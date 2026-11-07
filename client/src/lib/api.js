@@ -30,8 +30,6 @@ export async function api(path, opts = {}) {
     ...TUNNEL_HEADERS,
     ...(opts.headers || {}),
     Authorization: 'Bearer ' + token,
-    'Cache-Control': 'no-cache',
-    Pragma: 'no-cache',
   };
   let body = opts.body;
   const rawFile = typeof Blob !== 'undefined' && body instanceof Blob;
@@ -39,10 +37,7 @@ export async function api(path, opts = {}) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(body);
   }
-  let url = getApiBase() + path;
-  if (!opts.method || opts.method === 'GET') {
-    url += (path.includes('?') ? '&' : '?') + '_=' + Date.now();
-  }
+  const url = getApiBase() + path;
   const res = await fetch(url, { ...opts, headers, body, cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {

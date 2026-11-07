@@ -418,7 +418,7 @@ const FRONTEND_DIR = resolveFrontendDir();
 
 const app = express();
 app.set('etag', false);
-app.use(cors());
+app.use(cors({ maxAge: 7200 }));
 app.use(express.json({ limit: '512mb' }));
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');

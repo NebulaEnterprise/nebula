@@ -117,13 +117,16 @@ async function enterApp() {
   await loadDms();
   await openServer(ui.serverId || 'nebula-official');
   if (pollTimer) clearInterval(pollTimer);
+  let pollTick = 0;
   pollTimer = setInterval(() => {
+    if (document.hidden) return;
+    pollTick += 1;
     if (ui.mode === 'chat' || ui.mode === 'dm') loadMessages(true);
-    if (ui.mode === 'chat') {
-      loadMembers();
+    if (ui.mode === 'chat' && pollTick % 3 === 0) loadMembers(true);
+    if (ui.mode === 'chat' && pollTick % 3 === 1 && !ui.voice) {
       import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
     }
-    if (ui.mode !== 'chat') {
+    if (ui.mode !== 'chat' && pollTick % 2 === 0) {
       loadFriends();
       loadDms();
     }
@@ -242,7 +245,11 @@ export function pickChannel(ch) {
   loadMessages();
 }
 
+let messagesBusy = false;
+
 export async function loadMessages(quiet) {
+  if (quiet && messagesBusy) return;
+  messagesBusy = true;
   try {
     if (ui.mode === 'dm' && ui.dmUser) {
       const data = await api('/api/dms/' + ui.dmUser.id + '/messages');
@@ -276,15 +283,22 @@ export async function loadMessages(quiet) {
     }
   } catch (err) {
     if (!quiet) toast(err.message);
+  } finally {
+    messagesBusy = false;
   }
 }
 
-export async function loadMembers() {
+let membersBusy = false;
+
+export async function loadMembers(quiet) {
+  if (quiet && membersBusy) return;
+  membersBusy = true;
   try {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
     ui.members = data.members || [];
     ui.badgeDefs = data.badges || {};
   } catch (_) {}
+  finally { membersBusy = false; }
 }
 
 export async function sendMessage() {
@@ -351,18 +365,24 @@ export async function noteTyping() {
   try { await api('/api/typing', { method: 'POST', body }); } catch (_) {}
 }
 
+let typingBusy = false;
+
 export async function refreshTyping() {
+  if (document.hidden) return;
   if (ui.mode !== 'chat' && ui.mode !== 'dm') {
     ui.typers = [];
     return;
   }
+  if (typingBusy) return;
   const q = ui.mode === 'dm'
     ? 'dmUserId=' + encodeURIComponent(ui.dmUser?.id || '')
     : 'channelId=' + encodeURIComponent(ui.channelId || '') + '&serverId=' + encodeURIComponent(ui.serverId || '');
+  typingBusy = true;
   try {
     const data = await api('/api/typing?' + q);
     ui.typers = data.typers || [];
   } catch (_) {}
+  finally { typingBusy = false; }
 }
 
 export async function saveMe(body) {

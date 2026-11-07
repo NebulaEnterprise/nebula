@@ -13,7 +13,7 @@
     ui.channelId;
     ui.dmUser?.id;
     refreshTyping();
-    const timer = setInterval(refreshTyping, 1500);
+    const timer = setInterval(refreshTyping, 3000);
     return () => clearInterval(timer);
   });
 
