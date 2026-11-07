@@ -186,6 +186,41 @@ a:hover { text-decoration: underline; }
   position: absolute; top: 52px; left: 8px; right: 8px; z-index: 6;
   background: var(--bg-card); border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius-md); padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+  max-height: min(70vh, 520px); overflow-y: auto;
+}
+.server-menu button.danger, .member-tools [data-ban], .member-tools [data-kick] { color: #ed4245; }
+#guild-modal.wide .guild-sheet { width: min(960px, calc(100vw - 24px)); }
+#guild-modal.wide .guild-sheet-body { padding: 0; max-height: min(78vh, 760px); }
+.settings-layout { display: flex; min-height: 480px; }
+.settings-nav { width: 210px; flex-shrink: 0; background: #1e1f22; padding: 12px 8px; overflow-y: auto; }
+.settings-nav button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: #b5bac1; font-weight: 600; font-size: 14px; }
+.settings-nav button.on, .settings-nav button:hover { background: #404249; color: #fff; }
+.settings-page { flex: 1; padding: 20px 24px 32px; overflow: auto; max-height: min(78vh, 760px); }
+.settings-page h3 { margin: 0 0 8px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.settings-choice { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; color: var(--text-main); }
+.settings-choice.on, .settings-choice:hover { background: var(--bg-hover); }
+.settings-choice span { color: var(--text-faint); font-size: 12px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.swatch { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; }
+.swatch.on { border-color: #fff; }
+.preview-img { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; }
+.msg-content .emoji { width: 22px; height: 22px; vertical-align: middle; }
+.msg-content .sticker { width: 140px; height: auto; display: block; }
+.member-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.member-tools button { color: var(--text-muted); font-size: 12px; font-weight: 700; }
+.lobby-card { margin: 0 16px 8px; padding: 12px 14px; background: var(--bg-card); border-radius: 8px; }
+.lobby-card p { margin: 6px 0 0; color: var(--text-muted); white-space: pre-wrap; }
+.composer { display: flex; align-items: center; gap: 8px; }
+.sticker-pop { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 16px 8px; padding: 10px; background: var(--bg-card); border-radius: 8px; }
+.sticker-pop[hidden], .lobby-card[hidden] { display: none; }
+.sticker-pop button { width: 72px; height: 72px; border-radius: 8px; overflow: hidden; }
+.sticker-pop img { width: 100%; height: 100%; object-fit: contain; }
+.settings-page textarea, .settings-page select, .settings-page input[type="text"], .settings-page input[type="number"] { width: 100%; }
+@media (max-width: 720px) {
+  .settings-layout { flex-direction: column; min-height: 0; }
+  .settings-nav { width: 100%; display: flex; gap: 4px; overflow-x: auto; }
+  .settings-nav button { width: auto; white-space: nowrap; }
 }
 .server-menu button {
   display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: var(--radius-sm);

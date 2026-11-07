@@ -270,24 +270,27 @@ function renderChannels() {
     el.innerHTML = '<div class="cat">Text Channels</div><div class="channel active" data-id="general"><span class="hash">#</span>general</div>';
     return;
   }
-  const text = channels.filter(c => c.type === 'text');
-  const voice = channels.filter(c => c.type === 'voice');
   const manage = hasPerm(PERM.MANAGE_CHANNELS);
   const gear = (c) => manage ? `<button type="button" class="ch-edit" data-edit="${c.id}" title="Edit channel">✎</button>` : '';
-  let html = `<div class="cat cat-row"><span>Text Channels</span>${manage ? '<button type="button" class="cat-plus" data-new="text" title="Create channel">+</button>' : ''}</div>`;
-  text.forEach(c => {
-    html += `<div class="channel ${c.id === currentChannel && chatMode === 'server' ? 'active' : ''}" data-id="${c.id}">
-      <span class="hash">#</span><span class="ch-label">${escapeHtml(c.name)}</span>${gear(c)}
+  const row = (c) => `<div class="channel ${c.id === currentChannel && chatMode === 'server' ? 'active' : ''}" data-id="${c.id}">
+      <span class="hash">${c.type === 'voice' ? '🔊' : '#'}</span><span class="ch-label">${escapeHtml(c.name)}</span>${gear(c)}
     </div>`;
+  const groups = [{ id: '', name: '' }].concat(serverCategories || []);
+  let html = '';
+  groups.forEach(cat => {
+    const text = channels.filter(c => c.type === 'text' && (c.categoryId || '') === cat.id);
+    const voice = channels.filter(c => c.type === 'voice' && (c.categoryId || '') === cat.id);
+    if (cat.id && !text.length && !voice.length) return;
+    if (cat.name) html += `<div class="cat">${escapeHtml(cat.name)}</div>`;
+    if (text.length || !cat.id) {
+      html += `<div class="cat cat-row"><span>${cat.name ? 'Text' : 'Text Channels'}</span>${!cat.id && manage ? '<button type="button" class="cat-plus" data-new="text" title="Create channel">+</button>' : ''}</div>`;
+      text.forEach(c => { html += row(c); });
+    }
+    if (voice.length || (!cat.id && manage)) {
+      html += `<div class="cat cat-row"><span>${cat.name ? 'Voice' : 'Voice Channels'}</span>${!cat.id && manage ? '<button type="button" class="cat-plus" data-new="voice" title="Create voice channel">+</button>' : ''}</div>`;
+      voice.forEach(c => { html += row(c); });
+    }
   });
-  if (voice.length || manage) {
-    html += `<div class="cat cat-row" style="margin-top:16px"><span>Voice Channels</span>${manage ? '<button type="button" class="cat-plus" data-new="voice" title="Create voice channel">+</button>' : ''}</div>`;
-    voice.forEach(c => {
-      html += `<div class="channel voice" data-id="${c.id}">
-        <span class="hash">🔊</span><span class="ch-label">${escapeHtml(c.name)}</span>${gear(c)}
-      </div>`;
-    });
-  }
   el.innerHTML = html;
   el.querySelectorAll('.cat-plus').forEach(btn => {
     btn.onclick = (e) => { e.stopPropagation(); openCreateChannel(btn.dataset.new || 'text'); };
@@ -303,6 +306,7 @@ function renderChannels() {
       dmUserId = null;
       dmUser = null;
       currentChannel = ch.id;
+      seenMessageId = '';
       renderChannels();
       if ($('ch-icon')) $('ch-icon').textContent = '#';
       $('ch-name').textContent = ch.name;
@@ -333,7 +337,7 @@ function renderMessageList(list, emptyTitle, emptySub) {
           <span class="msg-author" style="color:${a.accentColor || '#fff'}" data-uid="${a.id}">${escapeHtml(a.displayName || a.username)}</span>
           <span class="msg-time">${time}</span>
         </div>
-        <div class="msg-content">${escapeHtml(m.content)}</div>
+        <div class="msg-content">${formatContent(m.content)}</div>
       </div>
     </div>`;
   }).join('');
@@ -343,6 +347,7 @@ function renderMessageList(list, emptyTitle, emptySub) {
   });
 }
 
+let seenMessageId = '';
 async function loadMessages() {
   try {
     if (chatMode === 'dm' && dmUserId) {
@@ -352,7 +357,24 @@ async function loadMessages() {
       return;
     }
     const data = await api(`/api/channels/${currentChannel}/messages`);
-    renderMessageList(data.messages || [], '#' + currentChannel, 'This is the start of the channel. Say hi!');
+    const list = data.messages || [];
+    renderMessageList(list, '#' + currentChannel, 'This is the start of the channel. Say hi!');
+    const newest = list[list.length - 1];
+    if (newest && newest.id && newest.id !== seenMessageId) {
+      const firstLook = !seenMessageId;
+      seenMessageId = newest.id;
+      const mine = me && newest.author && newest.author.id === me.id;
+      if (!firstLook && !mine && !serverMuted()) {
+        const mode = notifyMode();
+        const text = newest.content || '';
+        const mention = me && (text.includes('@' + me.username) || text.includes('@everyone'));
+        if (mode === 'all' || (mode === 'mentions' && mention)) {
+          const oldTitle = document.title;
+          document.title = 'New message · Nebula';
+          setTimeout(() => { if (document.title === 'New message · Nebula') document.title = oldTitle; }, 2500);
+        }
+      }
+    }
   } catch (e) {
     console.warn('loadMessages', e);
   }
@@ -675,7 +697,19 @@ async function openServer(serverId) {
     if (chData.servers) servers = chData.servers;
     serverPerms = chData.permissions || 0;
     serverRoles = chData.roles || [];
+    serverCategories = chData.categories || [];
+    pendingOnboarding = chData.onboarding || null;
     currentServerMeta = chData.server || null;
+    serverEmoji = chData.emoji || [];
+    serverStickers = chData.stickers || [];
+    applyServerLook(chData);
+    const lobby = $('lobby-card');
+    if (lobby) {
+      if (chData.showLobby && chData.about) {
+        lobby.hidden = false;
+        lobby.innerHTML = `<strong>${escapeHtml((chData.server && chData.server.name) || 'This server')}</strong><p>${escapeHtml(chData.about)}</p>`;
+      } else lobby.hidden = true;
+    }
   } catch (e) {
     console.warn(e);
     if (!channels.length) {
@@ -686,7 +720,10 @@ async function openServer(serverId) {
       ];
     }
   }
-  if ($('server-title')) $('server-title').textContent = (currentServerMeta && currentServerMeta.name) || 'Server';
+  if ($('server-title')) {
+    const muted = serverMuted();
+    $('server-title').textContent = ((currentServerMeta && currentServerMeta.name) || 'Server') + (muted ? '  · muted' : '');
+  }
   renderServerRail();
   renderChannels();
   if ($('ch-icon')) $('ch-icon').textContent = '#';
@@ -698,8 +735,11 @@ async function openServer(serverId) {
     $('msg-input').placeholder = `Message #${ch.name}`;
   }
   if ($('members')) $('members').classList.remove('hidden');
+  seenMessageId = '';
   await loadMessages();
   await loadMembers();
+  if (pendingOnboarding) showOnboarding(pendingOnboarding);
+  if ($('msg-input')) $('msg-input').disabled = !!(pendingOnboarding && pendingOnboarding.mustFinish);
 }
 
 if ($('btn-friends-page')) $('btn-friends-page').onclick = () => openFriendsHome(friendsTab || 'online');
@@ -805,8 +845,8 @@ function memberRow(m) {
       <span class="status-dot ${m.status || 'online'}" style="width:12px;height:12px;border-width:2px"></span>
     </div>
     <div>
-      <div class="member-name" style="color:${m.roleColor || m.accentColor || ''}">${escapeHtml(m.displayName || m.username)}</div>
-      ${m.customStatus ? `<div class="member-status">${escapeHtml(m.customStatus)}</div>` : (m.topRole ? `<div class="member-status">${escapeHtml(m.topRole)}</div>` : '')}
+      <div class="member-name" style="color:${m.roleColor || m.accentColor || ''}">${escapeHtml(m.nick || m.displayName || m.username)}</div>
+      ${m.customStatus ? `<div class="member-status">${escapeHtml(m.customStatus)}</div>` : ''}
     </div>
   </div>`;
 }
@@ -1228,11 +1268,40 @@ function renderServerRail() {
   });
 }
 
-function openModal(title, html, bind) {
+let serverCategories = [];
+let pendingOnboarding = null;
+let serverEmoji = [];
+let serverStickers = [];
+
+function formatContent(text) {
+  let html = escapeHtml(text || '');
+  (serverStickers || []).forEach((e) => {
+    if (!e.name || !e.url) return;
+    html = html.split('[[sticker:' + e.name + ']]').join('<img class="sticker" alt="" src="' + String(e.url).replace(/"/g, '') + '">');
+  });
+  (serverEmoji || []).forEach((e) => {
+    if (!e.name || !e.url) return;
+    html = html.split(':' + e.name + ':').join('<img class="emoji" alt="" src="' + String(e.url).replace(/"/g, '') + '">');
+  });
+  return html;
+}
+
+function notifyMode() {
+  return localStorage.getItem('nebula-notify-' + currentServerId) || 'mentions';
+}
+function muteUntil() {
+  return Number(localStorage.getItem('nebula-mute-' + currentServerId) || 0);
+}
+function serverMuted() {
+  return muteUntil() > Date.now();
+}
+
+function openModal(title, html, bind, wide) {
   const modal = $('guild-modal');
   if (!modal) return;
   $('guild-modal-title').textContent = title;
   $('guild-modal-body').innerHTML = html;
+  modal.classList.toggle('wide', !!wide);
   modal.classList.add('open');
   const menu = $('server-menu');
   if (menu) menu.hidden = true;
@@ -1243,25 +1312,276 @@ function closeModal() {
   if (modal) modal.classList.remove('open');
 }
 
+function applyServerLook(data) {
+  const theme = (data && data.theme) || {};
+  const root = document.documentElement;
+  if (theme.accent) root.style.setProperty('--brand', theme.accent);
+  else root.style.removeProperty('--brand');
+  if (theme.tint) root.style.setProperty('--bg-main', theme.tint);
+  else root.style.removeProperty('--bg-main');
+  const side = $('sidebar-server');
+  if (side) side.style.backgroundImage = data && data.bannerUrl ? 'linear-gradient(rgba(19,19,26,0.72), rgba(19,19,26,0.92)), url("' + data.bannerUrl.replace(/"/g, '') + '")' : '';
+}
+
 function toggleServerMenu() {
   const menu = $('server-menu');
   if (!menu) return;
   if (!menu.hidden) { menu.hidden = true; return; }
   const items = [];
-  if (hasPerm(PERM.INVITE)) items.push(`<button type="button" data-act="invite">Invite People</button>`);
-  if (hasPerm(PERM.MANAGE_SERVER)) items.push(`<button type="button" data-act="settings">Server Settings</button>`);
-  if (hasPerm(PERM.MANAGE_CHANNELS)) items.push(`<button type="button" data-act="channel">Create Channel</button>`);
-  if (hasPerm(PERM.MANAGE_ROLES)) items.push(`<button type="button" data-act="roles">Roles</button>`);
-  if (!items.length) items.push(`<div class="server-menu-empty">Only owners can edit this server</div>`);
-  menu.innerHTML = items.join('');
+  const manage = hasPerm(PERM.MANAGE_SERVER);
+  const channels = hasPerm(PERM.MANAGE_CHANNELS);
+  if (hasPerm(PERM.INVITE)) items.push(['invite', 'Invite people']);
+  items.push(['events', 'Events']);
+  if (manage) items.push(['settings', 'Server settings']);
+  if (hasPerm(PERM.INVITE)) items.push(['promote', 'Promote server']);
+  if (channels) items.push(['channel', 'Create channel']);
+  if (channels) items.push(['category', 'Create category']);
+  if (manage) items.push(['lock', 'Lock server']);
+  items.push(['pings', 'Ping roles']);
+  items.push(['notify', 'Notification settings']);
+  items.push(['nick', 'Change nickname']);
+  items.push(['mute', 'Mute server']);
+  items.push(['report', 'Report a member']);
+  if (currentServerMeta && currentServerMeta.owner && currentServerId !== 'nebula-official') items.push(['delete', 'Delete server', 'danger']);
+  menu.innerHTML = items.map(([act, label, cls]) => `<button type="button" data-act="${act}" class="${cls || ''}">${label}</button>`).join('');
   menu.hidden = false;
   menu.querySelectorAll('[data-act]').forEach(btn => {
     btn.onclick = () => {
       menu.hidden = true;
-      if (btn.dataset.act === 'invite') openInviteModal();
-      else if (btn.dataset.act === 'settings') openServerSettings();
-      else if (btn.dataset.act === 'channel') openCreateChannel('text');
-      else if (btn.dataset.act === 'roles') openRolesModal();
+      const act = btn.dataset.act;
+      if (act === 'invite') openInviteModal();
+      else if (act === 'settings') openServerSettings();
+      else if (act === 'channel') openCreateChannel('text');
+      else if (act === 'events') openEventsModal();
+      else if (act === 'category') openCategoryModal();
+      else if (act === 'lock') openLockModal();
+      else if (act === 'notify') openNotifyModal();
+      else if (act === 'nick') openNickModal();
+      else if (act === 'mute') openMuteModal();
+      else if (act === 'promote') promoteServer();
+      else if (act === 'delete') deleteThisServer();
+      else if (act === 'pings') openPingPicker();
+      else if (act === 'report') openReportModal();
+    };
+  });
+}
+
+async function guildAction(body) {
+  return api('/api/servers/' + currentServerId + '/action', { method: 'POST', body });
+}
+
+async function promoteServer() {
+  try {
+    const data = await api('/api/servers/' + currentServerId + '/invites', { method: 'POST', body: {} });
+    const name = (currentServerMeta && currentServerMeta.name) || 'my server';
+    const text = 'Join ' + name + ' on Nebula. Invite code: ' + data.code;
+    try { await navigator.clipboard.writeText(text); } catch (_) {}
+    alert(text + '\n\nCopied.');
+  } catch (err) { alert(err.message); }
+}
+
+function openCategoryModal() {
+  openModal('Create category', `
+    <div class="form-row"><label>Name</label><input id="cat-name" maxlength="40" placeholder="Community" /></div>
+    <button type="button" class="btn-primary" id="do-cat">Create</button>
+  `, (root) => {
+    root.querySelector('#do-cat').onclick = async () => {
+      try {
+        await guildAction({ type: 'category', name: root.querySelector('#cat-name').value });
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+function openLockModal() {
+  openModal('Lock server', `
+    <p class="field-hint">Nobody new can join, and only people who manage the server can post.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button type="button" class="btn-secondary" data-min="15">15 minutes</button>
+      <button type="button" class="btn-secondary" data-min="60">1 hour</button>
+      <button type="button" class="btn-secondary" data-min="1440">1 day</button>
+      <button type="button" class="btn-primary" data-min="0">Unlock</button>
+    </div>
+  `, (root) => {
+    root.querySelectorAll('[data-min]').forEach(btn => {
+      btn.onclick = async () => {
+        try {
+          await guildAction({ type: 'lock', minutes: Number(btn.dataset.min) });
+          closeModal();
+          alert(btn.dataset.min === '0' ? 'Server unlocked.' : 'Server locked.');
+        } catch (err) { alert(err.message); }
+      };
+    });
+  });
+}
+
+function openNotifyModal() {
+  const current = notifyMode();
+  const row = (id, title, sub) => `<button type="button" class="settings-choice ${current === id ? 'on' : ''}" data-mode="${id}"><strong>${title}</strong><span>${sub}</span></button>`;
+  openModal('Notifications', `
+    ${row('all', 'All messages', 'Ping me for every message')}
+    ${row('mentions', 'Only @mentions', 'Pings for @you, your roles and replies')}
+    ${row('nothing', 'Nothing', 'No pings. A direct @you still shows in the channel')}
+  `, (root) => {
+    root.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.onclick = () => {
+        localStorage.setItem('nebula-notify-' + currentServerId, btn.dataset.mode);
+        closeModal();
+      };
+    });
+  });
+}
+
+function openNickModal() {
+  openModal('Change nickname', `
+    <div class="form-row"><label>Nickname on this server</label><input id="nick-input" maxlength="32" placeholder="Shown instead of your name" /></div>
+    <button type="button" class="btn-primary" id="do-nick">Save</button>
+  `, (root) => {
+    root.querySelector('#do-nick').onclick = async () => {
+      try {
+        await guildAction({ type: 'nick', nick: root.querySelector('#nick-input').value });
+        closeModal();
+        await loadMembers();
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+function openMuteModal() {
+  openModal('Mute server', `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button type="button" class="btn-secondary" data-ms="900000">For 15 minutes</button>
+      <button type="button" class="btn-secondary" data-ms="3600000">For 1 hour</button>
+      <button type="button" class="btn-secondary" data-ms="28800000">For 8 hours</button>
+      <button type="button" class="btn-secondary" data-ms="86400000">For 24 hours</button>
+      <button type="button" class="btn-secondary" data-ms="31536000000">Until I turn it back on</button>
+      <button type="button" class="btn-primary" data-ms="0">Unmute</button>
+    </div>
+  `, (root) => {
+    root.querySelectorAll('[data-ms]').forEach(btn => {
+      btn.onclick = async () => {
+        const ms = Number(btn.dataset.ms);
+        localStorage.setItem('nebula-mute-' + currentServerId, ms ? String(Date.now() + ms) : '0');
+        closeModal();
+        if ($('server-title')) {
+          const name = (currentServerMeta && currentServerMeta.name) || 'Server';
+          $('server-title').textContent = name + (serverMuted() ? '  · muted' : '');
+        }
+      };
+    });
+  });
+}
+
+async function deleteThisServer() {
+  const name = (currentServerMeta && currentServerMeta.name) || 'this server';
+  if (!confirm('Delete ' + name + '? This cannot be undone.')) return;
+  try {
+    await guildAction({ type: 'delete' });
+    currentServerId = 'nebula-official';
+    await openServer('nebula-official');
+  } catch (err) { alert(err.message); }
+}
+
+async function openEventsModal() {
+  let events = [];
+  try {
+    const data = await api('/api/servers/' + currentServerId + '/settings');
+    events = (data.settings && data.settings.events) || [];
+  } catch (err) { alert(err.message); return; }
+  const list = events.map(e => `<div class="settings-row"><div><strong>${escapeHtml(e.title)}</strong><div class="field-hint">${escapeHtml(e.when || '')} ${escapeHtml(e.description || '')}</div></div>${hasPerm(PERM.MANAGE_SERVER) ? `<button type="button" class="btn-secondary" data-del="${e.id}">Remove</button>` : ''}</div>`).join('') || '<p class="field-hint">No events yet.</p>';
+  openModal('Events', `
+    <div>${list}</div>
+    ${hasPerm(PERM.MANAGE_SERVER) ? `
+      <div class="form-row" style="margin-top:16px"><label>Name</label><input id="ev-title" maxlength="80" /></div>
+      <div class="form-row"><label>When</label><input id="ev-when" maxlength="40" placeholder="Friday 8pm" /></div>
+      <div class="form-row"><label>Details</label><input id="ev-desc" maxlength="400" /></div>
+      <button type="button" class="btn-primary" id="do-event">Create event</button>
+    ` : ''}
+  `, (root) => {
+    root.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = async () => {
+        try { await guildAction({ type: 'event', remove: true, id: btn.dataset.del }); closeModal(); openEventsModal(); }
+        catch (err) { alert(err.message); }
+      };
+    });
+    const create = root.querySelector('#do-event');
+    if (create) create.onclick = async () => {
+      try {
+        await guildAction({
+          type: 'event',
+          title: root.querySelector('#ev-title').value,
+          when: root.querySelector('#ev-when').value,
+          description: root.querySelector('#ev-desc').value,
+        });
+        closeModal();
+        openEventsModal();
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+async function openPingPicker() {
+  try {
+    const data = await api('/api/servers/' + currentServerId + '/settings');
+    const ids = new Set((data.settings && data.settings.pingRoleIds) || []);
+    const roles = ((data.settings && data.settings.roles) || []).filter(r => ids.has(r.id));
+    const mine = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
+    const meRow = (mine.members || []).find(m => me && m.id === me.id);
+    const have = new Set(((meRow && meRow.roles) || []).map(r => r.id));
+    if (!roles.length) {
+      openModal('Ping roles', '<p class="field-hint">This server has no roles you can pick yet.</p>');
+      return;
+    }
+    openModal('Ping roles', roles.map(r => `<label class="settings-row"><span>${escapeHtml(r.name)}</span><input type="checkbox" data-role="${r.id}" ${have.has(r.id) ? 'checked' : ''} /></label>`).join('') + '<p class="field-hint">Picking a role never gives you extra permissions.</p>', (root) => {
+      root.querySelectorAll('[data-role]').forEach(box => {
+        box.onchange = async () => {
+          try { await guildAction({ type: 'ping-toggle', roleId: box.dataset.role }); }
+          catch (err) { alert(err.message); box.checked = !box.checked; }
+        };
+      });
+    });
+  } catch (err) { alert(err.message); }
+}
+
+function openReportModal() {
+  openModal('Report a member', `
+    <div class="form-row"><label>Their user id</label><input id="rep-uid" placeholder="4" /></div>
+    <div class="form-row"><label>What happened</label><input id="rep-text" maxlength="400" /></div>
+    <button type="button" class="btn-primary" id="do-report">Send report</button>
+  `, (root) => {
+    root.querySelector('#do-report').onclick = async () => {
+      try {
+        const uid = root.querySelector('#rep-uid').value.trim();
+        const mem = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
+        const user = (mem.members || []).find(m => String(m.uid) === uid);
+        if (!user) throw new Error('No member with that id');
+        await guildAction({ type: 'report', userId: user.id, text: root.querySelector('#rep-text').value });
+        closeModal();
+        alert('Report sent.');
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+function showOnboarding(ob) {
+  const questions = (ob.questions || []).filter(q => q && q.q);
+  openModal('Before you chat', `
+    <p class="field-hint">Answer so you land in the right channels.</p>
+    ${questions.map(q => `<label class="settings-row"><span>${escapeHtml(q.q)}</span><input type="checkbox" data-role="${escapeHtml(q.roleId || '')}" /></label>`).join('') || '<p class="field-hint">Nothing to pick. You can finish now.</p>'}
+    <button type="button" class="btn-primary" id="do-onboard" style="margin-top:16px">Finish</button>
+  `, (root) => {
+    root.querySelector('#do-onboard').onclick = async () => {
+      const roleIds = [];
+      root.querySelectorAll('[data-role]').forEach(box => { if (box.checked && box.dataset.role) roleIds.push(box.dataset.role); });
+      try {
+        await guildAction({ type: 'onboard', roleIds });
+        pendingOnboarding = null;
+        if ($('msg-input')) $('msg-input').disabled = false;
+        closeModal();
+        await loadMembers();
+      } catch (err) { alert(err.message); }
     };
   });
 }
@@ -1295,6 +1615,11 @@ function openAddServerModal() {
       const hint = root.querySelector('#add-server-hint');
       try {
         const data = await api('/api/invites/' + encodeURIComponent(code) + '/join', { method: 'POST', body: {} });
+        if (data.pending) {
+          hint.textContent = 'Request sent. Someone who runs the server has to accept you.';
+          hint.className = 'field-hint';
+          return;
+        }
         closeModal();
         await openServer(data.server.id);
       } catch (err) {
@@ -1502,25 +1827,434 @@ function openRolesModal() {
   });
 }
 
-function openServerSettings() {
-  const name = (currentServerMeta && currentServerMeta.name) || '';
-  openModal('Server settings', `
-    <div class="form-row"><label>Server name</label><input id="srv-name" maxlength="40" value="${escapeHtml(name)}" /></div>
-    <button type="button" class="btn-primary" id="do-save-srv">Save</button>
-  `, (root) => {
-    root.querySelector('#do-save-srv').onclick = async () => {
-      try {
-        await api('/api/servers/' + currentServerId, {
-          method: 'PATCH',
-          body: { name: root.querySelector('#srv-name').value },
-        });
-        closeModal();
-        await openServer(currentServerId);
-      } catch (err) { alert(err.message); }
+const SETTINGS_PAGES = [
+  ['overview', 'Overview'],
+  ['theme', 'Theme'],
+  ['channels', 'Channels'],
+  ['lobby', 'Lobby'],
+  ['emoji', 'Emoji'],
+  ['stickers', 'Stickers'],
+  ['onboarding', 'Onboarding'],
+  ['pings', 'Ping roles'],
+  ['safety', 'Safety'],
+  ['reports', 'Reports'],
+  ['audit', 'Audit log'],
+  ['members', 'Members'],
+  ['requests', 'Join requests'],
+  ['roles', 'Roles'],
+  ['bans', 'Bans'],
+];
+const COLOR_SWATCHES = ['#7c5cff', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#f47fff', '#ffffff'];
+
+function swatchRow(name, current) {
+  return `<div class="swatches" data-swatch="${name}">${COLOR_SWATCHES.map(c => `<button type="button" class="swatch ${c === current ? 'on' : ''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div><input data-hex="${name}" value="${escapeHtml(current || '')}" maxlength="20" />`;
+}
+
+async function readImageFile(file) {
+  if (!file) throw new Error('Choose an image');
+  if (file.size > 300000) throw new Error('Keep the image under 300 KB');
+  const url = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+  if (typeof url !== 'string' || url.length > 400000) throw new Error('That image is too large');
+  return url;
+}
+
+function settingsHtml(page, s) {
+  if (page === 'overview') {
+    return `<h3>Server profile</h3>
+      <div class="form-row"><label>Server icon</label><input type="file" id="up-icon" accept="image/*" /></div>
+      ${s.iconUrl ? '<img class="preview-img" alt="" src="' + String(s.iconUrl).replace(/"/g, '') + '">' : ''}
+      <div class="form-row"><label>Banner</label><input type="file" id="up-banner" accept="image/*" /></div>
+      <div class="form-row"><label>Server name</label><input id="set-name" maxlength="40" value="${escapeHtml(s.name || '')}" /></div>
+      <div class="form-row"><label>Server tag (2–4 letters)</label><input id="set-tag" maxlength="4" value="${escapeHtml(s.tag || '')}" /></div>
+      <div class="form-row"><label>Accent</label>${swatchRow('accent', (s.theme && s.theme.accent) || s.color || '#7c5cff')}</div>
+      <button type="button" class="btn-primary" id="save-overview">Save</button>`;
+  }
+  if (page === 'theme') {
+    return `<h3>Theme</h3>
+      <p class="field-hint">Everyone sees these colours while they are in this server.</p>
+      <div class="form-row"><label>Accent colour</label>${swatchRow('accent', (s.theme && s.theme.accent) || '#7c5cff')}</div>
+      <div class="form-row"><label>Background tint</label>${swatchRow('tint', (s.theme && s.theme.tint) || '#313338')}</div>
+      <button type="button" class="btn-primary" id="save-theme">Save</button>
+      <button type="button" class="btn-secondary" id="clear-theme">Remove theme</button>`;
+  }
+  if (page === 'channels') {
+    const cats = s.categories || [];
+    const opts = (id) => `<option value="">No category</option>` + cats.map(c => `<option value="${c.id}" ${id === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+    return `<h3>Channels</h3>
+      <button type="button" class="btn-primary" id="add-cat">Create category</button>
+      ${(cats).map(c => `<div class="settings-row"><span>${escapeHtml(c.name)}</span><button type="button" class="btn-secondary" data-delcat="${c.id}">Delete</button></div>`).join('')}
+      ${(s.channels || []).map(c => `<div class="settings-row"><span>${c.type === 'voice' ? '🔊' : '#'} ${escapeHtml(c.name)}</span><select data-catch="${c.id}">${opts(c.categoryId || '')}</select><button type="button" data-up="${c.id}">Up</button><button type="button" data-down="${c.id}">Down</button></div>`).join('')}`;
+  }
+  if (page === 'lobby') {
+    return `<h3>Lobby</h3>
+      <p class="field-hint">Shown above the message box for everyone in this server.</p>
+      <label class="settings-row"><span>Show the lobby</span><input type="checkbox" id="lobby-on" ${s.showLobby ? 'checked' : ''} /></label>
+      <div class="form-row"><label>About</label><textarea id="lobby-about" maxlength="2000" rows="5">${escapeHtml(s.about || '')}</textarea></div>
+      <button type="button" class="btn-primary" id="save-lobby">Save</button>`;
+  }
+  if (page === 'emoji' || page === 'stickers') {
+    const list = page === 'emoji' ? (s.emoji || []) : (s.stickers || []);
+    const cap = page === 'emoji' ? 50 : 30;
+    return `<h3>${page === 'emoji' ? 'Emoji' : 'Stickers'}</h3>
+      <p class="field-hint">${list.length} / ${cap}. ${page === 'emoji' ? 'Type :name: in chat.' : 'They show in the sticker button next to the message box.'} PNG under 300 KB.</p>
+      <div class="form-row"><label>Name</label><input id="asset-name" maxlength="32" placeholder="wave" /></div>
+      <input type="file" id="asset-file" accept="image/*" />
+      <button type="button" class="btn-primary" id="upload-asset">Upload</button>
+      ${list.map(e => `<div class="settings-row"><img class="preview-img" alt="" src="${String(e.url).replace(/"/g, '')}"><span>:${escapeHtml(e.name)}:</span><button type="button" class="btn-secondary" data-delasset="${e.id}">Remove</button></div>`).join('') || '<p class="field-hint">Nothing here yet.</p>'}`;
+  }
+  if (page === 'onboarding') {
+    const ob = s.onboarding || { enabled: false, mustFinish: false, questions: [] };
+    return `<h3>Onboarding</h3>
+      <label class="settings-row"><span>Turn on onboarding</span><input type="checkbox" id="ob-on" ${ob.enabled ? 'checked' : ''} /></label>
+      <label class="settings-row"><span>Must finish before chatting</span><input type="checkbox" id="ob-must" ${ob.mustFinish ? 'checked' : ''} /></label>
+      <div id="ob-qs">${(ob.questions || []).map((q, i) => `<div class="settings-row"><input data-oq="${i}" value="${escapeHtml(q.q || '')}" placeholder="Question" /><select data-orole="${i}">${(s.roles || []).filter(r => r.id !== 'everyone' && r.id !== 'owner').map(r => `<option value="${r.id}" ${q.roleId === r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}</select></div>`).join('')}</div>
+      <button type="button" class="btn-secondary" id="ob-add">Add question</button>
+      <button type="button" class="btn-primary" id="save-ob">Save</button>`;
+  }
+  if (page === 'pings') {
+    const roles = (s.roles || []).filter(r => r.id !== 'everyone' && r.id !== 'owner');
+    const picked = new Set(s.pingRoleIds || []);
+    return `<h3>Ping roles</h3>
+      <p class="field-hint">People pick these themselves from the server menu. A ping role never includes manage permissions.</p>
+      <button type="button" class="btn-primary" id="ping-template">Add Announcements, Giveaways, Updates, Events, Polls</button>
+      ${roles.map(r => `<label class="settings-row"><span>${escapeHtml(r.name)}</span><input type="checkbox" data-ping="${r.id}" ${picked.has(r.id) ? 'checked' : ''} /></label>`).join('') || '<p class="field-hint">Create a role first.</p>'}
+      <button type="button" class="btn-primary" id="save-pings">Save</button>`;
+  }
+  if (page === 'safety') {
+    const raid = s.raid || {};
+    return `<h3>Safety</h3>
+      <div class="form-section-label">Raid protection</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn-secondary" data-lock="15">Lock 15 min</button>
+        <button type="button" class="btn-secondary" data-lock="60">Lock 1 hour</button>
+        <button type="button" class="btn-secondary" data-lock="1440">Lock 1 day</button>
+        <button type="button" class="btn-primary" data-lock="0">Unlock</button>
+      </div>
+      <div class="form-section-label" style="margin-top:16px">Raid mode</div>
+      <label class="settings-row"><span>On</span><input type="checkbox" id="raid-on" ${raid.on ? 'checked' : ''} /></label>
+      <div class="form-row"><label>Block accounts younger than (days)</label><input id="raid-days" type="number" min="0" value="${Number(raid.accountDays) || 3}" /></div>
+      <div class="form-row"><label>Verification</label>
+        <select id="verify">${['none', 'low', 'medium', 'high'].map(v => `<option ${s.verification === v ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      </div>
+      <div class="form-row"><label>Who can join</label>
+        <select id="join-mode"><option value="open" ${s.joinMode !== 'apply' ? 'selected' : ''}>Open invite</option><option value="apply" ${s.joinMode === 'apply' ? 'selected' : ''}>They apply, you approve</option></select>
+      </div>
+      <div class="form-row"><label>Question on the form</label><input id="join-q" maxlength="120" value="${escapeHtml((s.joinQuestions || [])[0] || '')}" /></div>
+      <button type="button" class="btn-primary" id="save-safety">Save safety</button>`;
+  }
+  if (page === 'reports') {
+    const rows = (s.reports || []).map(r => `<div class="settings-row"><div><strong>${escapeHtml(r.status)}</strong> ${escapeHtml(r.text || '')}</div>${r.status === 'open' ? `<button type="button" class="btn-secondary" data-report="${r.id}">Handled</button>` : ''}</div>`).join('');
+    return `<h3>Reports</h3>${rows || '<p class="field-hint">Nothing to review.</p>'}`;
+  }
+  if (page === 'audit') {
+    const rows = (s.audit || []).map(a => `<div class="settings-row"><div><strong>${escapeHtml(a.name || '')}</strong> ${escapeHtml(a.text || '')}<div class="field-hint">${escapeHtml(a.at || '')}</div></div></div>`).join('');
+    return `<h3>Audit log</h3>${rows || '<p class="field-hint">No changes yet.</p>'}`;
+  }
+  if (page === 'members') {
+    const rows = (s.members || []).map(m => `<div class="settings-row" data-member="${m.id}">
+      <div><strong>${escapeHtml(m.nick || m.displayName || m.username)}</strong><div class="field-hint">@${escapeHtml(m.username || '')} · ${escapeHtml(String(m.uid || ''))}</div></div>
+      <div class="member-tools">
+        <button type="button" data-copy="${m.uid || ''}">Copy id</button>
+        <button type="button" data-nick="${m.id}">Nickname</button>
+        <button type="button" data-timeout="${m.id}">Time out</button>
+        <button type="button" data-kick="${m.id}">Kick</button>
+        <button type="button" data-ban="${m.id}">Ban</button>
+      </div>
+    </div>`).join('');
+    return `<h3>Members</h3><input id="member-filter" placeholder="Search by name" /><div id="member-rows">${rows || '<p class="field-hint">No members.</p>'}</div>`;
+  }
+  if (page === 'requests') {
+    const rows = (s.requests || []).map(r => `<div class="settings-row"><div>${escapeHtml((r.user && (r.user.displayName || r.user.username)) || 'Someone')}<div class="field-hint">${escapeHtml(r.message || '')}</div></div><button type="button" class="btn-primary" data-accept="${r.id}">Accept</button><button type="button" class="btn-secondary" data-decline="${r.id}">Decline</button></div>`).join('');
+    return `<h3>Join requests</h3>${rows || '<p class="field-hint">Nobody is waiting.</p>'}`;
+  }
+  if (page === 'roles') {
+    return `<h3>Roles</h3>
+      ${(s.roles || []).map(r => `<div class="role-line"><span class="role-dot" style="background:${r.color || '#99aab5'}"></span>${escapeHtml(r.name)}</div>`).join('')}
+      <div class="form-row"><label>New role</label><input id="role-name" maxlength="32" placeholder="Moderator" /></div>
+      <div class="form-row"><label>Color</label><input id="role-color" value="#7c5cff" /></div>
+      <div class="role-flag-list">${ROLE_FLAGS.map(([label, bit]) => `<label><input type="checkbox" data-bit="${bit}" ${bit === PERM.VIEW || bit === PERM.SEND ? 'checked' : ''}/> ${label}</label>`).join('')}</div>
+      <button type="button" class="btn-primary" id="do-add-role">Add role</button>
+      <div class="form-row" style="margin-top:16px"><label>Member user id</label><input id="role-uid" placeholder="2" /></div>
+      <div class="form-row"><label>Role</label><select id="role-pick">${(s.roles || []).filter(r => r.id !== 'everyone').map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select></div>
+      <button type="button" class="btn-primary" id="do-give-role">Give</button>
+      <button type="button" class="btn-secondary" id="do-take-role">Remove</button>`;
+  }
+  if (page === 'bans') {
+    const rows = (s.bans || []).map(b => `<div class="settings-row"><span>${escapeHtml((b.user && (b.user.displayName || b.user.username)) || b.userId)} ${escapeHtml(b.reason || '')}</span><button type="button" class="btn-secondary" data-unban="${b.userId}">Unban</button></div>`).join('');
+    return `<h3>Bans</h3>${rows || '<p class="field-hint">No bans.</p>'}
+      <div class="form-row"><label>Ban by user id</label><input id="ban-uid" placeholder="4" /></div>
+      <div class="form-row"><label>Reason</label><input id="ban-reason" maxlength="200" /></div>
+      <button type="button" class="btn-primary" id="do-ban">Ban</button>`;
+  }
+  return '';
+}
+
+function bindSwatches(root) {
+  root.querySelectorAll('.swatch').forEach(btn => {
+    btn.onclick = () => {
+      const wrap = btn.closest('[data-swatch]');
+      wrap.querySelectorAll('.swatch').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      const hex = root.querySelector(`[data-hex="${wrap.dataset.swatch}"]`);
+      if (hex) hex.value = btn.dataset.color;
     };
   });
 }
 
+async function openServerSettings(startPage) {
+  let settings;
+  try {
+    settings = (await api('/api/servers/' + currentServerId + '/settings')).settings;
+  } catch (err) { alert(err.message); return; }
+  openModal('Server settings', `
+    <div class="settings-layout">
+      <nav class="settings-nav">${SETTINGS_PAGES.map(([id, label]) => `<button type="button" data-page="${id}">${label}</button>`).join('')}</nav>
+      <div class="settings-page" id="settings-page"></div>
+    </div>
+  `, (root) => {
+    const pageEl = () => root.querySelector('#settings-page');
+    const show = (id) => {
+      root.querySelectorAll('.settings-nav button').forEach(b => b.classList.toggle('on', b.dataset.page === id));
+      pageEl().innerHTML = settingsHtml(id, settings);
+      bindSwatches(pageEl());
+      wireSettings(pageEl(), id, settings, async () => {
+        settings = (await api('/api/servers/' + currentServerId + '/settings')).settings;
+        show(id);
+        await openServer(currentServerId);
+      });
+    };
+    root.querySelectorAll('.settings-nav button').forEach(b => { b.onclick = () => show(b.dataset.page); });
+    show(startPage || 'overview');
+  }, true);
+}
+
+function wireSettings(root, page, settings, refresh) {
+  const save = async (body) => {
+    await guildAction(Object.assign({ type: 'settings' }, body));
+    await refresh();
+  };
+  const hex = (name) => { const el = root.querySelector(`[data-hex="${name}"]`); return el ? el.value : ''; };
+  if (page === 'overview') {
+    root.querySelector('#save-overview').onclick = async () => {
+      try {
+        const body = { name: root.querySelector('#set-name').value, tag: root.querySelector('#set-tag').value, color: hex('accent'), theme: { accent: hex('accent'), tint: (settings.theme && settings.theme.tint) || '' } };
+        const icon = root.querySelector('#up-icon').files[0];
+        const banner = root.querySelector('#up-banner').files[0];
+        if (icon) body.iconUrl = await readImageFile(icon);
+        if (banner) body.bannerUrl = await readImageFile(banner);
+        await save(body);
+      } catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'theme') {
+    root.querySelector('#save-theme').onclick = async () => {
+      try { await save({ theme: { accent: hex('accent'), tint: hex('tint') }, color: hex('accent') }); }
+      catch (err) { alert(err.message); }
+    };
+    root.querySelector('#clear-theme').onclick = async () => {
+      try { await save({ theme: { accent: '#7c5cff', tint: '' } }); }
+      catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'channels') {
+    root.querySelector('#add-cat').onclick = () => { closeModal(); openCategoryModal(); };
+    root.querySelectorAll('[data-delcat]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'category-delete', categoryId: btn.dataset.delcat }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelectorAll('[data-catch]').forEach(sel => sel.onchange = async () => {
+      try { await guildAction({ type: 'set-category', channelId: sel.dataset.catch, categoryId: sel.value }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelectorAll('[data-up], [data-down]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'move-channel', channelId: btn.dataset.up || btn.dataset.down, dir: btn.dataset.up ? 'up' : 'down' }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+  }
+  if (page === 'lobby') {
+    root.querySelector('#save-lobby').onclick = async () => {
+      try { await save({ about: root.querySelector('#lobby-about').value, showLobby: root.querySelector('#lobby-on').checked }); }
+      catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'emoji' || page === 'stickers') {
+    root.querySelector('#upload-asset').onclick = async () => {
+      try {
+        const url = await readImageFile(root.querySelector('#asset-file').files[0]);
+        await guildAction({ type: page === 'emoji' ? 'emoji' : 'sticker', name: root.querySelector('#asset-name').value, url });
+        await refresh();
+      } catch (err) { alert(err.message); }
+    };
+    root.querySelectorAll('[data-delasset]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: page === 'emoji' ? 'emoji' : 'sticker', remove: true, id: btn.dataset.delasset }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+  }
+  if (page === 'onboarding') {
+    root.querySelector('#ob-add').onclick = () => {
+      const box = root.querySelector('#ob-qs');
+      const i = box.querySelectorAll('[data-oq]').length;
+      const roles = (settings.roles || []).filter(r => r.id !== 'everyone' && r.id !== 'owner');
+      box.insertAdjacentHTML('beforeend', `<div class="settings-row"><input data-oq="${i}" placeholder="Question" /><select data-orole="${i}">${roles.map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select></div>`);
+    };
+    root.querySelector('#save-ob').onclick = async () => {
+      const questions = [];
+      root.querySelectorAll('[data-oq]').forEach(input => {
+        const role = root.querySelector(`[data-orole="${input.dataset.oq}"]`);
+        questions.push({ q: input.value, roleId: role ? role.value : '' });
+      });
+      try {
+        await save({ onboarding: { enabled: root.querySelector('#ob-on').checked, mustFinish: root.querySelector('#ob-must').checked, questions } });
+      } catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'pings') {
+    root.querySelector('#ping-template').onclick = async () => {
+      try {
+        const names = ['Announcements', 'Giveaways', 'Updates', 'Events', 'Polls'];
+        for (const name of names) {
+          if ((settings.roles || []).some(r => r.name === name)) continue;
+          await api('/api/servers/' + currentServerId + '/roles', { method: 'POST', body: { name, color: '#7c5cff', permissions: PERM.VIEW } });
+        }
+        const fresh = (await api('/api/servers/' + currentServerId + '/settings')).settings;
+        const ids = (fresh.roles || []).filter(r => names.includes(r.name)).map(r => r.id);
+        await guildAction({ type: 'settings', pingRoleIds: ids.concat(fresh.pingRoleIds || []) });
+        await refresh();
+      } catch (err) { alert(err.message); }
+    };
+    root.querySelector('#save-pings').onclick = async () => {
+      const pingRoleIds = [];
+      root.querySelectorAll('[data-ping]').forEach(box => { if (box.checked) pingRoleIds.push(box.dataset.ping); });
+      try { await save({ pingRoleIds }); } catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'safety') {
+    root.querySelectorAll('[data-lock]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'lock', minutes: Number(btn.dataset.lock) }); alert(btn.dataset.lock === '0' ? 'Unlocked.' : 'Locked.'); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelector('#save-safety').onclick = async () => {
+      try {
+        await save({
+          raid: { on: root.querySelector('#raid-on').checked, accountDays: Number(root.querySelector('#raid-days').value) || 0, joinHours: 1, durationHours: 6 },
+          verification: root.querySelector('#verify').value,
+          joinMode: root.querySelector('#join-mode').value,
+          joinQuestions: [root.querySelector('#join-q').value].filter(Boolean),
+        });
+      } catch (err) { alert(err.message); }
+    };
+  }
+  if (page === 'reports') {
+    root.querySelectorAll('[data-report]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'report-handle', reportId: btn.dataset.report }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+  }
+  if (page === 'members') {
+    const filter = root.querySelector('#member-filter');
+    filter.oninput = () => {
+      const q = filter.value.toLowerCase();
+      root.querySelectorAll('[data-member]').forEach(row => {
+        row.hidden = q && !row.textContent.toLowerCase().includes(q);
+      });
+    };
+    root.querySelectorAll('[data-copy]').forEach(btn => btn.onclick = () => navigator.clipboard.writeText(btn.dataset.copy).catch(() => {}));
+    root.querySelectorAll('[data-nick]').forEach(btn => btn.onclick = async () => {
+      const nick = prompt('Nickname', '') ;
+      if (nick == null) return;
+      try { await guildAction({ type: 'nick-other', userId: btn.dataset.nick, nick }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelectorAll('[data-timeout]').forEach(btn => btn.onclick = async () => {
+      const minutes = Number(prompt('Time out for how many minutes? 0 clears it.', '10'));
+      if (Number.isNaN(minutes)) return;
+      try { await guildAction({ type: 'timeout', userId: btn.dataset.timeout, minutes }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelectorAll('[data-kick]').forEach(btn => btn.onclick = async () => {
+      if (!confirm('Kick this member?')) return;
+      try { await guildAction({ type: 'kick', userId: btn.dataset.kick }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelectorAll('[data-ban]').forEach(btn => btn.onclick = async () => {
+      const reason = prompt('Ban reason', '') || '';
+      try { await guildAction({ type: 'ban', userId: btn.dataset.ban, reason }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+  }
+  if (page === 'requests') {
+    root.querySelectorAll('[data-accept], [data-decline]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'request', requestId: btn.dataset.accept || btn.dataset.decline, accept: !!btn.dataset.accept }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+  }
+  if (page === 'roles') {
+    root.querySelector('#do-add-role').onclick = async () => {
+      let permissions = 0;
+      root.querySelectorAll('[data-bit]').forEach(box => { if (box.checked) permissions |= Number(box.dataset.bit); });
+      try {
+        await api('/api/servers/' + currentServerId + '/roles', { method: 'POST', body: { name: root.querySelector('#role-name').value, color: root.querySelector('#role-color').value, permissions } });
+        await refresh();
+      } catch (err) { alert(err.message); }
+    };
+    const assign = async (action) => {
+      const uid = root.querySelector('#role-uid').value.trim().replace(/^#/, '');
+      const roleId = root.querySelector('#role-pick').value;
+      try {
+        const mem = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
+        const user = (mem.members || []).find(m => String(m.uid) === uid);
+        if (!user) throw new Error('No member with that id');
+        await api('/api/servers/' + currentServerId + '/members/' + user.id + '/roles', { method: 'POST', body: { roleId, action } });
+        await refresh();
+      } catch (err) { alert(err.message); }
+    };
+    root.querySelector('#do-give-role').onclick = () => assign('add');
+    root.querySelector('#do-take-role').onclick = () => assign('remove');
+  }
+  if (page === 'bans') {
+    root.querySelectorAll('[data-unban]').forEach(btn => btn.onclick = async () => {
+      try { await guildAction({ type: 'unban', userId: btn.dataset.unban }); await refresh(); }
+      catch (err) { alert(err.message); }
+    });
+    root.querySelector('#do-ban').onclick = async () => {
+      const uid = root.querySelector('#ban-uid').value.trim();
+      try {
+        const mem = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
+        const user = (mem.members || []).find(m => String(m.uid) === uid);
+        if (!user) throw new Error('No member with that id');
+        await guildAction({ type: 'ban', userId: user.id, reason: root.querySelector('#ban-reason').value });
+        await refresh();
+      } catch (err) { alert(err.message); }
+    };
+  }
+}
+
+if ($('btn-stickers')) $('btn-stickers').onclick = async () => {
+  const pop = $('sticker-pop');
+  if (!pop) return;
+  if (!pop.hidden) { pop.hidden = true; return; }
+  if (!serverStickers.length) {
+    pop.hidden = false;
+    pop.innerHTML = '<p class="field-hint">No stickers on this server yet.</p>';
+    return;
+  }
+  pop.innerHTML = serverStickers.map(s => `<button type="button" data-sticker="${escapeHtml(s.name)}"><img alt="" src="${String(s.url).replace(/"/g, '')}"></button>`).join('');
+  pop.hidden = false;
+  pop.querySelectorAll('[data-sticker]').forEach(btn => {
+    btn.onclick = async () => {
+      pop.hidden = true;
+      try {
+        await api('/api/channels/' + currentChannel + '/messages', { method: 'POST', body: { content: '[[sticker:' + btn.dataset.sticker + ']]' } });
+        await loadMessages();
+      } catch (err) { alert(err.message); }
+    };
+  });
+};
 if ($('server-title')) $('server-title').onclick = () => toggleServerMenu();
 if ($('nav-add-server')) $('nav-add-server').onclick = () => openAddServerModal();
 if ($('guild-modal-close')) $('guild-modal-close').onclick = () => closeModal();

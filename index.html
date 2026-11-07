@@ -7,7 +7,7 @@
 <title>Nebula</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=7" />
+<link rel="stylesheet" href="style.css?v=8" />
 </head>
 <body>
 
@@ -117,9 +117,12 @@
         <div class="chat-col">
           <div class="messages" id="messages"></div>
           <div class="composer-wrap">
+            <div class="lobby-card" id="lobby-card" hidden></div>
             <div class="composer">
+              <button type="button" class="icon-btn" id="btn-stickers" title="Stickers">☺</button>
               <input id="msg-input" type="text" placeholder="Message #general" maxlength="2000" autocomplete="off" />
             </div>
+            <div class="sticker-pop" id="sticker-pop" hidden></div>
           </div>
         </div>
         <!-- Right side profile for DMs -->
@@ -291,6 +294,6 @@
   </div>
 </div>
 
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
