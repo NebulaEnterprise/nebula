@@ -3,7 +3,7 @@
 // 1. Keep backend/run.bat open
 // 2. Optional: ngrok http 3850
 // 3. Set DEFAULT_BACKEND or ?backend=https://xxxx.ngrok-free.app
-const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev ";
+const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev";
 
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
