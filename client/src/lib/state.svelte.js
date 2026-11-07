@@ -117,20 +117,8 @@ async function enterApp() {
   await loadDms();
   await openServer(ui.serverId || 'nebula-official');
   if (pollTimer) clearInterval(pollTimer);
-  let pollTick = 0;
-  pollTimer = setInterval(() => {
-    if (document.hidden) return;
-    pollTick += 1;
-    if (ui.mode === 'chat' || ui.mode === 'dm') loadMessages(true);
-    if (ui.mode === 'chat' && pollTick % 4 === 2) loadMembers(true);
-    if (ui.mode === 'chat' && pollTick % 4 === 3 && !ui.voice) {
-      import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
-    }
-    if (ui.mode !== 'chat' && pollTick % 2 === 0) {
-      loadFriends();
-      loadDms();
-    }
-  }, 8000);
+  pollTimer = null;
+  watchChat();
 }
 
 export async function login(email, password) {
@@ -200,6 +188,7 @@ export async function openDm(user) {
   ui.stickersOpen = false;
   ui.popout = null;
   applyTheme();
+  dropLive();
   await loadMessages();
 }
 
@@ -232,8 +221,10 @@ export async function openServer(id, opts = {}) {
   const ch = current || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
   ui.channelId = ch ? ch.id : '';
   ui.seenMessageId = '';
+  dropLive();
   await loadMessages();
   await loadMembers();
+  import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
   if (!opts.keepDialog && ui.onboarding) ui.dialog = { kind: 'onboarding' };
 }
 
@@ -242,44 +233,87 @@ export function pickChannel(ch) {
   ui.channelId = ch.id;
   ui.seenMessageId = '';
   ui.stickersOpen = false;
+  dropLive();
   loadMessages();
 }
 
 let messagesBusy = false;
 let pulseMissing = false;
+let watchStarted = false;
+let liveCtrl = null;
 
-async function pullLive(query) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function dropLive() {
+  if (liveCtrl) liveCtrl.abort();
+}
+
+async function pullLive(query, signal) {
   if (!pulseMissing) {
     try {
-      return await api('/api/pulse?' + query);
+      return await api('/api/pulse?' + query, { signal });
     } catch (err) {
+      if (err && err.name === 'AbortError') throw err;
       if (!/not found/i.test(err.message || '')) throw err;
       pulseMissing = true;
     }
   }
   if (query.startsWith('dmUserId=')) {
-    const id = query.slice('dmUserId='.length);
-    const data = await api('/api/dms/' + id + '/messages');
+    const id = decodeURIComponent(query.slice('dmUserId='.length).split('&')[0]);
+    const data = await api('/api/dms/' + id + '/messages', { signal });
     return { messages: data.messages || [], typers: [] };
   }
-  const data = await api('/api/channels/' + ui.channelId + '/messages');
+  const data = await api('/api/channels/' + ui.channelId + '/messages', { signal });
   return { messages: data.messages || [], typers: [] };
 }
 
-export async function loadMessages(quiet) {
+async function watchChat() {
+  if (watchStarted) return;
+  watchStarted = true;
+  while (true) {
+    const looking = !document.hidden && !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm');
+    if (!looking) {
+      await sleep(1500);
+      continue;
+    }
+    liveCtrl = new AbortController();
+    const signal = liveCtrl.signal;
+    const after = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
+    const typing = (ui.typers || []).map((row) => row.id).sort().join(',');
+    const started = Date.now();
+    try {
+      await loadMessages(true, { after, typing, signal });
+    } catch (err) {
+      if (err && err.name === 'AbortError') continue;
+      await sleep(8000);
+      continue;
+    }
+    if (Date.now() - started < 1500) await sleep(8000);
+  }
+}
+
+export async function loadMessages(quiet, live) {
   if (quiet && messagesBusy) return;
   messagesBusy = true;
+  const mode = ui.mode;
+  const channelId = ui.channelId;
+  const dmId = ui.dmUser?.id || '';
   try {
     let data;
+    const signal = live && live.signal;
+    const wait = live ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&wait=1' : '';
     if (ui.mode === 'dm' && ui.dmUser) {
-      data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id));
+      data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
     } else if (!ui.channelId) {
       ui.messages = [];
       ui.typers = [];
       return;
     } else {
-      data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || ''));
+      data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || '') + wait, signal);
     }
+    if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return;
     ui.typers = data.typers || [];
     const list = data.messages || [];
     if (ui.mode === 'dm') {
@@ -306,6 +340,7 @@ export async function loadMessages(quiet) {
       }
     }
   } catch (err) {
+    if (err && err.name === 'AbortError') throw err;
     if (!quiet) toast(err.message);
   } finally {
     messagesBusy = false;

@@ -31,6 +31,12 @@ function save(file, data) {
 
 let users = load(USERS_FILE, {});
 let messages = load(MESSAGES_FILE, {});
+const pulseWaiters = new Set();
+function wakePulse(roomId) {
+  for (const waiter of pulseWaiters) {
+    if (waiter.roomId === roomId) waiter.finish();
+  }
+}
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
@@ -919,6 +925,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
+  wakePulse(found.channel.id);
   res.json({ ok: true, message: msg });
 });
 
@@ -963,6 +970,7 @@ app.post('/api/typing', auth, (req, res) => {
     nameColors: cleanNameColors(req.user.nameColors),
     at: Date.now(),
   });
+  wakePulse(key.startsWith('ch:') ? key.split(':').pop() : key);
   res.json({ ok: true });
 });
 
@@ -972,29 +980,71 @@ app.get('/api/typing', auth, (req, res) => {
   res.json({ ok: true, typers: listTypers(key, req.user.id) });
 });
 
-app.get('/api/pulse', auth, (req, res) => {
-  ensureGuilds();
+function pulseSnap(req) {
   const dmUserId = String(req.query.dmUserId || '');
   if (dmUserId) {
-    if (!users[dmUserId]) return res.status(404).json({ error: 'User not found' });
+    if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
-    const list = messages['dm:' + key] || [];
-    return res.json({
-      ok: true,
-      messages: list.slice(-100),
-      typers: listTypers('dm:' + [req.user.id, dmUserId].sort().join(':'), req.user.id),
-    });
+    const roomId = 'dm:' + key;
+    const list = (messages[roomId] || []).slice(-100);
+    const typers = listTypers(roomId, req.user.id);
+    const last = list[list.length - 1];
+    return {
+      roomId,
+      body: {
+        ok: true,
+        messages: list,
+        typers,
+        cursor: last ? last.id : '',
+        typing: typers.map((row) => row.id).sort().join(','),
+      },
+    };
   }
   const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
-  if (!found) return res.status(404).json({ error: 'Channel not found' });
-  if (!can(found.guild, req.user, PERM.VIEW, found.channel)) {
-    return res.status(403).json({ error: 'You cannot view this channel' });
+  if (!found) return null;
+  if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
+  const list = (messages[found.channel.id] || []).slice(-100);
+  const typers = listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id);
+  const last = list[list.length - 1];
+  return {
+    roomId: found.channel.id,
+    body: {
+      ok: true,
+      messages: list,
+      typers,
+      cursor: last ? last.id : '',
+      typing: typers.map((row) => row.id).sort().join(','),
+    },
+  };
+}
+
+app.get('/api/pulse', auth, (req, res) => {
+  ensureGuilds();
+  const snap = pulseSnap(req);
+  if (!snap) return res.status(404).json({ error: 'Channel not found' });
+  if (snap.forbidden) return res.status(403).json({ error: 'You cannot view this channel' });
+  const after = String(req.query.after || '');
+  const typing = String(req.query.typing || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing;
+  if (!hold) return res.json(snap.body);
+  let settled = false;
+  const waiter = { roomId: snap.roomId, finish };
+  function finish() {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    pulseWaiters.delete(waiter);
+    if (res.writableEnded) return;
+    const next = pulseSnap(req);
+    res.json(next && next.body ? next.body : snap.body);
   }
-  const list = messages[found.channel.id] || [];
-  res.json({
-    ok: true,
-    messages: list.slice(-100),
-    typers: listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id),
+  const timer = setTimeout(finish, 25000);
+  pulseWaiters.add(waiter);
+  req.on('close', () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    pulseWaiters.delete(waiter);
   });
 });
 
@@ -1177,6 +1227,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   messages[channelId].push(msg);
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
   save(MESSAGES_FILE, messages);
+  wakePulse(channelId);
   res.json({ ok: true, message: msg });
 });
 
