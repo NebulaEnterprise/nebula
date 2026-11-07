@@ -17,15 +17,13 @@
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
     <div class="pop-banner" style="background:{u.bannerUrl ? `center/cover url('${u.bannerUrl}')` : (u.bannerColor || u.accentColor || 'var(--brand)')}"></div>
+    {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
     {#if rel === 'none'}
       <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
     {/if}
     <div class="pop-body">
-      <div class="pop-top">
-        <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
-          {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
-        </div>
-        {#if u.bio}<div class="bio-bubble">{u.bio}</div>{/if}
+      <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
+        {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
       </div>
       <div class="pop-head">
         <div>
