@@ -200,6 +200,20 @@ function initial(name) {
   return (name || '?').charAt(0).toUpperCase();
 }
 
+// Applies background image/color safely without shorthand overwrite
+function applyAvatarStyle(el, avatarUrl, avatarColor, letter) {
+  el.style.backgroundColor = avatarColor || '#7c5cff';
+  if (avatarUrl) {
+    el.textContent = '';
+    el.style.backgroundImage = `url("${avatarUrl}")`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+  } else {
+    el.textContent = letter;
+    el.style.backgroundImage = 'none';
+  }
+}
+
 function renderMe() {
   if (!me) return;
   const name = me.displayName || me.username;
@@ -210,10 +224,7 @@ function renderMe() {
   const ini = $('me-initial');
   
   if (av && ini) {
-    // 1. Set color fallback
     av.style.backgroundColor = me.avatarColor || '#7c5cff';
-    
-    // 2. Apply image URL or fallback to initial
     if (me.avatarUrl) {
       ini.style.display = 'none';
       av.style.backgroundImage = `url("${me.avatarUrl}")`;
