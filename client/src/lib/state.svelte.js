@@ -44,6 +44,8 @@ export const ui = $state({
   toast: '',
   seenMessageId: '',
   composer: '',
+  voice: null,
+  voiceRooms: {},
 });
 
 let pollTimer = null;
@@ -61,6 +63,7 @@ export function toast(msg) {
 }
 
 export function logout() {
+  import('./voice.js').then((mod) => mod.leaveVoice());
   localStorage.removeItem('dc_token');
   ui.me = null;
   ui.userSettings = false;
@@ -115,7 +118,10 @@ async function enterApp() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => {
     if (ui.mode === 'chat' || ui.mode === 'dm') loadMessages(true);
-    if (ui.mode === 'chat') loadMembers();
+    if (ui.mode === 'chat') {
+      loadMembers();
+      import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
+    }
     if (ui.mode !== 'chat') {
       loadFriends();
       loadDms();
@@ -194,6 +200,10 @@ export async function openDm(user) {
 }
 
 export async function openServer(id, opts = {}) {
+  if (id && ui.voice && id !== ui.serverId) {
+    const { leaveVoice } = await import('./voice.js');
+    await leaveVoice();
+  }
   if (id) ui.serverId = id;
   ui.mode = 'chat';
   ui.dmUser = null;

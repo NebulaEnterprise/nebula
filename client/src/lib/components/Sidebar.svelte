@@ -2,9 +2,11 @@
   import {
     ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
+    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
+  import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
@@ -121,11 +123,11 @@
               {/if}
             </div>
             {#each voices as ch}
-              <div class="channel">
-                <span class="channel-hit">
+              <div class="channel" class:on={ui.voice?.channelId === ch.id}>
+                <button class="channel-hit" onclick={() => joinVoice(ch)}>
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
-                </span>
+                </button>
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
                   <span class="row-actions">
                     <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>
@@ -133,6 +135,13 @@
                   </span>
                 {/if}
               </div>
+              {#each ui.voiceRooms[ch.id] || [] as person (person.id)}
+                <div class="voice-person" class:speaking={person.speaking}>
+                  <Avatar user={person} size={22} dot={false} />
+                  <span>{person.displayName || person.username}</span>
+                  {#if person.muted || person.deafened}<MicOff size={12} />{/if}
+                </div>
+              {/each}
             {/each}
           {/if}
         {/if}
@@ -154,6 +163,21 @@
     </div>
   {/if}
 
+  {#if ui.voice}
+    <div class="voice-live">
+      <div class="voice-live-copy">
+        <strong>{ui.voice.deafened ? 'Deafened' : 'Voice connected'}</strong>
+        <span>{ui.voice.name}</span>
+      </div>
+      <button class="row-act" title="Disconnect" onclick={leaveVoice}><PhoneOff size={16} /></button>
+      <button class="row-act" title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
+        {#if ui.voice.muted}<MicOff size={16} />{:else}<Mic size={16} />{/if}
+      </button>
+      <button class="row-act" title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
+        {#if ui.voice.deafened}<HeadphoneOff size={16} />{:else}<Headphones size={16} />{/if}
+      </button>
+    </div>
+  {/if}
   <div class="me">
     <Avatar user={ui.me} size={36} />
     <div class="who">
