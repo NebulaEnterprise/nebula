@@ -418,8 +418,10 @@ img { max-width: 100%; }
   font-size: 26px; font-weight: 700; overflow: hidden; flex-shrink: 0; color: #fff;
 }
 .look-av img { width: 100%; height: 100%; object-fit: cover; }
-.look-banner { height: 72px; border-radius: 12px; margin-bottom: 10px; overflow: hidden; background: var(--brand); }
-.look-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.look-banner, .preview-banner, .pop-banner {
+  position: relative; overflow: hidden; background: var(--brand); flex-shrink: 0;
+}
+.look-banner { height: 72px; min-height: 72px; max-height: 72px; border-radius: 12px; margin-bottom: 10px; }
 .look-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn.brand.look-btn { width: auto; cursor: pointer; }
 .look-btn input { display: none; }
@@ -432,6 +434,7 @@ img { max-width: 100%; }
 .drop img { width: 72px; height: 72px; object-fit: cover; border-radius: 16px; }
 .drop strong { color: var(--text); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; align-items: start; }
+.grid-2 > * { min-width: 0; }
 .select { position: relative; min-width: 160px; }
 .select-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -467,8 +470,7 @@ img { max-width: 100%; }
   background: linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
 }
 .colorbox-hue span { left: 7px; }
-.preview-banner { height: 88px; overflow: hidden; background: var(--brand); }
-.preview-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.preview-banner { height: 88px; min-height: 88px; max-height: 88px; }
 .preview-av {
   position: relative; z-index: 1; overflow: hidden;
   width: 72px; height: 72px; border-radius: 50%; margin: -36px 16px 8px; border: 4px solid #101117;
@@ -480,8 +482,7 @@ img { max-width: 100%; }
   position: fixed; z-index: 40; width: 320px; background: #16171e; border-radius: 16px;
   overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
-.pop-banner { height: 78px; overflow: hidden; background: var(--brand); }
-.pop-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pop-banner { height: 78px; min-height: 78px; max-height: 78px; }
 .pop-add {
   position: absolute; top: 10px; right: 10px; z-index: 2;
   width: 36px; height: 36px; display: grid; place-items: center;

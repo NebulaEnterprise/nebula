@@ -4,7 +4,7 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
-  import { api } from '../api.js';
+  import { api, resolveMedia } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -32,37 +32,39 @@
     ['glitch', 'Glitch'],
   ];
 
+  let savedUrl = { avatarUrl: '', bannerUrl: '' };
+
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
+    if (!file) return;
+    const preview = URL.createObjectURL(file);
+    const previous = String(form[field] || '');
+    form[field] = preview;
     try {
-      if (!file) return;
-      const preview = URL.createObjectURL(file);
-      form[field] = preview;
-      try {
-        const data = await api('/api/upload', {
-          method: 'POST',
-          body: file,
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        });
-        form[field] = data.url;
+      const data = await api('/api/upload', {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      });
+      if (!data.url) throw new Error('The picture did not save');
+      savedUrl[field] = data.url;
+      const shown = await resolveMedia(data.url);
+      if (shown && shown.startsWith('blob:')) form[field] = data.url;
+    } catch (err) {
+      savedUrl[field] = '';
+      if (kind === 'avatar') {
+        try { form.avatarUrl = await fileToDataUrl(file, { original: true }); }
+        catch { form.avatarUrl = previous.startsWith('blob:') ? '' : previous; }
+      } else {
+        form.bannerUrl = previous.startsWith('blob:') ? '' : previous;
         URL.revokeObjectURL(preview);
-      } catch (err) {
-        if (kind === 'banner') {
-          URL.revokeObjectURL(preview);
-          form.bannerUrl = ui.me?.bannerUrl || '';
-          toast(/not found/i.test(err.message || '')
-            ? 'Download the new server.js and restart it, then upload the banner again.'
-            : err.message);
-        } else {
-          const url = await fileToDataUrl(file, { original: true });
-          form.avatarUrl = url;
-          if (/not found/i.test(err.message || '') || file.size > 1500000) {
-            toast('The picture is in the preview. Download the new server.js and restart it, then save again so the GIF sticks.');
-          }
-        }
       }
-    } catch (err) { toast(err.message); }
-    finally { if (input) input.value = ''; }
+      toast(/not found/i.test(err.message || '')
+        ? 'Download the new server.js and restart it, then upload the GIF again.'
+        : (err.message || 'Could not upload that picture'));
+    } finally {
+      if (input) input.value = '';
+    }
   }
 
   function setNameColor(index, value) {
@@ -73,7 +75,17 @@
 
   async function save() {
     try {
-      await saveMe(form);
+      const body = { ...form };
+      for (const field of ['avatarUrl', 'bannerUrl']) {
+        if (String(body[field] || '').startsWith('blob:')) {
+          if (!savedUrl[field]) {
+            toast('That picture is still uploading. Hit save again in a second.');
+            return;
+          }
+          body[field] = savedUrl[field];
+        }
+      }
+      await saveMe(body);
     } catch (err) { toast(err.message); }
   }
 </script>
@@ -127,7 +139,7 @@
               <strong>Banner</strong>
               <p>A GIF, PNG, JPG, or WebP across the top of your profile.</p>
               <div class="look-banner">
-                {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
               </div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
@@ -154,7 +166,7 @@
           <p class="label">Preview</p>
           <div class="preview-card">
             <div class="preview-banner">
-              {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+              {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">

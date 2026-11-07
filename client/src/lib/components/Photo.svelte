@@ -1,7 +1,7 @@
 <script>
   import { resolveMedia } from '../api.js';
 
-  let { url = '' } = $props();
+  let { url = '', fill = false } = $props();
   let src = $state('');
 
   $effect(() => {
@@ -16,7 +16,7 @@
       return;
     }
     resolveMedia(current).then((next) => {
-      if (alive) src = next;
+      if (alive && next) src = next;
     });
     return () => {
       alive = false;
@@ -24,4 +24,16 @@
   });
 </script>
 
-{#if src}<img src={src} alt="" />{/if}
+{#if src}<img class:fill src={src} alt="" />{/if}
+
+<style>
+  img.fill {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: cover;
+    display: block;
+  }
+</style>

@@ -57,13 +57,21 @@ export function resolveMedia(url) {
   const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
   if (!full.includes('/uploads/')) return Promise.resolve(url);
   if (mediaCache.has(full)) return mediaCache.get(full);
-  const pending = fetch(full, { headers: TUNNEL_HEADERS, cache: 'force-cache' })
+  const pending = fetch(full, { headers: TUNNEL_HEADERS, cache: 'no-store' })
     .then((res) => {
       if (!res.ok) throw new Error('image');
+      const type = res.headers.get('content-type') || '';
+      if (/text\/html|application\/json/i.test(type)) throw new Error('image');
       return res.blob();
     })
-    .then((blob) => URL.createObjectURL(blob))
-    .catch(() => full);
+    .then((blob) => {
+      if (/text\/html|application\/json/i.test(blob.type || '')) throw new Error('image');
+      return URL.createObjectURL(blob);
+    })
+    .catch(() => {
+      mediaCache.delete(full);
+      return '';
+    });
   mediaCache.set(full, pending);
   return pending;
 }

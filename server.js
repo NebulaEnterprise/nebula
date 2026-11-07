@@ -621,7 +621,11 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   res.json({ ok: true, url: '/uploads/' + name });
 });
 
-app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
+app.use('/uploads', (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
