@@ -1,4 +1,4 @@
-import { api } from './api.js';
+import { api, warmMedia } from './api.js';
 import { PERM } from './format.js';
 
 export const ui = $state({
@@ -91,6 +91,7 @@ export function serverMuted() {
 }
 
 export async function boot() {
+  warmMedia();
   const token = localStorage.getItem('dc_token');
   if (!token) {
     ui.booting = false;
@@ -99,6 +100,7 @@ export async function boot() {
   try {
     const data = await api('/api/me');
     ui.me = data.user;
+    warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
   } catch {
     logout();
@@ -357,6 +359,7 @@ export async function loadMembers(quiet) {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
     ui.members = data.members || [];
     ui.badgeDefs = data.badges || {};
+    warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
   } catch (_) {}
   finally { membersBusy = false; }
 }

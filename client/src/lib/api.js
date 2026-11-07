@@ -50,28 +50,64 @@ export async function api(path, opts = {}) {
 }
 
 const mediaCache = new Map();
+const MEDIA_KEY = 'dc_media';
+const MEDIA_STORE = 'nebula-media-v1';
+
+function savedMedia() {
+  try { return JSON.parse(localStorage.getItem(MEDIA_KEY) || '[]'); } catch (_) { return []; }
+}
+
+function rememberMedia(url) {
+  if (!url || !String(url).includes('/uploads/')) return;
+  const list = savedMedia().filter((item) => item !== url);
+  list.unshift(url);
+  try { localStorage.setItem(MEDIA_KEY, JSON.stringify(list.slice(0, 40))); } catch (_) {}
+}
+
+async function cachedBlob(full) {
+  if (!('caches' in window)) return null;
+  const store = await caches.open(MEDIA_STORE);
+  const hit = await store.match(full);
+  if (!hit) return null;
+  const blob = await hit.blob();
+  if (!blob || !blob.size || /text\/html|application\/json/i.test(blob.type || '')) return null;
+  return blob;
+}
+
+export function warmMedia(urls) {
+  const set = new Set([...(urls || []), ...savedMedia()]);
+  for (const url of set) {
+    if (url) resolveMedia(url);
+  }
+}
 
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
   if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);
   const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
   if (!full.includes('/uploads/')) return Promise.resolve(url);
+  rememberMedia(url);
   if (mediaCache.has(full)) return mediaCache.get(full);
-  const pending = fetch(full, { headers: TUNNEL_HEADERS, cache: 'no-store' })
-    .then((res) => {
-      if (!res.ok) throw new Error('image');
-      const type = res.headers.get('content-type') || '';
-      if (/text\/html|application\/json/i.test(type)) throw new Error('image');
-      return res.blob();
-    })
-    .then((blob) => {
-      if (/text\/html|application\/json/i.test(blob.type || '')) throw new Error('image');
-      return URL.createObjectURL(blob);
-    })
-    .catch(() => {
-      mediaCache.delete(full);
-      return '';
-    });
+  const pending = (async () => {
+    const saved = await cachedBlob(full);
+    if (saved) return URL.createObjectURL(saved);
+    const res = await fetch(full, { headers: TUNNEL_HEADERS });
+    if (!res.ok) throw new Error('image');
+    const type = res.headers.get('content-type') || '';
+    if (/text\/html|application\/json/i.test(type)) throw new Error('image');
+    const blob = await res.blob();
+    if (/text\/html|application\/json/i.test(blob.type || '')) throw new Error('image');
+    if ('caches' in window) {
+      const copy = blob.slice(0, blob.size, blob.type || type || 'image/gif');
+      caches.open(MEDIA_STORE).then((store) => store.put(full, new Response(copy, {
+        headers: { 'Content-Type': copy.type || 'image/gif' },
+      }))).catch(() => {});
+    }
+    return URL.createObjectURL(blob);
+  })().catch(() => {
+    mediaCache.delete(full);
+    return '';
+  });
   mediaCache.set(full, pending);
   return pending;
 }

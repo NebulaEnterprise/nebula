@@ -175,11 +175,11 @@
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
-              <div class="pop-name">
-                <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
+              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
+              <div class="handle">
+                <span>@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</span>
                 {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
               </div>
-              <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
             </div>
           </div>
         </div>
