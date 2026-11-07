@@ -1,13 +1,6 @@
 // ========== BACKEND URL ==========
-// Same pattern as Secret Santa / yapper-claim-service
-// 1. Keep backend/run.bat open
-// 2. Optional: ngrok http 3850
-// 3. Set DEFAULT_BACKEND or ?backend=https://xxxx.ngrok-free.app
 const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev";
 
-// Headers that tell ngrok's free-tier interstitial to get out of the way.
-// Without these, preflight OPTIONS succeeds (204) but the actual GET/POST
-// is intercepted and returns an HTML warning page → JSON parse fails → nothing loads.
 const NGROK_HEADERS = {
   "ngrok-skip-browser-warning": "true",
   "bypass-tunnel-reminder": "true",
@@ -24,7 +17,6 @@ function getApiBase() {
     const saved = localStorage.getItem("dc_backend");
     if (saved) return saved.replace(/\/$/, "");
   } catch (e) {}
-  // When served by the Node backend, same origin works
   if (window.location.protocol !== "file:" && window.location.port === "3850") {
     return window.location.origin;
   }
@@ -41,7 +33,6 @@ let currentServerId = 'nebula-official';
 let currentChannel = 'general';
 let badgeDefs = {};
 let pollTimer = null;
-/** 'server' | 'dm' */
 let chatMode = 'server';
 let dmUserId = null;
 let dmUser = null;
@@ -299,18 +290,12 @@ function renderMessageList(list, emptyTitle, emptySub) {
   }
   box.innerHTML = list.map(m => {
     const a = m.author || {};
-    const badges = (a.badges || []).map(bid => {
-      const b = badgeDefs[bid];
-      if (!b) return '';
-      return `<span class="badge-pill" style="background:${b.color}" title="${b.label}">${b.icon} ${b.label}</span>`;
-    }).join('');
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `<div class="msg">
       <div class="av" style="background:${a.avatarColor || '#5865f2'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
       <div class="msg-body">
         <div class="msg-head">
           <span class="msg-author" style="color:${a.accentColor || '#fff'}" data-uid="${a.id}">${escapeHtml(a.displayName || a.username)}</span>
-          <span class="msg-badges">${badges}</span>
           <span class="msg-time">${time}</span>
         </div>
         <div class="msg-content">${escapeHtml(m.content)}</div>
@@ -370,7 +355,6 @@ function showMainView(name) {
 }
 
 function setRail(mode) {
-  // mode: 'server' | 'home'
   if ($('sidebar-server')) {
     $('sidebar-server').style.display = mode === 'server' ? 'flex' : 'none';
     $('sidebar-server').style.flexDirection = 'column';
@@ -383,7 +367,6 @@ function setRail(mode) {
     if (mode === 'server') $('members').classList.remove('hidden');
     else $('members').classList.add('hidden');
   }
-  // Active states refreshed by renderServerRail when on server
   const home = $('nav-home');
   if (home) home.classList.toggle('active', mode === 'home');
   document.querySelectorAll('[data-server-id]').forEach(el => {
@@ -400,18 +383,12 @@ function renderDmProfile(user) {
     return;
   }
   box.style.display = 'block';
-  const badges = (user.badges || []).map(bid => {
-    const b = badgeDefs[bid];
-    if (!b) return '';
-    return `<span class="badge-pill" style="background:${b.color}">${b.icon} ${b.label}</span>`;
-  }).join('');
   box.innerHTML = `
     <div class="dm-profile-banner" style="background:${user.bannerColor || user.accentColor || '#5865f2'}"></div>
     <div class="dm-profile-body">
       <div class="dm-profile-av" style="background:${user.avatarColor || '#5865f2'}">${initial(user.displayName || user.username)}</div>
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
-      <div class="dm-profile-user">@${escapeHtml(user.username)}${user.uid != null ? ' · #' + user.uid : ''}${user.pronouns ? ' · ' + escapeHtml(user.pronouns) : ''}</div>
-      ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
+      <div class="dm-profile-user">@${escapeHtml(user.username)}</div>
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
       <div class="dm-profile-section"><h4>Member Since</h4><p style="font-size:14px;color:var(--text-muted)">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p></div>
     </div>`;
@@ -426,7 +403,7 @@ async function openDm(user) {
   showMainView('view-chat');
   if ($('ch-hash')) $('ch-hash').textContent = '@';
   $('ch-name').textContent = user.displayName || user.username;
-  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || '')) + (user.uid != null ? ' · #' + user.uid : '');
+  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || ''));
   $('msg-input').placeholder = `Message @${user.username}`;
   renderDmProfile(user);
   document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
@@ -529,7 +506,7 @@ function friendListRow(u, kind) {
     </div>
     <div class="friend-list-meta">
       <div class="friend-list-name">${escapeHtml(u.displayName || u.username)} <span style="color:var(--text-faint);font-weight:400;font-size:13px">${escapeHtml(u.username)}</span></div>
-      <div class="friend-list-sub">${status}${u.uid != null ? ' · #' + u.uid : ''}</div>
+      <div class="friend-list-sub">${status}</div>
     </div>
     ${actions}
   </div>`;
@@ -668,12 +645,7 @@ document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
     document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
-    // also on add-friend page tabs that switch back
-    if ($('view-add-friend').classList.contains('active') === false) {
-      showMainView('view-friends-home');
-    } else {
-      showMainView('view-friends-home');
-    }
+    showMainView('view-friends-home');
     renderFriendsBody();
   };
 });
@@ -767,7 +739,9 @@ async function showPopout(uid, ev) {
     const data = await api('/api/members');
     const u = data.members.find(m => m.id === uid);
     if (!u) return;
-    const badges = (u.badges || []).map(bid => {
+    
+    // Only render the early supporter badge
+    const badges = (u.badges || []).filter(b => b === 'early').map(bid => {
       const b = badgeDefs[bid];
       if (!b) return '';
       return `<span class="badge-pill" style="background:${b.color}">${b.icon} ${b.label}</span>`;
@@ -787,7 +761,7 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
-        <div class="popout-user">@${escapeHtml(u.username)}${u.uid != null ? ' · #' + u.uid : ''}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
+        <div class="popout-user">@${escapeHtml(u.username)}</div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
@@ -801,7 +775,6 @@ async function showPopout(uid, ev) {
     if (btn) {
       btn.onclick = (e) => {
         e.stopPropagation();
-        // Re-open a slightly larger version / focus the same card
         showPopout(uid, ev);
       };
     }
@@ -830,7 +803,7 @@ const COLORS_HTML = (id, selected) => COLORS.map(c =>
 ).join('');
 
 function badgeHtml(list) {
-  return (list || []).map(bid => {
+  return (list || []).filter(b => b === 'early').map(bid => {
     const b = badgeDefs[bid];
     if (!b) return '';
     return `<span class="badge-pill" style="background:${b.color}">${b.icon} ${b.label}</span>`;
