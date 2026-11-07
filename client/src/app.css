@@ -246,6 +246,7 @@ img { max-width: 100%; }
 .lobby p { margin: 6px 0 0; color: var(--muted); white-space: pre-wrap; }
 .typing { margin: 0 8px 6px; color: var(--muted); font-size: 13px; font-weight: 600; min-height: 18px; }
 .composer-wrap { padding: 0 16px 16px; }
+.name-fx.plain { color: var(--fx1, #fff); }
 .name-fx.glow { color: var(--fx1, #5ce1ff); text-shadow: 0 0 8px var(--fx1, #3ecbff), 0 0 18px var(--fx2, #1aa7ff); }
 .name-fx.gradient, .name-fx.rainbow {
   background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -301,6 +302,9 @@ img { max-width: 100%; }
 .member .name-fx, .friend .name-fx, .me .who .name-fx, .msg-head .name-fx, .pop h3 .name-fx, .typing .name-fx {
   display: inline; margin: 0; font-size: inherit; font-weight: inherit; line-height: inherit;
   white-space: nowrap; word-break: normal;
+}
+.member .name-fx.plain, .friend .name-fx.plain, .me .who .name-fx.plain, .msg-head .name-fx.plain, .pop h3 .name-fx.plain, .typing .name-fx.plain {
+  color: var(--fx1, #fff);
 }
 .member .name-fx.glow, .friend .name-fx.glow, .me .who .name-fx.glow, .msg-head .name-fx.glow, .pop h3 .name-fx.glow, .typing .name-fx.glow {
   color: var(--fx1, #5ce1ff); text-shadow: 0 0 8px var(--fx1, #3ecbff), 0 0 18px var(--fx2, #1aa7ff);

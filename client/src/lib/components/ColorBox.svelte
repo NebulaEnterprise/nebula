@@ -1,7 +1,7 @@
 <script>
   import { untrack } from 'svelte';
 
-  let { colors = ['#5ce1ff', '#7c6af7'], onpick } = $props();
+  let { colors = ['#5ce1ff', '#7c6af7'], slots = 2, onpick } = $props();
 
   let which = $state(0);
   let h = $state(190);
@@ -105,9 +105,11 @@
   >
     <span style="left:{sat * 100}%;top:{(1 - val) * 100}%"></span>
   </button>
-  <div class="colorbox-swatches">
-    {#each [0, 1] as i}
-      <button type="button" class="colorbox-swatch" class:on={which === i} style="background:{colors[i] || '#5ce1ff'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (which = i)}></button>
-    {/each}
-  </div>
+  {#if slots > 1}
+    <div class="colorbox-swatches">
+      {#each [0, 1] as i}
+        <button type="button" class="colorbox-swatch" class:on={which === i} style="background:{colors[i] || '#5ce1ff'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (which = i)}></button>
+      {/each}
+    </div>
+  {/if}
 </div>

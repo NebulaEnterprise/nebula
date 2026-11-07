@@ -2,7 +2,6 @@
   import { X } from '@lucide/svelte';
   import { ui, saveMe, logout, toast } from '../state.svelte.js';
   import Name from './Name.svelte';
-  import ColorWheel from './ColorWheel.svelte';
   import ColorBox from './ColorBox.svelte';
   import { fileToDataUrl } from '../image.js';
 
@@ -24,6 +23,7 @@
 
   const effects = [
     ['', 'None'],
+    ['plain', 'Plain'],
     ['glow', 'Glow'],
     ['gradient', 'Gradient'],
     ['rainbow', 'Rainbow'],
@@ -98,7 +98,7 @@
               </div>
               {#if !form.avatarUrl}
                 <p class="label">Avatar color</p>
-                <ColorWheel value={form.avatarColor} onpick={(c) => (form.avatarColor = c)} />
+                <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
               {/if}
             </section>
             <section class="look-block">
@@ -113,7 +113,7 @@
               </div>
               {#if !form.bannerUrl}
                 <p class="label">Banner color</p>
-                <ColorWheel value={form.accentColor} onpick={(c) => (form.accentColor = c)} />
+                <ColorBox colors={[form.accentColor]} slots={1} onpick={(_, c) => (form.accentColor = c)} />
               {/if}
             </section>
           {:else}
@@ -158,7 +158,7 @@
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           </div>
-          <ColorBox colors={form.nameColors} onpick={setNameColor} />
+          <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
         {/if}
       </div>
     </div>

@@ -352,12 +352,16 @@ function publicUser(u) {
     avatarUrl: u.avatarUrl || '',
     bannerUrl: u.bannerUrl || '',
     serverTag: u.serverTag || '',
-    nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(u.nameEffect) ? u.nameEffect : '',
+    nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
     badges: (u.badges || []).filter(b => b === 'early'),
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };
+}
+
+function cleanNameEffect(value) {
+  return ['plain', 'glow', 'gradient', 'rainbow', 'glitch'].includes(value) ? value : '';
 }
 
 function cleanNameColors(input) {
@@ -561,9 +565,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (avatarUrl !== undefined) req.user.avatarUrl = String(avatarUrl);
   if (bannerUrl !== undefined) req.user.bannerUrl = String(bannerUrl);
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
-  if (nameEffect !== undefined) {
-    req.user.nameEffect = ['glow', 'gradient', 'rainbow', 'glitch'].includes(nameEffect) ? nameEffect : '';
-  }
+  if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
@@ -936,7 +938,7 @@ app.post('/api/typing', auth, (req, res) => {
   if (!typingRooms.has(key)) typingRooms.set(key, new Map());
   typingRooms.get(key).set(req.user.id, {
     name: req.user.displayName || req.user.username,
-    nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(req.user.nameEffect) ? req.user.nameEffect : '',
+    nameEffect: cleanNameEffect(req.user.nameEffect),
     nameColors: cleanNameColors(req.user.nameColors),
     at: Date.now(),
   });
