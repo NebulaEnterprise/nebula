@@ -5,6 +5,11 @@
 // 3. Set DEFAULT_BACKEND or ?backend=https://xxxx.ngrok-free.app
 const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev";
 
+const TUNNEL_HEADERS = {
+  'ngrok-skip-browser-warning': 'true',
+  'bypass-tunnel-reminder': 'true',
+};
+
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get("backend");
@@ -81,7 +86,8 @@ async function safeJson(res) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error('Server returned non-JSON (is the backend running at ' + API + '?)');
+    console.error('[safeJson] non-JSON from', res.url, '→', text.slice(0, 200));
+    throw new Error('Server returned non-JSON (backend down, wrong URL, or ngrok interstitial at ' + API + '?)');
   }
 }
 
@@ -94,7 +100,7 @@ $('btn-register').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/request-code', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
       body: JSON.stringify({ email, username, password }),
     });
     const data = await safeJson(res);
@@ -117,7 +123,7 @@ $('btn-verify').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
       body: JSON.stringify({ email: window._pendingEmail, code }),
     });
     const data = await safeJson(res);
@@ -141,7 +147,7 @@ $('btn-login').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     const data = await safeJson(res);
@@ -158,7 +164,11 @@ $('btn-login').onclick = async () => {
 };
 
 async function api(path, opts = {}) {
-  const headers = { ...(opts.headers || {}), Authorization: 'Bearer ' + token };
+  const headers = {
+    ...TUNNEL_HEADERS,
+    ...(opts.headers || {}),
+    Authorization: 'Bearer ' + token,
+  };
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
@@ -282,18 +292,14 @@ function renderMessageList(list, emptyTitle, emptySub) {
   }
   box.innerHTML = list.map(m => {
     const a = m.author || {};
-    const badges = (a.badges || []).map(bid => {
-      const b = badgeDefs[bid];
-      if (!b) return '';
-      return `<span class="badge-pill" style="background:${b.color}" title="${b.label}">${b.icon} ${b.label}</span>`;
-    }).join('');
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // BADGES ARE COMPLETELY REMOVED FROM CHAT HERE.
     return `<div class="msg">
       <div class="av" style="background:${a.avatarColor || '#5865f2'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
       <div class="msg-body">
         <div class="msg-head">
           <span class="msg-author" style="color:${a.accentColor || '#fff'}" data-uid="${a.id}">${escapeHtml(a.displayName || a.username)}</span>
-          <span class="msg-badges">${badges}</span>
           <span class="msg-time">${time}</span>
         </div>
         <div class="msg-content">${escapeHtml(m.content)}</div>
@@ -317,7 +323,7 @@ async function loadMessages() {
     const data = await api(`/api/channels/${currentChannel}/messages`);
     renderMessageList(data.messages || [], '#' + currentChannel, 'This is the start of the channel. Say hi!');
   } catch (e) {
-    console.warn(e);
+    console.warn('loadMessages', e);
   }
 }
 
@@ -366,7 +372,6 @@ function setRail(mode) {
     if (mode === 'server') $('members').classList.remove('hidden');
     else $('members').classList.add('hidden');
   }
-  // Active states refreshed by renderServerRail when on server
   const home = $('nav-home');
   if (home) home.classList.toggle('active', mode === 'home');
   document.querySelectorAll('[data-server-id]').forEach(el => {
@@ -393,9 +398,9 @@ function renderDmProfile(user) {
     <div class="dm-profile-body">
       <div class="dm-profile-av" style="background:${user.avatarColor || '#5865f2'}">${initial(user.displayName || user.username)}</div>
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
-      <div class="dm-profile-user">@${escapeHtml(user.username)}${user.uid != null ? ' · #' + user.uid : ''}${user.pronouns ? ' · ' + escapeHtml(user.pronouns) : ''}</div>
       ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
+      <div class="dm-profile-section"><h4>User ID</h4><p style="font-size:14px;color:var(--text-muted)">#${user.uid != null ? user.uid : '—'}</p></div>
       <div class="dm-profile-section"><h4>Member Since</h4><p style="font-size:14px;color:var(--text-muted)">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p></div>
     </div>`;
 }
@@ -409,7 +414,7 @@ async function openDm(user) {
   showMainView('view-chat');
   if ($('ch-hash')) $('ch-hash').textContent = '@';
   $('ch-name').textContent = user.displayName || user.username;
-  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || '')) + (user.uid != null ? ' · #' + user.uid : '');
+  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || ''));
   $('msg-input').placeholder = `Message @${user.username}`;
   renderDmProfile(user);
   document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
@@ -651,12 +656,7 @@ document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
     document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
-    // also on add-friend page tabs that switch back
-    if ($('view-add-friend').classList.contains('active') === false) {
-      showMainView('view-friends-home');
-    } else {
-      showMainView('view-friends-home');
-    }
+    showMainView('view-friends-home');
     renderFriendsBody();
   };
 });
@@ -770,7 +770,6 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
-        <div class="popout-user">@${escapeHtml(u.username)}${u.uid != null ? ' · #' + u.uid : ''}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
@@ -784,7 +783,6 @@ async function showPopout(uid, ev) {
     if (btn) {
       btn.onclick = (e) => {
         e.stopPropagation();
-        // Re-open a slightly larger version / focus the same card
         showPopout(uid, ev);
       };
     }
@@ -826,7 +824,8 @@ function refreshPreview() {
   const username = ($('set-username') && $('set-username').value.trim()) || (me && me.username) || 'user';
   const uid = me && me.uid != null ? me.uid : '';
   $('preview-name').textContent = display;
-  $('preview-user').textContent = '@' + username + (uid !== '' ? ' · #' + uid : '');
+  // Keep @username in settings preview, remove ID
+  $('preview-user').textContent = '@' + username;
   if ($('preview-pronouns')) $('preview-pronouns').textContent = ($('set-pronouns') && $('set-pronouns').value.trim()) || '';
   if ($('preview-bio')) $('preview-bio').textContent = ($('set-bio') && $('set-bio').value.trim()) || '';
   const avColor = document.querySelector('#avatar-colors .color-swatch.active')?.dataset.color
