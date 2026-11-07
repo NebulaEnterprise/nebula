@@ -112,6 +112,9 @@
         <span class="channel-icon" id="ch-icon">#</span>
         <span class="ch-name" id="ch-name">general</span>
         <span class="topic" id="ch-topic">Welcome to Nebula</span>
+        <div class="top-bar-actions" id="top-actions" style="margin-left:auto; display:none;">
+           <!-- For future use (search, pins, etc.) -->
+        </div>
       </div>
       
       <div class="chat-split">
@@ -215,6 +218,7 @@
               <div class="badge-list" id="settings-badges"></div>
             </div>
           </div>
+          
           <div class="settings-panel" id="panel-looks">
             <div class="form-row">
               <label>Avatar Color</label>
@@ -224,15 +228,22 @@
               <label>Banner Color</label>
               <div class="color-row" id="accent-colors"></div>
             </div>
+            
+            <!-- NEW UPLOAD FIELDS -->
             <div class="form-row">
-              <label>Profile Picture URL</label>
-              <input id="set-avatar-url" placeholder="https://..." />
+              <label>Profile Picture (Upload)</label>
+              <input type="file" id="upload-avatar" accept="image/*" class="file-input" />
+              <p class="field-hint">Or paste a URL below</p>
+              <input id="set-avatar-url" placeholder="https://..." style="margin-top:8px;" />
             </div>
             <div class="form-row">
-              <label>Banner URL</label>
-              <input id="set-banner-url" placeholder="https://..." />
+              <label>Banner Image (Upload)</label>
+              <input type="file" id="upload-banner" accept="image/*" class="file-input" />
+              <p class="field-hint">Or paste a URL below</p>
+              <input id="set-banner-url" placeholder="https://..." style="margin-top:8px;" />
             </div>
           </div>
+
           <div class="settings-panel" id="panel-status">
             <div class="form-row">
               <label>Custom Status</label>
