@@ -198,7 +198,16 @@ function renderMe() {
   const color = me.avatarColor || '#7c5cff';
   const st = me.status || 'online';
   
-  if ($('me-initial')) $('me-initial').textContent = initial(name);
+  if ($('me-initial')) {
+    if (me.avatarUrl) {
+      $('me-initial').style.display = 'none';
+      $('me-avatar').style.backgroundImage = `url(${me.avatarUrl})`;
+    } else {
+      $('me-initial').style.display = 'block';
+      $('me-avatar').style.backgroundImage = 'none';
+      $('me-initial').textContent = initial(name);
+    }
+  }
   if ($('me-avatar')) $('me-avatar').style.background = color;
   if ($('me-name')) $('me-name').textContent = name;
   if ($('me-custom')) $('me-custom').textContent = sub;
@@ -257,8 +266,14 @@ function renderMessageList(list, emptyTitle, emptySub) {
   box.innerHTML = list.map(m => {
     const a = m.author || {};
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const avStyle = a.avatarUrl 
+      ? `background-image:url(${a.avatarUrl});background-size:cover;background-position:center;`
+      : `background:${a.avatarColor || '#7c5cff'}`;
+    const letter = a.avatarUrl ? '' : initial(a.displayName || a.username);
+
+    // BADGES REMOVED FROM HERE
     return `<div class="msg">
-      <div class="av" style="background:${a.avatarColor || '#7c5cff'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
+      <div class="av" style="${avStyle}" data-uid="${a.id}">${letter}</div>
       <div class="msg-body">
         <div class="msg-head">
           <span class="msg-author" style="color:${a.accentColor || '#fff'}" data-uid="${a.id}">${escapeHtml(a.displayName || a.username)}</span>
@@ -334,7 +349,6 @@ function setRail(mode) {
   if (navHome) navHome.classList.toggle('active', mode === 'home');
 }
 
-// Toggle Server vs Home
 if ($('nav-server')) $('nav-server').onclick = () => openServer();
 if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
 
@@ -352,10 +366,20 @@ function renderDmProfile(user) {
     if (!b) return '';
     return `<span class="badge-pill" style="background:${b.color}">${b.icon} ${b.label}</span>`;
   }).join('');
+
+  const avStyle = user.avatarUrl 
+    ? `background-image:url(${user.avatarUrl});background-size:cover;background-position:center;` 
+    : `background:${user.avatarColor || '#7c5cff'}`;
+  const letter = user.avatarUrl ? '' : initial(user.displayName || user.username);
+
+  const banStyle = user.bannerUrl 
+    ? `background-image:url(${user.bannerUrl});background-size:cover;background-position:center;` 
+    : `background:${user.bannerColor || user.accentColor || '#7c5cff'}`;
+
   box.innerHTML = `
-    <div class="dm-profile-banner" style="background:${user.bannerColor || user.accentColor || '#7c5cff'}"></div>
+    <div class="dm-profile-banner" style="${banStyle}"></div>
     <div class="dm-profile-body">
-      <div class="dm-profile-av" style="background:${user.avatarColor || '#7c5cff'}">${initial(user.displayName || user.username)}</div>
+      <div class="dm-profile-av" style="${avStyle}">${letter}</div>
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
       ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
@@ -395,8 +419,13 @@ async function refreshDmList() {
       const u = d.other;
       if (!u) return '';
       const active = dmUserId === u.id ? 'active' : '';
+      const avStyle = u.avatarUrl 
+        ? `background-image:url(${u.avatarUrl});background-size:cover;background-position:center;` 
+        : `background:${u.avatarColor || '#7c5cff'}`;
+      const letter = u.avatarUrl ? '' : initial(u.displayName || u.username);
+      
       return `<div class="dm-item ${active}" data-dm-id="${u.id}">
-        <div class="av" style="background:${u.avatarColor || '#7c5cff'}">${initial(u.displayName || u.username)}</div>
+        <div class="av" style="${avStyle}">${letter}</div>
         <span>${escapeHtml(u.displayName || u.username)}</span>
       </div>`;
     }).join('');
@@ -465,8 +494,14 @@ function friendListRow(u, kind) {
   } else {
     actions = `<div class="friend-list-actions"><span style="font-size:12px;color:var(--text-faint)">Pending</span></div>`;
   }
+
+  const avStyle = u.avatarUrl 
+    ? `background-image:url(${u.avatarUrl});background-size:cover;background-position:center;` 
+    : `background:${u.avatarColor || '#7c5cff'}`;
+  const letter = u.avatarUrl ? '' : initial(u.displayName || u.username);
+
   return `<div class="friend-list-row" data-user="${u.id}">
-    <div class="av" style="background:${u.avatarColor || '#7c5cff'}">${initial(u.displayName || u.username)}
+    <div class="av" style="${avStyle}">${letter}
       <span class="status-dot ${u.status || 'offline'}" style="width:12px;height:12px;border-width:2px"></span>
     </div>
     <div class="friend-list-meta">
@@ -804,6 +839,29 @@ function showSettingsPanel(name) {
 document.querySelectorAll('.settings-nav-item[data-panel]').forEach(btn => {
   btn.onclick = () => showSettingsPanel(btn.dataset.panel);
 });
+
+// Add event listeners for file uploads (converts to base64)
+$('upload-avatar').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    $('set-avatar-url').value = ev.target.result;
+    refreshPreview();
+  };
+  reader.readAsDataURL(file);
+};
+
+$('upload-banner').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    $('set-banner-url').value = ev.target.result;
+    refreshPreview();
+  };
+  reader.readAsDataURL(file);
+};
 
 $('btn-settings').onclick = () => {
   if ($('set-uid')) $('set-uid').value = me.uid != null ? String(me.uid) : '—';
