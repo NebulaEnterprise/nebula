@@ -19,6 +19,7 @@
   <form class="auth-card" onsubmit={(e) => e.preventDefault()}>
     <div class="mark">N</div>
     <h1>Nebula</h1>
+    <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
       <p class="sub">Log in and pick up where you left off.</p>
       <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>

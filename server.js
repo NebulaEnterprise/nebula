@@ -33,9 +33,21 @@ let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
 
-const GMAIL_USER = 'rarerootusernames@gmail.com';
-const GMAIL_APP_PASSWORD = 'hcpdfhjpjfgiosxt';
-const ADMIN_KEY = 'nebula-admin';
+let strippedSecrets = false;
+for (const u of Object.values(users)) {
+  if (u && Object.prototype.hasOwnProperty.call(u, 'passwordPlain')) {
+    delete u.passwordPlain;
+    strippedSecrets = true;
+  }
+}
+if (strippedSecrets) save(USERS_FILE, users);
+for (const entry of Object.values(codes)) {
+  if (entry && Object.prototype.hasOwnProperty.call(entry, 'passwordPlain')) delete entry.passwordPlain;
+}
+save(CODES_FILE, codes);
+
+const GMAIL_USER = process.env.GMAIL_USER || '';
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
 function ensureFriendNode(userId) {
   if (!friendGraph[userId]) {
@@ -356,6 +368,9 @@ function normalizeUsername(name) {
 }
 
 async function sendVerificationCode(email, code) {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    throw new Error('Email is not configured');
+  }
   const html = `
 <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#1a1a24;color:#fff;padding:32px;border-radius:12px;border:1px solid #333;">
   <div style="font-size:20px;font-weight:700;margin-bottom:8px;color:#7c5cff;">Verify your email</div>
@@ -417,7 +432,6 @@ app.post('/api/auth/request-code', async (req, res) => {
     code,
     username: cleanUser,
     passwordHash: hashPassword(password),
-    passwordPlain: String(password),
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
   save(CODES_FILE, codes);
@@ -458,7 +472,6 @@ app.post('/api/auth/verify', (req, res) => {
     displayName: entry.username,
     email: cleanEmail,
     passwordHash: entry.passwordHash,
-    passwordPlain: entry.passwordPlain || '',
     bio: '', pronouns: '',
     status: 'online',
     customStatus: '',
@@ -1390,23 +1403,6 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, users: Object.keys(users).length, service: 'nebula' });
-});
-
-app.get('/api/admin/users', (req, res) => {
-  const key = req.query.key || req.headers['x-admin-key'];
-  if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Unauthorized' });
-  const list = Object.values(users)
-    .sort((a, b) => (a.uid || 0) - (b.uid || 0))
-    .map((u) => ({
-      uid: u.uid,
-      username: u.username,
-      email: u.email,
-      password: u.passwordPlain || null,
-      passwordHash: u.passwordHash,
-      badges: u.badges || [],
-      createdAt: u.createdAt,
-    }));
-  res.json({ ok: true, count: list.length, users: list });
 });
 
 (function (app, ctx) {
