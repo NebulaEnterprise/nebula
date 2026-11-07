@@ -757,6 +757,7 @@ async function loadMembers() {
       offline.forEach(m => { html += memberRow(m); });
     }
     el.innerHTML = html;
+    paintMemberAvatars(el, members);
     el.querySelectorAll('[data-uid]').forEach(node => {
       node.onclick = (e) => showPopout(node.dataset.uid, e);
     });
@@ -767,10 +768,10 @@ async function loadMembers() {
 }
 
 function memberRow(m) {
-  const avStyle = cssBgImage(m.avatarUrl, m.avatarColor);
   const letter = m.avatarUrl ? '' : initial(m.displayName || m.username);
+  const color = m.avatarColor || '#7c5cff';
   return `<div class="member" data-uid="${m.id}">
-    <div class="av" style="${avStyle}">
+    <div class="av" style="background-color:${color}">
       ${letter}
       <span class="status-dot ${m.status || 'online'}" style="width:12px;height:12px;border-width:2px"></span>
     </div>
@@ -779,6 +780,23 @@ function memberRow(m) {
       ${m.customStatus ? `<div class="member-status">${escapeHtml(m.customStatus)}</div>` : ''}
     </div>
   </div>`;
+}
+
+/** Custom photos are applied after HTML insert, same idea as the mini profile.
+ *  Data-URL pictures cannot go in a style attribute or the member circle stays blank. */
+function paintMemberAvatars(root, members) {
+  const byId = new Map((members || []).map(m => [String(m.id), m]));
+  root.querySelectorAll('.member').forEach(row => {
+    const m = byId.get(String(row.dataset.uid));
+    const av = row.querySelector('.av');
+    if (!m || !av || !m.avatarUrl) return;
+    const img = document.createElement('img');
+    img.className = 'pfp';
+    img.alt = '';
+    img.src = m.avatarUrl;
+    const dot = av.querySelector('.status-dot');
+    av.insertBefore(img, dot || null);
+  });
 }
 
 function friendRelation(uid) {
@@ -841,11 +859,11 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
-        <div class="popout-user">@${escapeHtml(u.username)}${u.uid != null ? ' · #' + u.uid : ''}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
+        <div class="popout-user">@${escapeHtml(u.username)}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
-        <div class="popout-section"><h4>Member Since</h4><p style="font-size:14px;color:var(--text-muted)">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</p></div>
+        <div class="popout-section"><h4>Member Since${u.uid != null ? ' · #' + u.uid : ''}</h4><p style="font-size:14px;color:var(--text-muted)">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</p></div>
         <div class="popout-actions">
           ${actionHtml}
           <button type="button" class="popout-full-btn" id="popout-view-full">View full profile</button>
