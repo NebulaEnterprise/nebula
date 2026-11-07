@@ -2,7 +2,7 @@
   import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping, refreshTyping, typingLine } from '../state.svelte.js';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping, refreshTyping } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -17,12 +17,23 @@
     return () => clearInterval(timer);
   });
 
+  function typerName(person) {
+    const live = ui.members.find((m) => m.id === person.id) || (ui.me?.id === person.id ? ui.me : null);
+    return {
+      displayName: person.name,
+      nameEffect: person.nameEffect || live?.nameEffect || '',
+    };
+  }
+
   function liveAuthor(author) {
     if (!author) return author;
     const live = ui.members.find((m) => m.id === author.id)
       || (ui.me?.id === author.id ? ui.me : null)
       || (ui.dmUser?.id === author.id ? ui.dmUser : null);
-    return live ? { ...author, nameEffect: live.nameEffect || '', displayName: live.nick || live.displayName || author.displayName } : author;
+    const effect = (author.id === ui.me?.id && ui.me?.nameEffect) || live?.nameEffect || author.nameEffect || '';
+    return live
+      ? { ...author, nameEffect: effect, displayName: live.nick || live.displayName || author.displayName }
+      : { ...author, nameEffect: effect };
   }
 
   function time(iso) {
@@ -74,7 +85,17 @@
       {/each}
     </div>
   {/if}
-  {#if typingLine(ui.typers)}<p class="typing">{typingLine(ui.typers)}</p>{/if}
+  {#if ui.typers.length}
+    <p class="typing">
+      {#if ui.typers.length > 5}
+        5+ are typing
+      {:else}
+        {#each ui.typers.slice(0, 5) as person, i}
+          {#if i > 0}, {/if}<Name user={typerName(person)} /> is typing
+        {/each}
+      {/if}
+    </p>
+  {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
     {#if ui.mode === 'chat'}
       <button type="button" class="btn icon" title="Stickers" onclick={() => (ui.stickersOpen = !ui.stickersOpen)}><Smile size={18} /></button>

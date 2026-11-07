@@ -899,7 +899,7 @@ function listTypers(key, selfId) {
       continue;
     }
     if (id === selfId) continue;
-    out.push({ id, name: row.name });
+    out.push({ id, name: row.name, nameEffect: row.nameEffect || '' });
   }
   return out;
 }
@@ -910,6 +910,7 @@ app.post('/api/typing', auth, (req, res) => {
   if (!typingRooms.has(key)) typingRooms.set(key, new Map());
   typingRooms.get(key).set(req.user.id, {
     name: req.user.displayName || req.user.username,
+    nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(req.user.nameEffect) ? req.user.nameEffect : '',
     at: Date.now(),
   });
   res.json({ ok: true });

@@ -203,8 +203,8 @@ img { max-width: 100%; }
   margin: 8px; border-radius: 14px; background: #0e0f14;
 }
 .me .who { flex: 1; min-width: 0; }
-.me .who strong, .me .who span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.me .who span { color: var(--faint); font-size: 12px; }
+.me .who strong, .me .who span { display: block; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
+.me .who span:not(.name-fx) { color: var(--faint); font-size: 12px; }
 
 .menu {
   position: absolute; top: 60px; left: 10px; right: 10px; z-index: 8;
@@ -260,7 +260,7 @@ img { max-width: 100%; }
   padding: 8px 10px; border-radius: 10px; background: #101117; border: 1px solid var(--line); min-width: 92px;
 }
 .effect-pick.on { border-color: var(--brand); }
-.effect-pick span { color: var(--faint); font-size: 11px; font-weight: 600; }
+.effect-pick > span { color: var(--faint); font-size: 11px; font-weight: 600; }
 @keyframes name-shift { to { background-position: 200% center; } }
 @keyframes name-glitch {
   0%, 100% { text-shadow: 2px 0 #ff4d6d, -2px 0 #3ecbff; }
@@ -288,8 +288,15 @@ img { max-width: 100%; }
 }
 .member:hover, .friend:hover { background: var(--bg-hover); }
 .member .meta, .friend .meta { min-width: 0; padding-top: 2px; }
-.member strong, .friend strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.member span, .friend span { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+.member strong, .friend strong { display: block; font-size: 14px; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
+.member span:not(.name-fx), .friend span:not(.name-fx) { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+.member .name-fx, .friend .name-fx, .me .who .name-fx, .msg-head .name-fx, .pop h3 .name-fx, .typing .name-fx {
+  display: inline; margin: 0; font-size: inherit; font-weight: inherit; line-height: inherit;
+  white-space: nowrap; word-break: normal;
+}
+.member .name-fx.glow, .friend .name-fx.glow, .me .who .name-fx.glow, .msg-head .name-fx.glow, .pop h3 .name-fx.glow, .typing .name-fx.glow {
+  color: #5ce1ff; text-shadow: 0 0 8px #3ecbff, 0 0 18px #1aa7ff;
+}
 
 .avatar {
   position: relative; border-radius: 50%; display: grid; place-items: center;
