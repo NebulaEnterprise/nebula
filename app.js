@@ -240,6 +240,10 @@ function renderChannels() {
       dmUserId = null;
       dmUser = null;
       currentChannel = ch.id;
+      
+      // Switch sidebar to Server view
+      if ($('tab-server')) $('tab-server').click();
+      
       renderChannels();
       if ($('ch-icon')) $('ch-icon').textContent = '#';
       $('ch-name').textContent = ch.name;
@@ -322,18 +326,6 @@ function showMainView(name) {
   if (el) el.classList.add('active');
 }
 
-function setRail(mode) {
-  if ($('sidebar-server')) $('sidebar-server').style.display = mode === 'server' ? 'block' : 'none';
-  if ($('sidebar-dm')) $('sidebar-dm').style.display = mode === 'home' ? 'block' : 'none';
-  
-  if ($('members')) {
-    if (mode === 'server') $('members').classList.remove('hidden');
-    else $('members').classList.add('hidden');
-  }
-  const home = $('nav-home');
-  if (home) home.classList.toggle('active', mode === 'home');
-}
-
 function renderDmProfile(user) {
   const box = $('dm-profile');
   if (!box) return;
@@ -362,17 +354,19 @@ function renderDmProfile(user) {
 
 async function openDm(user) {
   if (!user || !user.id) return;
-  setRail('home');
   chatMode = 'dm';
   dmUserId = user.id;
   dmUser = user;
   showMainView('view-chat');
+  
+  // Ensure sidebar is on friends view
+  if ($('tab-friends')) $('tab-friends').click();
+  
   if ($('ch-icon')) $('ch-icon').textContent = '@';
   $('ch-name').textContent = user.displayName || user.username;
   $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || ''));
   $('msg-input').placeholder = `Message @${user.username}`;
   renderDmProfile(user);
-  document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
   await refreshDmList();
   await loadMessages();
 }
@@ -519,29 +513,31 @@ async function loadFriendsData() {
 }
 
 function openFriendsHome(tab) {
-  setRail('home');
   chatMode = 'home';
   dmUserId = null;
   friendsTab = tab || 'online';
   showMainView('view-friends-home');
   renderDmProfile(null);
+  
+  if ($('tab-friends')) $('tab-friends').click();
+  
   document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
     if (t.classList.contains('add')) return;
     t.classList.toggle('active', t.dataset.ftab === friendsTab);
   });
-  document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
-  if ($('btn-friends-page')) $('btn-friends-page').classList.add('active');
+  document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.toggle('active', b.dataset.dmTab === friendsTab));
   loadFriendsData();
 }
 
 function openAddFriendPage() {
-  setRail('home');
   chatMode = 'home';
   dmUserId = null;
   showMainView('view-add-friend');
   renderDmProfile(null);
+  
+  if ($('tab-friends')) $('tab-friends').click();
+  
   document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
-  if ($('btn-add-friend-page')) $('btn-add-friend-page').classList.add('active');
   if ($('add-friend-hint')) {
     $('add-friend-hint').textContent = '';
     $('add-friend-hint').className = 'add-friend-hint';
@@ -549,12 +545,14 @@ function openAddFriendPage() {
 }
 
 async function openServer() {
-  setRail('server');
   chatMode = 'server';
   dmUserId = null;
   dmUser = null;
   showMainView('view-chat');
   renderDmProfile(null);
+  
+  if ($('tab-server')) $('tab-server').click();
+  
   try {
     const chData = await api('/api/channels');
     channels = chData.channels || [];
@@ -583,19 +581,57 @@ async function openServer() {
   await loadMembers();
 }
 
-if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
-if ($('btn-friends-page')) $('btn-friends-page').onclick = () => openFriendsHome(friendsTab || 'online');
-if ($('btn-add-friend-page')) $('btn-add-friend-page').onclick = () => openAddFriendPage();
+// TAB SWITCHERS
+if ($('tab-server')) {
+  $('tab-server').onclick = () => {
+    $('tab-server').classList.add('active');
+    $('tab-friends').classList.remove('active');
+    $('sidebar-server').classList.add('active');
+    $('sidebar-dm').classList.remove('active');
+    if (chatMode === 'home') {
+      showMainView('view-chat');
+      chatMode = 'server';
+      loadMessages();
+    }
+  };
+}
+if ($('tab-friends')) {
+  $('tab-friends').onclick = () => {
+    $('tab-friends').classList.add('active');
+    $('tab-server').classList.remove('active');
+    $('sidebar-dm').classList.add('active');
+    $('sidebar-server').classList.remove('active');
+    if (chatMode === 'server') {
+      openFriendsHome('online');
+    }
+  };
+}
+
+if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome(friendsTab || 'online');
 if ($('btn-dm-plus')) $('btn-dm-plus').onclick = () => openAddFriendPage();
 if ($('btn-open-add-friend')) $('btn-open-add-friend').onclick = () => openAddFriendPage();
 
-document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
+// Sidebar DM Tabs
+document.querySelectorAll('.dm-nav-item[data-dm-tab]').forEach(btn => {
+  btn.onclick = () => {
+    if (btn.classList.contains('add')) return;
+    friendsTab = btn.dataset.dmTab;
+    document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    showMainView('view-friends-home');
+    renderFriendsBody();
+  };
+});
+
+// Friends Home Page Tabs
+document.querySelectorAll('#view-friends-home .ftab[data-ftab]').forEach(btn => {
   btn.onclick = () => {
     if (btn.classList.contains('add')) return;
     friendsTab = btn.dataset.ftab;
     document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
+    document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.toggle('active', b.dataset.dmTab === friendsTab));
     showMainView('view-friends-home');
     renderFriendsBody();
   };
@@ -893,7 +929,9 @@ async function enterApp() {
   pollTimer = setInterval(() => {
     loadMessages();
     if (chatMode === 'server') loadMembers();
-    if (chatMode === 'home' || chatMode === 'dm') refreshDmList();
+    if (chatMode === 'home' || chatMode === 'dm') {
+      loadFriendsData(); // updates friend requests in the background
+    }
   }, 5000);
 }
 
