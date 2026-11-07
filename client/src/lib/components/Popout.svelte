@@ -32,10 +32,7 @@
       </div>
       {#if u.bio}<p style="margin-top:10px;color:var(--muted)">{u.bio}</p>{/if}
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
-      <div class="split">
-        <div><h4>Member since</h4><p>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</p></div>
-        <div><h4>User id</h4><p>{u.uid ?? '—'}</p></div>
-      </div>
+      <p class="pop-meta">Member since {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · User id {u.uid ?? '—'}</p>
       <div class="stack">
         {#if rel === 'friends'}
           <button class="btn brand" onclick={() => { ui.popout = null; openDm(u); }}>Message</button>

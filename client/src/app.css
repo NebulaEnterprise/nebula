@@ -402,10 +402,7 @@ img { max-width: 100%; }
 .pop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pop h3, .pop p { margin: 0; }
 .pop .handle { color: var(--muted); font-size: 13px; }
-.split { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.split div { background: #101117; border-radius: 10px; padding: 8px 10px; }
-.split h4 { margin: 0; font-size: 11px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
-.split p { margin: 2px 0 0; font-weight: 600; }
+.pop-meta { margin: 12px 0 0; color: var(--faint); font-size: 12px; font-weight: 500; }
 .stack { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .toast {
   position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
