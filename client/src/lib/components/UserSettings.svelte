@@ -18,6 +18,7 @@
     avatarUrl: ui.me?.avatarUrl || '',
     bannerUrl: ui.me?.bannerUrl || '',
     nameEffect: ui.me?.nameEffect || '',
+    nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
   });
 
   const effects = [
@@ -31,13 +32,17 @@
   async function upload(file, kind, input) {
     try {
       if (!file) return;
-      const url = await fileToDataUrl(file, kind === 'avatar'
-        ? { maxW: 256, maxH: 256, quality: 0.85 }
-        : { maxW: 960, maxH: 360, quality: 0.8 });
+      const url = await fileToDataUrl(file, { original: true });
       if (kind === 'avatar') form.avatarUrl = url;
       else form.bannerUrl = url;
     } catch (err) { toast(err.message); }
     finally { if (input) input.value = ''; }
+  }
+
+  function setNameColor(index, value) {
+    const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
+    next[index] = value;
+    form.nameColors = next;
   }
 
   async function save() {
@@ -114,11 +119,17 @@
             <div class="effect-picks">
               {#each effects as [id, label]}
                 <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id }} />
+                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameColors: form.nameColors }} />
                   <span>{label}</span>
                 </button>
               {/each}
             </div>
+            {#if form.nameEffect}
+              <p class="label">{form.nameEffect === 'glow' ? 'Name color' : 'First color'}</p>
+              <ColorWheel value={form.nameColors[0] || '#5ce1ff'} onpick={(c) => setNameColor(0, c)} />
+              <p class="label">{form.nameEffect === 'glow' ? 'Glow color' : 'Second color'}</p>
+              <ColorWheel value={form.nameColors[1] || '#7c6af7'} onpick={(c) => setNameColor(1, c)} />
+            {/if}
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
@@ -139,7 +150,7 @@
               {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
-              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect }} /></strong>
+              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
               <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
               {#if form.bio}<p>{form.bio}</p>{/if}
             </div>

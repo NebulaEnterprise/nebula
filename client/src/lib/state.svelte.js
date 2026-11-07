@@ -367,7 +367,11 @@ export async function refreshTyping() {
 
 export async function saveMe(body) {
   const data = await api('/api/me', { method: 'PATCH', body });
-  ui.me = { ...data.user, nameEffect: data.user?.nameEffect || body.nameEffect || '' };
+  ui.me = {
+    ...data.user,
+    nameEffect: data.user?.nameEffect || body.nameEffect || '',
+    nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || []),
+  };
   ui.userSettings = false;
   await loadMembers();
   toast('Profile saved');

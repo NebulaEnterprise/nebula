@@ -353,10 +353,22 @@ function publicUser(u) {
     bannerUrl: u.bannerUrl || '',
     serverTag: u.serverTag || '',
     nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(u.nameEffect) ? u.nameEffect : '',
+    nameColors: cleanNameColors(u.nameColors),
     badges: (u.badges || []).filter(b => b === 'early'),
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };
+}
+
+function cleanNameColors(input) {
+  const list = Array.isArray(input) ? input : [];
+  const out = [];
+  for (const c of list) {
+    const hex = String(c || '').trim().slice(0, 9);
+    if (/^#[0-9a-fA-F]{3,8}$/.test(hex)) out.push(hex);
+    if (out.length === 2) break;
+  }
+  return out;
 }
 
 function normalizeUsername(name) {
@@ -401,7 +413,7 @@ const FRONTEND_DIR = resolveFrontendDir();
 const app = express();
 app.set('etag', false);
 app.use(cors());
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '512mb' }));
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
@@ -525,7 +537,7 @@ app.get('/api/me', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, pronouns, customStatus, status,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -546,12 +558,13 @@ app.patch('/api/me', auth, (req, res) => {
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
-  if (avatarUrl !== undefined) req.user.avatarUrl = String(avatarUrl).slice(0, 12000000);
-  if (bannerUrl !== undefined) req.user.bannerUrl = String(bannerUrl).slice(0, 12000000);
+  if (avatarUrl !== undefined) req.user.avatarUrl = String(avatarUrl);
+  if (bannerUrl !== undefined) req.user.bannerUrl = String(bannerUrl);
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (nameEffect !== undefined) {
     req.user.nameEffect = ['glow', 'gradient', 'rainbow', 'glitch'].includes(nameEffect) ? nameEffect : '';
   }
+  if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
@@ -912,7 +925,7 @@ function listTypers(key, selfId) {
       continue;
     }
     if (id === selfId) continue;
-    out.push({ id, name: row.name, nameEffect: row.nameEffect || '' });
+    out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [] });
   }
   return out;
 }
@@ -924,6 +937,7 @@ app.post('/api/typing', auth, (req, res) => {
   typingRooms.get(key).set(req.user.id, {
     name: req.user.displayName || req.user.username,
     nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(req.user.nameEffect) ? req.user.nameEffect : '',
+    nameColors: cleanNameColors(req.user.nameColors),
     at: Date.now(),
   });
   res.json({ ok: true });

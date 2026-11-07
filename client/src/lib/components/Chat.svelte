@@ -22,6 +22,7 @@
     return {
       displayName: person.name,
       nameEffect: person.nameEffect || live?.nameEffect || '',
+      nameColors: person.nameColors?.length ? person.nameColors : (live?.nameColors || []),
     };
   }
 
@@ -30,10 +31,12 @@
     const live = ui.members.find((m) => m.id === author.id)
       || (ui.me?.id === author.id ? ui.me : null)
       || (ui.dmUser?.id === author.id ? ui.dmUser : null);
-    const effect = (author.id === ui.me?.id && ui.me?.nameEffect) || live?.nameEffect || author.nameEffect || '';
+    const mine = author.id === ui.me?.id ? ui.me : null;
+    const effect = mine?.nameEffect || live?.nameEffect || author.nameEffect || '';
+    const colors = mine?.nameColors?.length ? mine.nameColors : (live?.nameColors || author.nameColors || []);
     return live
-      ? { ...author, nameEffect: effect, displayName: live.nick || live.displayName || author.displayName }
-      : { ...author, nameEffect: effect };
+      ? { ...author, nameEffect: effect, nameColors: colors, displayName: live.nick || live.displayName || author.displayName }
+      : { ...author, nameEffect: effect, nameColors: colors };
   }
 
   function time(iso) {

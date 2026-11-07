@@ -3,7 +3,7 @@
   import Name from './Name.svelte';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
-    if (m.id === ui.me?.id && ui.me?.nameEffect) return { ...m, nameEffect: ui.me.nameEffect };
+    if (m.id === ui.me?.id && ui.me) return { ...m, nameEffect: ui.me.nameEffect || m.nameEffect, nameColors: ui.me.nameColors || m.nameColors };
     return m;
   }
   const online = $derived(ui.members.filter((m) => m.status !== 'offline'));

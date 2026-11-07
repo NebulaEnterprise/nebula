@@ -1,4 +1,13 @@
 export function fileToDataUrl(file, opts = {}) {
+  if (opts.original) {
+    return new Promise((resolve, reject) => {
+      if (!file) { reject(new Error('Choose an image')); return; }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read image'));
+      reader.readAsDataURL(file);
+    });
+  }
   const maxW = opts.maxW || 512;
   const maxH = opts.maxH || 512;
   const quality = opts.quality || 0.82;
