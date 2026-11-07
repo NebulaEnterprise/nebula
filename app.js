@@ -171,6 +171,9 @@ async function api(path, opts = {}) {
     logout();
     throw new Error('Session expired');
   }
+  if (res.status === 413) {
+    throw new Error('Image is too large. Use a smaller file or a shorter GIF.');
+  }
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
 }
@@ -869,27 +872,69 @@ document.querySelectorAll('.settings-nav-item[data-panel]').forEach(btn => {
   btn.onclick = () => showSettingsPanel(btn.dataset.panel);
 });
 
-// Add event listeners for file uploads (converts to base64)
-$('upload-avatar').onchange = (e) => {
+// Compress / resize image to data URL so PATCH stays under body limit
+function fileToDataUrl(file, opts) {
+  return new Promise((resolve, reject) => {
+    const maxW = opts.maxW || 512;
+    const maxH = opts.maxH || 512;
+    const quality = opts.quality || 0.82;
+    // Keep small GIFs animated; large ones get flattened to JPEG
+    const isGif = /image\/gif/i.test(file.type);
+    if (isGif && file.size <= 1.5 * 1024 * 1024) {
+      const reader = new FileReader();
+      reader.onload = (ev) => resolve(ev.target.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      const scale = Math.min(1, maxW / w, maxH / h);
+      w = Math.max(1, Math.round(w * scale));
+      h = Math.max(1, Math.round(h * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      // Prefer JPEG for photos; keep PNG if source had transparency and is small
+      const out = canvas.toDataURL('image/jpeg', quality);
+      resolve(out);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image'));
+    };
+    img.src = url;
+  });
+}
+
+$('upload-avatar').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    $('set-avatar-url').value = ev.target.result;
+  try {
+    const dataUrl = await fileToDataUrl(file, { maxW: 256, maxH: 256, quality: 0.85 });
+    $('set-avatar-url').value = dataUrl;
     refreshPreview();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    alert(err.message || 'Avatar upload failed');
+  }
 };
 
-$('upload-banner').onchange = (e) => {
+$('upload-banner').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    $('set-banner-url').value = ev.target.result;
+  try {
+    const dataUrl = await fileToDataUrl(file, { maxW: 960, maxH: 360, quality: 0.8 });
+    $('set-banner-url').value = dataUrl;
     refreshPreview();
-  };
-  reader.readAsDataURL(file);
+  } catch (err) {
+    alert(err.message || 'Banner upload failed');
+  }
 };
 
 $('btn-settings').onclick = () => {
@@ -963,7 +1008,12 @@ $('settings-save').onclick = async () => {
     loadMembers();
     $('settings-overlay').classList.remove('open');
   } catch (e) {
-    alert(e.message);
+    const msg = (e && e.message) || String(e);
+    if (/too large|PayloadTooLarge|entity too large|413/i.test(msg)) {
+      alert('Image is too large. Try a smaller file or a shorter GIF (under ~1.5MB).');
+    } else {
+      alert(msg);
+    }
   }
 };
 
