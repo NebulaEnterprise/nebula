@@ -1041,6 +1041,24 @@ function sourceFor(id) {
   return null;
 }
 
+const sizing = new Set();
+
+function scheduleGifSize(file, cached, size) {
+  if (sizing.has(cached) || fs.existsSync(cached)) return;
+  sizing.add(cached);
+  setImmediate(() => {
+    try {
+      if (!fs.existsSync(cached)) {
+        const gif = decodeGif(fs.readFileSync(file));
+        const out = gif && sizedGif(gif, size);
+        const originalSize = fs.statSync(file).size;
+        if (out && out.length && out.length < originalSize) fs.writeFileSync(cached, out);
+      }
+    } catch (err) {}
+    sizing.delete(cached);
+  });
+}
+
 function sendAsset(res, file, type) {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');
@@ -1066,20 +1084,23 @@ app.get('/uploads/:name', (req, res) => {
   const src = sourceFor(id);
   if (!src) return res.status(404).end();
   const animated = src.ext === '.gif';
-  if (animated && (want === 'gif' || want === 'png' || want === 'jpg') && (want !== 'gif' || size)) {
-    const kind = want === 'gif' ? 'gif' : 'png';
-    const cached = path.join(DERIVED_DIR, id + '.' + kind + '.s' + (size || 0));
-    if (fs.existsSync(cached)) return sendAsset(res, cached, kind === 'gif' ? 'gif' : 'png');
+  if (animated && want === 'gif' && size) {
+    const cached = path.join(DERIVED_DIR, id + '.gif.s' + size);
+    if (fs.existsSync(cached)) return sendAsset(res, cached, 'gif');
+    scheduleGifSize(src.file, cached, size);
+    return sendAsset(res, src.file, 'gif');
+  }
+  if (animated && (want === 'png' || want === 'jpg')) {
+    const cached = path.join(DERIVED_DIR, id + '.png.s' + (size || 0));
+    if (fs.existsSync(cached)) return sendAsset(res, cached, 'png');
     try {
       const gif = decodeGif(fs.readFileSync(src.file));
-      const out = gif && (want === 'gif' ? sizedGif(gif, size) : stillPng(gif, size));
-      const originalSize = fs.statSync(src.file).size;
-      if (out && out.length && (want !== 'gif' || out.length < originalSize)) {
+      const out = gif && stillPng(gif, size);
+      if (out && out.length) {
         fs.writeFileSync(cached, out);
-        return sendAsset(res, cached, kind === 'gif' ? 'gif' : 'png');
+        return sendAsset(res, cached, 'png');
       }
     } catch (err) {}
-    if (want === 'gif') return sendAsset(res, src.file, 'gif');
     return res.status(404).end();
   }
   if (want === 'gif' || want === src.ext.slice(1)) {

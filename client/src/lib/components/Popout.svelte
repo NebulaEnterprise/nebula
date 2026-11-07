@@ -22,7 +22,7 @@
 
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
-    <div class="pop-banner">
+    <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Banner url={u.bannerUrl} />{/if}
     </div>
     {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}

@@ -100,7 +100,7 @@ export async function boot() {
   try {
     const data = await api('/api/me');
     ui.me = data.user;
-    warmMedia([assetPath(data.user?.bannerUrl, { size: 512 }), data.user?.avatarUrl]);
+    warmMedia(bannerMedia(data.user?.bannerUrl).concat(data.user?.avatarUrl));
     await enterApp();
   } catch {
     logout();
@@ -359,7 +359,7 @@ export async function loadMembers(quiet) {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
     ui.members = data.members || [];
     ui.badgeDefs = data.badges || {};
-    warmMedia(ui.members.flatMap((m) => [assetPath(m.bannerUrl, { size: 512 }), m.avatarUrl]));
+    warmMedia(ui.members.flatMap((m) => bannerMedia(m.bannerUrl).concat(m.avatarUrl)));
   } catch (_) {}
   finally { membersBusy = false; }
 }
@@ -474,17 +474,30 @@ export async function friendAct(kind, body) {
   await loadDms();
 }
 
+function bannerMedia(url) {
+  if (!url) return [];
+  const animated = /\/uploads\/a_|\/uploads\/[^/]+\.gif(\?|$)/i.test(url);
+  return animated
+    ? [assetPath(url, { format: 'png', size: 512 }), assetPath(url, { format: 'gif', size: 512 })]
+    : [assetPath(url, { size: 512 })];
+}
+
 export async function openPopout(user, x, y) {
-  await loadFriends();
+  const known = ui.members.find((m) => m.id === user.id);
+  const seed = known ? { ...user, ...known, roles: known.roles || user.roles || [] } : user;
+  ui.popout = { user: seed, x, y };
+  warmMedia(bannerMedia(seed.bannerUrl));
+  loadFriends().catch(() => {});
   try {
     const q = ui.serverId ? ('?serverId=' + encodeURIComponent(ui.serverId)) : '';
     const data = await api('/api/members' + q);
+    if (!ui.popout || ui.popout.user?.id !== user.id) return;
     const fresh = (data.members || []).find((m) => m.id === user.id);
     ui.badgeDefs = data.badges || ui.badgeDefs;
-    ui.popout = { user: fresh ? { ...user, ...fresh, roles: fresh.roles || user.roles || [] } : user, x, y };
-  } catch {
-    ui.popout = { user, x, y };
-  }
+    if (!fresh) return;
+    ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || seed.roles || [] }, x, y };
+    warmMedia(bannerMedia(fresh.bannerUrl));
+  } catch (_) {}
 }
 
 export const currentChannel = () => ui.channels.find((c) => c.id === ui.channelId) || null;
