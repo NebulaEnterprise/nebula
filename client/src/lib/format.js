@@ -42,8 +42,6 @@ export const PERM = {
   ADMIN: 128,
 };
 
-export const COLORS = ['#7c6af7', '#3ecf8e', '#f5a524', '#f06a6a', '#eb459e', '#4db2ff', '#f47fff', '#f4f4f5'];
-
 export const ROLE_FLAGS = [
   ['View channels', PERM.VIEW],
   ['Send messages', PERM.SEND],

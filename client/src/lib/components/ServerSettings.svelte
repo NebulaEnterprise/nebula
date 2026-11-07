@@ -4,8 +4,9 @@
     Flag, ScrollText, Users, DoorOpen, Gavel, Ban, ChevronUp, ChevronDown, Trash2, Copy,
   } from '@lucide/svelte';
   import Select from './Select.svelte';
+  import ColorWheel from './ColorWheel.svelte';
   import { ui, guildAction, reloadSettings, toast } from '../state.svelte.js';
-  import { COLORS, ROLE_FLAGS, PERM } from '../format.js';
+  import { ROLE_FLAGS, PERM } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api } from '../api.js';
 
@@ -115,21 +116,17 @@
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" /></div>
         <div class="field"><label>Server tag</label><input bind:value={tag} maxlength="4" placeholder="ILY" /></div>
         <p class="label">Accent</p>
-        <div class="swatches">{#each COLORS as c}<button class="swatch" class:on={accent === c} style="background:{c}" onclick={() => (accent = c)}></button>{/each}</div>
+        <ColorWheel value={accent} onpick={(c) => (accent = c)} />
         <div style="height:14px"></div>
         <button class="btn brand" style="width:auto" onclick={saveOverview}>Save</button>
 
       {:else if ui.settingsPage === 'theme'}
         <p class="hint">Everyone sees these colors while they are in this server.</p>
         <p class="label">Accent</p>
-        <div class="swatches">{#each COLORS as c}<button class="swatch" class:on={accent === c} style="background:{c}" onclick={() => (accent = c)}></button>{/each}</div>
+        <ColorWheel value={accent} onpick={(c) => (accent = c)} />
         <p class="label" style="margin-top:14px">Background</p>
-        <div class="swatches">
-          <button class="swatch" class:on={!tint} style="background:#181920" onclick={() => (tint = '')}></button>
-          {#each ['#14161c', '#1a2330', '#241820', '#10241c', '#2a2418'] as c}
-            <button class="swatch" class:on={tint === c} style="background:{c}" onclick={() => (tint = c)}></button>
-          {/each}
-        </div>
+        <ColorWheel value={tint || '#181920'} onpick={(c) => (tint = c)} />
+        {#if tint}<button type="button" class="btn sm" style="margin-top:8px" onclick={() => (tint = '')}>Default background</button>{/if}
         <div style="height:14px"></div>
         <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', color: accent, theme: { accent, tint } }))}>Save theme</button>
         <button class="btn" onclick={() => run(() => guildAction({ type: 'settings', theme: { accent: '#7c6af7', tint: '' } }))}>Remove theme</button>
@@ -296,10 +293,11 @@
 
       {:else if ui.settingsPage === 'roles'}
         {#each s.roles || [] as r}
-          <div class="row"><span class="swatch" style="background:{r.color || '#99aab5'};width:12px;height:12px"></span><strong>{r.name}</strong></div>
+          <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.name}</strong></div>
         {/each}
         <div class="field"><label>New role</label><input bind:value={roleName} maxlength="32" placeholder="Moderator" /></div>
-        <div class="swatches" style="margin-bottom:8px">{#each COLORS as c}<button class="swatch" class:on={roleColor === c} style="background:{c}" onclick={() => (roleColor = c)}></button>{/each}</div>
+        <p class="label">Role color</p>
+        <ColorWheel value={roleColor} onpick={(c) => (roleColor = c)} />
         {#each ROLE_FLAGS as [label, bit]}
           <label class="check"><input type="checkbox" checked={!!(roleBits & bit)} onchange={(e) => { roleBits = e.target.checked ? roleBits | bit : roleBits & ~bit; }} /> {label}</label>
         {/each}

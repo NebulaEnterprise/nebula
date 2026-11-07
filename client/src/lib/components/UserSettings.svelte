@@ -2,7 +2,7 @@
   import { X } from '@lucide/svelte';
   import { ui, saveMe, logout, toast } from '../state.svelte.js';
   import Name from './Name.svelte';
-  import { COLORS } from '../format.js';
+  import ColorWheel from './ColorWheel.svelte';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -28,14 +28,16 @@
     ['glitch', 'Glitch'],
   ];
 
-  async function upload(file, kind) {
+  async function upload(file, kind, input) {
     try {
+      if (!file) return;
       const url = await fileToDataUrl(file, kind === 'avatar'
         ? { maxW: 256, maxH: 256, quality: 0.85 }
         : { maxW: 960, maxH: 360, quality: 0.8 });
       if (kind === 'avatar') form.avatarUrl = url;
       else form.bannerUrl = url;
     } catch (err) { toast(err.message); }
+    finally { if (input) input.value = ''; }
   }
 
   async function save() {
@@ -72,12 +74,42 @@
             <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
             <div class="field"><label>Bio</label><textarea bind:value={form.bio} maxlength="190" rows="4"></textarea></div>
           {:else if page === 'look'}
-            <p class="label">Avatar color</p>
-            <div class="swatches" style="margin-bottom:14px">
-              {#each COLORS as c}
-                <button class="swatch" class:on={form.avatarColor === c} style="background:{c}" onclick={() => (form.avatarColor = c)}></button>
-              {/each}
-            </div>
+            <section class="look-block">
+              <div class="look-row">
+                <div class="look-av" style="background:{form.avatarColor}">
+                  {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                </div>
+                <div>
+                  <strong>Profile picture</strong>
+                  <p>PNG, JPG, GIF, or WebP.</p>
+                  <div class="look-actions">
+                    <label class="btn brand sm look-btn">Upload picture
+                      <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
+                    </label>
+                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => (form.avatarUrl = '')}>Remove</button>{/if}
+                  </div>
+                </div>
+              </div>
+              {#if !form.avatarUrl}
+                <p class="label">Avatar color</p>
+                <ColorWheel value={form.avatarColor} onpick={(c) => (form.avatarColor = c)} />
+              {/if}
+            </section>
+            <section class="look-block">
+              <strong>Banner</strong>
+              <p>This sits across the top of your profile.</p>
+              <div class="look-banner" style="background:{form.bannerUrl ? `center/cover url('${form.bannerUrl}')` : form.accentColor}"></div>
+              <div class="look-actions">
+                <label class="btn brand sm look-btn">Upload banner
+                  <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
+                </label>
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => (form.bannerUrl = '')}>Remove</button>{/if}
+              </div>
+              {#if !form.bannerUrl}
+                <p class="label">Banner color</p>
+                <ColorWheel value={form.accentColor} onpick={(c) => (form.accentColor = c)} />
+              {/if}
+            </section>
             <p class="label">Name effect</p>
             <div class="effect-picks">
               {#each effects as [id, label]}
@@ -87,21 +119,6 @@
                 </button>
               {/each}
             </div>
-            <p class="label">Banner color</p>
-            <div class="swatches" style="margin-bottom:14px">
-              {#each COLORS as c}
-                <button class="swatch" class:on={form.accentColor === c} style="background:{c}" onclick={() => (form.accentColor = c)}></button>
-              {/each}
-            </div>
-            <label class="drop">
-              {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}<strong>Upload avatar</strong><span>Square image or GIF</span>{/if}
-              <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar')} />
-            </label>
-            <div style="height:10px"></div>
-            <label class="drop">
-              {#if form.bannerUrl}<img src={form.bannerUrl} alt="" />{:else}<strong>Upload banner</strong><span>A wide image</span>{/if}
-              <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'banner')} />
-            </label>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
