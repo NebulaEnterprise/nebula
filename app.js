@@ -292,8 +292,9 @@ function renderMessageList(list, emptyTitle, emptySub) {
   }
   box.innerHTML = list.map(m => {
     const a = m.author || {};
-    // REMOVED BADGES FROM CHAT HERE
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // BADGES ARE COMPLETELY REMOVED FROM CHAT HERE.
     return `<div class="msg">
       <div class="av" style="background:${a.avatarColor || '#5865f2'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
       <div class="msg-body">
@@ -397,7 +398,6 @@ function renderDmProfile(user) {
     <div class="dm-profile-body">
       <div class="dm-profile-av" style="background:${user.avatarColor || '#5865f2'}">${initial(user.displayName || user.username)}</div>
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
-      <!-- REMOVED @user · #id HERE -->
       ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
       <div class="dm-profile-section"><h4>User ID</h4><p style="font-size:14px;color:var(--text-muted)">#${user.uid != null ? user.uid : '—'}</p></div>
@@ -770,7 +770,6 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
-        <!-- REMOVED @user · #id HERE -->
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
