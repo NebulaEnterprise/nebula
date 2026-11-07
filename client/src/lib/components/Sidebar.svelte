@@ -4,7 +4,8 @@
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, pickChannel, logout, openServerSettings } from '../state.svelte.js';
+  import { api } from '../api.js';
+  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -41,6 +42,18 @@
     }
     ui.dialog = { kind: act };
   }
+
+  async function removeChannel(ch) {
+    const label = ch.type === 'voice' ? ch.name : '#' + ch.name;
+    if (!confirm('Delete ' + label + '?')) return;
+    try {
+      await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
+      if (ui.channelId === ch.id) ui.channelId = '';
+      await openServer(ui.serverId);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
 </script>
 
 <aside class="side">
@@ -66,6 +79,11 @@
       <div class="banner-strip" style="background-image:linear-gradient(rgba(12,13,17,0.2), rgba(12,13,17,0.72)), url('{ui.bannerUrl}')"></div>
     {/if}
     <div class="scroll">
+      {#if hasPerm(PERM.INVITE)}
+        <button class="invite-btn" onclick={() => (ui.dialog = { kind: 'invite' })}>
+          <Link size={16} /> Invite people
+        </button>
+      {/if}
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
@@ -77,7 +95,7 @@
             <div class="cat">
               <span>{cat.name ? 'Text' : 'Text channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
-                <button class="btn icon" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
+                <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
               {/if}
             </div>
             {#each texts as ch}
@@ -87,7 +105,10 @@
                   <span class="ch-name">{ch.name}</span>
                 </button>
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
-                  <button class="btn icon" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Settings size={14} /></button>
+                  <span class="row-actions">
+                    <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>
+                    <button class="row-act" title="Delete channel" onclick={() => removeChannel(ch)}><Trash2 size={15} /></button>
+                  </span>
                 {/if}
               </div>
             {/each}
@@ -96,13 +117,21 @@
             <div class="cat">
               <span>{cat.name ? 'Voice' : 'Voice channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
-                <button class="btn icon" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
+                <button class="cat-add" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
               {/if}
             </div>
             {#each voices as ch}
               <div class="channel">
-                <Volume2 size={16} />
-                <span class="ch-name">{ch.name}</span>
+                <span class="channel-hit">
+                  <Volume2 size={16} />
+                  <span class="ch-name">{ch.name}</span>
+                </span>
+                {#if hasPerm(PERM.MANAGE_CHANNELS)}
+                  <span class="row-actions">
+                    <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>
+                    <button class="row-act" title="Delete channel" onclick={() => removeChannel(ch)}><Trash2 size={15} /></button>
+                  </span>
+                {/if}
               </div>
             {/each}
           {/if}

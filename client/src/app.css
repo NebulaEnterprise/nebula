@@ -131,9 +131,32 @@ img { max-width: 100%; }
 .channel-hit { flex: 1; width: auto; min-width: 0; background: none; }
 .nav-item:hover, .channel:hover, .dm-item:hover { background: var(--bg-hover); color: var(--text); }
 .nav-item.on, .channel.on, .dm-item.on { background: var(--bg-active); color: var(--text); }
+.channel { border-radius: 4px; }
+.channel:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); }
+.channel.on, .channel.on:hover { background: #3c3f4a; color: #fff; }
+.channel .ch-name { font-weight: 500; }
+.channel.on .ch-name { font-weight: 600; color: #fff; }
+.invite-btn {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 2px 0 8px; padding: 8px 10px; border-radius: 4px;
+  background: #248046; color: #fff; font-weight: 600; font-size: 14px;
+}
+.invite-btn:hover { background: #1a6334; }
+.cat-add {
+  width: 18px; height: 18px; padding: 0; display: grid; place-items: center;
+  color: var(--faint); border-radius: 3px;
+}
+.cat-add:hover { color: var(--text); }
+.row-actions { display: none; align-items: center; gap: 1px; flex-shrink: 0; margin-right: 2px; }
+.channel:hover .row-actions, .channel.on .row-actions { display: flex; }
+.row-act {
+  width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
+  color: #c7cad1; border-radius: 4px;
+}
+.row-act:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 .cat {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 10px 4px; color: var(--faint); font-size: 11px; font-weight: 700;
+  padding: 14px 8px 4px; color: var(--faint); font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
 .ch-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
