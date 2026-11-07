@@ -2,20 +2,11 @@
   import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping, refreshTyping } from '../state.svelte.js';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
-
-  $effect(() => {
-    ui.mode;
-    ui.channelId;
-    ui.dmUser?.id;
-    refreshTyping();
-    const timer = setInterval(refreshTyping, 3000);
-    return () => clearInterval(timer);
-  });
 
   function typerName(person) {
     const live = ui.members.find((m) => m.id === person.id) || (ui.me?.id === person.id ? ui.me : null);

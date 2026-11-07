@@ -122,15 +122,15 @@ async function enterApp() {
     if (document.hidden) return;
     pollTick += 1;
     if (ui.mode === 'chat' || ui.mode === 'dm') loadMessages(true);
-    if (ui.mode === 'chat' && pollTick % 3 === 0) loadMembers(true);
-    if (ui.mode === 'chat' && pollTick % 3 === 1 && !ui.voice) {
+    if (ui.mode === 'chat' && pollTick % 4 === 2) loadMembers(true);
+    if (ui.mode === 'chat' && pollTick % 4 === 3 && !ui.voice) {
       import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
     }
     if (ui.mode !== 'chat' && pollTick % 2 === 0) {
       loadFriends();
       loadDms();
     }
-  }, 5000);
+  }, 8000);
 }
 
 export async function login(email, password) {
@@ -246,22 +246,46 @@ export function pickChannel(ch) {
 }
 
 let messagesBusy = false;
+let pulseMissing = false;
+
+async function pullLive(query) {
+  if (!pulseMissing) {
+    try {
+      return await api('/api/pulse?' + query);
+    } catch (err) {
+      if (!/not found/i.test(err.message || '')) throw err;
+      pulseMissing = true;
+    }
+  }
+  if (query.startsWith('dmUserId=')) {
+    const id = query.slice('dmUserId='.length);
+    const data = await api('/api/dms/' + id + '/messages');
+    return { messages: data.messages || [], typers: [] };
+  }
+  const data = await api('/api/channels/' + ui.channelId + '/messages');
+  return { messages: data.messages || [], typers: [] };
+}
 
 export async function loadMessages(quiet) {
   if (quiet && messagesBusy) return;
   messagesBusy = true;
   try {
+    let data;
     if (ui.mode === 'dm' && ui.dmUser) {
-      const data = await api('/api/dms/' + ui.dmUser.id + '/messages');
-      ui.messages = data.messages || [];
-      return;
-    }
-    if (!ui.channelId) {
+      data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id));
+    } else if (!ui.channelId) {
       ui.messages = [];
+      ui.typers = [];
+      return;
+    } else {
+      data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || ''));
+    }
+    ui.typers = data.typers || [];
+    const list = data.messages || [];
+    if (ui.mode === 'dm') {
+      ui.messages = list;
       return;
     }
-    const data = await api('/api/channels/' + ui.channelId + '/messages');
-    const list = data.messages || [];
     ui.messages = list;
     const newest = list[list.length - 1];
     if (newest && newest.id && newest.id !== ui.seenMessageId) {

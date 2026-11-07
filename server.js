@@ -30,7 +30,8 @@ function save(file, data) {
 }
 
 let users = load(USERS_FILE, {});
-let messages = load(MESSAGES_FILE, {});
+let messages = {};
+try { if (fs.existsSync(MESSAGES_FILE)) fs.unlinkSync(MESSAGES_FILE); } catch (_) {}
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
@@ -917,8 +918,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   };
   messages[found.channel.id].push(msg);
-  if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
-  save(MESSAGES_FILE, messages);
+  if (messages[found.channel.id].length > 100) messages[found.channel.id] = messages[found.channel.id].slice(-100);
   res.json({ ok: true, message: msg });
 });
 
@@ -943,7 +943,7 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 4000) {
+    if (now - row.at > 12000) {
       room.delete(id);
       continue;
     }
@@ -970,6 +970,32 @@ app.get('/api/typing', auth, (req, res) => {
   const key = typingKeyFrom(req);
   if (!key) return res.json({ ok: true, typers: [] });
   res.json({ ok: true, typers: listTypers(key, req.user.id) });
+});
+
+app.get('/api/pulse', auth, (req, res) => {
+  ensureGuilds();
+  const dmUserId = String(req.query.dmUserId || '');
+  if (dmUserId) {
+    if (!users[dmUserId]) return res.status(404).json({ error: 'User not found' });
+    const key = dmKey(req.user.id, dmUserId);
+    const list = messages['dm:' + key] || [];
+    return res.json({
+      ok: true,
+      messages: list.slice(-100),
+      typers: listTypers('dm:' + [req.user.id, dmUserId].sort().join(':'), req.user.id),
+    });
+  }
+  const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
+  if (!found) return res.status(404).json({ error: 'Channel not found' });
+  if (!can(found.guild, req.user, PERM.VIEW, found.channel)) {
+    return res.status(403).json({ error: 'You cannot view this channel' });
+  }
+  const list = messages[found.channel.id] || [];
+  res.json({
+    ok: true,
+    messages: list.slice(-100),
+    typers: listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id),
+  });
 });
 
 app.get('/api/friends', auth, (req, res) => {
@@ -1149,8 +1175,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   };
   messages[channelId].push(msg);
-  if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
-  save(MESSAGES_FILE, messages);
+  if (messages[channelId].length > 100) messages[channelId] = messages[channelId].slice(-100);
   res.json({ ok: true, message: msg });
 });
 
