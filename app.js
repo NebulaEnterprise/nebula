@@ -510,6 +510,10 @@ function friendListRow(u, kind) {
       <button type="button" class="ok" title="Accept" data-accept="${u.id}">✓</button>
       <button type="button" class="no" title="Ignore" data-decline="${u.id}">✕</button>
     </div>`;
+  } else if (kind === 'pending-out') {
+    actions = `<div class="friend-list-actions">
+      <button type="button" class="no" title="Cancel request" data-cancel="${u.id}">✕</button>
+    </div>`;
   } else {
     actions = `<div class="friend-list-actions"><span style="font-size:12px;color:var(--text-faint)">Pending</span></div>`;
   }
@@ -553,6 +557,16 @@ function bindFriendRowActions(root) {
       e.stopPropagation();
       try {
         await api('/api/friends/decline', { method: 'POST', body: { userId: btn.dataset.decline } });
+        await loadFriendsData();
+      } catch (err) { alert(err.message); }
+    };
+  });
+  root.querySelectorAll('[data-cancel]').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        // Cancel outgoing request (clears your outgoing + their incoming)
+        await api('/api/friends/cancel', { method: 'POST', body: { userId: btn.dataset.cancel } });
         await loadFriendsData();
       } catch (err) { alert(err.message); }
     };
@@ -817,7 +831,7 @@ async function showPopout(uid, ev) {
           <button type="button" class="popout-full-btn popout-primary" id="popout-accept">Accept Friend Request</button>
           <button type="button" class="popout-full-btn" id="popout-decline">Ignore</button>`;
       } else if (rel === 'outgoing') {
-        actionHtml = `<button type="button" class="popout-full-btn" id="popout-pending" disabled>Request Sent</button>`;
+        actionHtml = `<button type="button" class="popout-full-btn" id="popout-cancel-req">Cancel Request</button>`;
       } else {
         actionHtml = `<button type="button" class="popout-full-btn popout-primary" id="popout-add-friend">Add Friend</button>`;
       }
@@ -898,6 +912,17 @@ async function showPopout(uid, ev) {
         if (!confirm('Remove ' + (u.displayName || u.username) + ' as a friend?')) return;
         try {
           await api('/api/friends/remove', { method: 'POST', body: { userId: u.id } });
+          await loadFriendsData();
+          showPopout(uid, ev);
+        } catch (err) { alert(err.message); }
+      };
+    }
+    const cancelReqBtn = $('popout-cancel-req');
+    if (cancelReqBtn) {
+      cancelReqBtn.onclick = async (e) => {
+        stop(e);
+        try {
+          await api('/api/friends/cancel', { method: 'POST', body: { userId: u.id } });
           await loadFriendsData();
           showPopout(uid, ev);
         } catch (err) { alert(err.message); }
