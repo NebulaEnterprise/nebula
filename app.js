@@ -197,15 +197,12 @@ function renderMe() {
   const sub = me.customStatus || me.status || 'Online';
   const color = me.avatarColor || '#7c5cff';
   const st = me.status || 'online';
-  [
-    ['me-initial', 'me-avatar', 'me-name', 'me-custom', 'me-status-dot'],
-  ].forEach(([ini, av, nm, cu, dot]) => {
-    if ($(ini)) $(ini).textContent = initial(name);
-    if ($(av)) $(av).style.background = color;
-    if ($(nm)) $(nm).textContent = name;
-    if ($(cu)) $(cu).textContent = sub;
-    if ($(dot)) $(dot).className = 'status-dot ' + st;
-  });
+  
+  if ($('me-initial')) $('me-initial').textContent = initial(name);
+  if ($('me-avatar')) $('me-avatar').style.background = color;
+  if ($('me-name')) $('me-name').textContent = name;
+  if ($('me-custom')) $('me-custom').textContent = sub;
+  if ($('me-status-dot')) $('me-status-dot').className = 'status-dot ' + st;
 }
 
 function renderChannels() {
@@ -330,9 +327,16 @@ function setRail(mode) {
     if (mode === 'server') $('members').classList.remove('hidden');
     else $('members').classList.add('hidden');
   }
-  const home = $('nav-home');
-  if (home) home.classList.toggle('active', mode === 'home');
+  
+  const navServer = $('nav-server');
+  const navHome = $('nav-home');
+  if (navServer) navServer.classList.toggle('active', mode === 'server');
+  if (navHome) navHome.classList.toggle('active', mode === 'home');
 }
+
+// Toggle Server vs Home
+if ($('nav-server')) $('nav-server').onclick = () => openServer();
+if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
 
 function renderDmProfile(user) {
   const box = $('dm-profile');
@@ -583,7 +587,6 @@ async function openServer() {
   await loadMembers();
 }
 
-if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
 if ($('btn-friends-page')) $('btn-friends-page').onclick = () => openFriendsHome(friendsTab || 'online');
 if ($('btn-add-friend-page')) $('btn-add-friend-page').onclick = () => openAddFriendPage();
 if ($('btn-dm-plus')) $('btn-dm-plus').onclick = () => openAddFriendPage();
