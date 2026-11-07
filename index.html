@@ -47,31 +47,23 @@
 
 <!-- APP -->
 <div id="app">
-  <!-- LEFT SIDEBAR (Tabs + Content) -->
+  <!-- LEFT SIDEBAR (Channels + DMs + User) -->
   <div class="sidebar">
     <div class="sidebar-header">
       <div class="logo-icon">N</div>
-      <div class="server-name" id="server-title">Nebula</div>
+      <div class="server-name" id="server-title">Nebula Official</div>
     </div>
 
-    <!-- TOP TABS -->
-    <div class="sidebar-tabs">
-      <button class="stab active" id="tab-server">Server</button>
-      <button class="stab" id="tab-friends">Friends</button>
-    </div>
-
-    <!-- SERVER VIEW (Channels) -->
+    <!-- SERVER NAV -->
     <div id="sidebar-server" class="sidebar-view active">
       <div class="channel-list" id="channel-list"></div>
     </div>
 
-    <!-- FRIENDS VIEW (DMs + Requests) -->
+    <!-- DM NAV -->
     <div id="sidebar-dm" class="sidebar-view">
       <div class="dm-nav">
-        <button type="button" class="dm-nav-item active" data-dm-tab="online">Online</button>
-        <button type="button" class="dm-nav-item" data-dm-tab="all">All</button>
-        <button type="button" class="dm-nav-item" data-dm-tab="pending">Pending</button>
-        <button type="button" class="dm-nav-item add" id="btn-open-add-friend">Add Friend</button>
+        <button type="button" class="dm-nav-item active" id="btn-friends-page">Friends</button>
+        <button type="button" class="dm-nav-item" id="btn-add-friend-page">Find People</button>
       </div>
       <div class="friends-cat dm-section-label">
         <span>Direct Messages</span>
@@ -103,7 +95,7 @@
         <span class="ch-name" id="ch-name">general</span>
         <span class="topic" id="ch-topic">Welcome to Nebula</span>
         <div class="top-bar-actions">
-          <button class="nav-toggle" id="nav-home" title="View Friends">Friends</button>
+          <button class="nav-toggle" id="nav-home" title="Direct Messages">💬</button>
         </div>
       </div>
       
@@ -128,6 +120,7 @@
           <button type="button" class="ftab active" data-ftab="online">Online</button>
           <button type="button" class="ftab" data-ftab="all">All</button>
           <button type="button" class="ftab" data-ftab="pending">Pending</button>
+          <button type="button" class="ftab add" id="btn-open-add-friend">Add Friend</button>
         </div>
         <input class="friends-search" id="friends-search" type="text" placeholder="Search friends..." />
       </div>
