@@ -856,18 +856,23 @@ async function showPopout(uid, ev) {
           <button type="button" class="popout-full-btn" id="popout-decline">Ignore</button>`;
       } else if (rel === 'outgoing') {
         actionHtml = `<button type="button" class="popout-full-btn" id="popout-cancel-req">Cancel Request</button>`;
-      } else {
-        actionHtml = `<button type="button" class="popout-full-btn popout-primary" id="popout-add-friend">Add Friend</button>`;
       }
     }
+
+    const showAddIcon = !isSelf && rel === 'none';
 
     const pop = $('popout');
     pop.innerHTML = `
       <div class="popout-banner" style="${bannerStyle}"></div>
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
-        <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
-        <div class="popout-user">@${escapeHtml(u.username)}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
+        <div class="popout-head">
+          <div class="popout-id">
+            <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
+            <div class="popout-user">@${escapeHtml(u.username)}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
+          </div>
+          ${showAddIcon ? `<button type="button" class="popout-friend-icon" id="popout-add-friend" title="Add Friend" aria-label="Add Friend"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="8" r="3.2"/><path d="M4.5 19.2c.6-3 3-4.7 5.5-4.7s4.9 1.7 5.5 4.7"/><path d="M19 8v6M16 11h6"/></svg></button>` : ''}
+        </div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
@@ -886,15 +891,14 @@ async function showPopout(uid, ev) {
       addBtn.onclick = async (e) => {
         stop(e);
         addBtn.disabled = true;
-        addBtn.textContent = 'Sending…';
+        addBtn.title = 'Sending…';
         try {
-          const data = await api('/api/friends/request', { method: 'POST', body: { username: u.username } });
-          addBtn.textContent = data.status === 'accepted' ? 'Friends!' : 'Request Sent';
+          await api('/api/friends/request', { method: 'POST', body: { username: u.username } });
           await loadFriendsData();
           setTimeout(() => showPopout(uid, ev), 400);
         } catch (err) {
           addBtn.disabled = false;
-          addBtn.textContent = 'Add Friend';
+          addBtn.title = 'Add Friend';
           alert(err.message);
         }
       };

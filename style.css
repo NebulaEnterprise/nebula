@@ -484,7 +484,16 @@ a:hover { text-decoration: underline; }
   margin-top: -40px; display: flex; align-items: center; justify-content: center;
   font-size: 28px; font-weight: 700; color: #fff; background-size: cover; background-position: center;
 }
-.popout-name { font-size: 22px; font-weight: 700; margin-top: 12px; }
+.popout-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.popout-id { min-width: 0; }
+.popout-name { font-size: 22px; font-weight: 700; }
+.popout-friend-icon {
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0; margin-top: 2px;
+  background: var(--bg-hover); color: var(--text-main);
+  display: flex; align-items: center; justify-content: center;
+}
+.popout-friend-icon:hover { color: #fff; background: rgba(255,255,255,0.12); }
+.popout-friend-icon:disabled { opacity: 0.5; cursor: default; }
 .popout-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); }
 .popout-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em; }
 .meta-split { display: flex; gap: 24px; }
