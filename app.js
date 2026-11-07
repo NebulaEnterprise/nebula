@@ -167,7 +167,6 @@ async function api(path, opts = {}) {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
   }
-  // Bust any intermediary caches (ngrok / browser) on GET
   let url = API + path;
   if (!opts.method || opts.method === 'GET') {
     url += (path.includes('?') ? '&' : '?') + '_=' + Date.now();
@@ -207,12 +206,14 @@ function renderMe() {
   const sub = me.customStatus || me.status || 'Online';
   const st = me.status || 'online';
 
-  // avatar
   const av = $('me-avatar');
   const ini = $('me-initial');
+  
   if (av && ini) {
-    // Reset both first so background shorthand never wipes the image
+    // 1. Set color fallback
     av.style.backgroundColor = me.avatarColor || '#7c5cff';
+    
+    // 2. Apply image URL or fallback to initial
     if (me.avatarUrl) {
       ini.style.display = 'none';
       av.style.backgroundImage = `url("${me.avatarUrl}")`;
@@ -222,6 +223,7 @@ function renderMe() {
       av.style.backgroundImage = 'none';
     }
   }
+  
   if ($('me-name')) $('me-name').textContent = name;
   if ($('me-custom')) $('me-custom').textContent = sub;
   if ($('me-status-dot')) $('me-status-dot').className = 'status-dot ' + st;
@@ -347,7 +349,6 @@ function showMainView(name) {
 }
 
 function setRail(mode) {
-  // mode: 'server' | 'home'
   const ss = $('sidebar-server');
   const sd = $('sidebar-dm');
   if (ss) {
@@ -364,7 +365,6 @@ function setRail(mode) {
     else $('members').classList.add('hidden');
   }
 
-  // Server rail active states
   document.querySelectorAll('.server-icon[data-server-id], #nav-server').forEach(el => {
     el.classList.toggle('active', mode === 'server');
   });
@@ -568,7 +568,6 @@ function bindFriendRowActions(root) {
     btn.onclick = async (e) => {
       e.stopPropagation();
       try {
-        // Cancel outgoing request (clears your outgoing + their incoming)
         await api('/api/friends/cancel', { method: 'POST', body: { userId: btn.dataset.cancel } });
         await loadFriendsData();
       } catch (err) { alert(err.message); }
@@ -586,13 +585,11 @@ function bindFriendRowActions(root) {
 async function loadFriendsData() {
   try {
     const data = await api('/api/friends');
-    // Only real friends — never mix in server members
     friendsCache = {
       friends: Array.isArray(data.friends) ? data.friends : [],
       incoming: Array.isArray(data.incoming) ? data.incoming : [],
       outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
     };
-    // Show incoming count on Pending tab
     const pendingCount = (friendsCache.incoming || []).length;
     document.querySelectorAll('.ftab[data-ftab="pending"]').forEach(t => {
       t.textContent = pendingCount > 0 ? `Pending (${pendingCount})` : 'Pending';
@@ -682,7 +679,6 @@ document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
     showMainView('view-friends-home');
-    // Always refetch so the other user sees new incoming requests
     await loadFriendsData();
   };
 });
@@ -726,7 +722,6 @@ if ($('btn-add-friend')) {
       btn.disabled = false;
     }
   };
-  // Enter key on input
   if ($('friend-input')) {
     $('friend-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') $('btn-add-friend').click();
@@ -794,7 +789,6 @@ function friendRelation(uid) {
 
 async function showPopout(uid, ev) {
   try {
-    // Refresh friends so Add Friend state is accurate
     try {
       const fr = await api('/api/friends');
       friendsCache = {
