@@ -18,6 +18,7 @@
     avatarColor: ui.me?.avatarColor || '#7c6af7',
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
+    bannerUrl: ui.me?.bannerUrl || '',
     nameEffect: ui.me?.nameEffect || '',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
   });
@@ -32,23 +33,32 @@
   ];
 
   async function upload(file, kind, input) {
+    const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
     try {
       if (!file) return;
       const preview = URL.createObjectURL(file);
-      form.avatarUrl = preview;
+      form[field] = preview;
       try {
         const data = await api('/api/upload', {
           method: 'POST',
           body: file,
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
         });
-        form.avatarUrl = data.url;
+        form[field] = data.url;
         URL.revokeObjectURL(preview);
       } catch (err) {
-        const url = await fileToDataUrl(file, { original: true });
-        form.avatarUrl = url;
-        if (/not found/i.test(err.message || '') || file.size > 1500000) {
-          toast('The picture is in the preview. Download the new server.js and restart it, then save again so the GIF sticks.');
+        if (kind === 'banner') {
+          URL.revokeObjectURL(preview);
+          form.bannerUrl = ui.me?.bannerUrl || '';
+          toast(/not found/i.test(err.message || '')
+            ? 'Download the new server.js and restart it, then upload the banner again.'
+            : err.message);
+        } else {
+          const url = await fileToDataUrl(file, { original: true });
+          form.avatarUrl = url;
+          if (/not found/i.test(err.message || '') || file.size > 1500000) {
+            toast('The picture is in the preview. Download the new server.js and restart it, then save again so the GIF sticks.');
+          }
         }
       }
     } catch (err) { toast(err.message); }
@@ -63,11 +73,7 @@
 
   async function save() {
     try {
-      await saveMe({
-        ...form,
-        bannerUrl: '',
-        bannerColor: '',
-      });
+      await saveMe(form);
     } catch (err) { toast(err.message); }
   }
 </script>
@@ -117,6 +123,19 @@
                 <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
               {/if}
             </section>
+            <section class="look-block">
+              <strong>Banner</strong>
+              <p>A GIF, PNG, JPG, or WebP across the top of your profile.</p>
+              <div class="look-banner">
+                {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+              </div>
+              <div class="look-actions">
+                <label class="btn brand sm look-btn">Upload banner
+                  <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
+                </label>
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => (form.bannerUrl = '')}>Remove</button>{/if}
+              </div>
+            </section>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
@@ -134,7 +153,9 @@
         <div>
           <p class="label">Preview</p>
           <div class="preview-card">
-            <div class="preview-banner" style="background:var(--brand)"></div>
+            <div class="preview-banner">
+              {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+            </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
