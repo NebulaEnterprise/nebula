@@ -200,6 +200,15 @@ function initial(name) {
   return (name || '?').charAt(0).toUpperCase();
 }
 
+function memberSinceBlock(user) {
+  const date = user && user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—';
+  const id = user && user.uid != null ? String(user.uid) : '—';
+  return `<div class="meta-split">
+      <div><h4>Member Since</h4><p>${date}</p></div>
+      <div><h4>User ID</h4><p>${escapeHtml(id)}</p></div>
+    </div>`;
+}
+
 /** Safe CSS background for avatars/banners inside HTML style="..." attributes.
  *  Data-URL PFPs use double quotes in url("...") which terminate the attribute early
  *  and leave a blank circle + floating status dots in the members list. */
@@ -416,7 +425,7 @@ function renderDmProfile(user) {
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
       ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
-      <div class="dm-profile-section"><h4>Member Since${user.uid != null ? ' · #' + user.uid : ''}</h4><p style="font-size:14px;color:var(--text-muted)">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p></div>
+      <div class="dm-profile-section">${memberSinceBlock(user)}</div>
     </div>`;
 }
 
@@ -862,7 +871,7 @@ async function showPopout(uid, ev) {
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
-        <div class="popout-section"><h4>Member Since${u.uid != null ? ' · #' + u.uid : ''}</h4><p style="font-size:14px;color:var(--text-muted)">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</p></div>
+        <div class="popout-section">${memberSinceBlock(u)}</div>
         <div class="popout-actions">
           ${actionHtml}
           <button type="button" class="popout-full-btn" id="popout-view-full">View full profile</button>

@@ -487,6 +487,9 @@ a:hover { text-decoration: underline; }
 .popout-name { font-size: 22px; font-weight: 700; margin-top: 12px; }
 .popout-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.05); }
 .popout-section h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.05em; }
+.meta-split { display: flex; gap: 24px; }
+.meta-split > div { flex: 1; min-width: 0; }
+.meta-split p { font-size: 14px; color: var(--text-muted); margin: 0; }
 .popout-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .popout-full-btn {
   width: 100%; padding: 12px; border-radius: var(--radius-sm);
