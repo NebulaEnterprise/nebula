@@ -12,7 +12,7 @@
       <Avatar user={m} size={34} />
       <div class="meta">
         <strong style="color:{m.roleColor || m.accentColor || 'inherit'}">{m.nick || m.displayName || m.username}</strong>
-        {#if m.customStatus}<span>{m.customStatus}</span>{/if}
+        {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
       </div>
     </button>
   {/each}
@@ -23,6 +23,7 @@
         <Avatar user={m} size={34} />
         <div class="meta">
           <strong>{m.nick || m.displayName || m.username}</strong>
+          {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
         </div>
       </button>
     {/each}
