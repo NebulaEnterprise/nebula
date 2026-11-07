@@ -172,11 +172,51 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.05);
 }
 .sidebar-header-title {
-  height: 48px; padding: 0 16px; display: flex; align-items: center;
-  font-weight: 700; font-size: 15px;
+  height: 48px; padding: 0 16px; display: flex; align-items: center; width: 100%;
+  font-weight: 700; font-size: 15px; text-align: left;
   box-shadow: 0 1px 0 rgba(0,0,0,0.2);
   flex-shrink: 0;
 }
+.sidebar-header-title::after { content: "▾"; margin-left: auto; color: var(--text-faint); font-size: 12px; }
+#sidebar-dm .sidebar-header-title::after { content: none; }
+#server-icons { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; }
+.server-icon { background: var(--icon, var(--bg-card)); }
+.sidebar-view { position: relative; }
+.server-menu {
+  position: absolute; top: 52px; left: 8px; right: 8px; z-index: 6;
+  background: var(--bg-card); border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-md); padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+.server-menu button {
+  display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: var(--radius-sm);
+  color: var(--text-main); font-weight: 600; font-size: 14px;
+}
+.server-menu button:hover { background: var(--bg-hover); }
+.server-menu-empty { padding: 10px 12px; color: var(--text-faint); font-size: 13px; }
+.cat-row { display: flex; align-items: center; justify-content: space-between; }
+.cat-plus, .ch-edit {
+  width: 20px; height: 20px; border-radius: 4px; color: var(--text-faint); font-size: 14px;
+  display: none; align-items: center; justify-content: center;
+}
+.cat-row:hover .cat-plus, .channel:hover .ch-edit, .channel.active .ch-edit { display: flex; }
+.cat-plus:hover, .ch-edit:hover { color: var(--text-main); background: rgba(255,255,255,0.06); }
+.ch-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guild-sheet {
+  width: min(480px, 100%); background: var(--bg-main); border-radius: var(--radius-lg);
+  border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+}
+.guild-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.guild-sheet-head h2 { font-size: 18px; }
+.guild-sheet-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+.field-hint.err { color: var(--red); }
+.invite-row, .role-line, .role-access {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0; color: var(--text-main); font-size: 14px;
+}
+.invite-row code { font-size: 16px; letter-spacing: 0.08em; }
+.invite-row span, .role-access-flags { margin-left: auto; color: var(--text-faint); font-size: 12px; }
+.role-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.role-flag-list { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 16px; font-size: 14px; color: var(--text-muted); }
+.role-access-list { display: flex; flex-direction: column; }
 
 .sidebar-view { display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0; }
 .sidebar-view.active { display: flex; }

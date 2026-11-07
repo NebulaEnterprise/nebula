@@ -7,7 +7,7 @@
 <title>Nebula</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=6" />
+<link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
 
@@ -53,8 +53,7 @@
   <div class="servers" id="server-rail">
     <div class="server-icon" id="nav-home" title="Direct Messages">💬</div>
     <div class="server-sep"></div>
-    <div class="server-icon active" id="nav-server" title="Nebula Official" data-server-id="nebula-official">N</div>
-    <div class="server-sep"></div>
+    <div id="server-icons"></div>
     <div class="server-icon add" id="nav-add-server" title="Add Server">+</div>
   </div>
   
@@ -63,7 +62,8 @@
     
     <!-- SERVER CHANNELS VIEW -->
     <div id="sidebar-server" class="sidebar-view active">
-      <div class="sidebar-header-title" id="server-title">Nebula Official</div>
+      <button type="button" class="sidebar-header-title" id="server-title">Nebula Official</button>
+      <div class="server-menu" id="server-menu" hidden></div>
       <div class="channel-list" id="channel-list"></div>
     </div>
 
@@ -281,6 +281,16 @@
 <!-- PROFILE POPOUT -->
 <div class="popout" id="popout"></div>
 
-<script src="app.js?v=6"></script>
+<div class="overlay" id="guild-modal">
+  <div class="guild-sheet">
+    <div class="guild-sheet-head">
+      <h2 id="guild-modal-title">Server</h2>
+      <button type="button" class="modal-close" id="guild-modal-close">×</button>
+    </div>
+    <div class="guild-sheet-body" id="guild-modal-body"></div>
+  </div>
+</div>
+
+<script src="app.js?v=7"></script>
 </body>
 </html>

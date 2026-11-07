@@ -29,6 +29,14 @@ let me = null;
 let channels = [];
 let servers = [];
 let currentServerId = 'nebula-official';
+let serverPerms = 0;
+let serverRoles = [];
+let currentServerMeta = null;
+const PERM = { VIEW: 1, SEND: 2, MANAGE_CHANNELS: 4, MANAGE_ROLES: 8, INVITE: 16, MANAGE_SERVER: 32, ADMIN: 128 };
+function hasPerm(bit) {
+  if (serverPerms & PERM.ADMIN) return true;
+  return (serverPerms & bit) === bit;
+}
 let currentChannel = 'general';
 let badgeDefs = {};
 let pollTimer = null;
@@ -264,21 +272,29 @@ function renderChannels() {
   }
   const text = channels.filter(c => c.type === 'text');
   const voice = channels.filter(c => c.type === 'voice');
-  let html = '<div class="cat">Text Channels</div>';
+  const manage = hasPerm(PERM.MANAGE_CHANNELS);
+  const gear = (c) => manage ? `<button type="button" class="ch-edit" data-edit="${c.id}" title="Edit channel">✎</button>` : '';
+  let html = `<div class="cat cat-row"><span>Text Channels</span>${manage ? '<button type="button" class="cat-plus" data-new="text" title="Create channel">+</button>' : ''}</div>`;
   text.forEach(c => {
     html += `<div class="channel ${c.id === currentChannel && chatMode === 'server' ? 'active' : ''}" data-id="${c.id}">
-      <span class="hash">#</span>${c.name}
+      <span class="hash">#</span><span class="ch-label">${escapeHtml(c.name)}</span>${gear(c)}
     </div>`;
   });
-  if (voice.length) {
-    html += '<div class="cat" style="margin-top:16px">Voice Channels</div>';
+  if (voice.length || manage) {
+    html += `<div class="cat cat-row" style="margin-top:16px"><span>Voice Channels</span>${manage ? '<button type="button" class="cat-plus" data-new="voice" title="Create voice channel">+</button>' : ''}</div>`;
     voice.forEach(c => {
       html += `<div class="channel voice" data-id="${c.id}">
-        <span class="hash">🔊</span>${c.name}
+        <span class="hash">🔊</span><span class="ch-label">${escapeHtml(c.name)}</span>${gear(c)}
       </div>`;
     });
   }
   el.innerHTML = html;
+  el.querySelectorAll('.cat-plus').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); openCreateChannel(btn.dataset.new || 'text'); };
+  });
+  el.querySelectorAll('.ch-edit').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); openEditChannel(btn.dataset.edit); };
+  });
   el.querySelectorAll('.channel').forEach(node => {
     node.onclick = () => {
       const ch = channels.find(c => c.id === node.dataset.id);
@@ -343,7 +359,7 @@ async function loadMessages() {
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 $('msg-input').addEventListener('keydown', async (e) => {
@@ -389,13 +405,12 @@ function setRail(mode) {
     else $('members').classList.add('hidden');
   }
 
-  document.querySelectorAll('.server-icon[data-server-id], #nav-server').forEach(el => {
-    el.classList.toggle('active', mode === 'server');
+  document.querySelectorAll('.server-icon[data-server-id]').forEach(el => {
+    el.classList.toggle('active', mode === 'server' && el.dataset.serverId === currentServerId);
   });
   if ($('nav-home')) $('nav-home').classList.toggle('active', mode === 'home');
 }
 
-if ($('nav-server')) $('nav-server').onclick = () => openServer();
 if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
 
 function renderDmProfile(user) {
@@ -646,7 +661,8 @@ function openAddFriendPage() {
   }
 }
 
-async function openServer() {
+async function openServer(serverId) {
+  if (typeof serverId === 'string' && serverId) currentServerId = serverId;
   setRail('server');
   chatMode = 'server';
   dmUserId = null;
@@ -654,9 +670,12 @@ async function openServer() {
   showMainView('view-chat');
   renderDmProfile(null);
   try {
-    const chData = await api('/api/channels');
+    const chData = await api('/api/channels?serverId=' + encodeURIComponent(currentServerId));
     channels = chData.channels || [];
     if (chData.servers) servers = chData.servers;
+    serverPerms = chData.permissions || 0;
+    serverRoles = chData.roles || [];
+    currentServerMeta = chData.server || null;
   } catch (e) {
     console.warn(e);
     if (!channels.length) {
@@ -667,6 +686,8 @@ async function openServer() {
       ];
     }
   }
+  if ($('server-title')) $('server-title').textContent = (currentServerMeta && currentServerMeta.name) || 'Server';
+  renderServerRail();
   renderChannels();
   if ($('ch-icon')) $('ch-icon').textContent = '#';
   const ch = channels.find(c => c.id === currentChannel) || channels.find(c => c.type === 'text') || channels[0];
@@ -750,7 +771,7 @@ async function loadMembers() {
   el.classList.remove('hidden');
   el.style.display = 'block';
   try {
-    const data = await api('/api/members');
+    const data = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
     badgeDefs = data.badges || {};
     const members = data.members || [];
     const online = members.filter(m => m.status !== 'offline');
@@ -784,8 +805,8 @@ function memberRow(m) {
       <span class="status-dot ${m.status || 'online'}" style="width:12px;height:12px;border-width:2px"></span>
     </div>
     <div>
-      <div class="member-name" style="color:${m.accentColor || ''}">${escapeHtml(m.displayName || m.username)}</div>
-      ${m.customStatus ? `<div class="member-status">${escapeHtml(m.customStatus)}</div>` : ''}
+      <div class="member-name" style="color:${m.roleColor || m.accentColor || ''}">${escapeHtml(m.displayName || m.username)}</div>
+      ${m.customStatus ? `<div class="member-status">${escapeHtml(m.customStatus)}</div>` : (m.topRole ? `<div class="member-status">${escapeHtml(m.topRole)}</div>` : '')}
     </div>
   </div>`;
 }
@@ -1193,6 +1214,322 @@ $('settings-save').onclick = async () => {
     }
   }
 };
+
+function renderServerRail() {
+  const box = $('server-icons');
+  if (!box) return;
+  box.innerHTML = (servers || []).map(s => {
+    const active = s.id === currentServerId && chatMode === 'server' ? ' active' : '';
+    const icon = escapeHtml(s.icon || (s.name || 'S').charAt(0));
+    return `<div class="server-icon${active}" data-server-id="${s.id}" title="${escapeHtml(s.name || 'Server')}" style="--icon:${s.color || '#7c5cff'}">${icon}</div>`;
+  }).join('');
+  box.querySelectorAll('[data-server-id]').forEach(el => {
+    el.onclick = () => openServer(el.dataset.serverId);
+  });
+}
+
+function openModal(title, html, bind) {
+  const modal = $('guild-modal');
+  if (!modal) return;
+  $('guild-modal-title').textContent = title;
+  $('guild-modal-body').innerHTML = html;
+  modal.classList.add('open');
+  const menu = $('server-menu');
+  if (menu) menu.hidden = true;
+  if (bind) bind($('guild-modal-body'));
+}
+function closeModal() {
+  const modal = $('guild-modal');
+  if (modal) modal.classList.remove('open');
+}
+
+function toggleServerMenu() {
+  const menu = $('server-menu');
+  if (!menu) return;
+  if (!menu.hidden) { menu.hidden = true; return; }
+  const items = [];
+  if (hasPerm(PERM.INVITE)) items.push(`<button type="button" data-act="invite">Invite People</button>`);
+  if (hasPerm(PERM.MANAGE_SERVER)) items.push(`<button type="button" data-act="settings">Server Settings</button>`);
+  if (hasPerm(PERM.MANAGE_CHANNELS)) items.push(`<button type="button" data-act="channel">Create Channel</button>`);
+  if (hasPerm(PERM.MANAGE_ROLES)) items.push(`<button type="button" data-act="roles">Roles</button>`);
+  if (!items.length) items.push(`<div class="server-menu-empty">Only owners can edit this server</div>`);
+  menu.innerHTML = items.join('');
+  menu.hidden = false;
+  menu.querySelectorAll('[data-act]').forEach(btn => {
+    btn.onclick = () => {
+      menu.hidden = true;
+      if (btn.dataset.act === 'invite') openInviteModal();
+      else if (btn.dataset.act === 'settings') openServerSettings();
+      else if (btn.dataset.act === 'channel') openCreateChannel('text');
+      else if (btn.dataset.act === 'roles') openRolesModal();
+    };
+  });
+}
+
+function openAddServerModal() {
+  openModal('Add a server', `
+    <div class="form-row"><label>Create a server</label><input id="new-server-name" maxlength="40" placeholder="Server name" /></div>
+    <button type="button" class="btn-primary" id="do-create-server">Create</button>
+    <div class="form-row" style="margin-top:24px"><label>Join with an invite</label><input id="join-code" maxlength="16" placeholder="Invite code" /></div>
+    <button type="button" class="btn-secondary" id="do-join-server">Join</button>
+    <p class="field-hint" id="add-server-hint"></p>
+  `, (root) => {
+    root.querySelector('#do-create-server').onclick = async () => {
+      const name = root.querySelector('#new-server-name').value.trim();
+      const hint = root.querySelector('#add-server-hint');
+      try {
+        const data = await api('/api/servers', { method: 'POST', body: { name } });
+        closeModal();
+        if (data.invite) {
+          try { await navigator.clipboard.writeText(data.invite); } catch (_) {}
+        }
+        await openServer(data.server.id);
+        alert('Server created. Invite code ' + data.invite + ' copied.');
+      } catch (err) {
+        hint.textContent = err.message;
+        hint.className = 'field-hint err';
+      }
+    };
+    root.querySelector('#do-join-server').onclick = async () => {
+      const code = root.querySelector('#join-code').value.trim();
+      const hint = root.querySelector('#add-server-hint');
+      try {
+        const data = await api('/api/invites/' + encodeURIComponent(code) + '/join', { method: 'POST', body: {} });
+        closeModal();
+        await openServer(data.server.id);
+      } catch (err) {
+        hint.textContent = err.message;
+        hint.className = 'field-hint err';
+      }
+    };
+  });
+}
+
+async function openInviteModal() {
+  let invites = [];
+  try {
+    const data = await api('/api/servers/' + currentServerId + '/invites');
+    invites = data.invites || [];
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  const list = invites.length
+    ? invites.map(i => `<div class="invite-row"><code>${escapeHtml(i.code)}</code><span>${i.uses || 0} uses</span></div>`).join('')
+    : '<p class="field-hint">No invites yet.</p>';
+  openModal('Invite people', `
+    <p class="field-hint">Share a code. They open + and choose Join with an invite.</p>
+    <div id="invite-list">${list}</div>
+    <button type="button" class="btn-primary" id="do-new-invite" style="margin-top:16px">Create invite</button>
+  `, (root) => {
+    root.querySelector('#do-new-invite').onclick = async () => {
+      try {
+        const data = await api('/api/servers/' + currentServerId + '/invites', { method: 'POST', body: {} });
+        try { await navigator.clipboard.writeText(data.code); } catch (_) {}
+        closeModal();
+        alert('Invite ' + data.code + ' copied.');
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+function openCreateChannel(type) {
+  openModal(type === 'voice' ? 'Create voice channel' : 'Create channel', `
+    <div class="form-row"><label>Name</label><input id="ch-new-name" maxlength="32" placeholder="new-channel" /></div>
+    <div class="form-row"><label>Topic</label><input id="ch-new-topic" maxlength="200" placeholder="What's this channel for?" /></div>
+    <button type="button" class="btn-primary" id="do-create-ch">Create</button>
+  `, (root) => {
+    root.querySelector('#do-create-ch').onclick = async () => {
+      try {
+        await api('/api/servers/' + currentServerId + '/channels', {
+          method: 'POST',
+          body: {
+            name: root.querySelector('#ch-new-name').value,
+            topic: root.querySelector('#ch-new-topic').value,
+            type: type === 'voice' ? 'voice' : 'text',
+          },
+        });
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+function roleAccessFields(channel) {
+  const denies = {};
+  (channel.overwrites || []).forEach(ow => {
+    denies[ow.roleId] = denies[ow.roleId] || { view: false, send: false };
+    if (ow.deny & PERM.VIEW) denies[ow.roleId].view = true;
+    if (ow.deny & PERM.SEND) denies[ow.roleId].send = true;
+  });
+  return (serverRoles || []).map(r => {
+    const d = denies[r.id] || {};
+    const viewOn = d.view ? '' : 'checked';
+    const sendOn = d.send ? '' : 'checked';
+    return `<label class="role-access"><span class="role-dot" style="background:${r.color || '#99aab5'}"></span>${escapeHtml(r.name)}
+      <span class="role-access-flags"><input type="checkbox" data-view="${r.id}" ${viewOn} /> View <input type="checkbox" data-send="${r.id}" ${sendOn} /> Send</span>
+    </label>`;
+  }).join('');
+}
+
+function overwritesFrom(root) {
+  const roles = serverRoles || [];
+  const viewOff = [];
+  const sendOff = [];
+  roles.forEach(r => {
+    const v = root.querySelector(`[data-view="${r.id}"]`);
+    const s = root.querySelector(`[data-send="${r.id}"]`);
+    if (v && !v.checked) viewOff.push(r.id);
+    if (s && !s.checked) sendOff.push(r.id);
+  });
+  if (!viewOff.length && !sendOff.length) return [];
+  const map = {};
+  const touch = (id) => { if (!map[id]) map[id] = { roleId: id, allow: 0, deny: 0 }; return map[id]; };
+  if (viewOff.length) {
+    roles.forEach(r => {
+      const ow = touch(r.id);
+      if (viewOff.includes(r.id)) ow.deny |= PERM.VIEW;
+      else ow.allow |= PERM.VIEW;
+    });
+  }
+  if (sendOff.length) {
+    roles.forEach(r => {
+      const ow = touch(r.id);
+      if (sendOff.includes(r.id)) ow.deny |= PERM.SEND;
+      else ow.allow |= PERM.SEND;
+    });
+  }
+  return Object.values(map).sort((a, b) => (a.allow - a.deny) - (b.allow - b.deny));
+}
+
+function openEditChannel(channelId) {
+  const ch = (channels || []).find(c => c.id === channelId);
+  if (!ch) return;
+  openModal('Edit #' + ch.name, `
+    <div class="form-row"><label>Name</label><input id="ch-edit-name" maxlength="32" value="${escapeHtml(ch.name)}" /></div>
+    <div class="form-row"><label>Topic</label><input id="ch-edit-topic" maxlength="200" value="${escapeHtml(ch.topic || '')}" /></div>
+    <div class="form-section-label">Who can use this channel</div>
+    <div class="role-access-list">${roleAccessFields(ch)}</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button type="button" class="btn-primary" id="do-save-ch">Save</button>
+      <button type="button" class="btn-secondary" id="do-del-ch" style="color:var(--red)">Delete</button>
+    </div>
+  `, (root) => {
+    root.querySelector('#do-save-ch').onclick = async () => {
+      try {
+        await api('/api/servers/' + currentServerId + '/channels/' + channelId, {
+          method: 'PATCH',
+          body: {
+            name: root.querySelector('#ch-edit-name').value,
+            topic: root.querySelector('#ch-edit-topic').value,
+            overwrites: overwritesFrom(root),
+          },
+        });
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+    root.querySelector('#do-del-ch').onclick = async () => {
+      if (!confirm('Delete this channel?')) return;
+      try {
+        await api('/api/servers/' + currentServerId + '/channels/' + channelId, { method: 'DELETE' });
+        if (currentChannel === channelId) currentChannel = '';
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+const ROLE_FLAGS = [
+  ['View channels', PERM.VIEW],
+  ['Send messages', PERM.SEND],
+  ['Create invite', PERM.INVITE],
+  ['Manage channels', PERM.MANAGE_CHANNELS],
+  ['Manage roles', PERM.MANAGE_ROLES],
+  ['Manage server', PERM.MANAGE_SERVER],
+  ['Administrator', PERM.ADMIN],
+];
+
+function openRolesModal() {
+  const rows = (serverRoles || []).map(r => `<div class="role-line"><span class="role-dot" style="background:${r.color || '#99aab5'}"></span>${escapeHtml(r.name)}</div>`).join('');
+  openModal('Roles', `
+    <div class="role-line-list">${rows || '<p class="field-hint">No roles yet.</p>'}</div>
+    <div class="form-section-label" style="margin-top:16px">New role</div>
+    <div class="form-row"><label>Name</label><input id="role-name" maxlength="32" placeholder="Moderator" /></div>
+    <div class="form-row"><label>Color</label><input id="role-color" value="#7c5cff" /></div>
+    <div class="role-flag-list">${ROLE_FLAGS.map(([label, bit]) => `<label><input type="checkbox" data-bit="${bit}" ${bit === PERM.VIEW || bit === PERM.SEND ? 'checked' : ''}/> ${label}</label>`).join('')}</div>
+    <button type="button" class="btn-primary" id="do-add-role">Add role</button>
+    <div class="form-section-label" style="margin-top:20px">Give a role</div>
+    <div class="form-row"><label>Member user id (#)</label><input id="role-uid" placeholder="2" /></div>
+    <div class="form-row"><label>Role</label><select id="role-pick">${(serverRoles || []).filter(r => r.id !== 'everyone').map(r => `<option value="${r.id}">${escapeHtml(r.name)}</option>`).join('')}</select></div>
+    <div style="display:flex;gap:8px">
+      <button type="button" class="btn-primary" id="do-give-role">Give</button>
+      <button type="button" class="btn-secondary" id="do-take-role">Remove</button>
+    </div>
+  `, (root) => {
+    root.querySelector('#do-add-role').onclick = async () => {
+      let permissions = 0;
+      root.querySelectorAll('[data-bit]').forEach(box => { if (box.checked) permissions |= Number(box.dataset.bit); });
+      try {
+        await api('/api/servers/' + currentServerId + '/roles', {
+          method: 'POST',
+          body: { name: root.querySelector('#role-name').value, color: root.querySelector('#role-color').value, permissions },
+        });
+        closeModal();
+        await openServer(currentServerId);
+        openRolesModal();
+      } catch (err) { alert(err.message); }
+    };
+    const assign = async (action) => {
+      const uid = root.querySelector('#role-uid').value.trim().replace(/^#/, '');
+      const roleId = root.querySelector('#role-pick').value;
+      try {
+        const mem = await api('/api/members?serverId=' + encodeURIComponent(currentServerId));
+        const user = (mem.members || []).find(m => String(m.uid) === uid);
+        if (!user) throw new Error('No member with that id');
+        await api('/api/servers/' + currentServerId + '/members/' + user.id + '/roles', {
+          method: 'POST',
+          body: { roleId, action },
+        });
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+    root.querySelector('#do-give-role').onclick = () => assign('add');
+    root.querySelector('#do-take-role').onclick = () => assign('remove');
+  });
+}
+
+function openServerSettings() {
+  const name = (currentServerMeta && currentServerMeta.name) || '';
+  openModal('Server settings', `
+    <div class="form-row"><label>Server name</label><input id="srv-name" maxlength="40" value="${escapeHtml(name)}" /></div>
+    <button type="button" class="btn-primary" id="do-save-srv">Save</button>
+  `, (root) => {
+    root.querySelector('#do-save-srv').onclick = async () => {
+      try {
+        await api('/api/servers/' + currentServerId, {
+          method: 'PATCH',
+          body: { name: root.querySelector('#srv-name').value },
+        });
+        closeModal();
+        await openServer(currentServerId);
+      } catch (err) { alert(err.message); }
+    };
+  });
+}
+
+if ($('server-title')) $('server-title').onclick = () => toggleServerMenu();
+if ($('nav-add-server')) $('nav-add-server').onclick = () => openAddServerModal();
+if ($('guild-modal-close')) $('guild-modal-close').onclick = () => closeModal();
+document.addEventListener('click', (e) => {
+  const menu = $('server-menu');
+  if (!menu || menu.hidden) return;
+  if (e.target.closest('#server-menu') || e.target.closest('#server-title')) return;
+  menu.hidden = true;
+});
 
 async function enterApp() {
   $('auth-screen').style.display = 'none';
