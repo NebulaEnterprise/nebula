@@ -4,6 +4,7 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
+  import BannerFill from './BannerFill.svelte';
   import { api } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
@@ -123,8 +124,8 @@
             <section class="look-block">
               <strong>Banner</strong>
               <p>This sits across the top of your profile.</p>
-              <div class="look-banner" style="background:{form.bannerUrl ? 'transparent' : form.accentColor}">
-                {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+              <div class="look-banner">
+                <BannerFill url={form.bannerUrl} color={form.accentColor} />
               </div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
@@ -154,8 +155,8 @@
         <div>
           <p class="label">Preview</p>
           <div class="preview-card">
-            <div class="preview-banner" style="background:{form.bannerUrl ? 'transparent' : form.accentColor}">
-              {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+            <div class="preview-banner">
+              <BannerFill url={form.bannerUrl} color={form.accentColor} />
             </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">

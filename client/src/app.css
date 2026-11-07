@@ -418,8 +418,8 @@ img { max-width: 100%; }
   font-size: 26px; font-weight: 700; overflow: hidden; flex-shrink: 0; color: #fff;
 }
 .look-av img { width: 100%; height: 100%; object-fit: cover; }
-.look-banner { position: relative; height: 72px; border-radius: 12px; margin-bottom: 10px; overflow: hidden; background-size: cover; background-position: center; }
-.look-banner img, .preview-banner img, .pop-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.look-banner { position: relative; height: 72px; border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+.banner-fill { position: absolute; inset: 0; }
 .look-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn.brand.look-btn { width: auto; cursor: pointer; }
 .look-btn input { display: none; }
