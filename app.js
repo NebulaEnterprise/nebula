@@ -267,11 +267,10 @@ function renderMessageList(list, emptyTitle, emptySub) {
     const a = m.author || {};
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const avStyle = a.avatarUrl 
-      ? `background-image:url(${a.avatarUrl});background-size:cover;background-position:center;`
+      ? `background-image:url(${a.avatarUrl});background-size:cover;background-position:center;` 
       : `background:${a.avatarColor || '#7c5cff'}`;
     const letter = a.avatarUrl ? '' : initial(a.displayName || a.username);
 
-    // BADGES REMOVED FROM HERE
     return `<div class="msg">
       <div class="av" style="${avStyle}" data-uid="${a.id}">${letter}</div>
       <div class="msg-body">
