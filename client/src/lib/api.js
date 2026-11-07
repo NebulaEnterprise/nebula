@@ -34,7 +34,8 @@ export async function api(path, opts = {}) {
     Pragma: 'no-cache',
   };
   let body = opts.body;
-  if (body && typeof body === 'object') {
+  const rawFile = typeof Blob !== 'undefined' && body instanceof Blob;
+  if (body && typeof body === 'object' && !rawFile && !(typeof FormData !== 'undefined' && body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(body);
   }
@@ -48,7 +49,26 @@ export async function api(path, opts = {}) {
     localStorage.removeItem('dc_token');
     throw new Error('Session expired');
   }
-  if (res.status === 413) throw new Error('Image is too large. Use a smaller file or a shorter GIF.');
+  if (res.status === 413) throw new Error('That image is too large for the connection. Try a shorter GIF.');
   if (!res.ok) throw new Error(data.error || 'Request failed');
   return data;
+}
+
+const mediaCache = new Map();
+
+export function resolveMedia(url) {
+  if (!url) return Promise.resolve('');
+  if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);
+  const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
+  if (!full.includes('/uploads/')) return Promise.resolve(url);
+  if (mediaCache.has(full)) return mediaCache.get(full);
+  const pending = fetch(full, { headers: TUNNEL_HEADERS, cache: 'force-cache' })
+    .then((res) => {
+      if (!res.ok) throw new Error('image');
+      return res.blob();
+    })
+    .then((blob) => URL.createObjectURL(blob))
+    .catch(() => full);
+  mediaCache.set(full, pending);
+  return pending;
 }

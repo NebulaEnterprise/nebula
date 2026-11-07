@@ -1,6 +1,7 @@
 <script>
   import { UserPlus } from '@lucide/svelte';
   import Name from './Name.svelte';
+  import Photo from './Photo.svelte';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -17,14 +18,16 @@
 
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
-    <div class="pop-banner" style="background:{u.bannerUrl ? `center/cover url('${u.bannerUrl}')` : (u.bannerColor || u.accentColor || 'var(--brand)')}"></div>
+    <div class="pop-banner" style="background:{u.bannerUrl ? 'transparent' : (u.bannerColor || u.accentColor || 'var(--brand)')}">
+      {#if u.bannerUrl}<Photo url={u.bannerUrl} />{/if}
+    </div>
     {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
     {#if rel === 'none'}
       <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
     {/if}
     <div class="pop-body">
       <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
-        {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+        {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
       </div>
       <div class="pop-head">
         <div>

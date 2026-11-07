@@ -11,7 +11,8 @@
   let hueEl = $state(null);
   let drag = $state('');
 
-  const value = $derived(colors[which] || '#5ce1ff');
+  const slot = $derived(slots < 2 ? 0 : which);
+  const value = $derived(colors[slot] || '#5ce1ff');
 
   function hexToHsv(hex) {
     let raw = String(hex || '').trim().replace('#', '');
@@ -62,7 +63,7 @@
   });
 
   function emit(next) {
-    if (next.toLowerCase() !== String(value || '').toLowerCase()) onpick?.(which, next);
+    onpick?.(slot, next);
   }
 
   function fromPoint(e, mode) {

@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const PORT = 3850;
 
 const DATA_DIR = path.join(__dirname, 'data');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const CODES_FILE = path.join(DATA_DIR, 'codes.json');
@@ -16,6 +17,7 @@ const FRIENDS_FILE = path.join(DATA_DIR, 'friends.json');
 const DMS_FILE = path.join(DATA_DIR, 'dms.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 function load(file, fallback) {
   try {
@@ -524,6 +526,15 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true, token: user.token, user: publicUser(user) });
 });
 
+function sniffImage(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return '';
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return '.gif';
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return '.png';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return '.jpg';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return '.webp';
+  return '';
+}
+
 function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -533,6 +544,16 @@ function auth(req, res, next) {
   req.user = user;
   next();
 }
+
+app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
+  const ext = sniffImage(req.body);
+  if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
+  const name = uuidv4() + ext;
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
+  res.json({ ok: true, url: '/uploads/' + name });
+});
+
+app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });

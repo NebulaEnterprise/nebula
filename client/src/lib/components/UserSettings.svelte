@@ -3,6 +3,8 @@
   import { ui, saveMe, logout, toast } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
+  import Photo from './Photo.svelte';
+  import { api } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -33,9 +35,26 @@
   async function upload(file, kind, input) {
     try {
       if (!file) return;
-      const url = await fileToDataUrl(file, { original: true });
-      if (kind === 'avatar') form.avatarUrl = url;
-      else form.bannerUrl = url;
+      const preview = URL.createObjectURL(file);
+      if (kind === 'avatar') form.avatarUrl = preview;
+      else form.bannerUrl = preview;
+      try {
+        const data = await api('/api/upload', {
+          method: 'POST',
+          body: file,
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        });
+        if (kind === 'avatar') form.avatarUrl = data.url;
+        else form.bannerUrl = data.url;
+        URL.revokeObjectURL(preview);
+      } catch (err) {
+        const url = await fileToDataUrl(file, { original: true });
+        if (kind === 'avatar') form.avatarUrl = url;
+        else form.bannerUrl = url;
+        if (/not found/i.test(err.message || '') || file.size > 1500000) {
+          toast('The picture is in the preview. Download the new server.js and restart it, then save again so the GIF sticks.');
+        }
+      }
     } catch (err) { toast(err.message); }
     finally { if (input) input.value = ''; }
   }
@@ -83,7 +102,7 @@
             <section class="look-block">
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">
-                  {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                  {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                 </div>
                 <div>
                   <strong>Profile picture</strong>
@@ -104,7 +123,9 @@
             <section class="look-block">
               <strong>Banner</strong>
               <p>This sits across the top of your profile.</p>
-              <div class="look-banner" style="background:{form.bannerUrl ? `center/cover url('${form.bannerUrl}')` : form.accentColor}"></div>
+              <div class="look-banner" style="background:{form.bannerUrl ? 'transparent' : form.accentColor}">
+                {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+              </div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
@@ -133,10 +154,12 @@
         <div>
           <p class="label">Preview</p>
           <div class="preview-card">
-            <div class="preview-banner" style="background:{form.bannerUrl ? `center/cover url('${form.bannerUrl}')` : form.accentColor}"></div>
+            <div class="preview-banner" style="background:{form.bannerUrl ? 'transparent' : form.accentColor}">
+              {#if form.bannerUrl}<Photo url={form.bannerUrl} />{/if}
+            </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
-              {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+              {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
               <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
