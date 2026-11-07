@@ -36,6 +36,14 @@
     return list;
   });
 
+  function onVoice(ch) {
+    if (ui.voice && ui.voice.channelId === ch.id && ui.voice.serverId === ui.serverId) {
+      leaveVoice();
+      return;
+    }
+    joinVoice(ch);
+  }
+
   async function menu(act) {
     ui.menuOpen = false;
     if (act === 'settings') {
@@ -124,7 +132,7 @@
             </div>
             {#each voices as ch}
               <div class="channel" class:on={ui.voice?.channelId === ch.id}>
-                <button class="channel-hit" onclick={() => joinVoice(ch)}>
+                <button class="channel-hit" onclick={() => onVoice(ch)}>
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
                 </button>
@@ -140,6 +148,9 @@
                   <Avatar user={person} size={22} dot={false} />
                   <span>{person.displayName || person.username}</span>
                   {#if person.muted || person.deafened}<MicOff size={12} />{/if}
+                  {#if ui.voice?.channelId === ch.id && person.id === ui.me?.id}
+                    <button class="leave-mini" onclick={leaveVoice}>Leave</button>
+                  {/if}
                 </div>
               {/each}
             {/each}
@@ -165,17 +176,22 @@
 
   {#if ui.voice}
     <div class="voice-live">
-      <div class="voice-live-copy">
-        <strong>{ui.voice.deafened ? 'Deafened' : 'Voice connected'}</strong>
-        <span>{ui.voice.name}</span>
+      <div class="voice-live-top">
+        <div class="voice-live-copy">
+          <strong>{ui.voice.deafened ? 'Deafened' : 'Voice connected'}</strong>
+          <span>{ui.voice.name}</span>
+        </div>
+        <button class="hangup" title="Leave call" onclick={leaveVoice}><PhoneOff size={18} /></button>
       </div>
-      <button class="row-act" title="Disconnect" onclick={leaveVoice}><PhoneOff size={16} /></button>
-      <button class="row-act" title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
-        {#if ui.voice.muted}<MicOff size={16} />{:else}<Mic size={16} />{/if}
-      </button>
-      <button class="row-act" title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
-        {#if ui.voice.deafened}<HeadphoneOff size={16} />{:else}<Headphones size={16} />{/if}
-      </button>
+      <div class="voice-tools">
+        <button class="voice-tool" title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
+          {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
+        </button>
+        <button class="voice-tool" title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
+          {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
+        </button>
+      </div>
+      <button class="leave-call" onclick={leaveVoice}><PhoneOff size={16} /> Leave call</button>
     </div>
   {/if}
   <div class="me">
