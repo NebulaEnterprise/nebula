@@ -21,8 +21,11 @@
       <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
     {/if}
     <div class="pop-body">
-      <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
-        {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+      <div class="pop-top">
+        <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
+          {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+        </div>
+        {#if u.bio}<div class="bio-bubble">{u.bio}</div>{/if}
       </div>
       <div class="pop-head">
         <div>
@@ -30,7 +33,6 @@
           <p class="handle">@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</p>
         </div>
       </div>
-      {#if u.bio}<p style="margin-top:10px;color:var(--muted)">{u.bio}</p>{/if}
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
       <div class="stack">
         {#if rel === 'friends'}
