@@ -1,9 +1,9 @@
+// ========== BACKEND URL ==========
+// Same pattern as Secret Santa / yapper-claim-service
+// 1. Keep backend/run.bat open
+// 2. Optional: ngrok http 3850
+// 3. Set DEFAULT_BACKEND or ?backend=https://xxxx.ngrok-free.app
 const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev";
-
-const TUNNEL_HEADERS = {
-  'ngrok-skip-browser-warning': 'true',
-  'bypass-tunnel-reminder': 'true',
-};
 
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
@@ -16,6 +16,7 @@ function getApiBase() {
     const saved = localStorage.getItem("dc_backend");
     if (saved) return saved.replace(/\/$/, "");
   } catch (e) {}
+  // When served by the Node backend, same origin works
   if (window.location.protocol !== "file:" && window.location.port === "3850") {
     return window.location.origin;
   }
@@ -23,7 +24,7 @@ function getApiBase() {
 }
 let API = getApiBase();
 
-const COLORS = ['#7c5cff','#57f287','#fee75c','#eb459e','#ed4245','#f47fff','#00d4ff','#faa61a','#9b59b6','#1abc9c','#e67e22','#3498db'];
+const COLORS = ['#5865f2','#57f287','#fee75c','#eb459e','#ed4245','#f47fff','#00d4ff','#faa61a','#9b59b6','#1abc9c','#e67e22','#3498db'];
 let token = localStorage.getItem('dc_token') || null;
 let me = null;
 let channels = [];
@@ -32,6 +33,7 @@ let currentServerId = 'nebula-official';
 let currentChannel = 'general';
 let badgeDefs = {};
 let pollTimer = null;
+/** 'server' | 'dm' */
 let chatMode = 'server';
 let dmUserId = null;
 let dmUser = null;
@@ -41,7 +43,7 @@ const $ = (id) => document.getElementById(id);
 function networkError(err) {
   const msg = (err && err.message) || String(err);
   if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('fetch')) {
-    return 'Cannot reach server at ' + API + '. Check connection.';
+    return 'Cannot reach server at ' + API + '. Run backend/run.bat, leave it open, then open http://localhost:3850';
   }
   return msg;
 }
@@ -79,7 +81,7 @@ async function safeJson(res) {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error('Server returned non-JSON (is the backend running?)');
+    throw new Error('Server returned non-JSON (is the backend running at ' + API + '?)');
   }
 }
 
@@ -92,7 +94,7 @@ $('btn-register').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/request-code', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, username, password }),
     });
     const data = await safeJson(res);
@@ -115,7 +117,7 @@ $('btn-verify').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: window._pendingEmail, code }),
     });
     const data = await safeJson(res);
@@ -139,7 +141,7 @@ $('btn-login').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...TUNNEL_HEADERS },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
     const data = await safeJson(res);
@@ -156,11 +158,7 @@ $('btn-login').onclick = async () => {
 };
 
 async function api(path, opts = {}) {
-  const headers = {
-    ...TUNNEL_HEADERS,
-    ...(opts.headers || {}),
-    Authorization: 'Bearer ' + token,
-  };
+  const headers = { ...(opts.headers || {}), Authorization: 'Bearer ' + token };
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
@@ -195,10 +193,11 @@ function renderMe() {
   if (!me) return;
   const name = me.displayName || me.username;
   const sub = me.customStatus || me.status || 'Online';
-  const color = me.avatarColor || '#7c5cff';
+  const color = me.avatarColor || '#5865f2';
   const st = me.status || 'online';
   [
     ['me-initial', 'me-avatar', 'me-name', 'me-custom', 'me-status-dot'],
+    ['me-initial-dm', 'me-avatar-dm', 'me-name-dm', 'me-custom-dm', 'me-status-dot-dm'],
   ].forEach(([ini, av, nm, cu, dot]) => {
     if ($(ini)) $(ini).textContent = initial(name);
     if ($(av)) $(av).style.background = color;
@@ -241,7 +240,7 @@ function renderChannels() {
       dmUser = null;
       currentChannel = ch.id;
       renderChannels();
-      if ($('ch-icon')) $('ch-icon').textContent = '#';
+      if ($('ch-hash')) $('ch-hash').textContent = '#';
       $('ch-name').textContent = ch.name;
       $('ch-topic').textContent = ch.topic || '';
       $('msg-input').placeholder = `Message #${ch.name}`;
@@ -251,6 +250,30 @@ function renderChannels() {
   });
 }
 
+function renderServerRail() {
+  const rail = document.querySelector('.servers');
+  if (!rail) return;
+  const list = (servers && servers.length) ? servers : [{ id: 'nebula-official', name: 'Nebula Official', icon: 'N', color: '#5865f2' }];
+  let html = `<div class="server-icon ${chatMode !== 'server' ? 'active' : ''}" id="nav-home" title="Direct messages">💬</div>
+  <div class="server-sep"></div>`;
+  list.forEach(s => {
+    const active = chatMode === 'server' && currentServerId === s.id ? 'active' : '';
+    html += `<div class="server-icon ${active}" data-server-id="${s.id}" title="${s.name}" style="${s.color ? 'background:'+s.color : ''}">${s.icon || s.name.charAt(0)}</div>`;
+  });
+  html += `<div class="server-sep"></div>
+  <div class="server-icon" id="nav-add-server" title="Add Server" style="color:var(--green)">+</div>`;
+  rail.innerHTML = html;
+  const home = $('nav-home');
+  if (home) home.onclick = () => openFriendsHome('online');
+  rail.querySelectorAll('[data-server-id]').forEach(node => {
+    node.onclick = () => {
+      currentServerId = node.dataset.serverId;
+      openServer();
+    };
+  });
+}
+
+
 function renderMessageList(list, emptyTitle, emptySub) {
   const box = $('messages');
   if (!list.length) {
@@ -259,12 +282,18 @@ function renderMessageList(list, emptyTitle, emptySub) {
   }
   box.innerHTML = list.map(m => {
     const a = m.author || {};
+    const badges = (a.badges || []).map(bid => {
+      const b = badgeDefs[bid];
+      if (!b) return '';
+      return `<span class="badge-pill" style="background:${b.color}" title="${b.label}">${b.icon} ${b.label}</span>`;
+    }).join('');
     const time = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return `<div class="msg">
-      <div class="av" style="background:${a.avatarColor || '#7c5cff'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
+      <div class="av" style="background:${a.avatarColor || '#5865f2'}" data-uid="${a.id}">${initial(a.displayName || a.username)}</div>
       <div class="msg-body">
         <div class="msg-head">
           <span class="msg-author" style="color:${a.accentColor || '#fff'}" data-uid="${a.id}">${escapeHtml(a.displayName || a.username)}</span>
+          <span class="msg-badges">${badges}</span>
           <span class="msg-time">${time}</span>
         </div>
         <div class="msg-content">${escapeHtml(m.content)}</div>
@@ -288,7 +317,7 @@ async function loadMessages() {
     const data = await api(`/api/channels/${currentChannel}/messages`);
     renderMessageList(data.messages || [], '#' + currentChannel, 'This is the start of the channel. Say hi!');
   } catch (e) {
-    console.warn('loadMessages', e);
+    console.warn(e);
   }
 }
 
@@ -313,6 +342,7 @@ $('msg-input').addEventListener('keydown', async (e) => {
   }
 });
 
+
 let friendsCache = { friends: [], incoming: [], outgoing: [] };
 let friendsTab = 'online';
 
@@ -323,15 +353,25 @@ function showMainView(name) {
 }
 
 function setRail(mode) {
-  if ($('sidebar-server')) $('sidebar-server').style.display = mode === 'server' ? 'block' : 'none';
-  if ($('sidebar-dm')) $('sidebar-dm').style.display = mode === 'home' ? 'block' : 'none';
-  
+  // mode: 'server' | 'home'
+  if ($('sidebar-server')) {
+    $('sidebar-server').style.display = mode === 'server' ? 'flex' : 'none';
+    $('sidebar-server').style.flexDirection = 'column';
+  }
+  if ($('sidebar-dm')) {
+    $('sidebar-dm').style.display = mode === 'home' ? 'flex' : 'none';
+    $('sidebar-dm').style.flexDirection = 'column';
+  }
   if ($('members')) {
     if (mode === 'server') $('members').classList.remove('hidden');
     else $('members').classList.add('hidden');
   }
+  // Active states refreshed by renderServerRail when on server
   const home = $('nav-home');
   if (home) home.classList.toggle('active', mode === 'home');
+  document.querySelectorAll('[data-server-id]').forEach(el => {
+    el.classList.toggle('active', mode === 'server' && el.dataset.serverId === currentServerId);
+  });
 }
 
 function renderDmProfile(user) {
@@ -349,13 +389,13 @@ function renderDmProfile(user) {
     return `<span class="badge-pill" style="background:${b.color}">${b.icon} ${b.label}</span>`;
   }).join('');
   box.innerHTML = `
-    <div class="dm-profile-banner" style="background:${user.bannerColor || user.accentColor || '#7c5cff'}"></div>
+    <div class="dm-profile-banner" style="background:${user.bannerColor || user.accentColor || '#5865f2'}"></div>
     <div class="dm-profile-body">
-      <div class="dm-profile-av" style="background:${user.avatarColor || '#7c5cff'}">${initial(user.displayName || user.username)}</div>
+      <div class="dm-profile-av" style="background:${user.avatarColor || '#5865f2'}">${initial(user.displayName || user.username)}</div>
       <div class="dm-profile-name">${escapeHtml(user.displayName || user.username)}</div>
+      <div class="dm-profile-user">@${escapeHtml(user.username)}${user.uid != null ? ' · #' + user.uid : ''}${user.pronouns ? ' · ' + escapeHtml(user.pronouns) : ''}</div>
       ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
       ${user.bio ? `<div class="dm-profile-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(user.bio)}</p></div>` : ''}
-      <div class="dm-profile-section"><h4>User ID</h4><p style="font-size:14px;color:var(--text-muted)">#${user.uid != null ? user.uid : '—'}</p></div>
       <div class="dm-profile-section"><h4>Member Since</h4><p style="font-size:14px;color:var(--text-muted)">${user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}</p></div>
     </div>`;
 }
@@ -367,9 +407,9 @@ async function openDm(user) {
   dmUserId = user.id;
   dmUser = user;
   showMainView('view-chat');
-  if ($('ch-icon')) $('ch-icon').textContent = '@';
+  if ($('ch-hash')) $('ch-hash').textContent = '@';
   $('ch-name').textContent = user.displayName || user.username;
-  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || ''));
+  $('ch-topic').textContent = (user.status === 'online' ? 'Online' : (user.status || '')) + (user.uid != null ? ' · #' + user.uid : '');
   $('msg-input').placeholder = `Message @${user.username}`;
   renderDmProfile(user);
   document.querySelectorAll('.dm-nav-item').forEach(b => b.classList.remove('active'));
@@ -392,7 +432,7 @@ async function refreshDmList() {
       if (!u) return '';
       const active = dmUserId === u.id ? 'active' : '';
       return `<div class="dm-item ${active}" data-dm-id="${u.id}">
-        <div class="av" style="background:${u.avatarColor || '#7c5cff'}">${initial(u.displayName || u.username)}</div>
+        <div class="av" style="background:${u.avatarColor || '#5865f2'}">${initial(u.displayName || u.username)}</div>
         <span>${escapeHtml(u.displayName || u.username)}</span>
       </div>`;
     }).join('');
@@ -416,6 +456,7 @@ async function renderFriendsBody() {
   const body = $('friends-body');
   if (!body) return;
   const q = (($('friends-search') && $('friends-search').value) || '').trim().toLowerCase();
+  let rows = [];
   if (friendsTab === 'pending') {
     const incoming = friendsCache.incoming || [];
     const outgoing = friendsCache.outgoing || [];
@@ -426,11 +467,15 @@ async function renderFriendsBody() {
     let html = '';
     if (incoming.length) {
       html += `<div class="friends-cat">Incoming — ${incoming.length}</div>`;
-      incoming.forEach(u => { html += friendListRow(u, 'pending-in'); });
+      incoming.forEach(u => {
+        html += friendListRow(u, 'pending-in');
+      });
     }
     if (outgoing.length) {
       html += `<div class="friends-cat">Outgoing — ${outgoing.length}</div>`;
-      outgoing.forEach(u => { html += friendListRow(u, 'pending-out'); });
+      outgoing.forEach(u => {
+        html += friendListRow(u, 'pending-out');
+      });
     }
     body.innerHTML = html;
     bindFriendRowActions(body);
@@ -462,12 +507,12 @@ function friendListRow(u, kind) {
     actions = `<div class="friend-list-actions"><span style="font-size:12px;color:var(--text-faint)">Pending</span></div>`;
   }
   return `<div class="friend-list-row" data-user="${u.id}">
-    <div class="av" style="background:${u.avatarColor || '#7c5cff'}">${initial(u.displayName || u.username)}
-      <span class="status-dot ${u.status || 'offline'}" style="width:12px;height:12px;border-width:2px"></span>
+    <div class="av" style="background:${u.avatarColor || '#5865f2'}">${initial(u.displayName || u.username)}
+      <span class="status-dot ${u.status || 'offline'}" style="width:10px;height:10px;border-width:2px"></span>
     </div>
     <div class="friend-list-meta">
-      <div class="friend-list-name">${escapeHtml(u.displayName || u.username)}</div>
-      <div class="friend-list-sub">@${escapeHtml(u.username)} • ${status}</div>
+      <div class="friend-list-name">${escapeHtml(u.displayName || u.username)} <span style="color:var(--text-faint);font-weight:400;font-size:13px">${escapeHtml(u.username)}</span></div>
+      <div class="friend-list-sub">${status}${u.uid != null ? ' · #' + u.uid : ''}</div>
     </div>
     ${actions}
   </div>`;
@@ -569,8 +614,9 @@ async function openServer() {
       ];
     }
   }
+  renderServerRail();
   renderChannels();
-  if ($('ch-icon')) $('ch-icon').textContent = '#';
+  if ($('ch-hash')) $('ch-hash').textContent = '#';
   const ch = channels.find(c => c.id === currentChannel) || channels.find(c => c.type === 'text') || channels[0];
   if (ch) {
     currentChannel = ch.id;
@@ -578,16 +624,25 @@ async function openServer() {
     $('ch-topic').textContent = ch.topic || '';
     $('msg-input').placeholder = `Message #${ch.name}`;
   }
+  const header = document.querySelector('#sidebar-server .sidebar-header');
+  if (header) {
+    const s = (servers || []).find(x => x.id === currentServerId);
+    header.textContent = (s && s.name) || 'Nebula Official';
+  }
   if ($('members')) $('members').classList.remove('hidden');
   await loadMessages();
   await loadMembers();
 }
 
+
+// Rail
 if ($('nav-home')) $('nav-home').onclick = () => openFriendsHome('online');
 if ($('btn-friends-page')) $('btn-friends-page').onclick = () => openFriendsHome(friendsTab || 'online');
 if ($('btn-add-friend-page')) $('btn-add-friend-page').onclick = () => openAddFriendPage();
 if ($('btn-dm-plus')) $('btn-dm-plus').onclick = () => openAddFriendPage();
 if ($('btn-open-add-friend')) $('btn-open-add-friend').onclick = () => openAddFriendPage();
+if ($('btn-settings-dm')) $('btn-settings-dm').onclick = () => $('btn-settings').click();
+if ($('btn-logout-dm')) $('btn-logout-dm').onclick = () => logout();
 
 document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
   btn.onclick = () => {
@@ -596,11 +651,17 @@ document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
     document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
-    showMainView('view-friends-home');
+    // also on add-friend page tabs that switch back
+    if ($('view-add-friend').classList.contains('active') === false) {
+      showMainView('view-friends-home');
+    } else {
+      showMainView('view-friends-home');
+    }
     renderFriendsBody();
   };
 });
 
+// tabs on add-friend page header
 document.querySelectorAll('#view-add-friend .ftab[data-ftab]').forEach(btn => {
   btn.onclick = () => openFriendsHome(btn.dataset.ftab);
 });
@@ -654,6 +715,9 @@ async function loadMembers() {
       html += `<div class="members-cat">Offline — ${offline.length}</div>`;
       offline.forEach(m => { html += memberRow(m); });
     }
+    if (!members.length) {
+      html = '<div class="members-cat">Members</div><div style="padding:8px;color:var(--text-faint);font-size:13px">No members yet</div>';
+    }
     el.innerHTML = html;
     el.querySelectorAll('[data-uid]').forEach(node => {
       node.onclick = (e) => showPopout(node.dataset.uid, e);
@@ -666,13 +730,13 @@ async function loadMembers() {
 
 function memberRow(m) {
   const avStyle = m.avatarUrl
-    ? `background-image:url(${m.avatarUrl});background-size:cover;background-position:center;background-color:${m.avatarColor || '#7c5cff'}`
-    : `background:${m.avatarColor || '#7c5cff'}`;
+    ? `background-image:url(${m.avatarUrl});background-size:cover;background-position:center;background-color:${m.avatarColor || '#5865f2'}`
+    : `background:${m.avatarColor || '#5865f2'}`;
   const letter = m.avatarUrl ? '' : initial(m.displayName || m.username);
   return `<div class="member" data-uid="${m.id}">
     <div class="av" style="${avStyle}">
       ${letter}
-      <span class="status-dot ${m.status || 'online'}" style="width:12px;height:12px;border-width:2px"></span>
+      <span class="status-dot ${m.status || 'online'}" style="width:10px;height:10px;border-width:2px"></span>
     </div>
     <div>
       <div class="member-name" style="color:${m.accentColor || ''}">${escapeHtml(m.displayName || m.username)}</div>
@@ -694,10 +758,10 @@ async function showPopout(uid, ev) {
 
     const bannerStyle = u.bannerUrl
       ? `background-image:url(${u.bannerUrl});background-size:cover;background-position:center`
-      : `background:${u.bannerColor || u.accentColor || '#7c5cff'}`;
+      : `background:${u.bannerColor || u.accentColor || '#5865f2'}`;
     const avStyle = u.avatarUrl
-      ? `background-image:url(${u.avatarUrl});background-size:cover;background-position:center;background-color:${u.avatarColor || '#7c5cff'}`
-      : `background:${u.avatarColor || '#7c5cff'}`;
+      ? `background-image:url(${u.avatarUrl});background-size:cover;background-position:center;background-color:${u.avatarColor || '#5865f2'}`
+      : `background:${u.avatarColor || '#5865f2'}`;
     const letter = u.avatarUrl ? '' : initial(u.displayName || u.username);
 
     const pop = $('popout');
@@ -706,6 +770,7 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
+        <div class="popout-user">@${escapeHtml(u.username)}${u.uid != null ? ' · #' + u.uid : ''}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
@@ -719,6 +784,7 @@ async function showPopout(uid, ev) {
     if (btn) {
       btn.onclick = (e) => {
         e.stopPropagation();
+        // Re-open a slightly larger version / focus the same card
         showPopout(uid, ev);
       };
     }
@@ -741,6 +807,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Settings
 const COLORS_HTML = (id, selected) => COLORS.map(c =>
   `<div class="color-swatch ${c === selected ? 'active' : ''}" data-color="${c}" style="background:${c}" data-group="${id}"></div>`
 ).join('');
@@ -757,12 +824,15 @@ function refreshPreview() {
   if (!$('preview-name')) return;
   const display = ($('set-display') && $('set-display').value.trim()) || (me && me.displayName) || (me && me.username) || 'User';
   const username = ($('set-username') && $('set-username').value.trim()) || (me && me.username) || 'user';
+  const uid = me && me.uid != null ? me.uid : '';
   $('preview-name').textContent = display;
-  $('preview-user').textContent = '@' + username;
+  $('preview-user').textContent = '@' + username + (uid !== '' ? ' · #' + uid : '');
   if ($('preview-pronouns')) $('preview-pronouns').textContent = ($('set-pronouns') && $('set-pronouns').value.trim()) || '';
   if ($('preview-bio')) $('preview-bio').textContent = ($('set-bio') && $('set-bio').value.trim()) || '';
-  const avColor = document.querySelector('#avatar-colors .color-swatch.active')?.dataset.color || (me && me.avatarColor) || '#7c5cff';
-  const accent = document.querySelector('#accent-colors .color-swatch.active')?.dataset.color || (me && me.accentColor) || '#7c5cff';
+  const avColor = document.querySelector('#avatar-colors .color-swatch.active')?.dataset.color
+    || (me && me.avatarColor) || '#5865f2';
+  const accent = document.querySelector('#accent-colors .color-swatch.active')?.dataset.color
+    || (me && me.accentColor) || '#5865f2';
   const avUrl = ($('set-avatar-url') && $('set-avatar-url').value.trim()) || (me && me.avatarUrl) || '';
   const banUrl = ($('set-banner-url') && $('set-banner-url').value.trim()) || (me && me.bannerUrl) || '';
   const av = $('preview-av');
@@ -807,6 +877,7 @@ $('btn-settings').onclick = () => {
   if ($('set-username')) $('set-username').value = me.username || '';
   $('set-display').value = me.displayName || '';
   if ($('set-pronouns')) $('set-pronouns').value = me.pronouns || '';
+  if ($('set-servertag')) $('set-servertag').value = me.serverTag || '';
   $('set-bio').value = me.bio || '';
   $('set-custom').value = me.customStatus || '';
   $('set-status').value = me.status || 'online';
@@ -814,7 +885,7 @@ $('btn-settings').onclick = () => {
   if ($('set-banner-url')) $('set-banner-url').value = me.bannerUrl || '';
   $('avatar-colors').innerHTML = COLORS_HTML('avatar', me.avatarColor);
   $('accent-colors').innerHTML = COLORS_HTML('accent', me.accentColor || me.bannerColor);
-  $('settings-badges').innerHTML = badgeHtml(me.badges) || '<span style="color:var(--text-faint);font-size:14px">No badges yet</span>';
+  $('settings-badges').innerHTML = badgeHtml(me.badges) || '<span style="color:var(--text-faint);font-size:14px">No badges yet — Early Supporter until Dec 31</span>';
   $('preview-badges').innerHTML = badgeHtml(me.badges);
   bindColorClicks();
   showSettingsPanel('identity');
@@ -859,6 +930,7 @@ $('settings-save').onclick = async () => {
         displayName: $('set-display').value.trim(),
         bio: $('set-bio').value.trim(),
         pronouns: $('set-pronouns') ? $('set-pronouns').value.trim() : '',
+        serverTag: $('set-servertag') ? $('set-servertag').value.trim() : '',
         customStatus: $('set-custom').value.trim(),
         status: $('set-status').value,
         avatarColor,
@@ -897,6 +969,7 @@ async function enterApp() {
   }, 5000);
 }
 
+// Auto-login
 (async () => {
   if (!token) return;
   try {
