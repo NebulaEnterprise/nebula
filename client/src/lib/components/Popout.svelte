@@ -32,7 +32,6 @@
       </div>
       {#if u.bio}<p style="margin-top:10px;color:var(--muted)">{u.bio}</p>{/if}
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
-      <p class="pop-meta">Member since {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'} · User id {u.uid ?? '—'}</p>
       <div class="stack">
         {#if rel === 'friends'}
           <button class="btn brand" onclick={() => { ui.popout = null; openDm(u); }}>Message</button>
@@ -43,6 +42,16 @@
         {:else if rel === 'outgoing'}
           <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
         {/if}
+      </div>
+      <div class="pop-meta">
+        <div>
+          <span>Member since</span>
+          <strong>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</strong>
+        </div>
+        <div>
+          <span>User id</span>
+          <strong>{u.uid ?? '—'}</strong>
+        </div>
       </div>
     </div>
   </div>

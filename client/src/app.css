@@ -402,7 +402,12 @@ img { max-width: 100%; }
 .pop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pop h3, .pop p { margin: 0; }
 .pop .handle { color: var(--muted); font-size: 13px; }
-.pop-meta { margin: 12px 0 0; color: var(--faint); font-size: 12px; font-weight: 500; }
+.pop-meta {
+  display: flex; justify-content: space-between; gap: 16px;
+  margin-top: 16px; padding-top: 12px;
+}
+.pop-meta span { display: block; color: var(--faint); font-size: 11px; font-weight: 600; }
+.pop-meta strong { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; }
 .stack { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .toast {
   position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
