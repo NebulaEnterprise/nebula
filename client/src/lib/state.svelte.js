@@ -314,6 +314,7 @@ export async function loadMessages(quiet, live) {
       data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || '') + wait, signal);
     }
     if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return;
+    if (data.same) return;
     ui.typers = data.typers || [];
     const list = data.messages || [];
     if (ui.mode === 'dm') {

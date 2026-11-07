@@ -342,6 +342,66 @@ function makeToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+function storeImage(value) {
+  const url = String(value || '');
+  if (!url.startsWith('data:image/')) return url.length > 2000 ? '' : url;
+  const head = url.slice(5, 40).split(';')[0].toLowerCase();
+  const ext = head === 'image/gif' ? '.gif' : head === 'image/png' ? '.png' : head === 'image/webp' ? '.webp' : (head === 'image/jpeg' || head === 'image/jpg') ? '.jpg' : '';
+  const comma = url.indexOf(',');
+  if (!ext || comma < 0) return '';
+  const buf = Buffer.from(url.slice(comma + 1), url.slice(0, comma).includes(';base64') ? 'base64' : 'utf8');
+  if (!buf.length) return '';
+  const name = uuidv4() + ext;
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+  return '/uploads/' + name;
+}
+
+function slimAuthor(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    username: u.username,
+    displayName: u.displayName || u.username,
+    avatarColor: u.avatarColor || '#7c5cff',
+    nameEffect: cleanNameEffect(u.nameEffect),
+    nameColors: cleanNameColors(u.nameColors),
+  };
+}
+
+function presentMessage(msg) {
+  const live = msg && msg.authorId ? users[msg.authorId] : null;
+  const base = slimAuthor(msg.author || {}) || {};
+  const author = Object.assign(base, live ? slimAuthor(live) : {});
+  author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
+  return Object.assign({}, msg, { author });
+}
+
+function unpackImages() {
+  let userChanged = false;
+  for (const u of Object.values(users)) {
+    if (!u) continue;
+    for (const key of ['avatarUrl', 'bannerUrl']) {
+      if (String(u[key] || '').startsWith('data:')) {
+        u[key] = storeImage(u[key]);
+        userChanged = true;
+      }
+    }
+  }
+  if (userChanged) save(USERS_FILE, users);
+  let msgChanged = false;
+  for (const list of Object.values(messages)) {
+    if (!Array.isArray(list)) continue;
+    for (const msg of list) {
+      if (!msg || !msg.author) continue;
+      if (msg.author.avatarUrl || msg.author.bannerUrl || msg.author.email || msg.author.bio) {
+        msg.author = slimAuthor(msg.author);
+        msgChanged = true;
+      }
+    }
+  }
+  if (msgChanged) save(MESSAGES_FILE, messages);
+}
+
 function publicUser(u) {
   if (!u) return null;
   return {
@@ -367,6 +427,8 @@ function publicUser(u) {
     createdAt: u.createdAt,
   };
 }
+
+unpackImages();
 
 function cleanNameEffect(value) {
   return ['plain', 'glow', 'gradient', 'rainbow', 'glitch'].includes(value) ? value : '';
@@ -589,8 +651,8 @@ app.patch('/api/me', auth, (req, res) => {
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
-  if (avatarUrl !== undefined) req.user.avatarUrl = String(avatarUrl);
-  if (bannerUrl !== undefined) req.user.bannerUrl = String(bannerUrl);
+  if (avatarUrl !== undefined) req.user.avatarUrl = storeImage(avatarUrl);
+  if (bannerUrl !== undefined) req.user.bannerUrl = storeImage(bannerUrl);
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
@@ -875,7 +937,7 @@ app.get('/api/channels/:id/messages', auth, (req, res) => {
     return res.status(403).json({ error: 'You cannot view this channel' });
   }
   const list = messages[found.channel.id] || [];
-  res.json({ ok: true, messages: list.slice(-100) });
+  res.json({ ok: true, messages: list.slice(-100).map(presentMessage) });
 });
 
 app.post('/api/channels/:id/messages', auth, (req, res) => {
@@ -918,7 +980,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     id: uuidv4(),
     channelId: found.channel.id,
     authorId: req.user.id,
-    author: publicUser(req.user),
+    author: slimAuthor(req.user),
     content,
     createdAt: new Date().toISOString(),
   };
@@ -926,7 +988,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
   wakePulse(found.channel.id);
-  res.json({ ok: true, message: msg });
+  res.json({ ok: true, message: presentMessage(msg) });
 });
 
 const typingRooms = new Map();
@@ -986,7 +1048,7 @@ function pulseSnap(req) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
     const roomId = 'dm:' + key;
-    const list = (messages[roomId] || []).slice(-100);
+    const list = (messages[roomId] || []).slice(-100).map(presentMessage);
     const typers = listTypers(roomId, req.user.id);
     const last = list[list.length - 1];
     return {
@@ -1003,7 +1065,7 @@ function pulseSnap(req) {
   const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
   if (!found) return null;
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
-  const list = (messages[found.channel.id] || []).slice(-100);
+  const list = (messages[found.channel.id] || []).slice(-100).map(presentMessage);
   const typers = listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id);
   const last = list[list.length - 1];
   return {
@@ -1036,7 +1098,9 @@ app.get('/api/pulse', auth, (req, res) => {
     pulseWaiters.delete(waiter);
     if (res.writableEnded) return;
     const next = pulseSnap(req);
-    res.json(next && next.body ? next.body : snap.body);
+    const body = next && next.body ? next.body : snap.body;
+    if (body.cursor === after && body.typing === typing) return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing });
+    res.json(body);
   }
   const timer = setTimeout(finish, 25000);
   pulseWaiters.add(waiter);
@@ -1185,7 +1249,7 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   const key = dmKey(req.user.id, otherId);
   const list = messages['dm:' + key] || [];
-  res.json({ ok: true, messages: list.slice(-100), other: publicUser(users[otherId]) });
+  res.json({ ok: true, messages: list.slice(-100).map(presentMessage), other: publicUser(users[otherId]) });
 });
 
 app.post('/api/dms/:userId/messages', auth, (req, res) => {
@@ -1220,7 +1284,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     id: uuidv4(),
     channelId,
     authorId: req.user.id,
-    author: publicUser(req.user),
+    author: slimAuthor(req.user),
     content,
     createdAt: new Date().toISOString(),
   };
@@ -1228,7 +1292,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
   save(MESSAGES_FILE, messages);
   wakePulse(channelId);
-  res.json({ ok: true, message: msg });
+  res.json({ ok: true, message: presentMessage(msg) });
 });
 
 function settingsView(g, user) {
