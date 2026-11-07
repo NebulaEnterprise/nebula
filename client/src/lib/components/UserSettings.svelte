@@ -39,6 +39,13 @@
     finally { if (input) input.value = ''; }
   }
 
+  function toHex(value, fallback) {
+    const raw = String(value || '').trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+    if (/^#[0-9a-fA-F]{3}$/.test(raw)) return '#' + raw.slice(1).split('').map((c) => c + c).join('');
+    return fallback;
+  }
+
   function setNameColor(index, value) {
     const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
     next[index] = value;
@@ -115,7 +122,11 @@
                 <ColorWheel value={form.accentColor} onpick={(c) => (form.accentColor = c)} />
               {/if}
             </section>
-            <p class="label">Name effect</p>
+            <div class="effect-head">
+              <p class="label">Name effect</p>
+              <input class="rgb" type="color" aria-label="First color" value={toHex(form.nameColors[0], '#5ce1ff')} oninput={(e) => setNameColor(0, e.target.value)} />
+              <input class="rgb" type="color" aria-label="Second color" value={toHex(form.nameColors[1], '#7c6af7')} oninput={(e) => setNameColor(1, e.target.value)} />
+            </div>
             <div class="effect-picks">
               {#each effects as [id, label]}
                 <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
@@ -124,12 +135,6 @@
                 </button>
               {/each}
             </div>
-            {#if form.nameEffect}
-              <p class="label">{form.nameEffect === 'glow' ? 'Name color' : 'First color'}</p>
-              <ColorWheel value={form.nameColors[0] || '#5ce1ff'} onpick={(c) => setNameColor(0, c)} />
-              <p class="label">{form.nameEffect === 'glow' ? 'Glow color' : 'Second color'}</p>
-              <ColorWheel value={form.nameColors[1] || '#7c6af7'} onpick={(c) => setNameColor(1, c)} />
-            {/if}
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
