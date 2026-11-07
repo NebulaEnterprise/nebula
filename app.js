@@ -160,12 +160,19 @@ async function api(path, opts = {}) {
     ...TUNNEL_HEADERS,
     ...(opts.headers || {}),
     Authorization: 'Bearer ' + token,
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
   };
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
   }
-  const res = await fetch(API + path, { ...opts, headers });
+  // Bust any intermediary caches (ngrok / browser) on GET
+  let url = API + path;
+  if (!opts.method || opts.method === 'GET') {
+    url += (path.includes('?') ? '&' : '?') + '_=' + Date.now();
+  }
+  const res = await fetch(url, { ...opts, headers, cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     logout();
@@ -568,6 +575,11 @@ async function loadFriendsData() {
       incoming: Array.isArray(data.incoming) ? data.incoming : [],
       outgoing: Array.isArray(data.outgoing) ? data.outgoing : [],
     };
+    // Show incoming count on Pending tab
+    const pendingCount = (friendsCache.incoming || []).length;
+    document.querySelectorAll('.ftab[data-ftab="pending"]').forEach(t => {
+      t.textContent = pendingCount > 0 ? `Pending (${pendingCount})` : 'Pending';
+    });
     await renderFriendsBody();
     await refreshDmList();
   } catch (e) {
@@ -646,14 +658,15 @@ if ($('btn-dm-plus')) $('btn-dm-plus').onclick = () => openAddFriendPage();
 if ($('btn-open-add-friend')) $('btn-open-add-friend').onclick = () => openAddFriendPage();
 
 document.querySelectorAll('.ftab[data-ftab]').forEach(btn => {
-  btn.onclick = () => {
+  btn.onclick = async () => {
     if (btn.classList.contains('add')) return;
     friendsTab = btn.dataset.ftab;
     document.querySelectorAll('#view-friends-home .ftab').forEach(t => {
       if (!t.classList.contains('add')) t.classList.toggle('active', t.dataset.ftab === friendsTab);
     });
     showMainView('view-friends-home');
-    renderFriendsBody();
+    // Always refetch so the other user sees new incoming requests
+    await loadFriendsData();
   };
 });
 
@@ -751,8 +764,29 @@ function memberRow(m) {
   </div>`;
 }
 
+function friendRelation(uid) {
+  if (!uid || !me || uid === me.id) return 'self';
+  const f = friendsCache.friends || [];
+  const inc = friendsCache.incoming || [];
+  const out = friendsCache.outgoing || [];
+  if (f.some(x => x.id === uid)) return 'friends';
+  if (inc.some(x => x.id === uid)) return 'incoming';
+  if (out.some(x => x.id === uid)) return 'outgoing';
+  return 'none';
+}
+
 async function showPopout(uid, ev) {
   try {
+    // Refresh friends so Add Friend state is accurate
+    try {
+      const fr = await api('/api/friends');
+      friendsCache = {
+        friends: Array.isArray(fr.friends) ? fr.friends : [],
+        incoming: Array.isArray(fr.incoming) ? fr.incoming : [],
+        outgoing: Array.isArray(fr.outgoing) ? fr.outgoing : [],
+      };
+    } catch (_) {}
+
     const data = await api('/api/members');
     const u = data.members.find(m => m.id === uid);
     if (!u) return;
@@ -769,6 +803,25 @@ async function showPopout(uid, ev) {
       ? `background-image:url(${u.avatarUrl});background-size:cover;background-position:center;background-color:${u.avatarColor || '#7c5cff'}`
       : `background:${u.avatarColor || '#7c5cff'}`;
     const letter = u.avatarUrl ? '' : initial(u.displayName || u.username);
+    const rel = friendRelation(u.id);
+    const isSelf = rel === 'self';
+
+    let actionHtml = '';
+    if (!isSelf) {
+      if (rel === 'friends') {
+        actionHtml = `
+          <button type="button" class="popout-full-btn popout-primary" id="popout-msg">Message</button>
+          <button type="button" class="popout-full-btn" id="popout-unfriend">Remove Friend</button>`;
+      } else if (rel === 'incoming') {
+        actionHtml = `
+          <button type="button" class="popout-full-btn popout-primary" id="popout-accept">Accept Friend Request</button>
+          <button type="button" class="popout-full-btn" id="popout-decline">Ignore</button>`;
+      } else if (rel === 'outgoing') {
+        actionHtml = `<button type="button" class="popout-full-btn" id="popout-pending" disabled>Request Sent</button>`;
+      } else {
+        actionHtml = `<button type="button" class="popout-full-btn popout-primary" id="popout-add-friend">Add Friend</button>`;
+      }
+    }
 
     const pop = $('popout');
     pop.innerHTML = `
@@ -776,19 +829,84 @@ async function showPopout(uid, ev) {
       <div class="popout-body">
         <div class="popout-av" style="${avStyle}">${letter}</div>
         <div class="popout-name">${escapeHtml(u.displayName || u.username)}</div>
+        <div class="popout-user">@${escapeHtml(u.username)}${u.uid != null ? ' · #' + u.uid : ''}${u.pronouns ? ' · ' + escapeHtml(u.pronouns) : ''}</div>
         ${badges ? `<div class="badge-list" style="margin-top:8px">${badges}</div>` : ''}
         ${u.bio ? `<div class="popout-section"><h4>About Me</h4><p style="font-size:14px;color:var(--text-muted)">${escapeHtml(u.bio)}</p></div>` : ''}
         ${u.customStatus ? `<div class="popout-section"><h4>Status</h4><p style="font-size:14px">${escapeHtml(u.customStatus)}</p></div>` : ''}
-        <div class="popout-section"><h4>User ID</h4><p style="font-size:14px;color:var(--text-muted)">#${u.uid != null ? u.uid : '—'}</p></div>
         <div class="popout-section"><h4>Member Since</h4><p style="font-size:14px;color:var(--text-muted)">${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</p></div>
-        <button type="button" class="popout-full-btn" id="popout-view-full">View full profile</button>
+        <div class="popout-actions">
+          ${actionHtml}
+          <button type="button" class="popout-full-btn" id="popout-view-full">View full profile</button>
+        </div>
       </div>`;
     pop.classList.add('open');
 
-    const btn = $('popout-view-full');
-    if (btn) {
-      btn.onclick = (e) => {
-        e.stopPropagation();
+    const stop = (e) => e.stopPropagation();
+
+    const addBtn = $('popout-add-friend');
+    if (addBtn) {
+      addBtn.onclick = async (e) => {
+        stop(e);
+        addBtn.disabled = true;
+        addBtn.textContent = 'Sending…';
+        try {
+          const data = await api('/api/friends/request', { method: 'POST', body: { username: u.username } });
+          addBtn.textContent = data.status === 'accepted' ? 'Friends!' : 'Request Sent';
+          await loadFriendsData();
+          setTimeout(() => showPopout(uid, ev), 400);
+        } catch (err) {
+          addBtn.disabled = false;
+          addBtn.textContent = 'Add Friend';
+          alert(err.message);
+        }
+      };
+    }
+    const acceptBtn = $('popout-accept');
+    if (acceptBtn) {
+      acceptBtn.onclick = async (e) => {
+        stop(e);
+        try {
+          await api('/api/friends/accept', { method: 'POST', body: { userId: u.id } });
+          await loadFriendsData();
+          showPopout(uid, ev);
+        } catch (err) { alert(err.message); }
+      };
+    }
+    const declineBtn = $('popout-decline');
+    if (declineBtn) {
+      declineBtn.onclick = async (e) => {
+        stop(e);
+        try {
+          await api('/api/friends/decline', { method: 'POST', body: { userId: u.id } });
+          await loadFriendsData();
+          showPopout(uid, ev);
+        } catch (err) { alert(err.message); }
+      };
+    }
+    const msgBtn = $('popout-msg');
+    if (msgBtn) {
+      msgBtn.onclick = (e) => {
+        stop(e);
+        pop.classList.remove('open');
+        openDm(u);
+      };
+    }
+    const unfriendBtn = $('popout-unfriend');
+    if (unfriendBtn) {
+      unfriendBtn.onclick = async (e) => {
+        stop(e);
+        if (!confirm('Remove ' + (u.displayName || u.username) + ' as a friend?')) return;
+        try {
+          await api('/api/friends/remove', { method: 'POST', body: { userId: u.id } });
+          await loadFriendsData();
+          showPopout(uid, ev);
+        } catch (err) { alert(err.message); }
+      };
+    }
+    const fullBtn = $('popout-view-full');
+    if (fullBtn) {
+      fullBtn.onclick = (e) => {
+        stop(e);
         showPopout(uid, ev);
       };
     }
@@ -797,7 +915,7 @@ async function showPopout(uid, ev) {
     let left = rect.left + rect.width + 8;
     let top = rect.top;
     if (left + 320 > window.innerWidth) left = rect.left - 328;
-    if (top + 400 > window.innerHeight) top = window.innerHeight - 420;
+    if (top + 480 > window.innerHeight) top = window.innerHeight - 500;
     pop.style.left = Math.max(8, left) + 'px';
     pop.style.top = Math.max(8, top) + 'px';
   } catch (e) {
@@ -878,15 +996,22 @@ function fileToDataUrl(file, opts) {
     const maxW = opts.maxW || 512;
     const maxH = opts.maxH || 512;
     const quality = opts.quality || 0.82;
-    // Keep small GIFs animated; large ones get flattened to JPEG
-    const isGif = /image\/gif/i.test(file.type);
-    if (isGif && file.size <= 1.5 * 1024 * 1024) {
+    const maxBytes = opts.maxBytes || 8 * 1024 * 1024;
+    const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
+
+    // Animated GIFs: keep as-is (canvas would kill animation)
+    if (isGif) {
+      if (file.size > maxBytes) {
+        reject(new Error('GIF is too large (max ~8MB). Try a shorter or smaller GIF.'));
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (ev) => resolve(ev.target.result);
-      reader.onerror = reject;
+      reader.onerror = () => reject(new Error('Could not read GIF'));
       reader.readAsDataURL(file);
       return;
     }
+
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
@@ -901,7 +1026,6 @@ function fileToDataUrl(file, opts) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
       URL.revokeObjectURL(url);
-      // Prefer JPEG for photos; keep PNG if source had transparency and is small
       const out = canvas.toDataURL('image/jpeg', quality);
       resolve(out);
     };
@@ -917,7 +1041,7 @@ $('upload-avatar').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const dataUrl = await fileToDataUrl(file, { maxW: 256, maxH: 256, quality: 0.85 });
+    const dataUrl = await fileToDataUrl(file, { maxW: 256, maxH: 256, quality: 0.85, maxBytes: 8 * 1024 * 1024 });
     $('set-avatar-url').value = dataUrl;
     refreshPreview();
   } catch (err) {
@@ -929,7 +1053,7 @@ $('upload-banner').onchange = async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const dataUrl = await fileToDataUrl(file, { maxW: 960, maxH: 360, quality: 0.8 });
+    const dataUrl = await fileToDataUrl(file, { maxW: 960, maxH: 360, quality: 0.8, maxBytes: 8 * 1024 * 1024 });
     $('set-banner-url').value = dataUrl;
     refreshPreview();
   } catch (err) {
@@ -1033,7 +1157,11 @@ async function enterApp() {
   pollTimer = setInterval(() => {
     loadMessages();
     if (chatMode === 'server') loadMembers();
-    if (chatMode === 'home' || chatMode === 'dm') refreshDmList();
+    if (chatMode === 'home' || chatMode === 'dm') {
+      refreshDmList();
+      // Keep friend requests in sync for both users
+      loadFriendsData();
+    }
   }, 5000);
 }
 
