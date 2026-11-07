@@ -23,7 +23,7 @@
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
     <div class="pop-banner">
-      {#if u.bannerUrl || u.bannerStill}<Banner url={u.bannerUrl} still={u.bannerStill} />{/if}
+      {#if u.bannerUrl}<Banner url={u.bannerUrl} />{/if}
     </div>
     {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
     {#if rel === 'none'}

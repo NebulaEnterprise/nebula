@@ -49,6 +49,32 @@ export async function api(path, opts = {}) {
   return data;
 }
 
+const MEDIA_SIZES = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+function snapMediaSize(value) {
+  const n = Number(value) || 512;
+  let best = MEDIA_SIZES[0];
+  for (const size of MEDIA_SIZES) {
+    if (Math.abs(size - n) < Math.abs(best - n)) best = size;
+  }
+  return best;
+}
+
+export function assetPath(ref, opts = {}) {
+  if (!ref) return '';
+  if (ref.startsWith('data:') || ref.startsWith('blob:')) return ref;
+  const clean = String(ref).split('?')[0];
+  const match = clean.match(/\/uploads\/([^/]+?)(?:\.(gif|png|jpe?g|webp))?$/i);
+  if (!match) return ref;
+  const id = match[1];
+  const original = (match[2] || '').toLowerCase();
+  const animated = id.startsWith('a_') || original === 'gif';
+  let format = opts.format || (animated ? 'gif' : (original || 'png'));
+  if (format === 'jpeg') format = 'jpg';
+  const size = opts.size ? snapMediaSize(opts.size) : 0;
+  return '/uploads/' + id + '.' + format + (size ? '?size=' + size : '');
+}
+
 const mediaCache = new Map();
 const MEDIA_KEY = 'dc_media';
 const MEDIA_STORE = 'nebula-media-v1';
@@ -72,31 +98,6 @@ async function cachedBlob(full) {
   const blob = await hit.blob();
   if (!blob || !blob.size || /text\/html|application\/json/i.test(blob.type || '')) return null;
   return blob;
-}
-
-function posterKey(url) {
-  const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
-  return full + (full.includes('?') ? '&' : '?') + 'still=1';
-}
-
-export function resolvePoster(url) {
-  if (!url || url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve('');
-  const key = posterKey(url);
-  if (mediaCache.has(key)) return mediaCache.get(key);
-  const pending = cachedBlob(key).then((blob) => (blob ? URL.createObjectURL(blob) : '')).catch(() => '');
-  mediaCache.set(key, pending);
-  return pending;
-}
-
-export async function savePoster(url, blob) {
-  if (!url || !blob || url.startsWith('blob:') || url.startsWith('data:')) return;
-  const key = posterKey(url);
-  mediaCache.set(key, Promise.resolve(URL.createObjectURL(blob)));
-  if (!('caches' in window)) return;
-  try {
-    const store = await caches.open(MEDIA_STORE);
-    await store.put(key, new Response(blob, { headers: { 'Content-Type': blob.type || 'image/jpeg' } }));
-  } catch (_) {}
 }
 
 export function warmMedia(urls) {

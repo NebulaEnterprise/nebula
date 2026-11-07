@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = 3850;
@@ -438,7 +439,6 @@ function publicUser(u) {
     bannerColor: u.bannerColor || u.accentColor || '#7c5cff',
     avatarUrl: u.avatarUrl || '',
     bannerUrl: u.bannerUrl || '',
-    bannerStill: u.bannerStill || '',
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
@@ -584,7 +584,7 @@ app.post('/api/auth/verify', (req, res) => {
     accentColor: '#7c5cff',
     avatarColor: '#7c5cff',
     bannerColor: '#7c5cff',
-    avatarUrl: '', bannerUrl: '', bannerStill: '',
+    avatarUrl: '', bannerUrl: '',
     serverTag: '',
     server: SERVER_NAME,
     badges: [...new Set(badges)],
@@ -614,6 +614,402 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ ok: true, token: user.token, user: publicUser(user) });
 });
 
+const POW2 = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
+
+function snapSize(value) {
+  const n = Number(value);
+  if (!n || n < 16) return 0;
+  let best = POW2[0];
+  for (const size of POW2) {
+    if (Math.abs(size - n) < Math.abs(best - n)) best = size;
+  }
+  return best;
+}
+
+function readU16(buf, o) {
+  return buf[o] | (buf[o + 1] << 8);
+}
+
+function lzwDecode(minCodeSize, data, pixelCount) {
+  const clear = 1 << minCodeSize;
+  const eoi = clear + 1;
+  let codeSize = minCodeSize + 1;
+  let next = eoi + 1;
+  const dict = new Array(4096);
+  for (let i = 0; i < clear; i++) dict[i] = [i];
+  const out = [];
+  let bitBuf = 0;
+  let bitCount = 0;
+  let pos = 0;
+  let prev = null;
+  function read() {
+    while (bitCount < codeSize) {
+      if (pos >= data.length) return -1;
+      bitBuf |= data[pos++] << bitCount;
+      bitCount += 8;
+    }
+    const mask = (1 << codeSize) - 1;
+    const code = bitBuf & mask;
+    bitBuf >>= codeSize;
+    bitCount -= codeSize;
+    return code;
+  }
+  while (out.length < pixelCount) {
+    const code = read();
+    if (code < 0 || code === eoi) break;
+    if (code === clear) {
+      codeSize = minCodeSize + 1;
+      next = eoi + 1;
+      prev = null;
+      continue;
+    }
+    let entry;
+    if (code < next && dict[code]) entry = dict[code];
+    else if (prev && code === next) entry = prev.concat(prev[0]);
+    else break;
+    for (let i = 0; i < entry.length && out.length < pixelCount; i++) out.push(entry[i]);
+    if (prev && next < 4096) {
+      dict[next++] = prev.concat(entry[0]);
+      if (next === (1 << codeSize) && codeSize < 12) codeSize++;
+    }
+    prev = entry;
+  }
+  return out;
+}
+
+function lzwEncode(minCodeSize, indices) {
+  const clear = 1 << minCodeSize;
+  const eoi = clear + 1;
+  let codeSize = minCodeSize + 1;
+  let next = eoi + 1;
+  const dict = new Map();
+  const bits = [];
+  function emit(code, size) { bits.push([code, size]); }
+  function reset() {
+    dict.clear();
+    codeSize = minCodeSize + 1;
+    next = eoi + 1;
+  }
+  emit(clear, codeSize);
+  reset();
+  if (!indices.length) {
+    emit(eoi, codeSize);
+  } else {
+    let prefix = String(indices[0]);
+    for (let i = 1; i < indices.length; i++) {
+      const key = prefix + ',' + indices[i];
+      if (dict.has(key)) prefix = String(dict.get(key));
+      else {
+        emit(Number(prefix), codeSize);
+        if (next < 4096) {
+          dict.set(key, next++);
+          if (next === (1 << codeSize) && codeSize < 12) codeSize++;
+        } else {
+          emit(clear, codeSize);
+          reset();
+        }
+        prefix = String(indices[i]);
+      }
+    }
+    emit(Number(prefix), codeSize);
+    emit(eoi, codeSize);
+  }
+  let bitBuf = 0;
+  let bitCount = 0;
+  const bytes = [];
+  for (const [code, size] of bits) {
+    bitBuf |= code << bitCount;
+    bitCount += size;
+    while (bitCount >= 8) {
+      bytes.push(bitBuf & 255);
+      bitBuf >>= 8;
+      bitCount -= 8;
+    }
+  }
+  if (bitCount) bytes.push(bitBuf & 255);
+  const parts = [Buffer.from([minCodeSize])];
+  for (let i = 0; i < bytes.length; i += 255) {
+    const slice = bytes.slice(i, i + 255);
+    parts.push(Buffer.from([slice.length, ...slice]));
+  }
+  parts.push(Buffer.from([0]));
+  return Buffer.concat(parts);
+}
+
+function deinterlace(indexes, width, height) {
+  const out = new Array(indexes.length);
+  const passes = [[0, 8], [4, 8], [2, 4], [1, 2]];
+  let src = 0;
+  for (const [start, step] of passes) {
+    for (let y = start; y < height; y += step) {
+      for (let x = 0; x < width; x++) out[y * width + x] = indexes[src++];
+    }
+  }
+  return out;
+}
+
+function decodeGif(buf) {
+  if (buf.length < 13 || buf.toString('ascii', 0, 3) !== 'GIF') return null;
+  const width = readU16(buf, 6);
+  const height = readU16(buf, 8);
+  const packed = buf[10];
+  const gctFlag = packed & 128;
+  const gctSize = 1 << ((packed & 7) + 1);
+  let offset = 13;
+  let gct = null;
+  if (gctFlag) {
+    gct = buf.subarray(offset, offset + gctSize * 3);
+    offset += gctSize * 3;
+  }
+  const frames = [];
+  let delay = 10;
+  let transparent = -1;
+  let dispose = 0;
+  while (offset < buf.length) {
+    const block = buf[offset++];
+    if (block === 0x3b) break;
+    if (block === 0x21) {
+      const label = buf[offset++];
+      if (label === 0xf9) {
+        offset++;
+        const p = buf[offset++];
+        delay = readU16(buf, offset) || 10;
+        offset += 2;
+        transparent = (p & 1) ? buf[offset] : -1;
+        dispose = (p >> 2) & 7;
+        offset += 2;
+        continue;
+      }
+      while (offset < buf.length) {
+        const n = buf[offset++];
+        if (!n) break;
+        offset += n;
+      }
+      continue;
+    }
+    if (block !== 0x2c) break;
+    const left = readU16(buf, offset);
+    const top = readU16(buf, offset + 2);
+    const fw = readU16(buf, offset + 4);
+    const fh = readU16(buf, offset + 6);
+    const ip = buf[offset + 8];
+    offset += 9;
+    let palette = gct;
+    if (ip & 128) {
+      const n = 1 << ((ip & 7) + 1);
+      palette = buf.subarray(offset, offset + n * 3);
+      offset += n * 3;
+    }
+    const minCode = buf[offset++];
+    const chunks = [];
+    while (offset < buf.length) {
+      const n = buf[offset++];
+      if (!n) break;
+      chunks.push(buf.subarray(offset, offset + n));
+      offset += n;
+    }
+    let indexes = lzwDecode(minCode, Buffer.concat(chunks), fw * fh);
+    if (ip & 64) indexes = deinterlace(indexes, fw, fh);
+    frames.push({ left, top, width: fw, height: fh, palette, indexes, delay, transparent, dispose });
+    if (frames.length > 240) break;
+    delay = 10;
+    transparent = -1;
+    dispose = 0;
+  }
+  if (!frames.length || width * height > 8e6) return null;
+  return { width, height, frames };
+}
+
+function composite(gif) {
+  const { width, height, frames } = gif;
+  const canvas = Buffer.alloc(width * height * 4);
+  let previous = null;
+  const out = [];
+  for (const frame of frames) {
+    if (frame.dispose === 3) previous = Buffer.from(canvas);
+    for (let y = 0; y < frame.height; y++) {
+      const dy = frame.top + y;
+      if (dy < 0 || dy >= height) continue;
+      for (let x = 0; x < frame.width; x++) {
+        const dx = frame.left + x;
+        if (dx < 0 || dx >= width) continue;
+        const idx = frame.indexes[y * frame.width + x];
+        if (idx === frame.transparent) continue;
+        const p = idx * 3;
+        const o = (dy * width + dx) * 4;
+        canvas[o] = frame.palette ? frame.palette[p] : 0;
+        canvas[o + 1] = frame.palette ? frame.palette[p + 1] : 0;
+        canvas[o + 2] = frame.palette ? frame.palette[p + 2] : 0;
+        canvas[o + 3] = 255;
+      }
+    }
+    out.push({ rgba: Buffer.from(canvas), delay: frame.delay });
+    if (frame.dispose === 2) {
+      for (let y = 0; y < frame.height; y++) {
+        const dy = frame.top + y;
+        if (dy < 0 || dy >= height) continue;
+        canvas.fill(0, (dy * width + frame.left) * 4, (dy * width + frame.left + frame.width) * 4);
+      }
+    } else if (frame.dispose === 3 && previous) {
+      previous.copy(canvas);
+      previous = null;
+    }
+  }
+  return out;
+}
+
+function fitBox(w, h, max) {
+  if (!max || (w <= max && h <= max)) return { w, h };
+  const scale = max / Math.max(w, h);
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+}
+
+function scaleRGBA(src, sw, sh, dw, dh) {
+  if (sw === dw && sh === dh) return src;
+  const dst = Buffer.alloc(dw * dh * 4);
+  for (let y = 0; y < dh; y++) {
+    const sy = Math.min(sh - 1, Math.floor((y + 0.5) * sh / dh));
+    for (let x = 0; x < dw; x++) {
+      const sx = Math.min(sw - 1, Math.floor((x + 0.5) * sw / dw));
+      src.copy(dst, (y * dw + x) * 4, (sy * sw + sx) * 4, (sy * sw + sx) * 4 + 4);
+    }
+  }
+  return dst;
+}
+
+function crc32(buf) {
+  let c = ~0;
+  for (let i = 0; i < buf.length; i++) {
+    c ^= buf[i];
+    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
+  }
+  return ~c >>> 0;
+}
+
+function pngChunk(type, data) {
+  const head = Buffer.alloc(8);
+  head.writeUInt32BE(data.length, 0);
+  head.write(type, 4);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])), 0);
+  return Buffer.concat([head, data, crc]);
+}
+
+function encodePNG(w, h, rgba) {
+  const stride = w * 4 + 1;
+  const raw = Buffer.alloc(stride * h);
+  for (let y = 0; y < h; y++) {
+    rgba.copy(raw, y * stride + 1, y * w * 4, (y + 1) * w * 4);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function paletteOf(rgba, w, h) {
+  const colors = new Map();
+  const step = Math.max(1, Math.floor((w * h) / 4000));
+  for (let i = 0; i < w * h; i += step) {
+    const o = i * 4;
+    if (rgba[o + 3] < 16) continue;
+    const key = (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
+    colors.set(key, (colors.get(key) || 0) + 1);
+  }
+  const ranked = [...colors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 255);
+  if (!ranked.length) ranked.push([0, 1]);
+  const pal = Buffer.alloc(ranked.length * 3);
+  ranked.forEach(([key], i) => {
+    pal[i * 3] = (key >> 16) & 255;
+    pal[i * 3 + 1] = (key >> 8) & 255;
+    pal[i * 3 + 2] = key & 255;
+  });
+  return pal;
+}
+
+function nearest(pal, r, g, b) {
+  let best = 0;
+  let score = Infinity;
+  for (let i = 0; i < pal.length; i += 3) {
+    const dr = pal[i] - r;
+    const dg = pal[i + 1] - g;
+    const db = pal[i + 2] - b;
+    const s = dr * dr + dg * dg + db * db;
+    if (s < score) {
+      score = s;
+      best = i / 3;
+      if (!s) break;
+    }
+  }
+  return best;
+}
+
+function encodeGif(width, height, frames) {
+  const parts = [Buffer.from('GIF89a')];
+  const lsd = Buffer.alloc(7);
+  lsd.writeUInt16LE(width, 0);
+  lsd.writeUInt16LE(height, 2);
+  parts.push(lsd);
+  parts.push(Buffer.from([0x21, 0xff, 11]), Buffer.from('NETSCAPE2.0'), Buffer.from([3, 1, 0, 0, 0]));
+  for (const frame of frames) {
+    const pal = paletteOf(frame.rgba, width, height);
+    const count = pal.length / 3;
+    let sizeBits = 0;
+    while ((1 << (sizeBits + 1)) < count) sizeBits++;
+    const tableLen = 1 << (sizeBits + 1);
+    const padded = Buffer.alloc(tableLen * 3);
+    pal.copy(padded);
+    const indexes = Buffer.alloc(width * height);
+    const transparent = tableLen - 1;
+    for (let i = 0; i < width * height; i++) {
+      const o = i * 4;
+      indexes[i] = frame.rgba[o + 3] < 16 ? transparent : nearest(padded, frame.rgba[o], frame.rgba[o + 1], frame.rgba[o + 2]);
+    }
+    const gce = Buffer.alloc(8);
+    gce[0] = 0x21;
+    gce[1] = 0xf9;
+    gce[2] = 4;
+    gce[3] = 9;
+    gce.writeUInt16LE(Math.max(1, frame.delay || 10), 4);
+    gce[6] = transparent;
+    parts.push(gce);
+    const desc = Buffer.alloc(10);
+    desc[0] = 0x2c;
+    desc.writeUInt16LE(width, 5);
+    desc.writeUInt16LE(height, 7);
+    desc[9] = 128 | sizeBits;
+    parts.push(desc, padded, lzwEncode(Math.max(2, sizeBits + 1), indexes));
+  }
+  parts.push(Buffer.from([0x3b]));
+  return Buffer.concat(parts);
+}
+
+function stillPng(gif, max) {
+  const frames = composite(gif);
+  if (!frames.length) return null;
+  const box = fitBox(gif.width, gif.height, max);
+  const rgba = scaleRGBA(frames[0].rgba, gif.width, gif.height, box.w, box.h);
+  return encodePNG(box.w, box.h, rgba);
+}
+
+function sizedGif(gif, max) {
+  const box = fitBox(gif.width, gif.height, max);
+  if (box.w === gif.width && box.h === gif.height) return null;
+  const frames = composite(gif).map((frame) => ({
+    rgba: scaleRGBA(frame.rgba, gif.width, gif.height, box.w, box.h),
+    delay: frame.delay,
+  }));
+  return encodeGif(box.w, box.h, frames);
+}
+
+
 function sniffImage(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 12) return '';
   if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return '.gif';
@@ -633,19 +1029,65 @@ function auth(req, res, next) {
   next();
 }
 
+const DERIVED_DIR = path.join(UPLOAD_DIR, '.derived');
+if (!fs.existsSync(DERIVED_DIR)) fs.mkdirSync(DERIVED_DIR, { recursive: true });
+
+function sourceFor(id) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) return null;
+  for (const ext of ['.gif', '.png', '.jpg', '.jpeg', '.webp']) {
+    const file = path.join(UPLOAD_DIR, id + ext);
+    if (fs.existsSync(file)) return { file, ext: ext === '.jpeg' ? '.jpg' : ext };
+  }
+  return null;
+}
+
+function sendAsset(res, file, type) {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Cache-Control', 'public, max-age=604800, immutable');
+  res.type(type);
+  res.sendFile(file);
+}
+
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
-  const name = uuidv4() + ext;
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
-  res.json({ ok: true, url: '/uploads/' + name });
+  const id = (ext === '.gif' ? 'a_' : '') + uuidv4().replace(/-/g, '');
+  fs.writeFileSync(path.join(UPLOAD_DIR, id + ext), req.body);
+  res.json({ ok: true, hash: id, url: '/uploads/' + id + ext });
 });
 
-app.use('/uploads', (req, res, next) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-}, express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
+app.get('/uploads/:name', (req, res) => {
+  const match = String(req.params.name).match(/^([a-zA-Z0-9_-]+)\.(gif|png|jpe?g|webp)$/i);
+  if (!match) return res.status(404).end();
+  const id = match[1];
+  const want = match[2].toLowerCase() === 'jpeg' ? 'jpg' : match[2].toLowerCase();
+  const size = snapSize(req.query.size);
+  const src = sourceFor(id);
+  if (!src) return res.status(404).end();
+  const animated = src.ext === '.gif';
+  if (animated && (want === 'gif' || want === 'png' || want === 'jpg') && (want !== 'gif' || size)) {
+    const kind = want === 'gif' ? 'gif' : 'png';
+    const cached = path.join(DERIVED_DIR, id + '.' + kind + '.s' + (size || 0));
+    if (fs.existsSync(cached)) return sendAsset(res, cached, kind === 'gif' ? 'gif' : 'png');
+    try {
+      const gif = decodeGif(fs.readFileSync(src.file));
+      const out = gif && (want === 'gif' ? sizedGif(gif, size) : stillPng(gif, size));
+      const originalSize = fs.statSync(src.file).size;
+      if (out && out.length && (want !== 'gif' || out.length < originalSize)) {
+        fs.writeFileSync(cached, out);
+        return sendAsset(res, cached, kind === 'gif' ? 'gif' : 'png');
+      }
+    } catch (err) {}
+    if (want === 'gif') return sendAsset(res, src.file, 'gif');
+    return res.status(404).end();
+  }
+  if (want === 'gif' || want === src.ext.slice(1)) {
+    const type = src.ext === '.gif' ? 'gif' : src.ext === '.jpg' ? 'jpeg' : src.ext === '.webp' ? 'webp' : 'png';
+    return sendAsset(res, src.file, type);
+  }
+  return res.status(404).end();
+});
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
@@ -654,7 +1096,7 @@ app.get('/api/me', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, pronouns, customStatus, status,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, bannerStill, serverTag, nameEffect, nameColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -676,8 +1118,10 @@ app.patch('/api/me', auth, (req, res) => {
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
   if (avatarUrl !== undefined) req.user.avatarUrl = storeImage(avatarUrl);
-  if (bannerUrl !== undefined) req.user.bannerUrl = storeImage(bannerUrl);
-  if (bannerStill !== undefined) req.user.bannerStill = storeImage(bannerStill);
+  if (bannerUrl !== undefined) {
+    req.user.bannerUrl = storeImage(bannerUrl);
+    req.user.bannerStill = '';
+  }
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
