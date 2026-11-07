@@ -426,7 +426,7 @@ img { max-width: 100%; }
 .drop input { display: none; }
 .drop img { width: 72px; height: 72px; object-fit: cover; border-radius: 16px; }
 .drop strong { color: var(--text); }
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; align-items: start; }
 .select { position: relative; min-width: 160px; }
 .select-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -446,22 +446,22 @@ img { max-width: 100%; }
 .check { display: flex; align-items: center; gap: 8px; padding: 6px 0; color: var(--muted); font-size: 14px; }
 .preview-card { position: relative; background: #101117; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
 .preview-card .bio-bubble { left: 96px; top: 92px; }
-.colorbox { width: 168px; margin-top: 16px; }
-.colorbox-swatches { display: flex; gap: 8px; margin-bottom: 8px; }
+.colorbox { display: flex; align-items: flex-start; gap: 8px; }
+.colorbox-swatches { display: flex; flex-direction: column; gap: 8px; }
 .colorbox-swatch { width: 22px; height: 22px; border-radius: 6px; border: 2px solid transparent; padding: 0; }
 .colorbox-swatch.on { border-color: #fff; }
 .colorbox-sv {
-  position: relative; display: block; width: 168px; height: 96px; border: 0; border-radius: 10px; padding: 0; cursor: crosshair;
+  position: relative; display: block; width: 148px; height: 96px; border: 0; border-radius: 10px; padding: 0; cursor: crosshair;
 }
 .colorbox-sv span, .colorbox-hue span {
   position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
   border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.45); pointer-events: none;
 }
 .colorbox-hue {
-  position: relative; display: block; width: 168px; height: 12px; margin-top: 8px; padding: 0; border: 0; border-radius: 999px; cursor: crosshair;
-  background: linear-gradient(90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  position: relative; align-self: flex-end; display: block; width: 14px; height: 72px; padding: 0; border: 0; border-radius: 999px; cursor: crosshair;
+  background: linear-gradient(to bottom, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
 }
-.colorbox-hue span { top: 6px; }
+.colorbox-hue span { left: 7px; }
 .preview-banner { height: 88px; }
 .preview-av {
   width: 72px; height: 72px; border-radius: 50%; margin: -36px 16px 8px; border: 4px solid #101117;

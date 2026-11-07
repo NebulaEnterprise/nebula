@@ -116,15 +116,6 @@
                 <ColorWheel value={form.accentColor} onpick={(c) => (form.accentColor = c)} />
               {/if}
             </section>
-            <p class="label">Name effect</p>
-            <div class="effect-picks">
-              {#each effects as [id, label]}
-                <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameColors: form.nameColors }} />
-                  <span>{label}</span>
-                </button>
-              {/each}
-            </div>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
@@ -134,8 +125,10 @@
               {/each}
             </div>
           {/if}
-          <div style="height:16px"></div>
-          <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
+          {#if page !== 'look'}
+            <div style="height:16px"></div>
+            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
+          {/if}
         </div>
         <div>
           <p class="label">Preview</p>
@@ -150,8 +143,23 @@
               <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
             </div>
           </div>
-          <ColorBox colors={form.nameColors} onpick={setNameColor} />
         </div>
+        {#if page === 'look'}
+          <div>
+            <p class="label">Name effect</p>
+            <div class="effect-picks">
+              {#each effects as [id, label]}
+                <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
+                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameColors: form.nameColors }} />
+                  <span>{label}</span>
+                </button>
+              {/each}
+            </div>
+            <div style="height:16px"></div>
+            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
+          </div>
+          <ColorBox colors={form.nameColors} onpick={setNameColor} />
+        {/if}
       </div>
     </div>
   </div>

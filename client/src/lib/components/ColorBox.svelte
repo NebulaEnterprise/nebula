@@ -72,7 +72,7 @@
       val = 1 - Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
     } else if (hueEl) {
       const rect = hueEl.getBoundingClientRect();
-      h = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * 360;
+      h = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height)) * 360;
     }
     emit(hsvToHex(h, sat, val));
   }
@@ -92,11 +92,9 @@
 </script>
 
 <div class="colorbox">
-  <div class="colorbox-swatches">
-    {#each [0, 1] as i}
-      <button type="button" class="colorbox-swatch" class:on={which === i} style="background:{colors[i] || '#5ce1ff'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (which = i)}></button>
-    {/each}
-  </div>
+  <button type="button" class="colorbox-hue" aria-label="Hue" bind:this={hueEl} onpointerdown={(e) => start(e, 'hue')}>
+    <span style="top:{h / 360 * 100}%"></span>
+  </button>
   <button
     type="button"
     class="colorbox-sv"
@@ -107,7 +105,9 @@
   >
     <span style="left:{sat * 100}%;top:{(1 - val) * 100}%"></span>
   </button>
-  <button type="button" class="colorbox-hue" aria-label="Hue" bind:this={hueEl} onpointerdown={(e) => start(e, 'hue')}>
-    <span style="left:{h / 360 * 100}%"></span>
-  </button>
+  <div class="colorbox-swatches">
+    {#each [0, 1] as i}
+      <button type="button" class="colorbox-swatch" class:on={which === i} style="background:{colors[i] || '#5ce1ff'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (which = i)}></button>
+    {/each}
+  </div>
 </div>
