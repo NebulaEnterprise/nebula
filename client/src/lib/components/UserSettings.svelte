@@ -4,7 +4,7 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
-  import { api, cssBanner } from '../api.js';
+  import { api } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -18,7 +18,6 @@
     avatarColor: ui.me?.avatarColor || '#7c6af7',
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
-    bannerUrl: ui.me?.bannerUrl || '',
     nameEffect: ui.me?.nameEffect || '',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
   });
@@ -36,21 +35,18 @@
     try {
       if (!file) return;
       const preview = URL.createObjectURL(file);
-      if (kind === 'avatar') form.avatarUrl = preview;
-      else form.bannerUrl = preview;
+      form.avatarUrl = preview;
       try {
         const data = await api('/api/upload', {
           method: 'POST',
           body: file,
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
         });
-        if (kind === 'avatar') form.avatarUrl = data.url;
-        else form.bannerUrl = data.url;
+        form.avatarUrl = data.url;
         URL.revokeObjectURL(preview);
       } catch (err) {
         const url = await fileToDataUrl(file, { original: true });
-        if (kind === 'avatar') form.avatarUrl = url;
-        else form.bannerUrl = url;
+        form.avatarUrl = url;
         if (/not found/i.test(err.message || '') || file.size > 1500000) {
           toast('The picture is in the preview. Download the new server.js and restart it, then save again so the GIF sticks.');
         }
@@ -69,7 +65,8 @@
     try {
       await saveMe({
         ...form,
-        bannerColor: form.accentColor,
+        bannerUrl: '',
+        bannerColor: '',
       });
     } catch (err) { toast(err.message); }
   }
@@ -120,21 +117,6 @@
                 <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
               {/if}
             </section>
-            <section class="look-block">
-              <strong>Banner</strong>
-              <p>This sits across the top of your profile.</p>
-              <div class="look-banner" style="background:{cssBanner(form.bannerUrl, form.accentColor)}"></div>
-              <div class="look-actions">
-                <label class="btn brand sm look-btn">Upload banner
-                  <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
-                </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => (form.bannerUrl = '')}>Remove</button>{/if}
-              </div>
-              {#if !form.bannerUrl}
-                <p class="label">Banner color</p>
-                <ColorBox colors={[form.accentColor]} slots={1} onpick={(_, c) => (form.accentColor = c)} />
-              {/if}
-            </section>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
             <p class="label">Online status</p>
@@ -152,7 +134,7 @@
         <div>
           <p class="label">Preview</p>
           <div class="preview-card">
-            <div class="preview-banner" style="background:{cssBanner(form.bannerUrl, form.accentColor)}"></div>
+            <div class="preview-banner" style="background:var(--brand)"></div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
