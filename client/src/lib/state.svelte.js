@@ -474,10 +474,11 @@ export async function friendAct(kind, body) {
 export async function openPopout(user, x, y) {
   await loadFriends();
   try {
-    const data = await api('/api/members');
-    const fresh = (data.members || []).find((m) => m.id === user.id) || user;
+    const q = ui.serverId ? ('?serverId=' + encodeURIComponent(ui.serverId)) : '';
+    const data = await api('/api/members' + q);
+    const fresh = (data.members || []).find((m) => m.id === user.id);
     ui.badgeDefs = data.badges || ui.badgeDefs;
-    ui.popout = { user: fresh, x, y };
+    ui.popout = { user: fresh ? { ...user, ...fresh, roles: fresh.roles || user.roles || [] } : user, x, y };
   } catch {
     ui.popout = { user, x, y };
   }

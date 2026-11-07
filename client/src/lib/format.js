@@ -21,6 +21,15 @@ export function formatContent(text, emoji, stickers) {
   return html;
 }
 
+export const MOON_CUTOFF = Date.UTC(2026, 11, 31, 23, 59, 59);
+
+export function hasMoonBadge(user) {
+  if (!user) return false;
+  if ((user.badges || []).includes('early')) return true;
+  const created = Date.parse(user.createdAt || '');
+  return Number.isFinite(created) && created <= MOON_CUTOFF;
+}
+
 export function initial(name) {
   return (name || '?').charAt(0).toUpperCase();
 }

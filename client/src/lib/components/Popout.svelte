@@ -2,9 +2,12 @@
   import { UserPlus } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
+  import MoonBadge from './MoonBadge.svelte';
+  import { hasMoonBadge } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
+  const roles = $derived((u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
   const rel = $derived(u ? relation(u.id) : 'none');
   const left = $derived(Math.max(8, Math.min(ui.popout?.x || 80, window.innerWidth - 340)));
   const top = $derived(Math.max(8, Math.min((ui.popout?.y || 80) - 20, window.innerHeight - 460)));
@@ -30,12 +33,25 @@
         {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
       </div>
       <div class="pop-head">
-        <div>
-          <h3><Name user={u} /></h3>
+        <div class="pop-id">
+          <div class="pop-name">
+            <h3><Name user={u} /></h3>
+            {#if hasMoonBadge(u)}<MoonBadge />{/if}
+          </div>
           <p class="handle">@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</p>
         </div>
       </div>
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
+      {#if roles.length}
+        <div class="pop-roles">
+          <span>Roles</span>
+          <div class="pop-role-list">
+            {#each roles as r}
+              <em class="pop-role"><i style="background:{r.color || '#99aab5'}"></i>{r.name}</em>
+            {/each}
+          </div>
+        </div>
+      {/if}
       <div class="stack">
         {#if rel === 'friends'}
           <button class="btn brand" onclick={() => { ui.popout = null; openDm(u); }}>Message</button>

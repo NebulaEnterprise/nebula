@@ -115,6 +115,14 @@ function ownerRole() {
   return { id: 'owner', name: 'Owner', color: '#7c5cff', permissions: ALL_PERMS, position: 100 };
 }
 
+function ogRole() {
+  return { id: 'og', name: 'og', color: '#e3b34c', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 40 };
+}
+
+function adminRole() {
+  return { id: 'admin', name: 'admin', color: '#f06a6a', permissions: ALL_PERMS, position: 90 };
+}
+
 function ensureGuilds() {
   if (!guilds.servers) guilds.servers = {};
   if (!guilds.servers[OFFICIAL_ID]) {
@@ -138,6 +146,8 @@ function ensureGuilds() {
   g.invites = g.invites || {};
   if (!g.roles.some((r) => r.id === 'everyone')) g.roles.unshift(everyoneRole());
   if (!g.roles.some((r) => r.id === 'owner')) g.roles.push(ownerRole());
+  if (!g.roles.some((r) => r.id === 'og')) g.roles.push(ogRole());
+  if (!g.roles.some((r) => r.id === 'admin')) g.roles.push(adminRole());
   for (const u of Object.values(users)) {
     if (!g.members[u.id]) {
       g.members[u.id] = { roles: ['everyone'], joinedAt: u.createdAt || new Date().toISOString() };
@@ -146,6 +156,8 @@ function ensureGuilds() {
     if (Number(u.uid) === 1 || Number(u.uid) === 2) {
       if (!g.ownerIds.includes(u.id)) g.ownerIds.push(u.id);
       if (!g.members[u.id].roles.includes('owner')) g.members[u.id].roles.push('owner');
+      if (!g.members[u.id].roles.includes('og')) g.members[u.id].roles.push('og');
+      if (!g.members[u.id].roles.includes('admin')) g.members[u.id].roles.push('admin');
     } else if (g.members[u.id].roles.includes('owner')) {
       g.members[u.id].roles = g.members[u.id].roles.filter((id) => id !== 'owner');
     }
@@ -322,11 +334,18 @@ function requireGuild(req, res, perm, channel) {
 ensureGuilds();
 
 const BADGE_DEFS = {
-  early: { id: 'early', label: 'Early Supporter', color: '#f47fff', icon: '★' },
+  early: { id: 'early', label: 'Early Supporter', color: '#d7c6ff', icon: 'moon' },
 };
 
+const MOON_CUTOFF = Date.UTC(2026, 11, 31, 23, 59, 59);
+
+function signedUpForMoon(u) {
+  const created = u && u.createdAt ? Date.parse(u.createdAt) : NaN;
+  return Number.isFinite(created) && created <= MOON_CUTOFF;
+}
+
 function isEarlySupporterWindow() {
-  return Date.now() <= Date.UTC(2026, 11, 31, 23, 59, 59);
+  return Date.now() <= MOON_CUTOFF;
 }
 
 const transporter = nodemailer.createTransport({
@@ -422,7 +441,7 @@ function publicUser(u) {
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
-    badges: (u.badges || []).filter(b => b === 'early'),
+    badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };

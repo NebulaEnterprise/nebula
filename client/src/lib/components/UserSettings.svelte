@@ -4,6 +4,8 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
+  import MoonBadge from './MoonBadge.svelte';
+  import { hasMoonBadge } from '../format.js';
   import { api, resolveMedia } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
@@ -173,7 +175,10 @@
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
-              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
+              <div class="pop-name">
+                <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
+                {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
+              </div>
               <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
             </div>
           </div>
