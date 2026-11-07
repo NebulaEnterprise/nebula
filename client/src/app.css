@@ -244,7 +244,29 @@ img { max-width: 100%; }
   background: rgba(62, 207, 142, 0.08); border: 1px solid rgba(62, 207, 142, 0.2);
 }
 .lobby p { margin: 6px 0 0; color: var(--muted); white-space: pre-wrap; }
+.typing { margin: 0 8px 6px; color: var(--muted); font-size: 13px; font-weight: 600; min-height: 18px; }
 .composer-wrap { padding: 0 16px 16px; }
+.name-fx.glow { color: #5ce1ff; text-shadow: 0 0 8px #3ecbff, 0 0 18px #1aa7ff; }
+.name-fx.gradient, .name-fx.rainbow {
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: name-shift 3.5s linear infinite;
+}
+.name-fx.gradient { background-image: linear-gradient(90deg, #5ce1ff, #7c6af7, #5ce1ff); }
+.name-fx.rainbow { background-image: linear-gradient(90deg, #ff5c8a, #ffd15c, #5cff9a, #5cc8ff, #c45cff, #ff5c8a); }
+.name-fx.glitch { color: #5ce1ff; animation: name-glitch 1.2s infinite; }
+.effect-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.effect-pick {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  padding: 8px 10px; border-radius: 10px; background: #101117; border: 1px solid var(--line); min-width: 92px;
+}
+.effect-pick.on { border-color: var(--brand); }
+.effect-pick span { color: var(--faint); font-size: 11px; font-weight: 600; }
+@keyframes name-shift { to { background-position: 200% center; } }
+@keyframes name-glitch {
+  0%, 100% { text-shadow: 2px 0 #ff4d6d, -2px 0 #3ecbff; }
+  40% { text-shadow: -2px 0 #ff4d6d, 2px 0 #3ecbff; }
+  70% { text-shadow: 1px 0 #5ce1ff; }
+}
 .composer {
   display: flex; align-items: center; gap: 6px;
   background: #101117; border: 1px solid var(--line); border-radius: 14px; padding: 6px 8px 6px 6px;

@@ -340,6 +340,7 @@ function publicUser(u) {
     avatarUrl: u.avatarUrl || '',
     bannerUrl: u.bannerUrl || '',
     serverTag: u.serverTag || '',
+    nameEffect: ['glow', 'gradient', 'rainbow', 'glitch'].includes(u.nameEffect) ? u.nameEffect : '',
     badges: (u.badges || []).filter(b => b === 'early'),
     server: SERVER_NAME,
     createdAt: u.createdAt,
@@ -511,7 +512,7 @@ app.get('/api/me', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, pronouns, customStatus, status,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -535,6 +536,9 @@ app.patch('/api/me', auth, (req, res) => {
   if (avatarUrl !== undefined) req.user.avatarUrl = String(avatarUrl).slice(0, 12000000);
   if (bannerUrl !== undefined) req.user.bannerUrl = String(bannerUrl).slice(0, 12000000);
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
+  if (nameEffect !== undefined) {
+    req.user.nameEffect = ['glow', 'gradient', 'rainbow', 'glitch'].includes(nameEffect) ? nameEffect : '';
+  }
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
@@ -867,6 +871,54 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
   res.json({ ok: true, message: msg });
+});
+
+const typingRooms = new Map();
+
+function typingKeyFrom(req) {
+  const dmUserId = String((req.body && req.body.dmUserId) || req.query.dmUserId || '');
+  if (dmUserId) {
+    if (!users[dmUserId]) return null;
+    return 'dm:' + [req.user.id, dmUserId].sort().join(':');
+  }
+  const channelId = String((req.body && req.body.channelId) || req.query.channelId || '');
+  const serverId = String((req.body && req.body.serverId) || req.query.serverId || '');
+  const found = findChannel(channelId, serverId);
+  if (!found || !found.guild.members || !found.guild.members[req.user.id]) return null;
+  return 'ch:' + found.guild.id + ':' + found.channel.id;
+}
+
+function listTypers(key, selfId) {
+  const room = typingRooms.get(key);
+  if (!room) return [];
+  const now = Date.now();
+  const out = [];
+  for (const [id, row] of room) {
+    if (now - row.at > 4000) {
+      room.delete(id);
+      continue;
+    }
+    if (id === selfId) continue;
+    out.push({ id, name: row.name });
+  }
+  return out;
+}
+
+app.post('/api/typing', auth, (req, res) => {
+  const key = typingKeyFrom(req);
+  if (!key) return res.status(404).json({ error: 'Chat not found' });
+  if (!typingRooms.has(key)) typingRooms.set(key, new Map());
+  typingRooms.get(key).set(req.user.id, {
+    name: req.user.displayName || req.user.username,
+    at: Date.now(),
+  });
+  res.json({ ok: true });
+});
+
+app.get('/api/typing', auth, (req, res) => {
+  const key = typingKeyFrom(req);
+  if (!key) return res.json({ ok: true, typers: [] });
+  res.json({ ok: true, typers: listTypers(key, req.user.id) });
 });
 
 app.get('/api/friends', auth, (req, res) => {

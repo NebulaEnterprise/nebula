@@ -1,6 +1,7 @@
 <script>
   import { MessageSquare, Check, X } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
+  import Name from './Name.svelte';
   import { ui, showFriends, showAddFriend, openDm, friendAct, toast } from '../state.svelte.js';
   let q = $state('');
   let name = $state('');
@@ -52,7 +53,7 @@
     {#each ui.incoming as u}
       <div class="friend">
         <Avatar user={u} size={36} />
-        <div class="meta"><strong>{u.displayName || u.username}</strong><span>Incoming request</span></div>
+        <div class="meta"><strong><Name user={u} /></strong><span>Incoming request</span></div>
         <button class="btn icon" title="Accept" onclick={() => friendAct('accept', { userId: u.id })}><Check size={16} /></button>
         <button class="btn icon" title="Ignore" onclick={() => friendAct('decline', { userId: u.id })}><X size={16} /></button>
       </div>
@@ -61,7 +62,7 @@
     {#each ui.outgoing as u}
       <div class="friend">
         <Avatar user={u} size={36} />
-        <div class="meta"><strong>{u.displayName || u.username}</strong><span>Request sent</span></div>
+        <div class="meta"><strong><Name user={u} /></strong><span>Request sent</span></div>
         <button class="btn sm" onclick={() => friendAct('cancel', { userId: u.id })}>Cancel</button>
       </div>
     {/each}
@@ -72,7 +73,7 @@
       <div class="friend">
         <Avatar user={u} size={40} />
         <div class="meta">
-          <strong>{u.displayName || u.username}</strong>
+          <strong><Name user={u} /></strong>
           <span>{u.customStatus || (u.status === 'offline' ? 'Offline' : 'Online')}</span>
         </div>
         <button class="btn icon" title="Message" onclick={() => openDm(u)}><MessageSquare size={16} /></button>

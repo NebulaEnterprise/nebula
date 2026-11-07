@@ -1,6 +1,7 @@
 <script>
   import { X } from '@lucide/svelte';
   import { ui, saveMe, logout, toast } from '../state.svelte.js';
+  import Name from './Name.svelte';
   import { COLORS } from '../format.js';
   import { fileToDataUrl } from '../image.js';
 
@@ -16,7 +17,16 @@
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
     bannerUrl: ui.me?.bannerUrl || '',
+    nameEffect: ui.me?.nameEffect || '',
   });
+
+  const effects = [
+    ['', 'None'],
+    ['glow', 'Glow'],
+    ['gradient', 'Gradient'],
+    ['rainbow', 'Rainbow'],
+    ['glitch', 'Glitch'],
+  ];
 
   async function upload(file, kind) {
     try {
@@ -68,6 +78,15 @@
                 <button class="swatch" class:on={form.avatarColor === c} style="background:{c}" onclick={() => (form.avatarColor = c)}></button>
               {/each}
             </div>
+            <p class="label">Name effect</p>
+            <div class="effect-picks">
+              {#each effects as [id, label]}
+                <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
+                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id }} />
+                  <span>{label}</span>
+                </button>
+              {/each}
+            </div>
             <p class="label">Banner color</p>
             <div class="swatches" style="margin-bottom:14px">
               {#each COLORS as c}
@@ -103,7 +122,7 @@
               {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
-              <strong>{form.displayName || form.username}</strong>
+              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect }} /></strong>
               <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
               {#if form.bio}<p>{form.bio}</p>{/if}
             </div>

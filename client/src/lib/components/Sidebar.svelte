@@ -5,6 +5,7 @@
     Mic, MicOff, Headphones, HeadphoneOff, PhoneOff,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
+  import Name from './Name.svelte';
   import { api } from '../api.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
@@ -197,7 +198,7 @@
   <div class="me">
     <Avatar user={ui.me} size={36} />
     <div class="who">
-      <strong>{ui.me?.displayName || ui.me?.username}</strong>
+      <strong><Name user={ui.me} /></strong>
       <span>{ui.me?.customStatus || 'Online'}</span>
     </div>
     <button class="btn icon" title="Settings" onclick={() => (ui.userSettings = true)}><Settings size={16} /></button>

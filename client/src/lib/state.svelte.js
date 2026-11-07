@@ -44,6 +44,7 @@ export const ui = $state({
   toast: '',
   seenMessageId: '',
   composer: '',
+  typers: [],
   voice: null,
   voiceRooms: {},
 });
@@ -325,6 +326,43 @@ export async function reloadSettings() {
   const data = await api('/api/servers/' + ui.serverId + '/settings');
   ui.settings = data.settings;
   await openServer(ui.serverId, { keepDialog: true });
+}
+
+let lastTypingPing = 0;
+
+export function typingLine(list) {
+  const names = (list || []).map((row) => row.name).filter(Boolean);
+  if (!names.length) return '';
+  if (names.length > 5) return '5+ are typing';
+  if (names.length === 1) return names[0] + ' is typing';
+  return names.slice(0, 5).map((name) => name + ' is typing').join(', ');
+}
+
+export async function noteTyping() {
+  if (!ui.composer.trim()) return;
+  const now = Date.now();
+  if (now - lastTypingPing < 2000) return;
+  lastTypingPing = now;
+  const body = ui.mode === 'dm'
+    ? { dmUserId: ui.dmUser?.id }
+    : { channelId: ui.channelId, serverId: ui.serverId };
+  if (ui.mode === 'dm' && !ui.dmUser?.id) return;
+  if (ui.mode === 'chat' && !ui.channelId) return;
+  try { await api('/api/typing', { method: 'POST', body }); } catch (_) {}
+}
+
+export async function refreshTyping() {
+  if (ui.mode !== 'chat' && ui.mode !== 'dm') {
+    ui.typers = [];
+    return;
+  }
+  const q = ui.mode === 'dm'
+    ? 'dmUserId=' + encodeURIComponent(ui.dmUser?.id || '')
+    : 'channelId=' + encodeURIComponent(ui.channelId || '') + '&serverId=' + encodeURIComponent(ui.serverId || '');
+  try {
+    const data = await api('/api/typing?' + q);
+    ui.typers = data.typers || [];
+  } catch (_) {}
 }
 
 export async function saveMe(body) {

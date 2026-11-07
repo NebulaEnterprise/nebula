@@ -1,5 +1,6 @@
 <script>
   import { UserPlus } from '@lucide/svelte';
+  import Name from './Name.svelte';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -27,7 +28,7 @@
       </div>
       <div class="pop-head">
         <div>
-          <h3>{u.displayName || u.username}</h3>
+          <h3><Name user={u} /></h3>
           <p class="handle">@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</p>
         </div>
       </div>

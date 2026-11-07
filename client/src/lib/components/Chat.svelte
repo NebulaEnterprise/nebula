@@ -1,11 +1,29 @@
 <script>
   import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
-  import { ui, sendMessage, sendSticker, openPopout } from '../state.svelte.js';
+  import Name from './Name.svelte';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping, refreshTyping, typingLine } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
+
+  $effect(() => {
+    ui.mode;
+    ui.channelId;
+    ui.dmUser?.id;
+    refreshTyping();
+    const timer = setInterval(refreshTyping, 1500);
+    return () => clearInterval(timer);
+  });
+
+  function liveAuthor(author) {
+    if (!author) return author;
+    const live = ui.members.find((m) => m.id === author.id)
+      || (ui.me?.id === author.id ? ui.me : null)
+      || (ui.dmUser?.id === author.id ? ui.dmUser : null);
+    return live ? { ...author, nameEffect: live.nameEffect || '', displayName: live.nick || live.displayName || author.displayName } : author;
+  }
 
   function time(iso) {
     const d = new Date(iso);
@@ -33,7 +51,7 @@
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <strong style="color:{msg.author?.accentColor || 'white'}">{msg.author?.displayName || msg.author?.username}</strong>
+          <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
           <time>{time(msg.createdAt)}</time>
         </div>
         <div class="msg-content">{@html formatContent(msg.content, ui.emoji, ui.stickers)}</div>
@@ -56,12 +74,14 @@
       {/each}
     </div>
   {/if}
+  {#if typingLine(ui.typers)}<p class="typing">{typingLine(ui.typers)}</p>{/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
     {#if ui.mode === 'chat'}
       <button type="button" class="btn icon" title="Stickers" onclick={() => (ui.stickersOpen = !ui.stickersOpen)}><Smile size={18} /></button>
     {/if}
     <input
       bind:value={ui.composer}
+      oninput={noteTyping}
       maxlength="2000"
       disabled={locked}
       placeholder={locked ? 'Finish onboarding before you chat' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}
