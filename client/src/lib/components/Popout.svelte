@@ -1,5 +1,5 @@
 <script>
-  import { UserPlus, X } from '@lucide/svelte';
+  import { UserPlus } from '@lucide/svelte';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -17,6 +17,9 @@
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
     <div class="pop-banner" style="background:{u.bannerUrl ? `center/cover url('${u.bannerUrl}')` : (u.bannerColor || u.accentColor || 'var(--brand)')}"></div>
+    {#if rel === 'none'}
+      <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
+    {/if}
     <div class="pop-body">
       <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
         {#if u.avatarUrl}<img src={u.avatarUrl} alt="" />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
@@ -26,10 +29,6 @@
           <h3>{u.displayName || u.username}</h3>
           <p class="handle">@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</p>
         </div>
-        {#if rel === 'none'}
-          <button class="btn icon" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
-        {/if}
-        <button class="btn icon" title="Close" onclick={() => (ui.popout = null)}><X size={16} /></button>
       </div>
       {#if u.bio}<p style="margin-top:10px;color:var(--muted)">{u.bio}</p>{/if}
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
