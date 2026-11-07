@@ -48,6 +48,25 @@ export function fileToDataUrl(file, opts = {}) {
   });
 }
 
+export function frameBlob(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 480;
+      const width = img.naturalWidth || img.width || 1;
+      const height = img.naturalHeight || img.height || 1;
+      const scale = Math.min(1, maxW / width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not make a still frame'))), 'image/jpeg', 0.8);
+    };
+    img.onerror = () => reject(new Error('Could not read that picture'));
+    img.src = src;
+  });
+}
+
 export function readSmallImage(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('Choose an image'));

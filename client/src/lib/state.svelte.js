@@ -1,4 +1,5 @@
-import { api, warmMedia } from './api.js';
+import { api, warmMedia, resolveMedia } from './api.js';
+import { frameBlob } from './image.js';
 import { PERM } from './format.js';
 
 export const ui = $state({
@@ -100,13 +101,36 @@ export async function boot() {
   try {
     const data = await api('/api/me');
     ui.me = data.user;
-    warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
+    warmMedia([data.user?.bannerStill, data.user?.avatarUrl, data.user?.bannerUrl]);
+    backfillBannerStill();
     await enterApp();
   } catch {
     logout();
   } finally {
     ui.booting = false;
   }
+}
+
+let stillBusy = false;
+async function backfillBannerStill() {
+  const me = ui.me;
+  if (stillBusy || !me?.bannerUrl || me.bannerStill || !/\.gif(\?|$)/i.test(me.bannerUrl)) return;
+  stillBusy = true;
+  try {
+    const shown = await resolveMedia(me.bannerUrl);
+    if (!shown) return;
+    const blob = await frameBlob(shown);
+    const uploaded = await api('/api/upload', {
+      method: 'POST',
+      body: blob,
+      headers: { 'Content-Type': 'image/jpeg' },
+    });
+    if (!uploaded.url || !ui.me || ui.me.id !== me.id) return;
+    const saved = await api('/api/me', { method: 'PATCH', body: { bannerStill: uploaded.url } });
+    ui.me = { ...ui.me, ...saved.user, bannerStill: uploaded.url };
+    warmMedia([uploaded.url]);
+  } catch (_) {}
+  finally { stillBusy = false; }
 }
 
 async function enterApp() {
@@ -359,7 +383,7 @@ export async function loadMembers(quiet) {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
     ui.members = data.members || [];
     ui.badgeDefs = data.badges || {};
-    warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
+    warmMedia(ui.members.flatMap((m) => [m.bannerStill, m.avatarUrl, m.bannerUrl]));
   } catch (_) {}
   finally { membersBusy = false; }
 }

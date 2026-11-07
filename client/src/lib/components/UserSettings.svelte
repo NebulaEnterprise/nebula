@@ -4,10 +4,11 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
+  import Banner from './Banner.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { api, resolveMedia } from '../api.js';
-  import { fileToDataUrl } from '../image.js';
+  import { fileToDataUrl, frameBlob } from '../image.js';
 
   let page = $state('profile');
   let form = $state({
@@ -21,6 +22,7 @@
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
     bannerUrl: ui.me?.bannerUrl || '',
+    bannerStill: ui.me?.bannerStill || '',
     nameEffect: ui.me?.nameEffect || '',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
   });
@@ -34,14 +36,30 @@
     ['glitch', 'Glitch'],
   ];
 
-  let savedUrl = { avatarUrl: '', bannerUrl: '' };
+  let savedUrl = { avatarUrl: '', bannerUrl: '', bannerStill: '' };
+  let stillJob = null;
 
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
     if (!file) return;
     const preview = URL.createObjectURL(file);
     const previous = String(form[field] || '');
+    const previousStill = form.bannerStill;
     form[field] = preview;
+    if (kind === 'banner') {
+      form.bannerStill = '';
+      stillJob = frameBlob(preview).then(async (blob) => {
+        const data = await api('/api/upload', {
+          method: 'POST',
+          body: blob,
+          headers: { 'Content-Type': 'image/jpeg' },
+        });
+        if (data.url) {
+          savedUrl.bannerStill = data.url;
+          form.bannerStill = data.url;
+        }
+      }).catch(() => {});
+    }
     try {
       const data = await api('/api/upload', {
         method: 'POST',
@@ -59,6 +77,8 @@
         catch { form.avatarUrl = previous.startsWith('blob:') ? '' : previous; }
       } else {
         form.bannerUrl = previous.startsWith('blob:') ? '' : previous;
+        form.bannerStill = previousStill || '';
+        savedUrl.bannerStill = '';
         URL.revokeObjectURL(preview);
       }
       toast(/not found/i.test(err.message || '')
@@ -77,8 +97,9 @@
 
   async function save() {
     try {
+      if (stillJob) await stillJob;
       const body = { ...form };
-      for (const field of ['avatarUrl', 'bannerUrl']) {
+      for (const field of ['avatarUrl', 'bannerUrl', 'bannerStill']) {
         if (String(body[field] || '').startsWith('blob:')) {
           if (!savedUrl[field]) {
             toast('That picture is still uploading. Hit save again in a second.');
@@ -141,13 +162,13 @@
               <strong>Banner</strong>
               <p>A GIF, PNG, JPG, or WebP across the top of your profile.</p>
               <div class="look-banner">
-                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
+                {#if form.bannerUrl || form.bannerStill}<Banner url={form.bannerUrl} still={form.bannerStill} />{/if}
               </div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
                 </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => (form.bannerUrl = '')}>Remove</button>{/if}
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; form.bannerStill = ''; savedUrl.bannerUrl = ''; savedUrl.bannerStill = ''; }}>Remove</button>{/if}
               </div>
             </section>
           {:else}
@@ -168,7 +189,7 @@
           <p class="label">Preview</p>
           <div class="preview-card">
             <div class="preview-banner">
-              {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
+              {#if form.bannerUrl || form.bannerStill}<Banner url={form.bannerUrl} still={form.bannerStill} />{/if}
             </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">

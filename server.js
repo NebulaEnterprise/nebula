@@ -438,6 +438,7 @@ function publicUser(u) {
     bannerColor: u.bannerColor || u.accentColor || '#7c5cff',
     avatarUrl: u.avatarUrl || '',
     bannerUrl: u.bannerUrl || '',
+    bannerStill: u.bannerStill || '',
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
@@ -583,7 +584,7 @@ app.post('/api/auth/verify', (req, res) => {
     accentColor: '#7c5cff',
     avatarColor: '#7c5cff',
     bannerColor: '#7c5cff',
-    avatarUrl: '', bannerUrl: '',
+    avatarUrl: '', bannerUrl: '', bannerStill: '',
     serverTag: '',
     server: SERVER_NAME,
     badges: [...new Set(badges)],
@@ -653,7 +654,7 @@ app.get('/api/me', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, pronouns, customStatus, status,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, bannerStill, serverTag, nameEffect, nameColors,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -676,6 +677,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
   if (avatarUrl !== undefined) req.user.avatarUrl = storeImage(avatarUrl);
   if (bannerUrl !== undefined) req.user.bannerUrl = storeImage(bannerUrl);
+  if (bannerStill !== undefined) req.user.bannerStill = storeImage(bannerStill);
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);

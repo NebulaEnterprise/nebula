@@ -2,6 +2,7 @@
   import { UserPlus } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
+  import Banner from './Banner.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
@@ -22,7 +23,7 @@
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
     <div class="pop-banner">
-      {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
+      {#if u.bannerUrl || u.bannerStill}<Banner url={u.bannerUrl} still={u.bannerStill} />{/if}
     </div>
     {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
     {#if rel === 'none'}
