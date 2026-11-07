@@ -11,11 +11,12 @@
 </head>
 <body>
 
-<!-- AUTH -->
+<!-- AUTH SCREEN -->
 <div id="auth-screen">
   <div class="auth-card">
     <div class="auth-logo">N</div>
     <h1>Welcome to Nebula</h1>
+    
     <div id="auth-error" class="auth-error"></div>
     <div id="auth-ok" class="auth-ok"></div>
 
@@ -45,25 +46,38 @@
   </div>
 </div>
 
-<!-- APP -->
+<!-- MAIN APP -->
 <div id="app">
-  <!-- LEFT SIDEBAR (Channels + DMs + User) -->
+  
+  <!-- LEFT SIDEBAR -->
   <div class="sidebar">
+    
+    <!-- TOP HEADER / SERVER SWITCHER -->
     <div class="sidebar-header">
-      <div class="logo-icon">N</div>
-      <div class="server-name" id="server-title">Nebula Official</div>
+      <div class="server-tab active" id="nav-server" title="Nebula Official">
+        <div class="logo-icon">N</div>
+        <span>Nebula</span>
+      </div>
+      <div class="server-tab" id="nav-home" title="Direct Messages">
+        <div class="logo-icon dm-icon">💬</div>
+        <span>DMs</span>
+      </div>
     </div>
 
-    <!-- SERVER NAV -->
-    <div id="sidebar-server" class="sidebar-view active">
+    <!-- SERVER CHANNELS VIEW -->
+    <div id="sidebar-server" class="sidebar-view">
       <div class="channel-list" id="channel-list"></div>
     </div>
 
-    <!-- DM NAV -->
+    <!-- DIRECT MESSAGES VIEW -->
     <div id="sidebar-dm" class="sidebar-view">
       <div class="dm-nav">
-        <button type="button" class="dm-nav-item active" id="btn-friends-page">Friends</button>
-        <button type="button" class="dm-nav-item" id="btn-add-friend-page">Find People</button>
+        <button type="button" class="dm-nav-item active" id="btn-friends-page">
+          <span>👥 Friends</span>
+        </button>
+        <button type="button" class="dm-nav-item" id="btn-add-friend-page">
+          <span>🔍 Find People</span>
+        </button>
       </div>
       <div class="friends-cat dm-section-label">
         <span>Direct Messages</span>
@@ -72,9 +86,12 @@
       <div class="dm-list" id="dm-list"></div>
     </div>
 
-    <!-- USER PANEL -->
+    <!-- USER PANEL (BOTTOM) -->
     <div class="user-panel">
-      <div class="avatar" id="me-avatar"><span id="me-initial">?</span><span class="status-dot" id="me-status-dot"></span></div>
+      <div class="avatar" id="me-avatar">
+        <span id="me-initial">?</span>
+        <span class="status-dot" id="me-status-dot"></span>
+      </div>
       <div class="user-meta">
         <div class="name" id="me-name">User</div>
         <div class="sub" id="me-custom">Online</div>
@@ -86,17 +103,15 @@
     </div>
   </div>
 
-  <!-- MAIN CONTENT -->
+  <!-- MAIN CONTENT AREA -->
   <div class="main">
-    <!-- CHAT VIEW -->
+    
+    <!-- CHAT VIEW (Used for both Server and DMs) -->
     <div id="view-chat" class="main-view active">
       <div class="top-bar">
         <span class="channel-icon" id="ch-icon">#</span>
         <span class="ch-name" id="ch-name">general</span>
         <span class="topic" id="ch-topic">Welcome to Nebula</span>
-        <div class="top-bar-actions">
-          <button class="nav-toggle" id="nav-home" title="Direct Messages">💬</button>
-        </div>
       </div>
       
       <div class="chat-split">
@@ -108,11 +123,12 @@
             </div>
           </div>
         </div>
+        <!-- Right side profile for DMs -->
         <div class="dm-profile" id="dm-profile" style="display:none"></div>
       </div>
     </div>
 
-    <!-- FRIENDS HOME -->
+    <!-- FRIENDS HOME VIEW -->
     <div id="view-friends-home" class="main-view">
       <div class="friends-top">
         <div class="friends-top-tabs">
@@ -127,7 +143,7 @@
       <div class="friends-body" id="friends-body"></div>
     </div>
 
-    <!-- ADD FRIEND -->
+    <!-- ADD FRIEND VIEW -->
     <div id="view-add-friend" class="main-view">
       <div class="friends-top">
         <div class="friends-top-tabs">
@@ -148,13 +164,14 @@
         <p class="add-friend-hint" id="add-friend-hint"></p>
       </div>
     </div>
+
   </div>
 
   <!-- RIGHT SIDEBAR (MEMBERS) -->
   <div class="members" id="members"></div>
 </div>
 
-<!-- Settings Modal -->
+<!-- SETTINGS MODAL -->
 <div class="overlay" id="settings-overlay">
   <div class="settings-shell">
     <aside class="settings-nav">
@@ -255,7 +272,7 @@
   </div>
 </div>
 
-<!-- Profile Popout -->
+<!-- PROFILE POPOUT -->
 <div class="popout" id="popout"></div>
 
 <script src="app.js"></script>
