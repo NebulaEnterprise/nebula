@@ -5,6 +5,12 @@ const TUNNEL_HEADERS = {
   'bypass-tunnel-reminder': 'true',
 };
 
+export function cssBanner(url, fallback) {
+  if (!url) return fallback || 'transparent';
+  const src = url.startsWith('/uploads/') ? getApiBase() + url : url;
+  return "center/cover no-repeat url('" + String(src).replace(/'/g, '%27') + "')";
+}
+
 export function getApiBase() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get('backend');

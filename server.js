@@ -30,8 +30,7 @@ function save(file, data) {
 }
 
 let users = load(USERS_FILE, {});
-let messages = {};
-try { if (fs.existsSync(MESSAGES_FILE)) fs.unlinkSync(MESSAGES_FILE); } catch (_) {}
+let messages = load(MESSAGES_FILE, {});
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
@@ -918,7 +917,8 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   };
   messages[found.channel.id].push(msg);
-  if (messages[found.channel.id].length > 100) messages[found.channel.id] = messages[found.channel.id].slice(-100);
+  if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
+  save(MESSAGES_FILE, messages);
   res.json({ ok: true, message: msg });
 });
 
@@ -1175,7 +1175,8 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   };
   messages[channelId].push(msg);
-  if (messages[channelId].length > 100) messages[channelId] = messages[channelId].slice(-100);
+  if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
+  save(MESSAGES_FILE, messages);
   res.json({ ok: true, message: msg });
 });
 

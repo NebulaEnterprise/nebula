@@ -4,8 +4,7 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
-  import BannerFill from './BannerFill.svelte';
-  import { api } from '../api.js';
+  import { api, cssBanner } from '../api.js';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -124,9 +123,7 @@
             <section class="look-block">
               <strong>Banner</strong>
               <p>This sits across the top of your profile.</p>
-              <div class="look-banner">
-                <BannerFill url={form.bannerUrl} color={form.accentColor} />
-              </div>
+              <div class="look-banner" style="background:{cssBanner(form.bannerUrl, form.accentColor)}"></div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
@@ -155,9 +152,7 @@
         <div>
           <p class="label">Preview</p>
           <div class="preview-card">
-            <div class="preview-banner">
-              <BannerFill url={form.bannerUrl} color={form.accentColor} />
-            </div>
+            <div class="preview-banner" style="background:{cssBanner(form.bannerUrl, form.accentColor)}"></div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
