@@ -5,6 +5,14 @@
 // 3. Set DEFAULT_BACKEND or ?backend=https://xxxx.ngrok-free.app
 const DEFAULT_BACKEND = "https://scowling-anthill-civil.ngrok-free.dev";
 
+// Headers that tell ngrok's free-tier interstitial to get out of the way.
+// Without these, preflight OPTIONS succeeds (204) but the actual GET/POST
+// is intercepted and returns an HTML warning page → JSON parse fails → nothing loads.
+const NGROK_HEADERS = {
+  "ngrok-skip-browser-warning": "true",
+  "bypass-tunnel-reminder": "true",
+};
+
 function getApiBase() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get("backend");
@@ -45,6 +53,9 @@ function networkError(err) {
   if (msg === 'Failed to fetch' || msg.includes('NetworkError') || msg.includes('fetch')) {
     return 'Cannot reach server at ' + API + '. Run backend/run.bat, leave it open, then open http://localhost:3850';
   }
+  if (msg.includes('non-JSON')) {
+    return 'Server at ' + API + ' returned HTML instead of JSON (likely an ngrok interstitial or dead tunnel). Restart ngrok http 3850 and reload.';
+  }
   return msg;
 }
 
@@ -81,6 +92,7 @@ async function safeJson(res) {
   try {
     return JSON.parse(text);
   } catch {
+    console.error('[safeJson] non-JSON from', res.url, '→', text.slice(0, 300));
     throw new Error('Server returned non-JSON (is the backend running at ' + API + '?)');
   }
 }
@@ -94,7 +106,7 @@ $('btn-register').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/request-code', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
       body: JSON.stringify({ email, username, password }),
     });
     const data = await safeJson(res);
@@ -117,7 +129,7 @@ $('btn-verify').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
       body: JSON.stringify({ email: window._pendingEmail, code }),
     });
     const data = await safeJson(res);
@@ -141,7 +153,7 @@ $('btn-login').onclick = async () => {
   try {
     const res = await fetch(API + '/api/auth/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...NGROK_HEADERS },
       body: JSON.stringify({ email, password }),
     });
     const data = await safeJson(res);
@@ -158,7 +170,11 @@ $('btn-login').onclick = async () => {
 };
 
 async function api(path, opts = {}) {
-  const headers = { ...(opts.headers || {}), Authorization: 'Bearer ' + token };
+  const headers = {
+    ...NGROK_HEADERS,
+    ...(opts.headers || {}),
+    Authorization: 'Bearer ' + token,
+  };
   if (opts.body && typeof opts.body === 'object') {
     headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(opts.body);
@@ -181,6 +197,7 @@ function logout() {
   $('auth-screen').style.display = 'flex';
   showPanel('login');
   if (pollTimer) clearInterval(pollTimer);
+  pollTimer = null;
 }
 
 $('btn-logout').onclick = logout;
