@@ -1072,6 +1072,15 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
   const id = (ext === '.gif' ? 'a_' : '') + uuidv4().replace(/-/g, '');
   fs.writeFileSync(path.join(UPLOAD_DIR, id + ext), req.body);
+  if (ext === '.gif') {
+    const copy = Buffer.from(req.body);
+    setImmediate(() => {
+      try {
+        const png = stillPng(decodeGif(copy), 512);
+        if (png && png.length) fs.writeFileSync(path.join(DERIVED_DIR, id + '.png.s512'), png);
+      } catch (err) {}
+    });
+  }
   res.json({ ok: true, hash: id, url: '/uploads/' + id + ext });
 });
 
@@ -1088,7 +1097,7 @@ app.get('/uploads/:name', (req, res) => {
     const cached = path.join(DERIVED_DIR, id + '.gif.s' + size);
     if (fs.existsSync(cached)) return sendAsset(res, cached, 'gif');
     scheduleGifSize(src.file, cached, size);
-    return sendAsset(res, src.file, 'gif');
+    return res.status(202).end();
   }
   if (animated && (want === 'png' || want === 'jpg')) {
     const cached = path.join(DERIVED_DIR, id + '.png.s' + (size || 0));

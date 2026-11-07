@@ -48,6 +48,30 @@ export function fileToDataUrl(file, opts = {}) {
   });
 }
 
+export function frameDataUrl(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const width = img.naturalWidth || img.width || 1;
+      const height = img.naturalHeight || img.height || 1;
+      const scale = Math.min(1, 640 / width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      let quality = 0.72;
+      let out = canvas.toDataURL('image/jpeg', quality);
+      while (out.length > 90000 && quality > 0.4) {
+        quality -= 0.08;
+        out = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(out.length > 140000 ? '' : out);
+    };
+    img.onerror = () => reject(new Error('Could not read that picture'));
+    img.src = src;
+  });
+}
+
 export function readSmallImage(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error('Choose an image'));

@@ -1,3 +1,5 @@
+import { frameDataUrl } from './image.js';
+
 const DEFAULT_BACKEND = 'https://scowling-anthill-civil.ngrok-free.dev';
 
 const TUNNEL_HEADERS = {
@@ -60,6 +62,38 @@ function snapMediaSize(value) {
   return best;
 }
 
+const STILL_STORE = 'nebula-stills';
+
+function assetId(ref) {
+  const match = String(ref || '').split('?')[0].match(/\/uploads\/([^/]+?)(?:\.(gif|png|jpe?g|webp))?$/i);
+  return match ? match[1] : '';
+}
+
+export function readStill(ref) {
+  const id = assetId(ref);
+  if (!id) return '';
+  try {
+    const map = JSON.parse(localStorage.getItem(STILL_STORE) || '{}');
+    const hit = map[id];
+    return typeof hit === 'string' && hit.startsWith('data:image/') ? hit : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+export function writeStill(ref, dataUrl) {
+  const id = assetId(ref);
+  if (!id || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/') || dataUrl.length > 140000) return;
+  try {
+    const map = JSON.parse(localStorage.getItem(STILL_STORE) || '{}');
+    const next = { [id]: dataUrl };
+    for (const key of Object.keys(map)) {
+      if (key !== id && Object.keys(next).length < 16) next[key] = map[key];
+    }
+    localStorage.setItem(STILL_STORE, JSON.stringify(next));
+  } catch (_) {}
+}
+
 export function assetPath(ref, opts = {}) {
   if (!ref) return '';
   if (ref.startsWith('data:') || ref.startsWith('blob:')) return ref;
@@ -118,7 +152,7 @@ export function resolveMedia(url) {
     const saved = await cachedBlob(full);
     if (saved) return URL.createObjectURL(saved);
     const res = await fetch(full, { headers: TUNNEL_HEADERS });
-    if (!res.ok) throw new Error('image');
+    if (res.status === 202 || !res.ok) throw new Error('image');
     const type = res.headers.get('content-type') || '';
     if (/text\/html|application\/json/i.test(type)) throw new Error('image');
     const blob = await res.blob();
@@ -136,4 +170,45 @@ export function resolveMedia(url) {
   });
   mediaCache.set(full, pending);
   return pending;
+}
+
+export function seedStill(ref) {
+  if (!ref || readStill(ref)) return;
+  const motion = /\/uploads\/a_|\/uploads\/[^/]+\.gif(\?|$)/i.test(String(ref));
+  const stillUrl = assetPath(ref, { format: motion ? 'png' : undefined, size: 512 });
+  resolveMedia(stillUrl).then(async (src) => {
+    if (!src) return;
+    try {
+      const data = await frameDataUrl(src);
+      if (data) writeStill(ref, data);
+    } catch (_) {}
+  });
+}
+
+export function uploadFile(file, onProgress) {
+  const token = localStorage.getItem('dc_token') || '';
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', getApiBase() + '/api/upload');
+    xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
+    xhr.setRequestHeader('bypass-tunnel-reminder', 'true');
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
+      if (xhr.status === 401) {
+        localStorage.removeItem('dc_token');
+        reject(new Error('Session expired'));
+        return;
+      }
+      if (xhr.status < 200 || xhr.status >= 300) reject(new Error(data.error || 'Upload failed'));
+      else resolve(data);
+    };
+    xhr.onerror = () => reject(new Error('Could not reach your server'));
+    xhr.send(file);
+  });
 }

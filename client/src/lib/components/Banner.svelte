@@ -1,12 +1,13 @@
 <script>
-  import { assetPath, resolveMedia } from '../api.js';
+  import { assetPath, resolveMedia, readStill, writeStill } from '../api.js';
+  import { frameDataUrl } from '../image.js';
 
   let { url = '' } = $props();
-  let poster = $state('');
+  let poster = $state(readStill(url));
   let movie = $state('');
   let playing = $state(false);
 
-  function animated(ref) {
+  function motionOf(ref) {
     const clean = String(ref || '').split('?')[0];
     return /\/uploads\/a_[^/]+/i.test(clean) || /\.gif$/i.test(clean);
   }
@@ -14,24 +15,46 @@
   $effect(() => {
     const current = url || '';
     let alive = true;
-    poster = '';
-    movie = '';
+    let tries = 0;
+    let timer = 0;
     playing = false;
+    movie = '';
+    const saved = readStill(current);
+    poster = saved;
     if (!current) return () => { alive = false; };
     if (current.startsWith('blob:') || current.startsWith('data:')) {
       movie = current;
       playing = true;
       return () => { alive = false; };
     }
-    const motion = animated(current);
-    resolveMedia(assetPath(current, { format: motion ? 'png' : undefined, size: 512 })).then((src) => {
-      if (alive && src) poster = src;
+    const motion = motionOf(current);
+    resolveMedia(assetPath(current, { format: motion ? 'png' : undefined, size: 512 })).then(async (src) => {
+      if (!alive || !src) return;
+      if (!poster) poster = src;
+      try {
+        const data = await frameDataUrl(src);
+        if (alive && data) {
+          writeStill(current, data);
+          poster = data;
+        }
+      } catch (_) {}
     });
-    if (!motion) return () => { alive = false; };
-    resolveMedia(assetPath(current, { format: 'gif', size: 512 })).then((src) => {
-      if (alive && src) movie = src;
-    });
-    return () => { alive = false; };
+    const pullGif = () => {
+      if (!alive || !motion) return;
+      resolveMedia(assetPath(current, { format: 'gif', size: 512 })).then((src) => {
+        if (!alive) return;
+        if (src) {
+          movie = src;
+          return;
+        }
+        if (tries++ < 4) timer = setTimeout(pullGif, 1200);
+      });
+    };
+    pullGif();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   });
 </script>
 

@@ -7,8 +7,8 @@
   import Banner from './Banner.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
-  import { api, resolveMedia } from '../api.js';
-  import { fileToDataUrl } from '../image.js';
+  import { uploadFile, writeStill } from '../api.js';
+  import { fileToDataUrl, frameDataUrl } from '../image.js';
 
   let page = $state('profile');
   let form = $state({
@@ -36,25 +36,40 @@
   ];
 
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
+  let uploadNote = $state('');
 
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
+    const label = kind === 'banner' ? 'banner' : 'profile picture';
     if (!file) return;
     const preview = URL.createObjectURL(file);
     const previous = String(form[field] || '');
     form[field] = preview;
+    uploadNote = `Uploading ${label} to your server… 0%`;
     try {
-      const data = await api('/api/upload', {
-        method: 'POST',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
+      let body = file;
+      if (!isGif) {
+        const small = await fileToDataUrl(file, {
+          maxW: kind === 'banner' ? 1280 : 512,
+          maxH: kind === 'banner' ? 720 : 512,
+        });
+        body = await (await fetch(small)).blob();
+      }
+      const data = await uploadFile(body, (pct) => {
+        uploadNote = `Uploading ${label} to your server… ${pct}%`;
       });
       if (!data.url) throw new Error('The picture did not save');
       savedUrl[field] = data.url;
-      const shown = await resolveMedia(data.url);
-      if (shown && shown.startsWith('blob:')) form[field] = data.url;
+      try {
+        const still = await frameDataUrl(preview);
+        if (still) writeStill(data.url, still);
+      } catch (_) {}
+      form[field] = data.url;
+      uploadNote = `Uploaded. Hit Save changes to put this ${label} on your profile.`;
     } catch (err) {
       savedUrl[field] = '';
+      uploadNote = '';
       if (kind === 'avatar') {
         try { form.avatarUrl = await fileToDataUrl(file, { original: true }); }
         catch { form.avatarUrl = previous.startsWith('blob:') ? '' : previous; }
@@ -148,8 +163,9 @@
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
                 </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; savedUrl.bannerUrl = ''; }}>Remove</button>{/if}
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; savedUrl.bannerUrl = ''; uploadNote = ''; }}>Remove</button>{/if}
               </div>
+              {#if uploadNote}<p class="hint">{uploadNote}</p>{/if}
             </section>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
