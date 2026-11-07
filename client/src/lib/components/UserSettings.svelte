@@ -3,6 +3,7 @@
   import { ui, saveMe, logout, toast } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorWheel from './ColorWheel.svelte';
+  import ColorBox from './ColorBox.svelte';
   import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
@@ -37,13 +38,6 @@
       else form.bannerUrl = url;
     } catch (err) { toast(err.message); }
     finally { if (input) input.value = ''; }
-  }
-
-  function toHex(value, fallback) {
-    const raw = String(value || '').trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
-    if (/^#[0-9a-fA-F]{3}$/.test(raw)) return '#' + raw.slice(1).split('').map((c) => c + c).join('');
-    return fallback;
   }
 
   function setNameColor(index, value) {
@@ -122,11 +116,7 @@
                 <ColorWheel value={form.accentColor} onpick={(c) => (form.accentColor = c)} />
               {/if}
             </section>
-            <div class="effect-head">
-              <p class="label">Name effect</p>
-              <input class="rgb" type="color" aria-label="First color" value={toHex(form.nameColors[0], '#5ce1ff')} oninput={(e) => setNameColor(0, e.target.value)} />
-              <input class="rgb" type="color" aria-label="Second color" value={toHex(form.nameColors[1], '#7c6af7')} oninput={(e) => setNameColor(1, e.target.value)} />
-            </div>
+            <p class="label">Name effect</p>
             <div class="effect-picks">
               {#each effects as [id, label]}
                 <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
@@ -151,15 +141,16 @@
           <p class="label">Preview</p>
           <div class="preview-card">
             <div class="preview-banner" style="background:{form.bannerUrl ? `center/cover url('${form.bannerUrl}')` : form.accentColor}"></div>
+            {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<img src={form.avatarUrl} alt="" />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
               <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
               <div class="handle">@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</div>
-              {#if form.bio}<p>{form.bio}</p>{/if}
             </div>
           </div>
+          <ColorBox colors={form.nameColors} onpick={setNameColor} />
         </div>
       </div>
     </div>
