@@ -7,6 +7,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { api, pinMedia } from '../api.js';
+  import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let page = $state('profile');
   let form = $state({
@@ -53,13 +54,27 @@
     form[field] = preview;
     paintPicture(field, preview);
     const job = (async () => {
+      const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
+      let body = file;
+      if (isGif) {
+        body = await shrinkGif(file, kind === 'banner'
+          ? { max: 480, frames: 20, colors: 32 }
+          : { max: 160, frames: 12, colors: 32 });
+      } else if (file.size > 600 * 1024) {
+        const small = await fileToDataUrl(file, {
+          maxW: kind === 'banner' ? 960 : 512,
+          maxH: kind === 'banner' ? 540 : 512,
+          quality: 0.78,
+        });
+        body = await (await fetch(small)).blob();
+      }
       const data = await api('/api/upload?slot=' + kind, {
         method: 'POST',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body,
+        headers: { 'Content-Type': body.type || file.type || 'application/octet-stream' },
       });
       if (!data.url) throw new Error('The picture did not save');
-      pinMedia(data.url, file);
+      pinMedia(data.url, body);
       if (!data.user || data.user[field] !== data.url) {
         await api('/api/me', { method: 'PATCH', body: { [field]: data.url } });
       }
