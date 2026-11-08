@@ -1009,13 +1009,15 @@ img { max-width: 100%; }
 .profile-hero .handle { justify-content: center; }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .profile-face { position: relative; }
+.profile-face .bio-bubble { left: calc(100% + 10px); top: 22px; max-width: 132px; }
+.profile-face .bio-bubble span { max-width: 112px; }
 .profile-dot {
   position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
   border: 3px solid #140d1f;
 }
 .profile-roles { justify-content: center; margin-top: 12px; }
 .profile-panel {
-  margin-top: 14px; padding: 12px 12px 4px; border-radius: 16px;
+  margin-top: 14px; padding: 2px 12px 4px; border-radius: 16px;
   background: color-mix(in srgb, var(--shade-a) 22%, rgba(8, 4, 16, 0.72));
   border: 1px solid color-mix(in srgb, var(--shade-b) 38%, transparent);
 }
@@ -1027,6 +1029,7 @@ img { max-width: 100%; }
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px;
 }
+.profile-row:first-child { border-top: 0; }
 .profile-row span { display: inline-flex; align-items: center; gap: 8px; color: color-mix(in srgb, var(--shade-b) 62%, white); }
 .shade-preview { height: 36px; border-radius: 12px; margin: 0 0 12px; border: 1px solid var(--line); }
 .profile-row strong { display: inline-flex; align-items: center; gap: 6px; text-align: right; font-weight: 650; }

@@ -1,11 +1,11 @@
 <script>
-  import { UserPlus, User, AtSign, Smile, FileText, Sparkles, Clock, Circle } from '@lucide/svelte';
+  import { UserPlus, User, AtSign, Smile, Sparkles, Clock, Circle } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
-  import { visibleBadges } from '../format.js';
+  import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -55,6 +55,7 @@
             {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
+          {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
         <h3><Name user={u} /></h3>
         <p class="handle">
@@ -73,15 +74,12 @@
         </div>
       {/if}
       <section class="profile-panel">
-        <h4><User size={15} /> About me</h4>
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
-        <div class="profile-row"><span><FileText size={14} /> Bio</span><strong>{u.bio || '—'}</strong></div>
         <div class="profile-row"><span><Sparkles size={14} /> Custom status</span><strong>{u.customStatus || '—'}</strong></div>
       </section>
       <section class="profile-panel">
-        <h4><Clock size={15} /> Activity</h4>
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{u.lastSeen ? lastSeenLabel(u.lastSeen) : (u.hideLastSeen ? 'Hidden' : '—')}</strong></div>
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
