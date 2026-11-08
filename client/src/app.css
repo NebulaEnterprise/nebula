@@ -333,7 +333,8 @@ img { max-width: 100%; }
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 8px; border-radius: 8px; text-align: left; color: #fff; background: transparent;
 }
-.account-switch button:hover { background: #2a2b31; }
+.account-switch button:hover, .account-switch button.on { background: #2a2b31; }
+.account-switch button.on :global(svg) { margin-left: auto; color: #fff; }
 .account-switch strong, .account-switch em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-switch strong { font-size: 14px; font-weight: 700; }
 .account-switch em { color: var(--muted); font-style: normal; font-size: 12px; }

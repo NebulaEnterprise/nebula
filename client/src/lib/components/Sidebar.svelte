@@ -1,6 +1,6 @@
 <script>
   import {
-    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut,
+    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
     Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight,
   } from '@lucide/svelte';
@@ -101,6 +101,10 @@
   }
 
   async function useAccount(id) {
+    if (id === ui.me?.id) {
+      accountsOpen = false;
+      return;
+    }
     accountsOpen = false;
     accountOpen = false;
     try {
@@ -377,13 +381,14 @@
     </div>
     {#if accountsOpen}
       <div class="account-switch" onclick={(e) => e.stopPropagation()}>
-        {#each savedAccounts().filter((row) => row.id !== ui.me?.id) as row (row.id)}
-          <button type="button" onclick={() => useAccount(row.id)}>
+        {#each savedAccounts() as row (row.id)}
+          <button type="button" class:on={row.id === ui.me?.id} onclick={() => useAccount(row.id)}>
             <Avatar user={row} size={32} dot={false} />
             <span>
               <strong>{row.displayName || row.username}</strong>
               <em>@{row.username}</em>
             </span>
+            {#if row.id === ui.me?.id}<Check size={16} />{/if}
           </button>
         {/each}
         <button type="button" class="add" onclick={startAnother}>
