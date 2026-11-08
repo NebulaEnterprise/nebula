@@ -1,6 +1,6 @@
 <script>
   let { rank = '' } = $props();
-  const label = $derived(rank === 'admin' ? 'Admin' : rank === 'manager' ? 'Manager' : rank === 'moderator' ? 'Moderator' : '');
+  const label = $derived(rank ? 'Nebula staff' : '');
 </script>
 
 {#if label}
