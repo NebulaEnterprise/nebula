@@ -1604,7 +1604,21 @@ function klipyKey() {
     const file = fs.readFileSync(path.join(DATA_DIR, 'klipy.key'), 'utf8').trim();
     if (file) return file;
   } catch (_) {}
-  return String(process.env.KLIPY_KEY || '').trim();
+  return String(process.env.KLIPY_KEY || 'rqqVf83mum5Wy17KcCw9k5zbiq7XKiEHInFx7UTIAuzniEIyJZfmVWqHFCpNvdKo').trim();
+}
+
+function klipyGifUrl(file, size) {
+  const box = file && file[size] && file[size].gif;
+  return box && typeof box.url === 'string' ? box.url : '';
+}
+
+function klipyList(data) {
+  if (!data || typeof data !== 'object') return [];
+  const page = data.data;
+  if (page && Array.isArray(page.data)) return page.data;
+  if (Array.isArray(page)) return page;
+  if (Array.isArray(data.results)) return data.results;
+  return [];
 }
 
 async function klipyGifs(query) {
@@ -1613,34 +1627,25 @@ async function klipyGifs(query) {
   const route = query
     ? '/gifs/search?q=' + encodeURIComponent(query) + '&per_page=24&page=1'
     : '/gifs/trending?per_page=24&page=1';
-  const response = await fetch('https://api.klipy.com/api/v1/' + key + route);
+  const response = await fetch('https://api.klipy.com/api/v1/' + encodeURIComponent(key) + route);
   if (!response.ok) return [];
   const data = await response.json();
   const rows = [];
-  const walk = (node) => {
-    if (!node || rows.length > 40) return;
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-    if (typeof node !== 'object') return;
-    const gif = node.gif && node.gif.url;
-    const md = node.md && node.md.gif && node.md.gif.url;
-    const sm = node.sm && node.sm.gif && node.sm.gif.url;
-    if (gif || md || sm) {
-      rows.push({ id: node.slug || gif || md || sm, preview: sm || md || gif, url: gif || md || sm, title: String(node.title || '') });
-    }
-    Object.values(node).forEach(walk);
-  };
-  walk(data);
-  const unique = [];
   const seen = new Set();
-  for (const row of rows) {
-    if (!row.url || seen.has(row.url)) continue;
-    seen.add(row.url);
-    unique.push(row);
+  for (const item of klipyList(data)) {
+    const file = item && item.file;
+    const url = klipyGifUrl(file, 'md') || klipyGifUrl(file, 'hd') || klipyGifUrl(file, 'sm') || klipyGifUrl(file, 'xs');
+    const preview = klipyGifUrl(file, 'sm') || klipyGifUrl(file, 'xs') || url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    rows.push({
+      id: String(item.id || item.slug || url),
+      preview,
+      url,
+      title: String(item.title || ''),
+    });
   }
-  return unique.slice(0, 24);
+  return rows.slice(0, 24);
 }
 
 let reactionCatalogReady = false;

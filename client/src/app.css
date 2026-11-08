@@ -431,7 +431,8 @@ img { max-width: 100%; }
 .picker-grid { overflow: auto; padding: 0 10px 10px; display: grid; gap: 6px; min-height: 180px; }
 .emoji-grid { grid-template-columns: repeat(8, 1fr); max-height: 280px; }
 .sticker-grid { grid-template-columns: repeat(4, 1fr); }
-.gif-grid { grid-template-columns: repeat(2, 1fr); }
+.gif-grid { grid-template-columns: repeat(2, 1fr); align-items: start; }
+.gif-grid button { min-height: 110px; padding: 0; }
 .picker-grid button { border-radius: 8px; background: transparent; min-height: 36px; display: grid; place-items: center; overflow: hidden; }
 .picker-grid button:hover { background: var(--bg-hover); }
 .emoji-grid button { font-size: 22px; }

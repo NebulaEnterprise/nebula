@@ -164,8 +164,8 @@
       {#if gifError}<p class="hint">{gifError}</p>{/if}
       {#if !busy && !gifError && !gifs.length}<p class="hint">No GIFs for that search.</p>{/if}
       {#each gifs as gif (gif.url)}
-        <button type="button" onclick={() => sendGif(gif.url)}>
-          <img src={gif.preview || gif.url} alt={gif.title || ''} />
+        <button type="button" title={gif.title || 'GIF'} onclick={() => sendGif(gif.url)}>
+          <img src={gif.preview || gif.url} alt="" referrerpolicy="no-referrer" />
         </button>
       {/each}
     </div>
