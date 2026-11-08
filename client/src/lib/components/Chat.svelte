@@ -8,15 +8,6 @@
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
 
-  function typerName(person) {
-    const live = ui.members.find((m) => m.id === person.id) || (ui.me?.id === person.id ? ui.me : null);
-    return {
-      displayName: person.name,
-      nameEffect: person.nameEffect || live?.nameEffect || '',
-      nameColors: person.nameColors?.length ? person.nameColors : (live?.nameColors || []),
-    };
-  }
-
   function liveAuthor(author) {
     if (!author) return author;
     const member = ui.members.find((m) => m.id === author.id);
@@ -105,19 +96,7 @@
     </div>
   {/if}
   {#if ui.typers.length}
-    <p class="typing">
-      {#if ui.typers.length > 3}
-        <Name user={typerName(ui.typers[0])} /><span>, </span>
-        <Name user={typerName(ui.typers[1])} /><span> and {ui.typers.length - 2} others are typing</span>
-      {:else}
-        {#each ui.typers as person, i}
-          {#if i > 0}<span>{i === ui.typers.length - 1 ? ' and ' : ', '}</span>{/if}
-          <Name user={typerName(person)} />
-        {/each}
-        <span>{ui.typers.length === 1 ? ' is typing' : ' are typing'}</span>
-      {/if}
-      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
-    </p>
+    <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} typing....</p>
   {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
     {#if ui.mode === 'chat'}
