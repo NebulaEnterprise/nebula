@@ -1038,7 +1038,6 @@ img { max-width: 100%; }
 }
 .profile-row:first-child { border-top: 0; }
 .profile-row span { display: inline-flex; align-items: center; gap: 8px; color: color-mix(in srgb, var(--shade-b) 62%, white); }
-.shade-preview { height: 36px; border-radius: 12px; margin: 0 0 12px; border: 1px solid var(--line); }
 .profile-row strong { display: inline-flex; align-items: center; gap: 6px; text-align: right; font-weight: 650; }
 .profile-row strong i { width: 8px; height: 8px; border-radius: 50%; display: block; }
 .bio-bubble {

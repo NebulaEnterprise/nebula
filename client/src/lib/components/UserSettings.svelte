@@ -231,11 +231,6 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
-            <p class="label">Profile color</p>
-            <p class="hint">Two separate shades. The first is the main color. The second is the other tone on your profile card.</p>
-            <div class="shade-preview" style="background: linear-gradient(90deg, {form.profileColors[0]}, {form.profileColors[1]})"></div>
-            <ColorBox colors={form.profileColors} slots={2} onpick={setProfileColor} />
-            <div style="height:16px"></div>
             <section class="look-block">
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">
@@ -315,6 +310,9 @@
               {/each}
             </div>
             <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
+            <p class="label">Profile color</p>
+            <p class="hint">Two separate shades. The first is the main color. The second is the other tone on your profile card.</p>
+            <ColorBox colors={form.profileColors} slots={2} onpick={setProfileColor} />
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
