@@ -362,6 +362,14 @@
     follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
   }
 
+  let roomKey = '';
+  $effect(() => {
+    const next = ui.mode + ':' + (ui.mode === 'dm' ? (ui.dmUser?.id || '') : (ui.channelId || ''));
+    if (next === roomKey) return;
+    roomKey = next;
+    follow = true;
+  });
+
   $effect(() => {
     ui.messages.length;
     ui.messages[ui.messages.length - 1]?.id;
@@ -386,7 +394,9 @@
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
-  {#if !ui.messages.length}
+  {#if ui.chatLoading && !ui.messages.length}
+    <div class="welcome"><p>Loading messages…</p></div>
+  {:else if !ui.messages.length}
     <div class="welcome">
       <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : '#' + (channel?.name || 'channel')}</h2>
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : 'This is the start of the channel. Say hi.'}</p>

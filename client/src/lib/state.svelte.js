@@ -32,6 +32,7 @@ export const ui = $state({
   stickers: [],
   onboarding: null,
   messages: [],
+  chatLoading: false,
   members: [],
   badgeDefs: {},
   menuOpen: false,
@@ -308,6 +309,7 @@ export function showAddFriend() {
 }
 
 export async function openDm(user) {
+  const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
   ui.dmUser = user;
   if (user && user.id && ui.activity.dms[user.id]) {
@@ -322,6 +324,7 @@ export async function openDm(user) {
   ui.reply = null;
   ui.editing = null;
   applyTheme();
+  if (!same) showLoadingChat();
   dropLive();
   await loadMessages();
 }
@@ -331,9 +334,11 @@ export async function openServer(id, opts = {}) {
     const { leaveVoice } = await import('./voice.js');
     await leaveVoice();
   }
+  const leavingRoom = ui.mode !== 'chat' || (id && id !== ui.serverId);
   if (id) ui.serverId = id;
   ui.mode = 'chat';
   ui.dmUser = null;
+  if (leavingRoom) showLoadingChat();
   ui.menuOpen = false;
   ui.picker = '';
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
@@ -363,13 +368,21 @@ export async function openServer(id, opts = {}) {
   if (!opts.keepDialog && ui.onboarding) ui.dialog = { kind: 'onboarding' };
 }
 
+function showLoadingChat() {
+  ui.messages = [];
+  ui.typers = [];
+  ui.chatLoading = true;
+}
+
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
-    ui.channelId = ch.id;
+  if (ch.id === ui.channelId && ui.mode === 'chat') return;
+  ui.channelId = ch.id;
   ui.seenMessageId = '';
   ui.picker = '';
   ui.reply = null;
   ui.editing = null;
+  showLoadingChat();
   dropLive();
   loadMessages();
 }
@@ -552,7 +565,10 @@ export async function loadMessages(quiet, live) {
     if (!quiet) toast(err.message);
     return 'same';
   } finally {
-    if (serial === pulseSerial) messagesBusy = false;
+    if (serial === pulseSerial) {
+      messagesBusy = false;
+      if (!live) ui.chatLoading = false;
+    }
   }
 }
 
