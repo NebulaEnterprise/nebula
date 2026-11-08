@@ -1,11 +1,11 @@
 <script>
-  import { fileUrl, pinnedSrc, resolveMedia } from '../api.js';
+  import { bannerGif, fileUrl, pinnedSrc, resolveMedia } from '../api.js';
 
-  let { url = '', fill = false } = $props();
+  let { url = '', fill = false, size = 0 } = $props();
   let src = $state('');
 
   $effect(() => {
-    const current = url;
+    const current = bannerGif(url, size || 512);
     if (!current) {
       src = '';
       return;
@@ -19,7 +19,7 @@
   });
 
   function failed() {
-    const current = url;
+    const current = bannerGif(url, size || 512);
     if (!current || current.startsWith('data:') || current.startsWith('blob:')) return;
     resolveMedia(current).then((next) => {
       if (next && next !== src) src = next;

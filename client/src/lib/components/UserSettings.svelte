@@ -125,11 +125,9 @@
     const job = (async () => {
       const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
       let body = file;
-      if (isGif) {
-        body = await shrinkGif(file, kind === 'banner'
-          ? { max: 480, frames: 20, colors: 32 }
-          : { max: 160, frames: 12, colors: 32 });
-      } else if (file.size > 600 * 1024) {
+      if (isGif && kind !== 'banner') {
+        body = await shrinkGif(file, { max: 160, frames: 12, colors: 32 });
+      } else if (!isGif && file.size > 600 * 1024) {
         const small = await fileToDataUrl(file, {
           maxW: kind === 'banner' ? 960 : 512,
           maxH: kind === 'banner' ? 540 : 512,

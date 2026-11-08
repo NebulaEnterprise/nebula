@@ -839,8 +839,15 @@ function saveProfileFile(user, slot, buf, ext) {
   const folder = path.join(FILES_DIR, bucket, user.id);
   fs.mkdirSync(folder, { recursive: true });
   const name = 'r2-' + Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + ext;
-  fs.writeFileSync(path.join(folder, name), buf);
-  const rel = bucket + '/' + user.id + '/' + name;
+  const full = path.join(folder, name);
+  fs.writeFileSync(full, buf);
+  let storedName = name;
+  if (slot === 'banner' && ext === '.gif') {
+    try { writeBannerSizes(full); } catch (_) {}
+    const sized = name.replace(/\.gif$/i, '.512.gif');
+    if (fs.existsSync(path.join(folder, sized))) storedName = sized;
+  }
+  const rel = bucket + '/' + user.id + '/' + storedName;
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   user[pathKey] = rel;
@@ -1818,6 +1825,30 @@ function sizedGif(gif, max) {
   return encodeGif(box.w, box.h, frames);
 }
 
+const BANNER_GIF_SIZES = [32, 128, 512];
+
+function writeBannerSizes(file) {
+  const gif = decodeGif(fs.readFileSync(file));
+  const edge = gif ? Math.max(gif.width, gif.height) : 0;
+  let frames = null;
+  for (const size of BANNER_GIF_SIZES) {
+    const dest = file.replace(/\.gif$/i, '.' + size + '.gif');
+    if (!gif || edge <= size) {
+      fs.copyFileSync(file, dest);
+      continue;
+    }
+    if (!frames) frames = composite(gif);
+    const box = fitBox(gif.width, gif.height, size);
+    const scaled = frames.map((frame) => ({
+      rgba: scaleRGBA(frame.rgba, gif.width, gif.height, box.w, box.h),
+      delay: frame.delay,
+    }));
+    const out = encodeGif(box.w, box.h, scaled);
+    if (out && out.length) fs.writeFileSync(dest, out);
+    else fs.copyFileSync(file, dest);
+  }
+}
+
 
 function sniffImage(buf) {
   if (!Buffer.isBuffer(buf) || buf.length < 12) return '';
@@ -1971,7 +2002,18 @@ function allowMedia(req, res, next) {
 
 app.use('/files', allowMedia, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
-  next();
+  const match = req.path.match(/^\/files\/banners\/([A-Za-z0-9_-]+)\/(.+)\.(32|128|512)\.gif$/);
+  if (!match) return next();
+  const dir = path.join(FILES_DIR, 'banners', match[1]);
+  const sized = path.join(dir, match[2] + '.' + match[3] + '.gif');
+  const original = path.join(dir, match[2] + '.gif');
+  if (!fs.existsSync(sized) && fs.existsSync(original)) {
+    try { writeBannerSizes(original); } catch (_) {}
+  }
+  const file = fs.existsSync(sized) ? sized : (fs.existsSync(original) ? original : '');
+  if (!file) return next();
+  res.type('image/gif');
+  res.sendFile(file);
 }, express.static(FILES_DIR, { maxAge: '365d', immutable: true, acceptRanges: true }));
 
 app.use('/uploads', allowMedia, (req, res, next) => {
