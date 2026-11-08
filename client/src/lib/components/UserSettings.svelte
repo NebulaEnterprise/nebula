@@ -8,7 +8,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import TagPill from './TagPill.svelte';
-  import { ownedBadges } from '../format.js';
+  import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
@@ -26,7 +26,7 @@
     username: ui.me?.username || '',
     displayName: ui.me?.displayName || '',
     pronouns: ui.me?.pronouns || '',
-    bio: ui.me?.bio || '',
+    bio: shortBio(ui.me?.bio),
     shownBadges: Array.isArray(ui.me?.shownBadges) ? [...ui.me.shownBadges] : null,
     showcaseServerId: ui.me?.showcaseServerId || '',
     showcaseBadge: ui.me?.showcaseBadge || '',
@@ -161,7 +161,7 @@
   async function save() {
     try {
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
-      const body = { ...form, aboutMe: aboutDraft };
+      const body = { ...form, bio: shortBio(form.bio), aboutMe: aboutDraft };
       for (const field of ['avatarUrl', 'bannerUrl']) {
         if (String(body[field] || '').startsWith('blob:')) body[field] = savedUrl[field] || '';
       }
@@ -235,7 +235,7 @@
             </section>
             <div class="field">
               <label>Bio</label>
-              <textarea bind:value={form.bio} maxlength="190" rows="3" placeholder="Shows in the bubble beside your picture"></textarea>
+              <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="Shows in the bubble beside your picture"></textarea>
             </div>
             <div class="field">
               <label>About me</label>
@@ -292,7 +292,7 @@
             <div class="preview-banner">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
-            {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
+            {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>

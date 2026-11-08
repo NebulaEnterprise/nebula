@@ -854,7 +854,7 @@ function publicUser(u) {
     username: u.username,
     displayName: u.displayName || u.username,
     email: u.email,
-    bio: u.bio || '',
+    bio: String(u.bio || '').slice(0, 29),
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
     status: u.status || 'online',
@@ -1642,7 +1642,7 @@ app.patch('/api/me', auth, (req, res) => {
   }
 
   if (displayName !== undefined) req.user.displayName = String(displayName).slice(0, 32);
-  if (bio !== undefined) req.user.bio = String(bio).slice(0, 190);
+  if (bio !== undefined) req.user.bio = String(bio).slice(0, 29);
   if (aboutMe !== undefined) req.user.aboutMe = String(aboutMe).slice(0, 190);
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);

@@ -5,7 +5,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
-  import { visibleBadges } from '../format.js';
+  import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -26,7 +26,7 @@
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
-    {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
+    {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
     {#if rel === 'none'}
       <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
     {/if}

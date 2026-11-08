@@ -11,7 +11,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import { api } from '../api.js';
-  import { visibleBadges } from '../format.js';
+  import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe } from '../state.svelte.js';
   import { PERM } from '../format.js';
@@ -71,7 +71,7 @@
     editingStatus = false;
     editingBio = false;
     statusDraft = ui.me?.customStatus || '';
-    bioDraft = ui.me?.bio || '';
+    bioDraft = shortBio(ui.me?.bio);
   }
 
   function editProfile() {
@@ -100,7 +100,7 @@
 
   async function saveBio() {
     try {
-      await saveMe({ bio: bioDraft.trim() });
+      await saveMe({ bio: shortBio(bioDraft.trim()) });
       editingBio = false;
     } catch (err) {
       toast(err.message);
@@ -302,12 +302,12 @@
         </div>
         {#if editingBio}
           <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
-            <input bind:value={bioDraft} maxlength="190" placeholder="Bio" />
+            <input bind:value={bioDraft} maxlength="29" placeholder="Bio" />
             <button type="submit" title="Save bio">✓</button>
           </form>
-        {:else if ui.me?.bio}
+        {:else if shortBio(ui.me?.bio)}
           <div class="account-bubble">
-            <span>{ui.me.bio}</span>
+            <span>{shortBio(ui.me.bio)}</span>
             <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
             <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
           </div>

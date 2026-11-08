@@ -1,3 +1,7 @@
+export function shortBio(text) {
+  return String(text || '').slice(0, 29);
+}
+
 export function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')

@@ -2,6 +2,7 @@
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
+  import { shortBio } from '../format.js';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
@@ -13,6 +14,7 @@
         nameColors: ui.me.nameColors && ui.me.nameColors.length ? ui.me.nameColors : m.nameColors,
         avatarUrl: ui.me.avatarUrl || m.avatarUrl,
         avatarColor: ui.me.avatarColor || m.avatarColor,
+        bio: ui.me.bio ?? m.bio,
         roleIcon: m.roleIcon || '',
         showcase: ui.me.showcase || m.showcase || null,
         showcaseBadge: ui.me.showcaseBadge || '',
@@ -34,7 +36,7 @@
       <Avatar user={m} size={34} />
       <div class="meta">
         <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} /></div>
-        {#if m.bio}<span>{m.bio}</span>{/if}
+        {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
       </div>
     </button>
   {/each}
@@ -45,7 +47,7 @@
         <Avatar user={m} size={34} />
         <div class="meta">
           <div class="name-row"><strong><Name user={shown(m)} /></strong><NameExtras user={shown(m)} /></div>
-          {#if m.bio}<span>{m.bio}</span>{/if}
+          {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
         </div>
       </button>
     {/each}
