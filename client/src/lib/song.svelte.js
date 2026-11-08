@@ -1,4 +1,4 @@
-import { fileUrl } from './api.js';
+import { fileUrl, resolveMedia } from './api.js';
 
 export const player = $state({ key: '', playing: false });
 
@@ -67,6 +67,32 @@ export function playing(file, start) {
   return player.playing && player.key === songKey(file, startAtOf(start));
 }
 
+const readySrc = new Map();
+const warming = new Set();
+const warmQueue = [];
+let warmBusy = false;
+
+export function warmSong(file) {
+  if (!hasSong(file) || readySrc.has(file) || warming.has(file)) return;
+  warming.add(file);
+  warmQueue.push(file);
+  pumpWarm();
+}
+
+function pumpWarm() {
+  if (warmBusy) return;
+  const file = warmQueue.shift();
+  if (!file) return;
+  warmBusy = true;
+  resolveMedia(file).then((src) => {
+    if (src) readySrc.set(file, src);
+  }).finally(() => {
+    warming.delete(file);
+    warmBusy = false;
+    pumpWarm();
+  });
+}
+
 let audio = null;
 let active = null;
 
@@ -115,23 +141,48 @@ function beginSong(file, start) {
   if (!hasSong(file)) return '';
   const startAt = startAtOf(start);
   const key = songKey(file, startAt);
-  if (player.key === key && (player.playing || (audio && !audio.paused))) return key;
+  if (player.key === key && player.playing) return key;
   const el = ensureAudio();
+  const src = readySrc.get(file) || fileUrl(file);
   active = { file, startAt, key };
   player.key = key;
   player.playing = true;
-  el.loop = startAt === 0;
-  if (el.dataset.file !== file) {
+  if (el.dataset.file !== file || el.src !== src) {
     el.dataset.file = file;
-    el.preload = 'none';
-    el.src = fileUrl(file);
+    el.src = src;
   }
   if (startAt > 0) el.addEventListener('loadedmetadata', () => seekTo(el, startAt, key), { once: true });
-  el.play().then(() => {
+  else seekTo(el, startAt, key);
+  const played = el.play();
+  played.then(() => {
     if (active && active.key === key) player.playing = true;
   }).catch(() => {
-    if (active && active.key === key) player.playing = false;
+    if (!active || active.key !== key) return;
+    player.playing = false;
+    active.blocked = true;
   });
+  if (!readySrc.has(file)) {
+    warmSong(file);
+    resolveMedia(file).then((local) => {
+      if (!local) return;
+      readySrc.set(file, local);
+      if (!active || active.key !== key || !audio || !active.blocked) return;
+      audio.dataset.file = file;
+      audio.src = local;
+      const resume = () => {
+        if (!active || active.key !== key) return;
+        seekTo(audio, startAt, key);
+        audio.play().then(() => {
+          if (active && active.key === key) {
+            active.blocked = false;
+            player.playing = true;
+          }
+        }).catch(() => {});
+      };
+      if (audio.readyState >= 1) resume();
+      else audio.addEventListener('loadedmetadata', resume, { once: true });
+    });
+  }
   return key;
 }
 
