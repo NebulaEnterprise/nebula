@@ -63,14 +63,12 @@
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
         <h3><Name user={u} /></h3>
-        <p class="handle"><span>@{u.username}</span></p>
-        {#if visibleBadges(u).length}
-          <div class="profile-marks">
-            {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
-            {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
-            {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
-          </div>
-        {/if}
+        <p class="handle">
+          <span>@{u.username}</span>
+          {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
+          {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
+          {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
+        </p>
         {#if u.aboutMe || u.customStatus}<p class="profile-status">{u.aboutMe || u.customStatus}</p>{/if}
       </div>
       {#if roles.length}

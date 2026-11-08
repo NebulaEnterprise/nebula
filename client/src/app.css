@@ -1006,11 +1006,9 @@ img { max-width: 100%; }
 }
 .profile-hero { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: -46px; }
 .profile-hero h3 { margin: 10px 0 0; font-size: 22px; width: 100%; text-align: center; }
-.profile-card .profile-hero .handle,
-.profile-marks {
+.profile-card .profile-hero .handle {
   display: flex; width: 100%; justify-content: center; align-items: center; gap: 6px;
 }
-.profile-marks { margin-top: 6px; }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .profile-face { position: relative; }
 .profile-face .bio-bubble {
