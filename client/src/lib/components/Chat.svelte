@@ -2,7 +2,7 @@
   import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import TagPill from './TagPill.svelte';
+  import NameExtras from './NameExtras.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
@@ -70,9 +70,12 @@
       nameColors: colors,
       avatarUrl: mine?.avatarUrl || author.avatarUrl || member?.avatarUrl,
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
-      staff: ui.mode === 'chat' ? (member ? (member.staff || '') : (author.staff || '')) : '',
+      staff: member?.staff || mine?.staff || author.staff || '',
       developer: !!(member?.developer || mine?.developer || author.developer),
       showcase: live?.showcase || author.showcase || null,
+      showcaseBadge: live?.showcaseBadge || author.showcaseBadge || '',
+      badges: live?.badges || author.badges,
+      roleIcon: member?.roleIcon || '',
     };
   }
 
@@ -536,8 +539,7 @@
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
-          <TagPill tag={liveAuthor(msg.author)?.showcase} />
+          <span class="msg-id"><strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong><NameExtras user={liveAuthor(msg.author)} /></span>
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

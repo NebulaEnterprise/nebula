@@ -27,9 +27,9 @@
     displayName: ui.me?.displayName || '',
     pronouns: ui.me?.pronouns || '',
     bio: ui.me?.bio || '',
-    aboutMe: ui.me?.aboutMe || '',
     shownBadges: Array.isArray(ui.me?.shownBadges) ? [...ui.me.shownBadges] : null,
     showcaseServerId: ui.me?.showcaseServerId || '',
+    showcaseBadge: ui.me?.showcaseBadge || '',
     customStatus: ui.me?.customStatus || '',
     status: ui.me?.status || 'online',
     avatarColor: ui.me?.avatarColor || '#7c6af7',
@@ -50,6 +50,12 @@
     ['sparkle', 'Sparkle'],
   ];
 
+  let aboutDraft = $state(ui.me?.aboutMe || '');
+  let aboutEditing = $state(false);
+  $effect(() => {
+    const value = ui.me?.aboutMe || '';
+    if (!aboutEditing) aboutDraft = value;
+  });
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
   const inflight = { avatarUrl: null, bannerUrl: null };
 
@@ -147,7 +153,7 @@
   async function save() {
     try {
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
-      const body = { ...form };
+      const body = { ...form, aboutMe: aboutDraft };
       for (const field of ['avatarUrl', 'bannerUrl']) {
         if (String(body[field] || '').startsWith('blob:')) body[field] = savedUrl[field] || '';
       }
@@ -225,8 +231,9 @@
             </div>
             <div class="field">
               <label>About me</label>
-              <textarea bind:value={form.aboutMe} maxlength="190" rows="4" placeholder="A note you can keep on your profile"></textarea>
+              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="A note you can keep on your profile" onfocus={() => (aboutEditing = true)} onblur={() => (aboutEditing = false)}></textarea>
             </div>
+            <button class="btn brand" style="width:auto" onclick={async () => { aboutEditing = false; try { await saveMe({ aboutMe: aboutDraft }); } catch (err) { toast(err.message); } }}>Save about me</button>
             <p class="label">Badge</p>
             {#if ownedBadges(ui.me).length}
               <div class="pick-row">
@@ -241,6 +248,17 @@
             {:else}
               <p class="hint">You do not have a badge yet.</p>
             {/if}
+            <p class="label">Showcase badge</p>
+            <div class="pick-row">
+              <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
+              {#each ownedBadges(ui.me) as id}
+                <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
+                  {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                  <span>{badgeNames[id]}</span>
+                </button>
+              {/each}
+            </div>
+            <p class="hint">This badge sits right next to your name in the member list and in chat.</p>
             <p class="label">Showcase role</p>
             <div class="pick-row">
               <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>

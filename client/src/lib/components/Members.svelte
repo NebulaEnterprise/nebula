@@ -1,7 +1,7 @@
 <script>
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import TagPill from './TagPill.svelte';
+  import NameExtras from './NameExtras.svelte';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
@@ -13,6 +13,12 @@
         nameColors: ui.me.nameColors && ui.me.nameColors.length ? ui.me.nameColors : m.nameColors,
         avatarUrl: ui.me.avatarUrl || m.avatarUrl,
         avatarColor: ui.me.avatarColor || m.avatarColor,
+        roleIcon: m.roleIcon || '',
+        showcase: ui.me.showcase || m.showcase || null,
+        showcaseBadge: ui.me.showcaseBadge || '',
+        badges: ui.me.badges || m.badges,
+        staff: ui.me.staff || m.staff,
+        developer: !!(ui.me.developer || m.developer),
       };
     }
     return m;
@@ -27,8 +33,8 @@
     <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
       <Avatar user={m} size={34} />
       <div class="meta">
-        <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><TagPill tag={shown(m).showcase} /></div>
-        {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
+        <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} /></div>
+        {#if m.customStatus}<span>{m.customStatus}</span>{/if}
       </div>
     </button>
   {/each}
@@ -38,8 +44,8 @@
       <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
         <Avatar user={m} size={34} />
         <div class="meta">
-          <div class="name-row"><strong><Name user={shown(m)} /></strong><TagPill tag={shown(m).showcase} /></div>
-          {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
+          <div class="name-row"><strong><Name user={shown(m)} /></strong><NameExtras user={shown(m)} /></div>
+          {#if m.customStatus}<span>{m.customStatus}</span>{/if}
         </div>
       </button>
     {/each}

@@ -508,7 +508,9 @@ function memberView(g, u) {
   const roles = memberRoles(g, u).slice().sort((a, b) => (b.position || 0) - (a.position || 0));
   const top = roles.find((r) => r.id !== 'everyone' && r.id !== 'owner');
   const mem = (g.members && g.members[u.id]) || {};
-  pub.roles = roles.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position || 0 }));
+  pub.roles = roles.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position || 0, icon: r.icon || '' }));
+  const iconRole = roles.find((r) => r.icon && r.id !== 'everyone' && r.id !== 'here' && r.id !== 'owner');
+  pub.roleIcon = iconRole ? iconRole.icon : '';
   pub.staff = staffKey(g, u);
   pub.roleColor = top && top.color ? top.color : '';
   pub.nick = mem.nick || '';
@@ -588,6 +590,10 @@ function slimAuthor(u) {
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
     showcase: showcaseOf(u),
+    showcaseBadge: userOwnsBadge(u, u.showcaseBadge) ? u.showcaseBadge : '',
+    badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
+    staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
+    developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
   };
 }
 
@@ -832,6 +838,14 @@ function saveProfileFile(user, slot, buf, ext) {
   return { path: rel, url: '/files/' + rel };
 }
 
+function userOwnsBadge(u, id) {
+  if (!u || !id) return false;
+  if (id === 'early') return (u.badges || []).includes('early') || signedUpForMoon(u);
+  if (id === 'staff') return !!staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u);
+  if (id === 'developer') return hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u);
+  return false;
+}
+
 function publicUser(u) {
   if (!u) return null;
   return {
@@ -860,6 +874,7 @@ function publicUser(u) {
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     shownBadges: Array.isArray(u.shownBadges) ? u.shownBadges.filter((id) => id === 'early' || id === 'staff' || id === 'developer') : null,
     showcaseServerId: u.showcaseServerId || '',
+    showcaseBadge: userOwnsBadge(u, u.showcaseBadge) ? u.showcaseBadge : '',
     showcase: showcaseOf(u),
     tagChoices: tagChoices(u),
     server: SERVER_NAME,
@@ -1604,8 +1619,17 @@ app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status,
     accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
-    shownBadges, showcaseServerId,
+    shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
+  if (showcaseServerId) {
+    const home = guilds.servers[String(showcaseServerId)];
+    if (!home || !home.members || !home.members[req.user.id] || !home.tag || !canCustomize(home)) {
+      return res.status(400).json({ error: 'You cannot showcase that server' });
+    }
+  }
+  if (showcaseBadge && !userOwnsBadge(req.user, String(showcaseBadge))) {
+    return res.status(400).json({ error: 'You do not have that badge' });
+  }
 
   if (username !== undefined) {
     const clean = normalizeUsername(username);
@@ -1649,6 +1673,7 @@ app.patch('/api/me', auth, (req, res) => {
       req.user.showcaseServerId = picked;
     }
   }
+  if (showcaseBadge !== undefined) req.user.showcaseBadge = showcaseBadge ? String(showcaseBadge) : '';
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   save(USERS_FILE, users);
@@ -2002,6 +2027,11 @@ app.patch('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   }
   if (req.body?.name != null && role.id !== 'everyone') role.name = String(req.body.name).trim().slice(0, 32) || role.name;
   if (req.body?.color != null) role.color = String(req.body.color).slice(0, 20);
+  if (req.body?.icon != null) {
+    const icon = String(req.body.icon || '');
+    if (icon && !TAG_ICONS.includes(icon)) return res.status(400).json({ error: 'Pick a role icon from the list' });
+    role.icon = icon;
+  }
   if (req.body?.permissions != null && role.id !== 'owner') role.permissions = Number(req.body.permissions) || 0;
   if (Array.isArray(req.body?.mentionBy)) {
     const ids = new Set((g.roles || []).map((r) => r.id));

@@ -360,7 +360,7 @@
       <Avatar user={ui.me} size={36} />
       <div class="who">
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-        <span>{ui.me?.customStatus || presenceLabel[1]}</span>
+        <span>{presenceLabel[1]}</span>
       </div>
     </button>
     <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={16} /></button>

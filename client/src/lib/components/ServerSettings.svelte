@@ -333,7 +333,17 @@
       {:else if ui.settingsPage === 'roles'}
         {#each s.roles || [] as r}
           <div class="role-card">
-            <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.name}</strong></div>
+            <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.icon ? r.icon + ' ' : ''}{r.name}</strong></div>
+            {#if r.id !== 'everyone' && r.id !== 'here'}
+              <p class="label">Role icon</p>
+              <p class="hint">Shows next to the names of people with this role. The highest role with an icon wins.</p>
+              <div class="tag-icons">
+                <button type="button" class:on={!r.icon} onclick={() => run(() => api('/api/servers/' + ui.serverId + '/roles/' + r.id, { method: 'PATCH', body: { icon: '' } }).then(() => loadMembers()))}>None</button>
+                {#each TAG_ICONS as icon}
+                  <button type="button" class:on={r.icon === icon} onclick={() => run(() => api('/api/servers/' + ui.serverId + '/roles/' + r.id, { method: 'PATCH', body: { icon } }).then(() => loadMembers()))}>{icon}</button>
+                {/each}
+              </div>
+            {/if}
             <p class="label">Choose who can mention this role</p>
             <div class="mention-by">
               {#each (s.roles || []).filter((other) => other.id !== r.id && other.id !== 'here') as other}

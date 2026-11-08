@@ -1544,7 +1544,7 @@ async function watchAlerts() {
 export async function saveMe(body) {
   const previous = ui.me;
   const pending = { ...ui.me };
-  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor', 'showcaseServerId']) {
+  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor', 'showcaseServerId', 'showcaseBadge']) {
     if (body[key] !== undefined) pending[key] = body[key];
   }
   if (Array.isArray(body.shownBadges)) pending.shownBadges = body.shownBadges;
@@ -1561,6 +1561,8 @@ export async function saveMe(body) {
     ...previous,
     ...data.user,
     displayName: data.user?.displayName ?? body.displayName ?? previous?.displayName ?? '',
+    aboutMe: data.user?.aboutMe ?? body.aboutMe ?? previous?.aboutMe ?? '',
+    showcaseBadge: data.user?.showcaseBadge ?? body.showcaseBadge ?? previous?.showcaseBadge ?? '',
     nameEffect: data.user?.nameEffect || body.nameEffect || '',
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
   };

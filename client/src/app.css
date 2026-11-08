@@ -477,6 +477,7 @@ img { max-width: 100%; }
   .msg-tools { opacity: 1; pointer-events: auto; }
 }
 .msg-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; max-width: 100%; }
+.msg-id { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .msg-head strong { min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-head time { color: var(--faint); font-size: 12px; flex-shrink: 0; }
 .msg-content { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
@@ -710,7 +711,9 @@ img { max-width: 100%; }
 }
 .member:hover, .friend:hover { background: var(--bg-hover); }
 .name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.name-row strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.name-row strong { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.name-extras { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.role-ico { font-style: normal; font-size: 14px; line-height: 1; }
 .tag-pill {
   display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
   height: 18px; padding: 0 5px; border-radius: 4px;
