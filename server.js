@@ -91,6 +91,7 @@ function memberStamp(g) {
       Array.isArray(u.profileColors) ? u.profileColors.join(',') : '',
       u.songUrl || '',
       String(u.songStart || 0),
+      u.songAutoplay ? '1' : '',
       u.status || '',
     ].join('\t');
   });
@@ -893,6 +894,7 @@ function publicUser(u) {
     profileColors: profileShades(u.profileColors),
     songUrl: cleanSongUrl(u.songUrl),
     songStart: cleanSongStart(u.songStart),
+    songAutoplay: !!u.songAutoplay,
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
@@ -1696,7 +1698,7 @@ app.post('/api/seen', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart, songAutoplay,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -1766,6 +1768,7 @@ app.patch('/api/me', auth, (req, res) => {
     req.user.songUrl = next;
   }
   if (songStart !== undefined) req.user.songStart = cleanSongStart(songStart);
+  if (songAutoplay !== undefined) req.user.songAutoplay = !!songAutoplay;
   if (profileColors !== undefined) {
     const shades = cleanNameColors(profileColors);
     if (shades.length === 2) req.user.profileColors = shades;

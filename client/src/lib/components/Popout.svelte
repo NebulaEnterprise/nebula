@@ -8,6 +8,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
+  import { hasSong, playSong, stopSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
     const shown = ui.popout?.user;
@@ -38,6 +39,15 @@
     if (Number.isNaN(d.getTime())) return '—';
     return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   }
+
+  $effect(() => {
+    const id = u?.id;
+    const url = u?.songUrl || '';
+    const start = u?.songStart || 0;
+    if (!id || !u?.songAutoplay || !hasSong(url)) return;
+    playSong(url, start);
+    return () => stopSong(url, start);
+  });
 
   async function act(kind) {
     try {

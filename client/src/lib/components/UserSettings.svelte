@@ -56,6 +56,7 @@
     profileColors: Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? [...ui.me.profileColors] : ['#7c3aed', '#c084fc'],
     songUrl: ui.me?.songUrl || '',
     songStart: ui.me?.songStart ? formatStamp(ui.me.songStart) : '',
+    songAutoplay: !!ui.me?.songAutoplay,
   });
 
   const profileStyles = [
@@ -309,6 +310,11 @@
               <label>Start at</label>
               <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
               <p class="hint">Where playback starts, like 1:30.</p>
+            </div>
+            <div class="field">
+              <label>Autoplay</label>
+              <button type="button" class="btn" class:brand={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'On' : 'Off'}</button>
+              <p class="hint">Starts the song when this profile is opened.</p>
             </div>
             <div class="field">
               <label>Bio</label>

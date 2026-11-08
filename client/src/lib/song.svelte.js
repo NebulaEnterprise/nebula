@@ -221,20 +221,42 @@ async function playSpotify(uri, startAt, key) {
   spotifyController.play();
 }
 
-export function toggleSong(url, start) {
+function beginSong(url, start) {
   const song = parseSong(url);
-  if (!song) return;
+  if (!song) return '';
   const startAt = Number(start) > 0 ? Math.min(Number(start), 21600) : (song.start || 0);
   const key = songKey(song, startAt);
-  if (player.key === key && player.playing) {
-    active = null;
-    pauseAll();
-    return;
-  }
+  if (player.key === key && player.playing) return key;
   pauseAll();
   active = { song, startAt, key };
   player.key = key;
   player.playing = true;
   if (song.kind === 'youtube') playYouTube(song.id, startAt, key);
   else playSpotify(song.uri, startAt, key);
+  return key;
+}
+
+export function playSong(url, start) {
+  beginSong(url, start);
+}
+
+export function stopSong(url, start) {
+  const song = parseSong(url);
+  if (!song) return;
+  const startAt = Number(start) > 0 ? Math.min(Number(start), 21600) : (song.start || 0);
+  if (player.key !== songKey(song, startAt)) return;
+  active = null;
+  pauseAll();
+}
+
+export function toggleSong(url, start) {
+  const song = parseSong(url);
+  if (!song) return;
+  const startAt = Number(start) > 0 ? Math.min(Number(start), 21600) : (song.start || 0);
+  if (player.key === songKey(song, startAt) && player.playing) {
+    active = null;
+    pauseAll();
+    return;
+  }
+  beginSong(url, start);
 }
