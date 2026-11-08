@@ -71,6 +71,8 @@ let audio = null;
 let active = null;
 let paintToken = 0;
 let releaseTimer = 0;
+let playingKey = '';
+let pausedKey = '';
 
 function ensureAudio() {
   if (audio) return audio;
@@ -120,6 +122,8 @@ function beginSong(file, start, fromStart = false) {
   if (!fromStart && player.key === key && player.playing) return key;
   const el = ensureAudio();
   active = { file, startAt, key };
+  playingKey = key;
+  pausedKey = '';
   player.key = key;
   player.playing = true;
   el.loop = startAt === 0;
@@ -150,11 +154,11 @@ export function playSongAfterPaint(file, start) {
   clearTimeout(releaseTimer);
   releaseTimer = 0;
   const key = songKey(file, startAtOf(start));
-  if (player.key === key && player.playing) return;
+  if (pausedKey === key || playingKey === key) return;
   const token = ++paintToken;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      if (token !== paintToken) return;
+      if (token !== paintToken || pausedKey === key) return;
       beginSong(file, start, true);
     });
   });
@@ -171,11 +175,17 @@ export function releaseSong(file, start) {
 export function stopSong(file, start) {
   if (!hasSong(file)) return;
   paintToken += 1;
-  if (player.key !== songKey(file, startAtOf(start))) return;
+  const key = songKey(file, startAtOf(start));
+  if (playingKey === key) playingKey = '';
+  if (pausedKey === key) pausedKey = '';
+  const mine = player.key === key || (audio && audio.dataset.file === file);
+  if (!mine) return;
   active = null;
-  player.playing = false;
-  player.key = '';
-  if (audio) {
+  if (player.key === key) {
+    player.playing = false;
+    player.key = '';
+  }
+  if (audio && audio.dataset.file === file) {
     audio.pause();
     try {
       if (audio.readyState >= 1) audio.currentTime = startAtOf(start);
@@ -186,7 +196,10 @@ export function stopSong(file, start) {
 export function toggleSong(file, start) {
   if (!hasSong(file)) return;
   const key = songKey(file, startAtOf(start));
-  if (player.key === key && player.playing) {
+  if ((player.key === key && player.playing) || playingKey === key) {
+    paintToken += 1;
+    pausedKey = key;
+    playingKey = '';
     active = null;
     player.playing = false;
     player.key = '';
