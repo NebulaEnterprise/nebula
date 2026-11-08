@@ -277,30 +277,42 @@ img { max-width: 100%; }
 .skel { display: flex; align-items: center; gap: 12px; }
 .skel span { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.06); flex-shrink: 0; }
 .skel i { display: block; height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); }
-.msg { position: relative; display: flex; flex-wrap: wrap; column-gap: 12px; row-gap: 0; align-items: flex-start; max-width: 100%; padding: 8px 12px; border-radius: 12px; transition: background-color var(--fast) var(--ease); }
+.msg {
+  position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr);
+  column-gap: 12px; row-gap: 2px; align-items: start; max-width: 100%;
+  padding: 2px 12px 2px 16px; border-radius: 4px; transition: background-color var(--fast) var(--ease);
+}
 .msg:hover { background: rgba(255,255,255,0.025); }
 .msg.flash { background: rgba(250, 168, 26, 0.16); }
-.msg-av { padding: 0; border-radius: 50%; line-height: 0; }
+.msg-av { grid-column: 1; grid-row: 1; padding: 2px 0 0; border-radius: 50%; line-height: 0; }
+.msg-body { grid-column: 2; grid-row: 1; min-width: 0; padding-top: 2px; }
+.msg.has-reply .msg-av,
+.msg.has-reply .msg-body { grid-row: 2; }
 .reply-ref {
-  position: relative; flex: 0 0 100%; display: flex; align-items: center; gap: 6px;
-  min-width: 0; max-width: 100%; margin: 0 0 2px 52px; padding: 0;
-  color: var(--muted); font-size: 14px; font-weight: 500; text-align: left;
+  grid-column: 1 / -1; grid-row: 1;
+  display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px;
+  width: 100%; min-width: 0; margin: 0; padding: 0;
+  color: var(--muted); font-size: 13px; font-weight: 500; text-align: left; line-height: 1.2;
+}
+.reply-main {
+  grid-column: 2; position: relative; display: flex; align-items: center; gap: 4px;
+  min-width: 0; max-width: 100%; height: 22px;
 }
 .reply-ref .avatar { width: 16px; height: 16px; overflow: hidden; flex-shrink: 0; }
 .reply-ref strong {
-  flex-shrink: 1; min-width: 0; max-width: 40%;
-  font-size: 14px; font-weight: 600; line-height: 1.2;
+  flex: 0 1 auto; min-width: 0; max-width: 40%;
+  font-size: 13px; font-weight: 600; line-height: 22px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .reply-ref em {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--faint); font-style: normal; font-weight: 400;
+  color: var(--faint); font-style: normal; font-weight: 400; line-height: 22px;
 }
 .reply-ref:hover em { color: var(--text); }
 .reply-spine {
-  position: absolute; left: -34px; top: 8px; bottom: -12px; width: 28px;
+  position: absolute; left: -30px; top: 2px; width: 26px; height: 12px;
   border-left: 2px solid #4e5058; border-top: 2px solid #4e5058;
-  border-top-left-radius: 8px; pointer-events: none;
+  border-top-left-radius: 6px; pointer-events: none;
 }
 .msg-tools {
   position: absolute; right: 8px; top: -14px; z-index: 2;
@@ -315,7 +327,7 @@ img { max-width: 100%; }
   display: grid; place-items: center;
 }
 .msg-tools button:hover { background: var(--bg-hover); }
-.msg-body { flex: 1; min-width: 0; max-width: 100%; }
+.msg-body { min-width: 0; }
 .edited { color: var(--faint); font-size: 11px; }
 .forward-tag { margin: 0 0 4px; color: var(--faint); font-size: 12px; }
 .reacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
@@ -348,10 +360,22 @@ img { max-width: 100%; }
   margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: #111214; border-left: 3px solid var(--brand);
 }
 .compose-note p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-.reply-note { gap: 8px; }
-.reply-note .avatar { width: 16px; height: 16px; overflow: hidden; flex-shrink: 0; }
-.reply-note > div { flex: 1; min-width: 0; }
-.reply-note strong, .reply-note p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-note {
+  gap: 8px; margin: 0 0 -1px; padding: 8px 8px 8px 14px;
+  background: #101117; border: 1px solid var(--line); border-bottom: 0; border-left: 0;
+  border-radius: 14px 14px 0 0;
+}
+.reply-label {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); font-size: 14px; font-weight: 500; line-height: 22px;
+}
+.composer-wrap:has(.reply-note) .composer { border-top-left-radius: 0; border-top-right-radius: 0; }
+.reply-label .name-fx,
+.reply-ref .name-fx { display: inline; position: static; font-weight: 600; vertical-align: baseline; }
+.reply-label .name-fx.sparkle i,
+.reply-ref .name-fx.sparkle i { display: none; }
+.reply-label .name-fx.glitch,
+.reply-ref .name-fx.glitch { animation: none; text-shadow: none; }
 .forward-row {
   width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-weight: 650;
 }

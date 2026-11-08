@@ -460,10 +460,12 @@
       {#if msg.reply}
         {@const person = replyPerson(msg)}
         <button type="button" class="reply-ref" onclick={() => jumpTo(msg.reply.id)}>
-          <i class="reply-spine"></i>
-          <Avatar user={person} size={16} dot={false} />
-          <strong><Name user={person} /></strong>
-          <em>{msg.reply.preview}</em>
+          <span class="reply-main">
+            <i class="reply-spine"></i>
+            <Avatar user={person} size={16} dot={false} />
+            <strong><Name user={person} /></strong>
+            <em>{msg.reply.preview}</em>
+          </span>
         </button>
       {/if}
       <button type="button" class="msg-av" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
@@ -548,12 +550,8 @@
   {/if}
   {#if ui.reply}
     <div class="compose-note reply-note">
-      <Avatar user={ui.reply.author || { displayName: ui.reply.name }} size={16} dot={false} />
-      <div>
-        <strong>Replying to <Name user={ui.reply.author || { displayName: ui.reply.name }} /></strong>
-        <p>{ui.reply.preview}</p>
-      </div>
-      <button type="button" class="btn icon" onclick={() => (ui.reply = null)}>✕</button>
+      <span class="reply-label">Replying to <Name user={ui.reply.author || { displayName: ui.reply.name, username: ui.reply.name }} /></span>
+      <button type="button" class="btn icon" title="Cancel reply" onclick={() => (ui.reply = null)}>✕</button>
     </div>
   {/if}
   {#if ui.editing}
