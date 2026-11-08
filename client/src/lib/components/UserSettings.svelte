@@ -3,7 +3,6 @@
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
-  import ColorWheel from './ColorWheel.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
@@ -80,7 +79,6 @@
   ];
 
   let aboutDraft = $state(ui.me?.aboutMe || '');
-  let shadeSlot = $state(0);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -291,13 +289,7 @@
                   <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
                 {/each}
               </div>
-              {#if form.profileStyle !== 'solid'}
-                <div class="style-seg wheel-slots">
-                  <button type="button" class:on={shadeSlot === 0} onclick={() => (shadeSlot = 0)}>Main</button>
-                  <button type="button" class:on={shadeSlot === 1} onclick={() => (shadeSlot = 1)}>Tone</button>
-                </div>
-              {/if}
-              <ColorWheel value={form.profileColors[form.profileStyle === 'solid' ? 0 : shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(form.profileStyle === 'solid' ? 0 : shadeSlot, c)} />
+              <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
             </section>
             <div class="field">
               <label>Bio</label>
