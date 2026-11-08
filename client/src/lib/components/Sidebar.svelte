@@ -316,12 +316,11 @@
             <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
             <button type="submit" title="Save status">✓</button>
           </form>
-        {:else if ui.me?.customStatus}
-          <div class="account-bubble">
-            <span>{ui.me.customStatus}</span>
-            <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
-            <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
-          </div>
+        {:else}
+          <button type="button" class="bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
+            <i><Plus size={13} /></i>
+            <span>Just finished reading...</span>
+          </button>
         {/if}
       </div>
       <div class="account-body">
