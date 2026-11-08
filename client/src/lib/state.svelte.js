@@ -661,7 +661,7 @@ export async function sendFiles(list) {
   const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
   const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
-  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file), progress: 4 }));
+  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file) }));
   ui.messages = [...ui.messages, {
     id: tempId,
     pending: true,
@@ -679,24 +679,16 @@ export async function sendFiles(list) {
       const gif = packed.type === 'image/gif' || /\.gif$/i.test(packed.name || files[i].name || '');
       let poster = '';
       if (!gif && packed.poster) {
-        const preview = await uploadFile(packed.poster, (n) => {
-          patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(n * 0.2)) } : row) }));
-        }, packed.posterName);
+        const preview = await uploadFile(packed.poster, null, packed.posterName);
         poster = preview.url || '';
         if (poster) pinMedia(poster, packed.poster);
       }
-      const report = (n) => {
-        const span = poster ? 0.8 : 1;
-        const base = poster ? 20 : 0;
-        patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(base + n * span)) } : row) }));
-      };
-      const data = gif ? await uploadGif(files[i], report) : await uploadFile(packed.body, report, packed.name);
+      const data = gif ? await uploadGif(files[i]) : await uploadFile(packed.body, null, packed.name);
       if (!data.url) throw new Error('The file did not upload');
       pinMedia(data.url, gif ? files[i] : packed.body);
       const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file' };
       if (poster) row.poster = poster;
       saved.push(row);
-      patchLocal(tempId, (msg) => ({ files: msg.files.map((item, index) => index === i ? { ...item, progress: 100 } : item) }));
     }
     await postMessage({ content, files: saved, reply }, target);
     dismissLocal(tempId);
