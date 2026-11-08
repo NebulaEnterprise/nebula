@@ -190,7 +190,14 @@ function rememberDm(id, at) {
 
 export async function loadDms() {
   try {
-    const data = await api('/api/dms');
+    const seen = seenMap();
+    const seeded = localStorage.getItem('nebula-dm-baseline') === '1';
+    let data;
+    try {
+      data = await api('/api/dms', { method: 'POST', body: { seen, seeded } });
+    } catch (_) {
+      data = await api('/api/dms');
+    }
     const next = data.dms || [];
     ui.dms = next;
     const map = seenMap();
@@ -232,10 +239,21 @@ export async function loadDms() {
         heardDm[id] = stamp;
         continue;
       }
-      const freshId = row.lastId && map[key] !== row.lastId;
-      const freshAt = row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0);
-      if (freshId || freshAt) {
-        unread[id] = serverDmNotes[id] && serverDmNotes[id].unread ? serverDmNotes[id] : { unread: 1 };
+      const reported = row.unread != null && row.unread !== '';
+      const serverCount = reported
+        ? Number(row.unread) || 0
+        : Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
+      let count = serverCount;
+      if (!reported && !serverCount && !own) {
+        const freshId = row.lastId && map[key] && map[key] !== row.lastId;
+        const freshAt = row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0);
+        if (freshId || freshAt) {
+          const prev = (ui.activity.dms[id] && ui.activity.dms[id].unread) || 0;
+          count = heardDm[id] && heardDm[id] !== stamp ? prev + 1 : Math.max(prev, 1);
+        }
+      }
+      if (count > 0) {
+        unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp) ping = true;
       }
       heardDm[id] = stamp;

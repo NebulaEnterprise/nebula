@@ -104,14 +104,14 @@ img { max-width: 100%; }
 .dm-rail, .dm-rail:hover { width: 40px; height: 40px; border-radius: 50%; padding: 0; overflow: visible; background: transparent; }
 .dm-rail .avatar, .dm-rail:hover .avatar { width: 40px; height: 40px; border-radius: 50%; }
 .dm-rail .badge {
-  left: auto; top: auto; right: -6px; bottom: -4px; z-index: 3;
+  left: auto; top: auto; right: -3px; bottom: -2px; z-index: 3;
   display: flex; align-items: center; justify-content: center;
-  box-sizing: border-box; width: 22px; height: 22px; min-width: 22px; padding: 0;
-  border-radius: 50%; background: #f23f43; color: #fff;
+  box-sizing: border-box; width: max-content; height: 16px; min-width: 16px; padding: 0 4px;
+  border-radius: 999px; background: #f23f43; color: #fff;
   font-family: ui-sans-serif, system-ui, sans-serif;
-  font-size: 12px; font-weight: 700; font-style: normal; line-height: 1;
+  font-size: 10px; font-weight: 700; font-style: normal; line-height: 1;
   letter-spacing: 0; text-align: center;
-  box-shadow: 0 0 0 3px var(--bg-rail);
+  box-shadow: 0 0 0 2px var(--bg-rail);
 }
 .sep { width: 32px; height: 2px; border-radius: 2px; background: var(--line); }
 .rail-add { color: var(--ok); background: rgba(62, 207, 142, 0.1); }

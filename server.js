@@ -1427,28 +1427,9 @@ app.post('/api/activity', auth, (req, res) => {
     }
     if (unread || mentions) servers[g.id] = { unread, mentions };
   }
-  const dms = {};
-  for (const thread of Object.values(dmThreads)) {
-    if (!thread || (String(thread.a) !== String(req.user.id) && String(thread.b) !== String(req.user.id))) continue;
-    const other = String(thread.a) === String(req.user.id) ? thread.b : thread.a;
-    const list = messages['dm:' + dmKey(req.user.id, other)] || [];
-    const cursor = String(seen['dm:' + other] || '');
-    let start = list.length;
-    if (cursor) {
-      const idx = list.findIndex((msg) => msg.id === cursor);
-      start = idx === -1 ? 0 : idx + 1;
-    } else if (seeded) {
-      start = 0;
-    }
-    let unread = 0;
-    for (let i = start; i < list.length; i++) {
-      if (list[i] && list[i].authorId !== req.user.id) unread++;
-    }
-    if (unread) dms[other] = { unread };
-    const last = list[list.length - 1];
-    if (last) heads['dm:' + other] = last.id;
-  }
-  res.json({ ok: true, servers, channels, dms, heads });
+  const dmNotes = dmInbox(req.user.id, seen, seeded);
+  Object.assign(heads, dmNotes.heads);
+  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads });
 });
 
 const gifCache = new Map();
@@ -2106,6 +2087,42 @@ function sharesServer(a, b) {
   return Object.values(guilds.servers).some((g) => g && g.members && g.members[a] && g.members[b]);
 }
 
+function dmInbox(userId, seen, seeded) {
+  const others = new Set();
+  for (const thread of Object.values(dmThreads)) {
+    if (!thread || (String(thread.a) !== String(userId) && String(thread.b) !== String(userId))) continue;
+    others.add(String(String(thread.a) === String(userId) ? thread.b : thread.a));
+  }
+  for (const roomId of Object.keys(messages)) {
+    if (!String(roomId).startsWith('dm:')) continue;
+    const ids = roomId.slice(3).split(':');
+    if (!ids.map(String).includes(String(userId))) continue;
+    const other = ids.find((id) => String(id) !== String(userId));
+    if (other) others.add(String(other));
+  }
+  const counts = {};
+  const heads = {};
+  for (const other of others) {
+    const list = messages['dm:' + dmKey(userId, other)] || [];
+    const cursor = String((seen && seen['dm:' + other]) || '');
+    let start = list.length;
+    if (cursor) {
+      const idx = list.findIndex((msg) => msg && msg.id === cursor);
+      start = idx === -1 ? 0 : idx + 1;
+    } else if (seeded) {
+      start = 0;
+    }
+    let unread = 0;
+    for (let i = start; i < list.length; i++) {
+      if (list[i] && String(list[i].authorId) !== String(userId)) unread++;
+    }
+    if (unread) counts[other] = { unread };
+    const last = list[list.length - 1];
+    if (last) heads['dm:' + other] = last.id;
+  }
+  return { counts, heads };
+}
+
 function dmPreview(content) {
   return String(content || '')
     .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
@@ -2115,7 +2132,10 @@ function dmPreview(content) {
     .slice(0, 80);
 }
 
-app.get('/api/dms', auth, (req, res) => {
+function sendDmList(req, res) {
+  const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  const seeded = !!(req.body && req.body.seeded);
+  const notes = dmInbox(req.user.id, seen, seeded).counts;
   for (const roomId of Object.keys(messages)) {
     if (!String(roomId).startsWith('dm:')) continue;
     const ids = roomId.slice(3).split(':');
@@ -2134,6 +2154,7 @@ app.get('/api/dms', auth, (req, res) => {
       const otherId = String(t.a) === String(req.user.id) ? t.b : t.a;
       const room = messages['dm:' + t.id] || [];
       const last = room[room.length - 1];
+      const note = notes[String(otherId)];
       return {
         id: t.id,
         other: publicUser(users[otherId]),
@@ -2141,11 +2162,15 @@ app.get('/api/dms', auth, (req, res) => {
         preview: last ? dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '') : '',
         lastId: last ? last.id : '',
         lastFrom: last ? last.authorId : '',
+        unread: note ? note.unread : 0,
       };
     })
     .filter((t) => t.other);
   res.json({ ok: true, dms: list });
-});
+}
+
+app.get('/api/dms', auth, sendDmList);
+app.post('/api/dms', auth, sendDmList);
 
 app.get('/api/dms/:userId/messages', auth, (req, res) => {
   const otherId = req.params.userId;
