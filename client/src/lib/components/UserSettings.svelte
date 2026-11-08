@@ -1,5 +1,5 @@
 <script>
-  import { X } from '@lucide/svelte';
+  import { X, User, AtSign, Smile, Sparkles, Clock, Circle } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -63,6 +63,25 @@
   ];
 
   let aboutDraft = $state(ui.me?.aboutMe || '');
+  const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
+  const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
+
+  function lastSeenLabel(value) {
+    const t = Number(value);
+    if (!t) return '';
+    const d = new Date(t);
+    if (Number.isNaN(d.getTime())) return '';
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return 'Today at ' + time;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + time;
+  }
+
+  function joinedLabel(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
   const inflight = { avatarUrl: null, bannerUrl: null };
 
@@ -150,6 +169,7 @@
   }
 
   const showcaseChoice = $derived((ui.me?.tagChoices || []).find((choice) => choice.serverId === form.showcaseServerId) || null);
+  const previewRoles = $derived((ui.members.find((m) => m.id === ui.me?.id)?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
 
   function setNameColor(index, value) {
     const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
@@ -305,24 +325,55 @@
         </div>
         <div>
           <p class="label">Preview</p>
-          <div class="preview-card">
-            <div class="preview-banner">
+          <div class="preview-card profile-card" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
+            <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
-            {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}
-            <div class="preview-av" style="background:{form.avatarColor}">
-              {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
-            </div>
-            <div class="pad">
-              <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
-              <div class="handle">
-                <span>@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</span>
-                {#if badgeOn('early')}<MoonBadge />{/if}
-                {#if badgeOn('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
-                {#if badgeOn('developer')}<DevBadge on={true} />{/if}
-                <TagPill tag={showcaseChoice} />
+            <div class="pop-body">
+              <div class="profile-hero">
+                <div class="profile-face">
+                  <div class="pop-av profile-av" style="background:{form.avatarColor}">
+                    {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                  </div>
+                  <i class="profile-dot" style="background:{statusColor[form.status] || statusColor.offline}"></i>
+                  {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}
+                </div>
+                <h3><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></h3>
+                <p class="handle">
+                  <span>@{form.username}</span>
+                  {#if badgeOn('early')}<MoonBadge />{/if}
+                  {#if badgeOn('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
+                  {#if badgeOn('developer')}<DevBadge on={true} />{/if}
+                </p>
+                {#if aboutDraft}<p class="profile-status">{aboutDraft}</p>{/if}
               </div>
-              {#if aboutDraft}<p class="about-copy">{aboutDraft}</p>{/if}
+              {#if previewRoles.length}
+                <div class="pop-role-list profile-roles">
+                  {#each previewRoles as r}
+                    <em class="pop-role"><i style="background:{r.color || '#99aab5'}"></i>{r.name}</em>
+                  {/each}
+                </div>
+              {/if}
+              <section class="profile-panel">
+                <div class="profile-row"><span><User size={14} /> Display name</span><strong>{form.displayName || form.username}</strong></div>
+                <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{form.username}</strong></div>
+                <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
+                <div class="profile-row"><span><Sparkles size={14} /> Custom status</span><strong>{form.customStatus || '—'}</strong></div>
+              </section>
+              <section class="profile-panel">
+                <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{ui.me?.lastSeen ? lastSeenLabel(ui.me.lastSeen) : (ui.me?.hideLastSeen ? 'Hidden' : '—')}</strong></div>
+                <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[form.status] || statusColor.offline}"></i>{statusName[form.status] || 'Offline'}</strong></div>
+              </section>
+              <div class="pop-meta">
+                <div>
+                  <span>Member since</span>
+                  <strong>{joinedLabel(ui.me?.createdAt)}</strong>
+                </div>
+                <div>
+                  <span>User id</span>
+                  <strong>{ui.me?.uid != null ? `#${ui.me.uid}` : '—'}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
