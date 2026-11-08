@@ -974,16 +974,14 @@ img { max-width: 100%; }
   font-size: 13px; font-weight: 650;
 }
 .style-seg button.on { background: #2a2c38; color: #fff; }
-.shade-anchor { position: relative; }
 .rgb-head { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; }
-.wheel-back { position: fixed; inset: 0; z-index: 40; background: transparent; }
+.wheel-back { position: fixed; inset: 0; z-index: 70; background: transparent; }
 .wheel-pop {
-  position: absolute; z-index: 41; left: 0; top: calc(100% + 6px);
-  padding: 10px; border-radius: 14px; background: #1c1d26;
+  position: fixed; z-index: 71;
+  padding: 12px; border-radius: 14px; background: #1c1d26;
   border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
-.wheel-pop .picker { margin: 0; gap: 10px; }
-.wheel-pop .wheel { --wheel: 132px; }
+.wheel-pop .picker { margin: 0; }
 .rgb-dot {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 10px 3px 3px; border-radius: 999px;
