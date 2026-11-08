@@ -2932,6 +2932,7 @@ app.post('/api/friends/request', auth, (req, res) => {
     if (!me.friends.includes(target.id)) me.friends.push(target.id);
     if (!them.friends.includes(req.user.id)) them.friends.push(req.user.id);
     save(FRIENDS_FILE, friendGraph);
+    touchAlerts();
     return res.json({ ok: true, status: 'accepted', user: publicUser(target) });
   }
 
@@ -2944,6 +2945,7 @@ app.post('/api/friends/request', auth, (req, res) => {
   friendGraph[mid] = me;
   friendGraph[tid] = them;
   save(FRIENDS_FILE, friendGraph);
+  touchAlerts();
   res.json({ ok: true, status: 'pending', user: publicUser(target) });
 });
 
@@ -2961,6 +2963,7 @@ app.post('/api/friends/accept', auth, (req, res) => {
   if (!me.friends.map(String).includes(fromId)) me.friends.push(fromId);
   if (!them.friends.map(String).includes(String(req.user.id))) them.friends.push(req.user.id);
   save(FRIENDS_FILE, friendGraph);
+  touchAlerts();
   res.json({ ok: true, user: publicUser(users[fromId]) });
 });
 
@@ -2975,6 +2978,7 @@ app.post('/api/friends/decline', auth, (req, res) => {
   me.incoming = me.incoming.filter((id) => id !== fromId);
   them.outgoing = (them.outgoing || []).map(String).filter((id) => id !== String(req.user.id));
   save(FRIENDS_FILE, friendGraph);
+  touchAlerts();
   res.json({ ok: true });
 });
 
@@ -2986,6 +2990,7 @@ app.post('/api/friends/cancel', auth, (req, res) => {
   me.outgoing = (me.outgoing || []).map(String).filter((id) => id !== otherId);
   them.incoming = (them.incoming || []).map(String).filter((id) => id !== String(req.user.id));
   save(FRIENDS_FILE, friendGraph);
+  touchAlerts();
   res.json({ ok: true });
 });
 
@@ -3001,6 +3006,7 @@ app.post('/api/friends/remove', auth, (req, res) => {
   them.outgoing = them.outgoing.filter((id) => id !== req.user.id);
   them.incoming = them.incoming.filter((id) => id !== req.user.id);
   save(FRIENDS_FILE, friendGraph);
+  touchAlerts();
   res.json({ ok: true });
 });
 

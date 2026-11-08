@@ -768,7 +768,7 @@ async function watchChat() {
       await sleep(80);
       continue;
     }
-    if (Date.now() - started < 1500) await sleep(150);
+    if (Date.now() - started < 1500) await sleep(1000);
   }
 }
 
@@ -973,7 +973,7 @@ export async function loadMembers(quiet) {
       ui.badgeDefs = data.badges || {};
       adoptMe(ui.members);
       applyMemberNames(ui.members);
-      warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
+      warmMedia(ui.members.map((m) => m.avatarUrl));
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
@@ -1719,13 +1719,17 @@ function startClocks() {
   setInterval(() => {
     if (document.hidden || !localStorage.getItem('dc_token')) return;
     if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
-  }, 1000);
-  const watchInbox = () => {
-    if (!localStorage.getItem('dc_token')) return;
-    pollActivity().then(() => loadDms());
-  };
-  setInterval(watchInbox, 1000);
-  watchInbox();
+  }, 20000);
+  setInterval(() => {
+    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    if (ui.mode !== 'chat' || !ui.serverId) return;
+    import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
+  }, 15000);
+  setInterval(() => {
+    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    pollActivity();
+  }, 30000);
+  pollActivity();
   watchAlerts();
   loadPacks();
 }
@@ -1747,6 +1751,7 @@ async function watchAlerts() {
       if (changed) {
         await pollActivity();
         await loadDms();
+        await loadFriends();
       }
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;
