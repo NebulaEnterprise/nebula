@@ -309,6 +309,7 @@ export function showAddFriend() {
 }
 
 export async function openDm(user) {
+  const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
   ui.dmUser = user;
@@ -324,7 +325,10 @@ export async function openDm(user) {
   ui.reply = null;
   ui.editing = null;
   applyTheme();
-  if (!same) showLoadingChat();
+  if (!same) {
+    stashRoom(prev);
+    showCached(user && user.id ? 'dm:' + user.id : '');
+  }
   dropLive();
   await loadMessages();
 }
@@ -334,11 +338,17 @@ export async function openServer(id, opts = {}) {
     const { leaveVoice } = await import('./voice.js');
     await leaveVoice();
   }
+  const prev = currentRoom();
   const leavingRoom = ui.mode !== 'chat' || (id && id !== ui.serverId);
+  if (leavingRoom) {
+    stashRoom(prev);
+    ui.messages = [];
+    ui.typers = [];
+    ui.chatLoading = true;
+  }
   if (id) ui.serverId = id;
   ui.mode = 'chat';
   ui.dmUser = null;
-  if (leavingRoom) showLoadingChat();
   ui.menuOpen = false;
   ui.picker = '';
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
@@ -359,6 +369,7 @@ export async function openServer(id, opts = {}) {
   const current = ui.channels.find((c) => c.id === ui.channelId && c.type === 'text');
   const ch = current || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
   ui.channelId = ch ? ch.id : '';
+  if (leavingRoom) showCached(ui.channelId ? 'ch:' + ui.channelId : '');
   ui.seenMessageId = '';
   memberStamp = '';
   dropLive();
@@ -368,21 +379,46 @@ export async function openServer(id, opts = {}) {
   if (!opts.keepDialog && ui.onboarding) ui.dialog = { kind: 'onboarding' };
 }
 
-function showLoadingChat() {
-  ui.messages = [];
+const roomLogs = new Map();
+
+function currentRoom() {
+  if (ui.mode === 'dm' && ui.dmUser && ui.dmUser.id) return 'dm:' + ui.dmUser.id;
+  if (ui.mode === 'chat' && ui.channelId) return 'ch:' + ui.channelId;
+  return '';
+}
+
+function stashRoom(id) {
+  if (!id) return;
+  roomLogs.set(id, ui.messages.filter((msg) => msg && !msg.pending && !msg.failed));
+}
+
+function showCached(id) {
   ui.typers = [];
+  if (id && roomLogs.has(id)) {
+    ui.messages = roomLogs.get(id).slice();
+    ui.chatLoading = false;
+    return;
+  }
+  ui.messages = [];
   ui.chatLoading = true;
+}
+
+function rememberLog(id, list) {
+  if (!id) return;
+  roomLogs.set(id, (list || []).filter((msg) => msg && !msg.pending && !msg.failed));
 }
 
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
+  const prev = currentRoom();
+  stashRoom(prev);
   ui.channelId = ch.id;
   ui.seenMessageId = '';
   ui.picker = '';
   ui.reply = null;
   ui.editing = null;
-  showLoadingChat();
+  showCached('ch:' + ch.id);
   dropLive();
   loadMessages();
 }
@@ -553,9 +589,12 @@ export async function loadMessages(quiet, live) {
       ui.typers = ui.typers.filter((row) => row.id !== newest.author.id);
     }
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+    const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
     if (newest && newest.id) markSeen(roomKey, newest.id);
     const local = ui.messages.filter((msg) => msg && (msg.pending || msg.failed) && msg.roomKey === roomKey && String(msg.id).startsWith('local-'));
     ui.messages = local.length ? [...list, ...local] : list;
+    rememberLog(logKey, ui.messages);
+    ui.chatLoading = false;
     if (newest && newest.id) ui.seenMessageId = newest.id;
     announceFresh(list, roomKey);
     return 'changed';

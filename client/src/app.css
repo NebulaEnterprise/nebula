@@ -23,7 +23,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #app { height: 100%; margin: 0; }
+html, body, #app { height: 100%; margin: 0; overflow: hidden; }
 button, input, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; cursor: pointer; }
 img { max-width: 100%; }
@@ -88,7 +88,7 @@ img { max-width: 100%; }
   letter-spacing: 0.4em; text-align: center; font-size: 22px; font-weight: 700;
 }
 
-.shell { height: 100%; display: flex; min-width: 0; }
+.shell { height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden; }
 .rail {
   width: 76px; background: var(--bg-rail); display: flex; flex-direction: column;
   align-items: center; gap: 10px; padding: 14px 0; flex-shrink: 0;
@@ -231,7 +231,7 @@ img { max-width: 100%; }
 .menu button.danger { color: var(--danger); }
 .menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg-main); }
+.main { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg-main); }
 .top {
   height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 18px;
   border-bottom: 1px solid var(--line); flex-shrink: 0;
@@ -255,7 +255,7 @@ img { max-width: 100%; }
   display: inline-grid; place-items: center; flex-shrink: 0;
 }
 .pill-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #fff; flex-shrink: 0; }
-.messages { flex: 1; overflow: auto; padding: 18px 8px 8px; }
+.messages { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 18px 8px 8px; }
 .welcome { padding: 28px 18px; }
 .welcome h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.03em; }
 .welcome p { margin: 0; color: var(--muted); }
@@ -348,7 +348,7 @@ img { max-width: 100%; }
   color: var(--muted); font-size: 13px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.composer-wrap { padding: 0 16px 16px; }
+.composer-wrap { flex-shrink: 0; padding: 0 16px 16px; }
 .name-fx.plain { color: var(--fx1, #fff); }
 .name-fx.glow { color: var(--fx1, #5ce1ff); text-shadow: 0 0 8px var(--fx1, #3ecbff), 0 0 18px var(--fx2, #1aa7ff); }
 .name-fx.gradient, .name-fx.rainbow {
