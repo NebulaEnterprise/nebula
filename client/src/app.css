@@ -272,8 +272,10 @@ img { max-width: 100%; }
   margin-top: 2px; color: #b5bac1; font-size: 14px; line-height: 18px;
 }
 .account-user { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.account-bio {
-  margin: 10px 0 0; color: #dbdee1; font-size: 14px; line-height: 1.35;
+.account-pop .bio-bubble { left: 108px; top: 58px; max-width: 180px; }
+.account-pop .account-status-edit, .account-pop .account-bubble { position: absolute; left: 108px; top: 58px; margin: 0; }
+.about-copy {
+  margin: 8px 0 0; color: #dbdee1; font-size: 14px; line-height: 1.35;
   white-space: pre-wrap; word-break: break-word;
 }
 .account-edit, .account-row {

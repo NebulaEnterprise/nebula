@@ -43,6 +43,7 @@
             <StaffBadge rank={u.staff} />
             <DevBadge on={!!u.developer} />
           </p>
+          {#if u.aboutMe}<p class="about-copy">{u.aboutMe}</p>{/if}
         </div>
       </div>
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}

@@ -640,7 +640,9 @@ function adoptMe(members) {
   const same = displayName === (ui.me.displayName || '')
     && username === (ui.me.username || '')
     && nameEffect === (ui.me.nameEffect || '')
-    && (mine.customStatus || '') === (ui.me.customStatus || '');
+    && (mine.customStatus || '') === (ui.me.customStatus || '')
+    && (mine.bio || '') === (ui.me.bio || '')
+    && (mine.aboutMe || '') === (ui.me.aboutMe || '');
   if (same) return;
   ui.me = {
     ...ui.me,
@@ -651,6 +653,7 @@ function adoptMe(members) {
     customStatus: mine.customStatus || '',
     pronouns: mine.pronouns ?? ui.me.pronouns,
     bio: mine.bio ?? ui.me.bio,
+    aboutMe: mine.aboutMe ?? ui.me.aboutMe,
     status: mine.status || ui.me.status,
     avatarColor: mine.avatarColor || ui.me.avatarColor,
     avatarUrl: String(ui.me.avatarUrl || '').startsWith('blob:') ? ui.me.avatarUrl : (mine.avatarUrl || ui.me.avatarUrl),
@@ -1514,7 +1517,7 @@ async function watchAlerts() {
 export async function saveMe(body) {
   const previous = ui.me;
   const pending = { ...ui.me };
-  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor']) {
+  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor']) {
     if (body[key] !== undefined) pending[key] = body[key];
   }
   if (body.nameColors) pending.nameColors = body.nameColors;

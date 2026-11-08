@@ -783,6 +783,7 @@ function publicUser(u) {
     displayName: u.displayName || u.username,
     email: u.email,
     bio: u.bio || '',
+    aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
     status: u.status || 'online',
     customStatus: u.customStatus || '',
@@ -941,7 +942,7 @@ app.post('/api/auth/verify', (req, res) => {
     displayName: entry.username,
     email: cleanEmail,
     passwordHash: entry.passwordHash,
-    bio: '', pronouns: '',
+    bio: '', aboutMe: '', pronouns: '',
     status: 'online',
     customStatus: '',
     accentColor: '#7c5cff',
@@ -1539,7 +1540,7 @@ app.get('/api/me', auth, (req, res) => {
 
 app.patch('/api/me', auth, (req, res) => {
   const {
-    username, displayName, bio, pronouns, customStatus, status,
+    username, displayName, bio, aboutMe, pronouns, customStatus, status,
     accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
   } = req.body || {};
 
@@ -1555,6 +1556,7 @@ app.patch('/api/me', auth, (req, res) => {
 
   if (displayName !== undefined) req.user.displayName = String(displayName).slice(0, 32);
   if (bio !== undefined) req.user.bio = String(bio).slice(0, 190);
+  if (aboutMe !== undefined) req.user.aboutMe = String(aboutMe).slice(0, 190);
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
   if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) req.user.status = status;

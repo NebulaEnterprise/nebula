@@ -26,6 +26,7 @@
     displayName: ui.me?.displayName || '',
     pronouns: ui.me?.pronouns || '',
     bio: ui.me?.bio || '',
+    aboutMe: ui.me?.aboutMe || '',
     customStatus: ui.me?.customStatus || '',
     status: ui.me?.status || 'online',
     avatarColor: ui.me?.avatarColor || '#7c6af7',
@@ -202,8 +203,12 @@
               </div>
             </section>
             <div class="field">
+              <label>Bio</label>
+              <textarea bind:value={form.bio} maxlength="190" rows="3" placeholder="Shows in the bubble beside your picture"></textarea>
+            </div>
+            <div class="field">
               <label>About me</label>
-              <textarea bind:value={form.bio} maxlength="190" rows="4" placeholder="Tell people a little about yourself"></textarea>
+              <textarea bind:value={form.aboutMe} maxlength="190" rows="4" placeholder="Shows under your name"></textarea>
             </div>
           {/if}
           {#if page !== 'look' && page !== 'notify'}
@@ -229,6 +234,7 @@
                 <StaffBadge rank={ui.me?.staff || ''} />
                 <DevBadge on={!!ui.me?.developer} />
               </div>
+              {#if form.aboutMe}<p class="about-copy">{form.aboutMe}</p>{/if}
             </div>
           </div>
         </div>
