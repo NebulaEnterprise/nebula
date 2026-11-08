@@ -120,6 +120,7 @@
   }
 
   function beginReply(msg) {
+    const pinned = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 140;
     ui.editing = null;
     const author = liveAuthor(msg.author);
     ui.reply = {
@@ -129,7 +130,8 @@
       author,
     };
     menu = null;
-    queueMicrotask(() => composerEl && composerEl.focus());
+    if (pinned) pinBottom();
+    queueMicrotask(() => composerEl && composerEl.focus({ preventScroll: true }));
   }
 
   function replyPerson(msg) {
@@ -386,9 +388,26 @@
   }
 
   const roomScroll = new Map();
+  let pinning = false;
+
+  function pinBottom() {
+    if (!box) return;
+    pinning = true;
+    follow = true;
+    const node = box;
+    const apply = () => {
+      node.scrollTop = node.scrollHeight;
+      follow = true;
+    };
+    queueMicrotask(apply);
+    requestAnimationFrame(() => {
+      apply();
+      pinning = false;
+    });
+  }
 
   function trackScroll() {
-    if (!box) return;
+    if (!box || pinning) return;
     follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
     if (roomKey) roomScroll.set(roomKey, { top: box.scrollTop, follow });
   }
@@ -412,11 +431,10 @@
     ui.messages.length;
     ui.messages[ui.messages.length - 1]?.id;
     ui.typers.length;
+    ui.reply;
+    ui.editing;
     if (!box || !follow) return;
-    const node = box;
-    queueMicrotask(() => {
-      node.scrollTop = node.scrollHeight;
-    });
+    pinBottom();
   });
 
   function time(iso) {
