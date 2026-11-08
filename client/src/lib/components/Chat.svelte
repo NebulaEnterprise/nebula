@@ -19,15 +19,19 @@
 
   function liveAuthor(author) {
     if (!author) return author;
-    const live = ui.members.find((m) => m.id === author.id)
-      || (ui.me?.id === author.id ? ui.me : null)
-      || (ui.dmUser?.id === author.id ? ui.dmUser : null);
+    const member = ui.members.find((m) => m.id === author.id);
     const mine = author.id === ui.me?.id ? ui.me : null;
-    const effect = mine?.nameEffect || live?.nameEffect || author.nameEffect || '';
-    const colors = mine?.nameColors?.length ? mine.nameColors : (live?.nameColors || author.nameColors || []);
-    return live
-      ? { ...author, nameEffect: effect, nameColors: colors, displayName: live.nick || live.displayName || author.displayName }
-      : { ...author, nameEffect: effect, nameColors: colors };
+    const effect = mine?.nameEffect || member?.nameEffect || author.nameEffect || '';
+    const colors = mine?.nameColors?.length ? mine.nameColors : (member?.nameColors || author.nameColors || []);
+    return {
+      ...author,
+      username: mine?.username || member?.username || author.username,
+      displayName: member?.nick || mine?.displayName || member?.displayName || author.displayName,
+      nameEffect: effect,
+      nameColors: colors,
+      avatarUrl: mine?.avatarUrl || member?.avatarUrl || author.avatarUrl,
+      avatarColor: mine?.avatarColor || member?.avatarColor || author.avatarColor,
+    };
   }
 
   function time(iso) {

@@ -242,6 +242,7 @@ export function pickChannel(ch) {
 
 let messagesBusy = false;
 let memberStamp = '';
+let profileStamp = '';
 let pulseMissing = false;
 let watchStarted = false;
 let liveCtrl = null;
@@ -288,7 +289,7 @@ async function watchChat() {
     const typing = (ui.typers || []).map((row) => row.id).sort().join(',');
     const started = Date.now();
     try {
-      await loadMessages(true, { after, typing, members: memberStamp, signal });
+      await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, signal });
     } catch (err) {
       if (err && err.name === 'AbortError') continue;
       await sleep(8000);
@@ -308,7 +309,7 @@ export async function loadMessages(quiet, live) {
     let data;
     const signal = live && live.signal;
     const wait = live
-      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&wait=1'
+      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&wait=1'
       : '';
     if (ui.mode === 'dm' && ui.dmUser) {
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
@@ -323,6 +324,10 @@ export async function loadMessages(quiet, live) {
     if (mode === 'chat' && data.members && data.members !== memberStamp) {
       memberStamp = data.members;
       loadMembers(true);
+    }
+    if (data.profiles && data.profiles !== profileStamp) {
+      profileStamp = data.profiles;
+      if (mode === 'chat') loadMembers(true);
     }
     if (data.same) return;
     ui.typers = data.typers || [];

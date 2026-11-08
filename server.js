@@ -35,6 +35,11 @@ function save(file, data) {
 let users = load(USERS_FILE, {});
 let messages = load(MESSAGES_FILE, {});
 const pulseWaiters = new Set();
+let profileRev = 1;
+function touchProfiles() {
+  profileRev += 1;
+  for (const waiter of [...pulseWaiters]) waiter.finish();
+}
 function wakePulse(roomId) {
   for (const waiter of pulseWaiters) {
     if (waiter.roomId === roomId) waiter.finish();
@@ -1173,6 +1178,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   save(USERS_FILE, users);
+  touchProfiles();
   res.json({ ok: true, user: publicUser(req.user) });
 });
 
@@ -1576,6 +1582,7 @@ function pulseSnap(req) {
         typers,
         cursor: last ? last.id : '',
         typing: typers.map((row) => row.id).sort().join(','),
+        profiles: String(profileRev),
       },
     };
   }
@@ -1594,6 +1601,7 @@ function pulseSnap(req) {
       cursor: last ? last.id : '',
       typing: typers.map((row) => row.id).sort().join(','),
       members: memberStamp(found.guild),
+      profiles: String(profileRev),
     },
   };
 }
@@ -1606,7 +1614,8 @@ app.get('/api/pulse', auth, (req, res) => {
   const after = String(req.query.after || '');
   const typing = String(req.query.typing || '');
   const members = String(req.query.members || '');
-  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members;
+  const profiles = String(req.query.profiles || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -1618,8 +1627,8 @@ app.get('/api/pulse', auth, (req, res) => {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    if (body.cursor === after && body.typing === typing && (body.members || '') === members) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '' });
+    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '' });
     }
     res.json(body);
   }

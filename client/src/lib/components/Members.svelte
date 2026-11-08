@@ -3,7 +3,17 @@
   import Name from './Name.svelte';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
-    if (m.id === ui.me?.id && ui.me) return { ...m, nameEffect: ui.me.nameEffect || m.nameEffect, nameColors: ui.me.nameColors || m.nameColors };
+    if (m.id === ui.me?.id && ui.me) {
+      return {
+        ...m,
+        username: ui.me.username || m.username,
+        displayName: ui.me.displayName || m.displayName,
+        nameEffect: ui.me.nameEffect || m.nameEffect,
+        nameColors: ui.me.nameColors || m.nameColors,
+        avatarUrl: ui.me.avatarUrl || m.avatarUrl,
+        avatarColor: ui.me.avatarColor || m.avatarColor,
+      };
+    }
     return m;
   }
   const online = $derived(ui.members.filter((m) => m.status !== 'offline'));
