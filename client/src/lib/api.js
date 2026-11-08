@@ -186,6 +186,19 @@ export function warmMedia(urls) {
   }
 }
 
+export function pinMedia(url, file) {
+  if (!url || !file) return;
+  const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
+  mediaCache.set(full, Promise.resolve(URL.createObjectURL(file)));
+  rememberMedia(url);
+  if (!('caches' in window)) return;
+  file.arrayBuffer().then((buf) => {
+    caches.open(MEDIA_STORE).then((store) => store.put(full, new Response(buf, {
+      headers: { 'Content-Type': file.type || 'image/gif' },
+    }))).catch(() => {});
+  }).catch(() => {});
+}
+
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
   if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);

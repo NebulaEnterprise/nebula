@@ -6,8 +6,7 @@
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
-  import { api, resolveMedia } from '../api.js';
-  import { fileToDataUrl } from '../image.js';
+  import { api, pinMedia } from '../api.js';
 
   let page = $state('profile');
   let form = $state({
@@ -35,36 +34,59 @@
   ];
 
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
+  const inflight = { avatarUrl: null, bannerUrl: null };
+
+  function paintPicture(field, url) {
+    if (ui.me) ui.me = { ...ui.me, [field]: url };
+    ui.members = ui.members.map((m) => (m.id === ui.me?.id ? { ...m, [field]: url } : m));
+    if (ui.popout?.user?.id === ui.me?.id) {
+      ui.popout = { ...ui.popout, user: { ...ui.popout.user, [field]: url } };
+    }
+  }
 
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
+    const label = kind === 'banner' ? 'Banner' : 'Profile picture';
     if (!file) return;
-    const preview = URL.createObjectURL(file);
     const previous = String(form[field] || '');
-    form[field] = preview;
-    try {
-      const data = await api('/api/upload', {
+    form[field] = URL.createObjectURL(file);
+    const job = (async () => {
+      const data = await api('/api/upload?slot=' + kind, {
         method: 'POST',
         body: file,
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
       });
       if (!data.url) throw new Error('The picture did not save');
-      savedUrl[field] = data.url;
-      const shown = await resolveMedia(data.url);
-      if (shown && shown.startsWith('blob:')) form[field] = data.url;
-    } catch (err) {
-      savedUrl[field] = '';
-      if (kind === 'avatar') {
-        try { form.avatarUrl = await fileToDataUrl(file, { original: true }); }
-        catch { form.avatarUrl = previous.startsWith('blob:') ? '' : previous; }
-      } else {
-        form.bannerUrl = previous.startsWith('blob:') ? '' : previous;
-        URL.revokeObjectURL(preview);
+      pinMedia(data.url, file);
+      if (!data.user || data.user[field] !== data.url) {
+        await api('/api/me', { method: 'PATCH', body: { [field]: data.url } });
       }
+      savedUrl[field] = data.url;
+      form[field] = data.url;
+      paintPicture(field, data.url);
+      toast(label + ' added');
+    })().catch((err) => {
+      savedUrl[field] = '';
+      form[field] = previous.startsWith('blob:') ? '' : previous;
       toast(err.message || 'Could not upload that picture');
+    });
+    inflight[field] = job;
+    try {
+      await job;
     } finally {
+      if (inflight[field] === job) inflight[field] = null;
       if (input) input.value = '';
     }
+  }
+
+  async function clearPicture(kind) {
+    const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
+    form[field] = '';
+    savedUrl[field] = '';
+    paintPicture(field, '');
+    try {
+      await api('/api/me', { method: 'PATCH', body: { [field]: '' } });
+    } catch (err) { toast(err.message); }
   }
 
   function setNameColor(index, value) {
@@ -75,15 +97,10 @@
 
   async function save() {
     try {
+      await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
       const body = { ...form };
       for (const field of ['avatarUrl', 'bannerUrl']) {
-        if (String(body[field] || '').startsWith('blob:')) {
-          if (!savedUrl[field]) {
-            toast('That picture is still uploading. Hit save again in a second.');
-            return;
-          }
-          body[field] = savedUrl[field];
-        }
+        if (String(body[field] || '').startsWith('blob:')) body[field] = savedUrl[field] || '';
       }
       await saveMe(body);
     } catch (err) { toast(err.message); }
@@ -126,7 +143,7 @@
                     <label class="btn brand sm look-btn">Upload picture
                       <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
                     </label>
-                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => (form.avatarUrl = '')}>Remove</button>{/if}
+                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
                   </div>
                 </div>
               </div>
@@ -145,7 +162,7 @@
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
                 </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; savedUrl.bannerUrl = ''; }}>Remove</button>{/if}
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
               </div>
             </section>
           {:else}

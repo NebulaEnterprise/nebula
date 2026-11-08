@@ -1071,8 +1071,15 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
   const name = uuidv4() + ext;
+  const url = '/uploads/' + name;
   fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
-  res.json({ ok: true, url: '/uploads/' + name });
+  const slot = String(req.query.slot || '');
+  if (slot === 'avatar' || slot === 'banner') {
+    req.user[slot === 'avatar' ? 'avatarUrl' : 'bannerUrl'] = url;
+    save(USERS_FILE, users);
+    return res.json({ ok: true, url, user: publicUser(req.user) });
+  }
+  res.json({ ok: true, url });
 });
 
 app.use('/uploads', (req, res, next) => {
