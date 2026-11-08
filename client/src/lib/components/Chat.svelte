@@ -4,9 +4,9 @@
   import Name from './Name.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
+  import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur } from '../state.svelte.js';
   import { formatContent } from '../format.js';
-  import { fileUrl } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
@@ -210,11 +210,7 @@
         {#if msg.files?.length}
           <div class="msg-files">
             {#each msg.files as file}
-              {#if file.kind === 'image'}
-                <a href={fileUrl(file.url)} target="_blank" rel="noreferrer"><img class="file-img" src={fileUrl(file.url)} alt={file.name} /></a>
-              {:else}
-                <a class="file-chip" href={fileUrl(file.url)} target="_blank" rel="noreferrer">{file.name || 'File'}</a>
-              {/if}
+              <Attachment file={file} />
             {/each}
           </div>
         {/if}
@@ -272,7 +268,7 @@
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
-    <input bind:this={filePick} class="file-input" type="file" multiple onchange={onFiles} />
+    <input bind:this={filePick} class="file-input" type="file" accept="image/*,video/*" multiple onchange={onFiles} />
   </form>
   {#if pollOpen}
     <div class="poll-overlay" role="presentation" onclick={() => (pollOpen = false)}>

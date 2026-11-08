@@ -1,4 +1,4 @@
-import { api, warmMedia } from './api.js';
+import { api, pinMedia, warmMedia } from './api.js';
 import { PERM } from './format.js';
 
 export const ui = $state({
@@ -618,6 +618,8 @@ export async function sendFiles(list) {
         body: file,
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
       });
+      if (!data.url) throw new Error('The file did not upload');
+      pinMedia(data.url, file);
       saved.push({ url: data.url, name: data.name || file.name || 'file' });
     }
     const content = ui.composer.trim();

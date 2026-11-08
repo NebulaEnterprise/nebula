@@ -426,8 +426,9 @@ function readFiles(body) {
     const url = String(row && row.url || '');
     if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(url)) continue;
     const name = String(row && row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
-    const image = /\.(png|jpe?g|gif|webp)$/i.test(url);
-    files.push({ url, name, kind: image ? 'image' : 'file' });
+    const image = /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(url);
+    const video = /\.(mp4|webm|mov|m4v|ogv|ogg)$/i.test(url);
+    files.push({ url, name, kind: image ? 'image' : video ? 'video' : 'file' });
   }
   return files;
 }
@@ -639,7 +640,10 @@ const FRONTEND_DIR = resolveFrontendDir();
 const app = express();
 app.set('etag', false);
 app.use(cors({ maxAge: 7200 }));
-app.use(express.json({ limit: '512mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/upload') return next();
+  return express.json({ limit: '512mb' })(req, res, next);
+});
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
@@ -1206,7 +1210,17 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
     if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: 'Choose a file' });
     if (body.length > 25 * 1024 * 1024) return res.status(413).json({ error: 'Files can be up to 25 MB' });
     const safe = String(req.query.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
-    const ext = (path.extname(safe).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
+    let ext = (path.extname(safe).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
+    if (!ext) {
+      const type = String(req.headers['content-type'] || '').toLowerCase();
+      if (type.includes('png')) ext = '.png';
+      else if (type.includes('jpeg') || type.includes('jpg')) ext = '.jpg';
+      else if (type.includes('gif')) ext = '.gif';
+      else if (type.includes('webp')) ext = '.webp';
+      else if (type.includes('mp4')) ext = '.mp4';
+      else if (type.includes('webm')) ext = '.webm';
+      else if (type.includes('quicktime')) ext = '.mov';
+    }
     const blocked = new Set(['.exe', '.bat', '.cmd', '.js', '.mjs', '.html', '.htm', '.svg', '.sh', '.msi']);
     if (blocked.has(ext)) return res.status(400).json({ error: 'That file type is blocked' });
     const stored = uuidv4() + ext;
