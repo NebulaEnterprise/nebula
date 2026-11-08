@@ -408,6 +408,9 @@ img { max-width: 100%; }
   background: #111214; border: 1px solid var(--line); border-radius: 14px;
   box-shadow: var(--shadow); display: flex; flex-direction: column; max-height: 420px; overflow: hidden;
 }
+.picker.picker-pop { position: relative; right: auto; bottom: auto; left: auto; width: min(408px, 86vw); max-height: min(480px, 70vh); }
+.picker.picker-pop .emoji-grid { max-height: 400px; }
+.react-picker { position: fixed; z-index: 45; }
 .picker-tabs { display: flex; gap: 6px; padding: 10px 10px 0; }
 .picker-tabs button { padding: 6px 12px; border-radius: 8px; color: var(--muted); font-weight: 700; font-size: 13px; }
 .picker-tabs button.on { background: var(--bg-active); color: white; }

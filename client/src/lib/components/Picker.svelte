@@ -1,7 +1,11 @@
 <script>
   import { ui, sendSticker, sendGif, insertEmoji, loadPacks } from '../state.svelte.js';
-  import { api } from '../api.js';
+  import { api, fileUrl } from '../api.js';
   import { EMOJI, NAMED } from '../emoji.js';
+
+  let { onpick = null } = $props();
+  const reacting = $derived(typeof onpick === 'function');
+  const frequent = ['💯', '👍', '👎', '❤️', '☝️', '👀', '😩', '😂', '✅', '❌'];
 
   let tab = $state(ui.picker || 'emoji');
   $effect(() => {
@@ -25,6 +29,25 @@
     }
     return hits.length ? hits : (EMOJI.find((row) => row[0] === cat) || EMOJI[0])[1].filter((glyph) => glyph.includes(q));
   });
+
+  const serverEmoji = $derived.by(() => {
+    const rows = [];
+    const seen = new Set();
+    const add = (pack, item) => {
+      const name = String(item?.name || '');
+      if (!name || seen.has(name)) return;
+      seen.add(name);
+      rows.push({ pack, name, url: item.url });
+    };
+    for (const pack of emojiPacks) for (const item of pack.emoji || []) add(pack.name, item);
+    for (const item of ui.emoji || []) add(ui.serverMeta?.name || 'This server', item);
+    return rows;
+  });
+
+  function choose(token) {
+    if (reacting) onpick(token);
+    else insertEmoji(token);
+  }
 
   $effect(() => {
     loadPacks();
@@ -50,39 +73,71 @@
   });
 </script>
 
-<div class="picker">
+<div class="picker" class:picker-pop={reacting}>
+  {#if !reacting}
   <div class="picker-tabs">
     <button type="button" class:on={tab === 'gif'} onclick={() => (tab = 'gif')}>GIFs</button>
     <button type="button" class:on={tab === 'sticker'} onclick={() => (tab = 'sticker')}>Stickers</button>
     <button type="button" class:on={tab === 'emoji'} onclick={() => (tab = 'emoji')}>Emoji</button>
   </div>
+  {/if}
 
-  {#if tab === 'emoji'}
+  {#if reacting || tab === 'emoji'}
     <div class="picker-search">
-      <input bind:value={query} placeholder="Find an emoji" />
+      <input bind:value={query} placeholder={reacting ? 'Find the perfect reaction' : 'Find an emoji'} />
     </div>
     <div class="picker-grid emoji-grid">
-      {#if cat === 'Servers'}
+      {#if reacting && query.trim()}
+        {#each people as glyph}
+          <button type="button" onclick={() => choose(glyph)}>{glyph}</button>
+        {/each}
+        {#each serverEmoji.filter((item) => item.name.toLowerCase().includes(query.trim().toLowerCase().replaceAll(':', ''))) as item}
+          <button type="button" title={':' + item.name + ':'} onclick={() => choose(':' + item.name + ':')}>
+            <img src={fileUrl(item.url)} alt={item.name} />
+          </button>
+        {/each}
+      {:else if reacting}
+        <p class="picker-label">Frequently Used</p>
+        {#each frequent as glyph}
+          <button type="button" onclick={() => choose(glyph)}>{glyph}</button>
+        {/each}
+        {#each serverEmoji as item, index}
+          {#if index === 0 || item.pack !== serverEmoji[index - 1].pack}
+            <p class="picker-label">{item.pack}</p>
+          {/if}
+          <button type="button" title={':' + item.name + ':'} onclick={() => choose(':' + item.name + ':')}>
+            <img src={fileUrl(item.url)} alt={item.name} />
+          </button>
+        {/each}
+        {#each EMOJI as row}
+          <p class="picker-label">{row[0]}</p>
+          {#each row[1] as glyph}
+            <button type="button" onclick={() => choose(glyph)}>{glyph}</button>
+          {/each}
+        {/each}
+      {:else if cat === 'Servers'}
         {#each emojiPacks as pack}
           <p class="picker-label">{pack.name}</p>
           {#each pack.emoji as item}
-            <button type="button" title={':' + item.name + ':'} onclick={() => insertEmoji(':' + item.name + ':')}>
-              <img src={item.url} alt={item.name} />
+            <button type="button" title={':' + item.name + ':'} onclick={() => choose(':' + item.name + ':')}>
+              <img src={fileUrl(item.url)} alt={item.name} />
             </button>
           {/each}
         {/each}
       {:else}
         {#each people as glyph}
-          <button type="button" onclick={() => insertEmoji(glyph)}>{glyph}</button>
+          <button type="button" onclick={() => choose(glyph)}>{glyph}</button>
         {/each}
       {/if}
     </div>
+    {#if !reacting}
     <div class="picker-cats">
       {#each EMOJI as row}
         <button type="button" class:on={cat === row[0]} title={row[0]} onclick={() => (cat = row[0])}>{row[1][0]}</button>
       {/each}
       {#if emojiPacks.length}<button type="button" class:on={cat === 'Servers'} title="Servers" onclick={() => (cat = 'Servers')}>✨</button>{/if}
     </div>
+    {/if}
   {:else if tab === 'sticker'}
     <div class="picker-grid sticker-grid">
       {#if !stickerPacks.length}

@@ -178,7 +178,7 @@
   $effect(() => {
     if (!menu) return;
     const close = (event) => {
-      if (event.target?.closest?.('.msg-menu') || event.target?.closest?.('.msg-more')) return;
+      if (event.target?.closest?.('.msg-menu') || event.target?.closest?.('.msg-more') || event.target?.closest?.('.react-picker')) return;
       menu = null;
     };
     window.addEventListener('click', close);
@@ -437,15 +437,8 @@
   <div class="msg-menu" style="left:{menu.x}px;top:{menu.y}px" onclick={(e) => e.stopPropagation()}>
     <button type="button" onclick={() => (menu = { ...menu, react: !menu.react })}><SmilePlus size={16} /> Add Reaction</button>
     {#if menu.react}
-      <div class="react-flyout">
-        {#each reactionEmoji as row}
-          {#if row.pack && row.pack !== reactionEmoji[reactionEmoji.indexOf(row) - 1]?.pack}
-            <p class="picker-label">{row.pack}</p>
-          {/if}
-          <button type="button" title={row.emoji} onclick={() => current && onReact(current.id, row.emoji)}>
-            {#if row.url}<img src={fileUrl(row.url)} alt={row.emoji} />{:else}{row.emoji}{/if}
-          </button>
-        {/each}
+      <div class="react-picker" style="left:{menu.x + 636 < window.innerWidth ? menu.x + 228 : Math.max(8, menu.x - 416)}px;top:{Math.max(8, Math.min(menu.y, window.innerHeight - 500))}px">
+        <Picker onpick={(emoji) => current && onReact(current.id, emoji)} />
       </div>
     {/if}
     {#if current && menu.mine}
