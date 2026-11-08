@@ -264,11 +264,19 @@ export function seedStill(ref) {
   });
 }
 
-export function uploadFile(file, onProgress) {
+export function startTunnelProxy() {
+  if (!('serviceWorker' in navigator)) return;
+  const script = new URL('sw.js', document.baseURI);
+  const scope = new URL('./', document.baseURI);
+  navigator.serviceWorker.register(script.href, { scope: scope.href }).catch(() => {});
+}
+
+export function uploadFile(file, onProgress, name) {
   const token = localStorage.getItem('dc_token') || '';
+  const label = name || file.name || 'file';
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', getApiBase() + '/api/upload');
+    xhr.open('POST', getApiBase() + '/api/upload?slot=file&name=' + encodeURIComponent(label));
     xhr.setRequestHeader('Authorization', 'Bearer ' + token);
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');

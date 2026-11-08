@@ -5,7 +5,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, toast } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast } from '../state.svelte.js';
   import { formatContent } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
@@ -306,7 +306,6 @@
     }
     noteKeyDown(event);
   }
-  let uploading = $state(false);
   let pollOpen = $state(false);
   let pollQuestion = $state('');
   let pollAnswers = $state(['', '']);
@@ -318,13 +317,10 @@
     ui.picker = ui.picker === tab ? '' : tab;
   }
 
-  async function onFiles(event) {
+  function onFiles(event) {
     const list = [...(event.target.files || [])];
     event.target.value = '';
-    if (!list.length) return;
-    uploading = true;
-    try { await sendFiles(list); }
-    finally { uploading = false; }
+    if (list.length) sendFiles(list);
   }
 
   function openPoll() {
@@ -379,13 +375,15 @@
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg" class:menu-open={menu?.id === msg.id}>
+    <article class="msg" class:menu-open={menu?.id === msg.id} class:pending={msg.pending}>
+      {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
           <button type="button" title="React" onclick={() => onReact(msg.id, glyph)}>{glyph}</button>
         {/each}
         <button type="button" class="msg-more" title="More" onclick={(e) => openMenu(e, msg)}><MoreHorizontal size={18} /></button>
       </div>
+      {/if}
       <button type="button" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
@@ -410,6 +408,9 @@
               <Attachment file={file} />
             {/each}
           </div>
+        {/if}
+        {#if msg.failed}
+          <button type="button" class="msg-fail" onclick={() => dismissLocal(msg.id)}>Couldn't send. Tap to remove.</button>
         {/if}
         {#if msg.poll}
           <PollCard poll={msg.poll} messageId={msg.id} />
@@ -492,13 +493,13 @@
     </div>
   {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
-    <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked || uploading} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
+    <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
       <Plus size={20} />
     </button>
     {#if ui.attachOpen}
       <div class="attach-menu">
         <label class="attach-file" for="nebula-file">
-          <FileUp size={16} /> {uploading ? 'Uploading…' : 'Upload a File'}
+          <FileUp size={16} /> Upload a File
         </label>
         <button type="button" onclick={openPoll}><BarChart3 size={16} /> Create Poll</button>
       </div>
@@ -517,7 +518,7 @@
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
-    <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple disabled={uploading} onchange={onFiles} />
+    <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple onchange={onFiles} />
   </form>
   {#if forward}
     <div class="poll-overlay" role="presentation" onclick={() => (forward = null)}>

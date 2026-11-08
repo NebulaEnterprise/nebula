@@ -448,7 +448,10 @@ function readFiles(body) {
     const name = String(row && row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
     const image = /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(url);
     const video = /\.(mp4|webm|mov|m4v|ogv|ogg)$/i.test(url);
-    files.push({ url, name, kind: image ? 'image' : video ? 'video' : 'file' });
+    const file = { url, name, kind: image ? 'image' : video ? 'video' : 'file' };
+    const poster = String(row && row.poster || '');
+    if (/^\/uploads\/[A-Za-z0-9._-]+$/.test(poster)) file.poster = poster;
+    files.push(file);
   }
   return files;
 }
@@ -1329,18 +1332,27 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   res.json({ ok: true, url: '/uploads/' + name });
 });
 
-app.use('/files', (req, res, next) => {
+function allowMedia(req, res, next) {
   res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'ngrok-skip-browser-warning, bypass-tunnel-reminder, range, Range');
+  res.set('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length, Content-Type');
+  res.set('Access-Control-Max-Age', '86400');
   res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Accept-Ranges', 'bytes');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+}
+
+app.use('/files', allowMedia, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
   next();
-}, express.static(FILES_DIR, { maxAge: '365d', immutable: true }));
+}, express.static(FILES_DIR, { maxAge: '365d', immutable: true, acceptRanges: true }));
 
-app.use('/uploads', (req, res, next) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+app.use('/uploads', allowMedia, (req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=604800, immutable');
   next();
-}, express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true }));
+}, express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true, acceptRanges: true }));
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });

@@ -1,4 +1,5 @@
-import { api, pinMedia, warmMedia } from './api.js';
+import { api, pinMedia, warmMedia, uploadFile } from './api.js';
+import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
 export const ui = $state({
@@ -405,7 +406,8 @@ async function watchChat() {
     }
     liveCtrl = new AbortController();
     const signal = liveCtrl.signal;
-    const after = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
+    const real = [...ui.messages].reverse().find((msg) => msg && !msg.pending && !msg.failed);
+    const after = real ? real.id : '';
     const typing = (ui.typers || []).map((row) => row.id + '@' + (row.tick || '')).sort().join(',');
     const started = Date.now();
     let pace = 'same';
@@ -523,7 +525,8 @@ export async function loadMessages(quiet, live) {
     }
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
     if (newest && newest.id) markSeen(roomKey, newest.id);
-    ui.messages = list;
+    const local = ui.messages.filter((msg) => msg && (msg.pending || msg.failed) && msg.roomKey === roomKey && String(msg.id).startsWith('local-'));
+    ui.messages = local.length ? [...list, ...local] : list;
     if (newest && newest.id) ui.seenMessageId = newest.id;
     announceFresh(list, roomKey);
     return 'changed';
@@ -559,20 +562,22 @@ export async function loadMembers(quiet) {
   finally { membersBusy = false; }
 }
 
-async function postMessage(payload) {
+async function postMessage(payload, target) {
   const content = String(payload.content || '').trim();
   const files = payload.files || [];
   const poll = payload.poll || null;
   if (!content && !files.length && !poll) return;
+  const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
   const typingToken = stopTyping();
   const body = { content, typingToken };
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
   if (payload.reply && payload.reply.id) body.reply = { id: payload.reply.id };
-  const data = ui.mode === 'dm' && ui.dmUser
-    ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body })
-    : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body });
-  if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
+  const data = where.mode === 'dm' && where.dmUserId
+    ? await api('/api/dms/' + where.dmUserId + '/messages', { method: 'POST', body })
+    : await api('/api/channels/' + where.channelId + '/messages', { method: 'POST', body });
+  const sameRoom = where.mode === ui.mode && (where.mode === 'dm' ? where.dmUserId === (ui.dmUser?.id || '') : where.channelId === ui.channelId);
+  if (sameRoom && data.message && !ui.messages.some((m) => m.id === data.message.id)) {
     lastSentId = data.message.id;
     ui.messages = [...ui.messages, data.message];
     paintNames(ui.messages);
@@ -580,7 +585,7 @@ async function postMessage(payload) {
     lastSentId = data.message.id;
   }
   dropLive();
-  if (ui.mode === 'dm') loadDms();
+  if (where.mode === 'dm') loadDms();
 }
 
 export async function sendMessage() {
@@ -637,27 +642,65 @@ export async function forwardMessage(messageId, target) {
   if (target.userId) loadDms();
 }
 
+function patchLocal(id, change) {
+  ui.messages = ui.messages.map((msg) => msg.id === id ? { ...msg, ...change(msg) } : msg);
+}
+
+export function dismissLocal(id) {
+  ui.messages = ui.messages.filter((msg) => msg.id !== id);
+}
+
 export async function sendFiles(list) {
   const files = [...(list || [])].slice(0, 10);
   if (!files.length) return;
   ui.attachOpen = false;
+  const content = ui.composer.trim();
+  const reply = ui.reply;
+  ui.composer = '';
+  ui.reply = null;
+  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
+  const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
+  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file), progress: 4 }));
+  ui.messages = [...ui.messages, {
+    id: tempId,
+    pending: true,
+    roomKey,
+    createdAt: new Date().toISOString(),
+    author: ui.me,
+    content,
+    reply: reply || null,
+    files: locals,
+  }];
   try {
     const saved = [];
-    for (const file of files) {
-      const data = await api('/api/upload?slot=file&name=' + encodeURIComponent(file.name || 'file'), {
-        method: 'POST',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
+    for (let i = 0; i < files.length; i++) {
+      const packed = await packUpload(files[i]);
+      let poster = '';
+      if (packed.poster) {
+        const preview = await uploadFile(packed.poster, (n) => {
+          patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(n * 0.2)) } : row) }));
+        }, packed.posterName);
+        poster = preview.url || '';
+        if (poster) pinMedia(poster, packed.poster);
+      }
+      const data = await uploadFile(packed.body, (n) => {
+        const span = poster ? 0.8 : 1;
+        const base = poster ? 20 : 0;
+        patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(base + n * span)) } : row) }));
+      }, packed.name);
       if (!data.url) throw new Error('The file did not upload');
-      pinMedia(data.url, file);
-      saved.push({ url: data.url, name: data.name || file.name || 'file' });
+      pinMedia(data.url, packed.body);
+      const row = { url: data.url, name: data.name || packed.name || 'file' };
+      if (poster) row.poster = poster;
+      saved.push(row);
+      patchLocal(tempId, (msg) => ({ files: msg.files.map((item, index) => index === i ? { ...item, progress: 100 } : item) }));
     }
-    const content = ui.composer.trim();
-    ui.composer = '';
-    await postMessage({ content, files: saved });
+    await postMessage({ content, files: saved, reply }, target);
+    dismissLocal(tempId);
   } catch (err) {
-    toast(err.message);
+    patchLocal(tempId, () => ({ pending: false, failed: true }));
+    toast(err.message || 'Could not send that file');
   }
 }
 
