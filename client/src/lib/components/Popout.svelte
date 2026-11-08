@@ -26,7 +26,7 @@
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
-    {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
+    {#if u.aboutMe || u.customStatus}<div class="bio-bubble"><span>{u.aboutMe || u.customStatus}</span></div>{/if}
     {#if rel === 'none'}
       <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
     {/if}
@@ -45,7 +45,7 @@
           </p>
         </div>
       </div>
-      {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}
+      {#if u.bio}<p class="about-copy">{u.bio}</p>{/if}
       {#if roles.length}
         <div class="pop-roles">
           <span>Roles</span>

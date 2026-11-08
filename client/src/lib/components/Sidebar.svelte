@@ -71,7 +71,7 @@
     editingStatus = false;
     editingBio = false;
     statusDraft = ui.me?.customStatus || '';
-    bioDraft = ui.me?.bio || '';
+    bioDraft = ui.me?.aboutMe || ui.me?.customStatus || '';
   }
 
   function editProfile() {
@@ -100,7 +100,7 @@
 
   async function saveBio() {
     try {
-      await saveMe({ bio: bioDraft.trim() });
+      await saveMe({ aboutMe: bioDraft.trim() });
       editingBio = false;
     } catch (err) {
       toast(err.message);
@@ -302,14 +302,14 @@
         </div>
         {#if editingBio}
           <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
-            <input bind:value={bioDraft} maxlength="190" placeholder="Bio" />
-            <button type="submit" title="Save bio">✓</button>
+            <input bind:value={bioDraft} maxlength="190" placeholder="About me" />
+            <button type="submit" title="Save about me">✓</button>
           </form>
-        {:else if ui.me?.bio}
+        {:else if ui.me?.aboutMe || ui.me?.customStatus}
           <div class="account-bubble">
-            <span>{ui.me.bio}</span>
-            <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
-            <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
+            <span>{ui.me.aboutMe || ui.me.customStatus}</span>
+            <button type="button" title="Edit about me" onclick={() => { bioDraft = ui.me?.aboutMe || ui.me?.customStatus || ''; editingBio = true; }}><Pencil size={14} /></button>
+            <button type="button" title="Remove about me" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
           </div>
         {:else if editingStatus}
           <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
@@ -332,6 +332,7 @@
           {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
           {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
         </div>
+        {#if ui.me?.bio}<p class="about-copy">{ui.me.bio}</p>{/if}
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
         <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
           <i style="background:{presenceLabel[2]}"></i>

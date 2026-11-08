@@ -34,7 +34,7 @@
       <Avatar user={m} size={34} />
       <div class="meta">
         <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} /></div>
-        {#if m.customStatus}<span>{m.customStatus}</span>{/if}
+        {#if m.bio}<span>{m.bio}</span>{/if}
       </div>
     </button>
   {/each}
@@ -45,7 +45,7 @@
         <Avatar user={m} size={34} />
         <div class="meta">
           <div class="name-row"><strong><Name user={shown(m)} /></strong><NameExtras user={shown(m)} /></div>
-          {#if m.customStatus}<span>{m.customStatus}</span>{/if}
+          {#if m.bio}<span>{m.bio}</span>{/if}
         </div>
       </button>
     {/each}

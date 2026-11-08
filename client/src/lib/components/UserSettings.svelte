@@ -50,11 +50,19 @@
     ['sparkle', 'Sparkle'],
   ];
 
-  let aboutDraft = $state(ui.me?.aboutMe || '');
+  let aboutDraft = $state(ui.me?.aboutMe || ui.me?.customStatus || '');
   let aboutEditing = $state(false);
+  let aboutSynced = false;
   $effect(() => {
-    const value = ui.me?.aboutMe || '';
-    if (!aboutEditing) aboutDraft = value;
+    const saved = ui.me?.aboutMe || '';
+    const status = ui.me?.customStatus || '';
+    if (aboutEditing) return;
+    if (!aboutSynced) {
+      aboutDraft = saved || status;
+      aboutSynced = true;
+      return;
+    }
+    aboutDraft = saved;
   });
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
   const inflight = { avatarUrl: null, bannerUrl: null };
@@ -227,11 +235,11 @@
             </section>
             <div class="field">
               <label>Bio</label>
-              <textarea bind:value={form.bio} maxlength="190" rows="3" placeholder="Shows in the bubble beside your picture"></textarea>
+              <textarea bind:value={form.bio} maxlength="190" rows="3" placeholder="Shows under your name"></textarea>
             </div>
             <div class="field">
               <label>About me</label>
-              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="A note you can keep on your profile" onfocus={() => (aboutEditing = true)} onblur={() => (aboutEditing = false)}></textarea>
+              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Shows in the bubble beside your picture" onfocus={() => (aboutEditing = true)} onblur={() => (aboutEditing = false)}></textarea>
             </div>
             <button class="btn brand" style="width:auto" onclick={async () => { aboutEditing = false; try { await saveMe({ aboutMe: aboutDraft }); } catch (err) { toast(err.message); } }}>Save about me</button>
             <p class="label">Badge</p>
@@ -284,7 +292,7 @@
             <div class="preview-banner">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
-            {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
+            {#if aboutDraft}<div class="bio-bubble"><span>{aboutDraft}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
@@ -297,6 +305,7 @@
                 {#if badgeOn('developer')}<DevBadge on={true} />{/if}
                 <TagPill tag={showcaseChoice} />
               </div>
+              {#if form.bio}<p class="about-copy">{form.bio}</p>{/if}
             </div>
           </div>
         </div>
