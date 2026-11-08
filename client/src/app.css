@@ -314,6 +314,22 @@ img { max-width: 100%; }
   padding: 8px; border-radius: 6px; text-align: left; font-weight: 650; color: var(--text);
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
+.account-switch {
+  position: fixed; left: min(416px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
+  width: 260px; padding: 8px; border-radius: 12px;
+  background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
+}
+.account-switch button {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 8px; border-radius: 8px; text-align: left; color: #fff; background: transparent;
+}
+.account-switch button:hover { background: #2a2b31; }
+.account-switch strong, .account-switch em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-switch strong { font-size: 14px; font-weight: 700; }
+.account-switch em { color: var(--muted); font-style: normal; font-size: 12px; }
+.account-switch .add { font-weight: 700; color: #dbdee1; }
+.account-switch p { margin: 6px 8px 2px; color: var(--faint); font-size: 12px; }
+.auth-accounts { position: static; width: 100%; margin: 4px 0 12px; background: #101117; }
 .me .who strong, .me .who span { display: block; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
 .staff-badge {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;

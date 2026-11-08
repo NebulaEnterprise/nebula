@@ -13,7 +13,7 @@
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -52,6 +52,7 @@
 
   let accountOpen = $state(false);
   let statusOpen = $state(false);
+  let accountsOpen = $state(false);
   let editingStatus = $state(false);
   let editingBio = $state(false);
   let statusDraft = $state('');
@@ -68,6 +69,7 @@
     event.stopPropagation();
     accountOpen = !accountOpen;
     statusOpen = false;
+    accountsOpen = false;
     editingStatus = false;
     editingBio = false;
     statusDraft = ui.me?.customStatus || '';
@@ -98,6 +100,22 @@
     }
   }
 
+  async function useAccount(id) {
+    accountsOpen = false;
+    accountOpen = false;
+    try {
+      await switchAccount(id);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function startAnother() {
+    if (!addAccount()) return;
+    accountsOpen = false;
+    accountOpen = false;
+  }
+
   async function saveBio() {
     try {
       await saveMe({ bio: shortBio(bioDraft.trim()) });
@@ -111,7 +129,7 @@
     if (!accountOpen) return;
     const close = (event) => {
       const node = event.target instanceof Element ? event.target : null;
-      if (node && (node.closest('.account-pop') || node.closest('.me-card'))) return;
+      if (node && (node.closest('.account-pop') || node.closest('.account-switch') || node.closest('.me-card'))) return;
       accountOpen = false;
     };
     const onKey = (event) => {
@@ -332,7 +350,7 @@
           {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
         </div>
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
-        <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
+        <button type="button" class="account-row" onclick={() => { statusOpen = !statusOpen; accountsOpen = false; }}>
           <i style="background:{presenceLabel[2]}"></i>
           <span>{presenceLabel[1]}</span>
           <ChevronRight size={16} />
@@ -351,8 +369,29 @@
             {/if}
           </div>
         {/if}
+        <button type="button" class="account-row" onclick={() => { accountsOpen = !accountsOpen; statusOpen = false; }}>
+          <span>Switch accounts</span>
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
+    {#if accountsOpen}
+      <div class="account-switch" onclick={(e) => e.stopPropagation()}>
+        {#each savedAccounts().filter((row) => row.id !== ui.me?.id) as row (row.id)}
+          <button type="button" onclick={() => useAccount(row.id)}>
+            <Avatar user={row} size={32} dot={false} />
+            <span>
+              <strong>{row.displayName || row.username}</strong>
+              <em>@{row.username}</em>
+            </span>
+          </button>
+        {/each}
+        <button type="button" class="add" onclick={startAnother}>
+          <Plus size={18} /> Add another account
+        </button>
+        <p>{savedAccounts().length} of 7 accounts</p>
+      </div>
+    {/if}
   {/if}
   <div class="me">
     <button type="button" class="me-card" onclick={openAccount}>

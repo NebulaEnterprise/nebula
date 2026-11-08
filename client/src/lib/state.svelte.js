@@ -55,6 +55,7 @@ export const ui = $state({
   typers: [],
   voice: null,
   voiceRooms: {},
+  addingAccount: false,
 });
 
 let pollTimer = null;
@@ -71,14 +72,59 @@ export function toast(msg) {
   }, 2800);
 }
 
+const ACCOUNT_LIMIT = 7;
+const ACCOUNTS_KEY = 'nebula-accounts';
+let returnAccountId = '';
+
+export function savedAccounts() {
+  try {
+    const list = JSON.parse(localStorage.getItem(ACCOUNTS_KEY) || '[]');
+    if (!Array.isArray(list)) return [];
+    return list.filter((row) => row && row.id && row.token).slice(0, ACCOUNT_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function writeAccounts(list) {
+  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list.slice(0, ACCOUNT_LIMIT)));
+}
+
+function rememberAccount(user, token) {
+  if (!user?.id || !token) return;
+  const existing = savedAccounts();
+  const known = existing.some((row) => row.id === user.id);
+  if (!known && existing.length >= ACCOUNT_LIMIT) {
+    throw new Error('You can keep 7 accounts');
+  }
+  const row = {
+    id: user.id,
+    token,
+    username: user.username || '',
+    displayName: user.displayName || user.username || '',
+    avatarUrl: user.avatarUrl || '',
+    avatarColor: user.avatarColor || '#7c6af7',
+    status: user.status || 'online',
+  };
+  writeAccounts([row, ...existing.filter((item) => item.id !== user.id)]);
+}
+
+function forgetToken(token) {
+  if (!token) return;
+  writeAccounts(savedAccounts().filter((row) => row.token !== token));
+}
+
 export function logout() {
+  const id = ui.me?.id;
   import('./voice.js').then((mod) => mod.leaveVoice());
+  if (id) writeAccounts(savedAccounts().filter((row) => row.id !== id));
   localStorage.removeItem('dc_token');
   ui.me = null;
   ui.userSettings = false;
   ui.serverSettings = false;
   ui.dialog = null;
   ui.popout = null;
+  ui.addingAccount = false;
   ui.auth = 'login';
   if (pollTimer) clearInterval(pollTimer);
 }
@@ -108,9 +154,11 @@ export async function boot() {
   try {
     const data = await api('/api/me');
     ui.me = data.user;
+    rememberAccount(data.user, token);
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
   } catch {
+    forgetToken(token);
     logout();
   } finally {
     ui.booting = false;
@@ -136,8 +184,10 @@ async function enterApp() {
 export async function login(email, password) {
   ui.authError = '';
   const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+  rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
   ui.me = data.user;
+  ui.addingAccount = false;
   ui.booting = false;
   await enterApp();
 }
@@ -156,10 +206,103 @@ export async function verify(code) {
     method: 'POST',
     body: { email: ui.pending.email, code, username: ui.pending.username, password: ui.pending.password },
   });
+  rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
   ui.me = data.user;
+  ui.addingAccount = false;
   ui.pending = null;
   await enterApp();
+}
+
+function resetSession() {
+  roomLogs.clear();
+  serverSnap.clear();
+  memberStamp = '';
+  profileStamp = '';
+  pollStamp = '';
+  editStamp = '';
+  dropLive();
+  ui.messages = [];
+  ui.members = [];
+  ui.friends = [];
+  ui.incoming = [];
+  ui.outgoing = [];
+  ui.dms = [];
+  ui.dmUser = null;
+  ui.channels = [];
+  ui.channelId = '';
+  ui.servers = [];
+  ui.serverMeta = null;
+  ui.serverPerms = 0;
+  ui.roles = [];
+  ui.categories = [];
+  ui.popout = null;
+  ui.userSettings = false;
+  ui.serverSettings = false;
+  ui.dialog = null;
+  ui.composer = '';
+  ui.reply = null;
+  ui.editing = null;
+  ui.typers = [];
+  ui.voice = null;
+  ui.voiceRooms = {};
+  ui.activity = { servers: {}, channels: {}, dms: {} };
+  ui.mode = 'friends';
+  ui.chatLoading = true;
+}
+
+export async function switchAccount(id) {
+  const row = savedAccounts().find((item) => item.id === id);
+  if (!row) throw new Error('That account is not saved');
+  if (ui.me && row.id === ui.me.id) return;
+  try {
+    const mod = await import('./voice.js');
+    await mod.leaveVoice();
+  } catch (_) {}
+  resetSession();
+  localStorage.setItem('dc_token', row.token);
+  ui.booting = true;
+  ui.addingAccount = false;
+  try {
+    const data = await api('/api/me');
+    ui.me = data.user;
+    rememberAccount(data.user, row.token);
+    warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
+    await enterApp();
+  } catch (err) {
+    forgetToken(row.token);
+    localStorage.removeItem('dc_token');
+    ui.me = null;
+    ui.auth = 'login';
+    throw new Error(err.message === 'Session expired' ? 'That account needs to log in again' : err.message);
+  } finally {
+    ui.booting = false;
+  }
+}
+
+export function addAccount() {
+  if (savedAccounts().length >= ACCOUNT_LIMIT) {
+    toast('You can keep 7 accounts');
+    return false;
+  }
+  returnAccountId = ui.me?.id || '';
+  import('./voice.js').then((mod) => mod.leaveVoice()).catch(() => {});
+  resetSession();
+  localStorage.removeItem('dc_token');
+  ui.me = null;
+  ui.addingAccount = true;
+  ui.auth = 'login';
+  ui.authError = '';
+  ui.authOk = '';
+  return true;
+}
+
+export async function cancelAdd() {
+  ui.addingAccount = false;
+  ui.authError = '';
+  const id = returnAccountId;
+  if (!id) return;
+  await switchAccount(id);
 }
 
 function pendingInvite() {
@@ -685,6 +828,7 @@ function adoptMe(members) {
     avatarColor: mine.avatarColor || ui.me.avatarColor,
     avatarUrl: String(ui.me.avatarUrl || '').startsWith('blob:') ? ui.me.avatarUrl : (mine.avatarUrl || ui.me.avatarUrl),
   };
+  rememberAccount(ui.me, localStorage.getItem('dc_token') || '');
 }
 
 function applyMemberNames(members) {
@@ -1567,6 +1711,7 @@ export async function saveMe(body) {
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
   };
   ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
+  rememberAccount(ui.me, localStorage.getItem('dc_token') || '');
   ui.userSettings = false;
   await loadMembers();
   dropLive();

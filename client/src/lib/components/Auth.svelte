@@ -1,5 +1,6 @@
 <script>
-  import { ui, login, requestCode, verify } from '../state.svelte.js';
+  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount } from '../state.svelte.js';
+  import Avatar from './Avatar.svelte';
   let email = $state('');
   let username = $state('');
   let password = $state('');
@@ -25,7 +26,23 @@
       <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>Log in</button>
+      {#if savedAccounts().length}
+        <div class="account-switch auth-accounts">
+          {#each savedAccounts() as row (row.id)}
+            <button type="button" onclick={() => run(() => switchAccount(row.id))}>
+              <Avatar user={row} size={32} dot={false} />
+              <span>
+                <strong>{row.displayName || row.username}</strong>
+                <em>@{row.username}</em>
+              </span>
+            </button>
+          {/each}
+        </div>
+      {/if}
       <p class="auth-switch">New here? <button type="button" onclick={() => (ui.auth = 'register')}>Create an account</button></p>
+      {#if ui.addingAccount}
+        <p class="auth-switch"><button type="button" onclick={() => run(() => cancelAdd())}>Back</button></p>
+      {/if}
     {:else if ui.auth === 'register'}
       <p class="sub">Create an account. We’ll email you a code.</p>
       <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>
