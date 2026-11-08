@@ -2,13 +2,18 @@
   import {
     ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff,
+    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
+  import Photo from './Photo.svelte';
+  import MoonBadge from './MoonBadge.svelte';
+  import StaffBadge from './StaffBadge.svelte';
+  import DevBadge from './DevBadge.svelte';
   import { api } from '../api.js';
+  import { hasMoonBadge } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -44,6 +49,68 @@
     }
     joinVoice(ch);
   }
+
+  let accountOpen = $state(false);
+  let statusOpen = $state(false);
+  let editingStatus = $state(false);
+  let statusDraft = $state('');
+  const presence = [
+    ['online', 'Online', '#3ecf8e'],
+    ['idle', 'Idle', '#f0b429'],
+    ['dnd', 'Do not disturb', '#f06a6a'],
+    ['offline', 'Invisible', '#8b8e98'],
+  ];
+  const presenceLabel = $derived(presence.find((row) => row[0] === (ui.me?.status || 'online')) || presence[0]);
+
+  function openAccount(event) {
+    event.stopPropagation();
+    accountOpen = !accountOpen;
+    statusOpen = false;
+    editingStatus = false;
+    statusDraft = ui.me?.customStatus || '';
+  }
+
+  function editProfile() {
+    accountOpen = false;
+    ui.userPage = 'profile';
+    ui.userSettings = true;
+  }
+
+  async function setPresence(id) {
+    try {
+      await saveMe({ status: id });
+      statusOpen = false;
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function saveCustomStatus() {
+    try {
+      await saveMe({ customStatus: statusDraft.trim() });
+      editingStatus = false;
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  $effect(() => {
+    if (!accountOpen) return;
+    const close = (event) => {
+      const node = event.target instanceof Element ? event.target : null;
+      if (node && (node.closest('.account-pop') || node.closest('.me-card'))) return;
+      accountOpen = false;
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') accountOpen = false;
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  });
 
   async function menu(act) {
     ui.menuOpen = false;
@@ -210,13 +277,67 @@
       <button class="leave-call" onclick={leaveVoice}><PhoneOff size={16} /> Leave call</button>
     </div>
   {/if}
-  <div class="me">
-    <Avatar user={ui.me} size={36} />
-    <div class="who">
-      <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-      <span>{ui.me?.customStatus || 'Online'}</span>
+  {#if accountOpen}
+    <div class="account-pop" onclick={(e) => e.stopPropagation()}>
+      <div class="account-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
+        {#if ui.me?.bannerUrl}<Photo url={ui.me.bannerUrl} fill />{/if}
+      </div>
+      <div class="account-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
+        {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
+        <i style="background:{presenceLabel[2]}"></i>
+      </div>
+      {#if editingStatus}
+        <form class="account-status-edit" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
+          <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
+          <button type="submit" class="btn sm brand">Save</button>
+        </form>
+      {:else if ui.me?.customStatus}
+        <div class="account-bubble">
+          <span>{ui.me.customStatus}</span>
+          <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
+          <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
+        </div>
+      {/if}
+      <div class="account-body">
+        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
+        <p class="handle">
+          <span>@{ui.me?.username}</span>
+          {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
+          <StaffBadge rank={ui.me?.staff || ''} />
+          <DevBadge on={!!ui.me?.developer} />
+        </p>
+        <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
+        <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
+          <i style="background:{presenceLabel[2]}"></i>
+          <span>{presenceLabel[1]}</span>
+          <ChevronRight size={16} />
+        </button>
+        {#if statusOpen}
+          <div class="account-statuses">
+            {#each presence as [id, label, color]}
+              <button type="button" class:on={ui.me?.status === id || (!ui.me?.status && id === 'online')} onclick={() => setPresence(id)}>
+                <i style="background:{color}"></i> {label}
+              </button>
+            {/each}
+            {#if !editingStatus}
+              <button type="button" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; statusOpen = false; }}>
+                <Pencil size={14} /> Custom status
+              </button>
+            {/if}
+          </div>
+        {/if}
+      </div>
     </div>
-    <button class="btn icon" title="Settings" onclick={() => (ui.userSettings = true)}><Settings size={16} /></button>
+  {/if}
+  <div class="me">
+    <button type="button" class="me-card" onclick={openAccount}>
+      <Avatar user={ui.me} size={36} />
+      <div class="who">
+        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
+        <span>{ui.me?.customStatus || presenceLabel[1]}</span>
+      </div>
+    </button>
+    <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={16} /></button>
     <button class="btn icon" title="Log out" onclick={logout}><LogOut size={16} /></button>
   </div>
 </aside>

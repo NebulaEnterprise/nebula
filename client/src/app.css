@@ -225,10 +225,57 @@ img { max-width: 100%; }
 }
 .leave-mini:hover { background: #a12828; }
 .me {
-  display: flex; align-items: center; gap: 10px; padding: 10px; flex-shrink: 0;
-  margin: 8px; border-radius: 14px; background: #0e0f14;
+  display: flex; align-items: center; gap: 8px; padding: 8px; flex-shrink: 0;
+  margin: 8px; border-radius: 14px; background: #0e0f14; position: relative;
 }
+.me-card {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  padding: 4px; border-radius: 10px; text-align: left;
+}
+.me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
+.account-pop {
+  position: fixed; left: 88px; bottom: 78px; z-index: 50; width: min(320px, calc(100vw - 104px));
+  background: #111214; border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.account-banner { height: 84px; position: relative; }
+.account-banner img, .account-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.account-av {
+  width: 72px; height: 72px; margin: -36px 0 0 14px; border-radius: 50%;
+  border: 6px solid #111214; position: relative; overflow: visible;
+  display: grid; place-items: center; font-size: 26px; font-weight: 750;
+}
+.account-av img { border-radius: 50%; }
+.account-av i, .account-row i, .account-statuses i {
+  width: 12px; height: 12px; border-radius: 50%; display: block; border: 2px solid #111214;
+}
+.account-av i { position: absolute; right: 2px; bottom: 2px; }
+.account-bubble {
+  display: flex; align-items: center; gap: 6px; margin: 8px 14px 0;
+  background: #1e1f22; border-radius: 8px; padding: 6px 8px; color: var(--text); font-size: 13px;
+}
+.account-bubble span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--muted); }
+.account-bubble button:hover { background: var(--bg-hover); color: var(--text); }
+.account-status-edit { display: flex; gap: 8px; margin: 8px 14px 0; }
+.account-status-edit input { flex: 1; min-width: 0; background: #1e1f22; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.account-body { padding: 10px 14px 14px; }
+.account-body > strong { display: block; font-size: 18px; }
+.account-edit, .account-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+  background: #1e1f22; text-align: left; font-weight: 650;
+}
+.account-edit:hover, .account-row:hover { background: #2a2b31; }
+.account-row span { flex: 1; }
+.account-row :global(svg) { color: var(--muted); }
+.account-statuses { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; padding: 6px; border-radius: 8px; background: #1e1f22; }
+.account-statuses button {
+  width: 100%; height: auto; display: flex; align-items: center; gap: 8px;
+  padding: 8px; border-radius: 6px; text-align: left; font-weight: 650; color: var(--text);
+}
+.account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .me .who strong, .me .who span { display: block; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
 .staff-badge {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;

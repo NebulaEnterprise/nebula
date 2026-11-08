@@ -11,7 +11,6 @@
   import { api, pinMedia } from '../api.js';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
-  let page = $state('profile');
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
 
   function toggleSound() {
@@ -20,7 +19,8 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', status: 'Status', notify: 'Notifications' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications' };
+  const page = $derived(ui.userPage || 'profile');
   let form = $state({
     username: ui.me?.username || '',
     displayName: ui.me?.displayName || '',
@@ -142,10 +142,9 @@
   <div class="settings" role="dialog" onclick={(e) => e.stopPropagation()}>
     <aside class="set-nav">
       <div class="group">User settings</div>
-      <button class:on={page === 'profile'} onclick={() => (page = 'profile')}>Profile</button>
-      <button class:on={page === 'look'} onclick={() => (page = 'look')}>Appearance</button>
-      <button class:on={page === 'status'} onclick={() => (page = 'status')}>Status</button>
-      <button class:on={page === 'notify'} onclick={() => (page = 'notify')}>Notifications</button>
+      <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}>Profile</button>
+      <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}>Appearance</button>
+      <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}>Notifications</button>
       <div class="group">Account</div>
       <button class="danger" onclick={logout}>Log out</button>
     </aside>
@@ -161,7 +160,6 @@
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
             <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
             <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
-            <div class="field"><label>Bio</label><textarea bind:value={form.bio} maxlength="190" rows="4"></textarea></div>
           {:else if page === 'notify'}
             <div class="field">
               <label>Notification sound</label>
@@ -203,14 +201,6 @@
                 {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
               </div>
             </section>
-          {:else}
-            <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
-            <p class="label">Online status</p>
-            <div class="actions">
-              {#each [['online', 'Online'], ['idle', 'Idle'], ['dnd', 'Do not disturb'], ['offline', 'Invisible']] as [id, label]}
-                <button class="btn sm" class:brand={form.status === id} onclick={() => (form.status = id)}>{label}</button>
-              {/each}
-            </div>
           {/if}
           {#if page !== 'look' && page !== 'notify'}
             <div style="height:16px"></div>
@@ -223,7 +213,6 @@
             <div class="preview-banner">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
-            {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>

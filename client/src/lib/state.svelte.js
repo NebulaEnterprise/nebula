@@ -42,6 +42,7 @@ export const ui = $state({
   activity: { servers: {}, channels: {}, dms: {} },
   popout: null,
   userSettings: false,
+  userPage: 'profile',
   serverSettings: false,
   settingsPage: 'overview',
   settings: null,
