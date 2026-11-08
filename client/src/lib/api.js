@@ -197,10 +197,14 @@ async function cachedBlob(full) {
   return blob;
 }
 
+function isSongFile(url) {
+  return /\/uploads\/song-/i.test(String(url || ''));
+}
+
 export function warmMedia(urls) {
   const set = new Set([...(urls || []), ...savedMedia()]);
   for (const url of set) {
-    if (url) resolveMedia(url);
+    if (url && !isSongFile(url)) resolveMedia(url);
   }
 }
 
@@ -222,6 +226,7 @@ export function pinMedia(url, file) {
 
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
+  if (isSongFile(url)) return Promise.resolve(fileUrl(url));
   if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);
   const full = fileUrl(url);
   if (!full.includes('/uploads/') && !full.includes('/files/')) return Promise.resolve(full);

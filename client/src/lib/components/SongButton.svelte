@@ -1,11 +1,10 @@
 <script>
   import { Pause, Play } from '@lucide/svelte';
-  import { hasSong, playing, toggleSong, warmSong } from '../song.svelte.js';
+  import { hasSong, playing, toggleSong } from '../song.svelte.js';
 
   let { file = '', start = 0 } = $props();
   const ready = $derived(hasSong(file));
   const on = $derived(playing(file, start));
-  $effect(() => { if (ready) warmSong(file); });
 </script>
 
 {#if ready}

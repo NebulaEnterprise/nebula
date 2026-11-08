@@ -1141,7 +1141,7 @@ async function downloadWithYtDlp(pageUrl, destBase) {
         '--js-runtimes', 'node',
         '--max-filesize', '25M',
         '--match-filter', 'duration < 900',
-        '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/bestaudio',
+        '-f', 'ba[ext=m4a][abr<=128]/ba[abr<=128]/ba[ext=m4a]/ba',
         '-o', destBase + '.%(ext)s',
         ...extra,
         pageUrl,

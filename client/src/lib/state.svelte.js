@@ -1,5 +1,5 @@
 import { api, pinMedia, warmMedia, uploadFile } from './api.js';
-import { hasSong, playSong, warmSong } from './song.svelte.js';
+import { hasSong, playSong } from './song.svelte.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -975,10 +975,6 @@ export async function loadMembers(quiet) {
       adoptMe(ui.members);
       applyMemberNames(ui.members);
       warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
-      const songs = [];
-      if (hasSong(ui.me?.songFile)) songs.push(ui.me.songFile);
-      for (const member of ui.members) if (hasSong(member.songFile)) songs.push(member.songFile);
-      for (const file of new Set(songs)) warmSong(file);
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
