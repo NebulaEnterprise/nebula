@@ -10,6 +10,7 @@
   const video = $derived(file?.kind === 'video' || /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|$)/i.test(file?.url || file?.name || ''));
   const image = $derived(!video && (file?.kind === 'image' || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(file?.url || file?.name || '')));
   const progress = $derived(Math.max(0, Math.min(100, Number(file?.progress) || 0)));
+  const gif = $derived(/\.gif(\?|$)/i.test(file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
 
   function direct(url) {
     if (!url) return '';
@@ -50,7 +51,7 @@
   {#if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
   {:else if image}
-    {#if src}<button type="button" class="file-open" onclick={() => (open = true)}><img class="file-img" src={src} alt={name} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
+    {#if src}<button type="button" class="file-open" class:gif-crop={gif} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={name} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
   {:else}
     <a class="file-chip" href={src || fileUrl(file?.url)} target="_blank" rel="noreferrer">{name}</a>
   {/if}

@@ -410,7 +410,7 @@
           </div>
         {/if}
         {#if msg.failed}
-          <button type="button" class="msg-fail" onclick={() => dismissLocal(msg.id)}>Couldn't send. Tap to remove.</button>
+          <button type="button" class="msg-fail" onclick={() => dismissLocal(msg.id)}>Couldn't send. {msg.error || 'Tap to remove.'}</button>
         {/if}
         {#if msg.poll}
           <PollCard poll={msg.poll} messageId={msg.id} />

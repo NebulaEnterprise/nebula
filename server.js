@@ -730,7 +730,7 @@ const app = express();
 app.set('etag', false);
 app.use(cors({ maxAge: 7200 }));
 app.use((req, res, next) => {
-  if (req.path === '/api/upload') return next();
+  if (req.path === '/api/upload' || req.path === '/api/upload/part') return next();
   return express.json({ limit: '512mb' })(req, res, next);
 });
 app.use('/api', (req, res, next) => {
@@ -1295,6 +1295,51 @@ function sendAsset(res, file, type) {
   res.type(type);
   res.sendFile(file);
 }
+
+const PART_DIR = path.join(DATA_DIR, 'parts');
+
+app.post('/api/upload/part', auth, express.raw({ type: () => true, limit: '1mb' }), (req, res) => {
+  const id = String(req.query.id || '').replace(/[^a-zA-Z0-9-]/g, '');
+  const index = Number(req.query.index);
+  if (!id || id.length > 80 || !Number.isInteger(index) || index < 0 || index > 60) {
+    return res.status(400).json({ error: 'Bad upload part' });
+  }
+  if (!Buffer.isBuffer(req.body) || !req.body.length || req.body.length > 1024 * 1024) {
+    return res.status(400).json({ error: 'Empty upload part' });
+  }
+  const dir = path.join(PART_DIR, String(req.user.id).replace(/[^a-zA-Z0-9-]/g, ''), id);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, String(index).padStart(4, '0')), req.body);
+  res.json({ ok: true });
+});
+
+app.post('/api/upload/finish', auth, (req, res) => {
+  const id = String((req.body && req.body.id) || '').replace(/[^a-zA-Z0-9-]/g, '');
+  const count = Number(req.body && req.body.count);
+  const dir = path.join(PART_DIR, String(req.user.id).replace(/[^a-zA-Z0-9-]/g, ''), id);
+  if (!id || !Number.isInteger(count) || count < 1 || count > 60 || !fs.existsSync(dir)) {
+    return res.status(400).json({ error: 'Upload expired. Try the GIF again.' });
+  }
+  const chunks = [];
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    const file = path.join(dir, String(i).padStart(4, '0'));
+    if (!fs.existsSync(file)) return res.status(400).json({ error: 'Upload was incomplete. Try the GIF again.' });
+    const buf = fs.readFileSync(file);
+    total += buf.length;
+    if (total > 25 * 1024 * 1024) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      return res.status(413).json({ error: 'GIFs can be up to 25 MB' });
+    }
+    chunks.push(buf);
+  }
+  const body = Buffer.concat(chunks, total);
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (sniffImage(body) !== '.gif') return res.status(400).json({ error: 'That file is not a GIF' });
+  const stored = uuidv4() + '.gif';
+  fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
+  res.json({ ok: true, url: '/uploads/' + stored, name: 'animation.gif' });
+});
 
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
   const slot = String(req.query.slot || '');

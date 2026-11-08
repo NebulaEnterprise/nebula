@@ -1,4 +1,4 @@
-import { api, pinMedia, warmMedia, uploadFile } from './api.js';
+import { api, pinMedia, warmMedia, uploadFile, uploadGif } from './api.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -676,22 +676,24 @@ export async function sendFiles(list) {
     const saved = [];
     for (let i = 0; i < files.length; i++) {
       const packed = await packUpload(files[i]);
+      const gif = packed.type === 'image/gif' || /\.gif$/i.test(packed.name || files[i].name || '');
       let poster = '';
-      if (packed.poster) {
+      if (!gif && packed.poster) {
         const preview = await uploadFile(packed.poster, (n) => {
           patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(n * 0.2)) } : row) }));
         }, packed.posterName);
         poster = preview.url || '';
         if (poster) pinMedia(poster, packed.poster);
       }
-      const data = await uploadFile(packed.body, (n) => {
+      const report = (n) => {
         const span = poster ? 0.8 : 1;
         const base = poster ? 20 : 0;
         patchLocal(tempId, (msg) => ({ files: msg.files.map((row, index) => index === i ? { ...row, progress: Math.max(4, Math.round(base + n * span)) } : row) }));
-      }, packed.name);
+      };
+      const data = gif ? await uploadGif(files[i], report) : await uploadFile(packed.body, report, packed.name);
       if (!data.url) throw new Error('The file did not upload');
-      pinMedia(data.url, packed.body);
-      const row = { url: data.url, name: data.name || packed.name || 'file' };
+      pinMedia(data.url, gif ? files[i] : packed.body);
+      const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file' };
       if (poster) row.poster = poster;
       saved.push(row);
       patchLocal(tempId, (msg) => ({ files: msg.files.map((item, index) => index === i ? { ...item, progress: 100 } : item) }));
@@ -699,7 +701,7 @@ export async function sendFiles(list) {
     await postMessage({ content, files: saved, reply }, target);
     dismissLocal(tempId);
   } catch (err) {
-    patchLocal(tempId, () => ({ pending: false, failed: true }));
+    patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');
   }
 }

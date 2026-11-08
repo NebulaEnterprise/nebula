@@ -271,12 +271,16 @@ export function startTunnelProxy() {
   navigator.serviceWorker.register(script.href, { scope: scope.href }).catch(() => {});
 }
 
-export function uploadFile(file, onProgress, name) {
+export function uploadFile(file, onProgress, name, path) {
   const token = localStorage.getItem('dc_token') || '';
   const label = name || file.name || 'file';
+  const target = path
+    ? getApiBase() + path
+    : getApiBase() + '/api/upload?slot=file&name=' + encodeURIComponent(label);
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', getApiBase() + '/api/upload?slot=file&name=' + encodeURIComponent(label));
+    xhr.open('POST', target);
+    xhr.timeout = 60000;
     xhr.setRequestHeader('Authorization', 'Bearer ' + token);
     xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
     xhr.setRequestHeader('ngrok-skip-browser-warning', 'true');
@@ -296,6 +300,31 @@ export function uploadFile(file, onProgress, name) {
       else resolve(data);
     };
     xhr.onerror = () => reject(new Error('Could not reach your server'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out'));
     xhr.send(file);
   });
+}
+
+async function once(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    return fn();
+  }
+}
+
+export async function uploadGif(file, onProgress) {
+  if (file.size > 25 * 1024 * 1024) throw new Error('GIFs can be up to 25 MB');
+  const id = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+  const size = 512 * 1024;
+  const count = Math.max(1, Math.ceil(file.size / size));
+  let sent = 0;
+  for (let index = 0; index < count; index++) {
+    const part = file.slice(index * size, Math.min(file.size, (index + 1) * size), 'application/octet-stream');
+    const path = '/api/upload/part?id=' + encodeURIComponent(id) + '&index=' + index;
+    await once(() => uploadFile(part, null, 'part.gif', path));
+    sent += part.size;
+    if (onProgress) onProgress(Math.min(99, Math.round((sent / file.size) * 100)));
+  }
+  return api('/api/upload/finish', { method: 'POST', body: { id, count } });
 }
