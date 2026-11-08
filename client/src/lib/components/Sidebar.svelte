@@ -72,7 +72,7 @@
 
   function editProfile() {
     accountOpen = false;
-    ui.userPage = 'profile';
+    ui.userPage = 'look';
     ui.userSettings = true;
   }
 
@@ -282,30 +282,33 @@
       <div class="account-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
         {#if ui.me?.bannerUrl}<Photo url={ui.me.bannerUrl} fill />{/if}
       </div>
-      <div class="account-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
-        {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
-        <i style="background:{presenceLabel[2]}"></i>
-      </div>
-      {#if editingStatus}
-        <form class="account-status-edit" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
-          <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
-          <button type="submit" class="btn sm brand">Save</button>
-        </form>
-      {:else if ui.me?.customStatus}
-        <div class="account-bubble">
-          <span>{ui.me.customStatus}</span>
-          <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
-          <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
+      <div class="account-face">
+        <div class="account-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
+          {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
+          <i style="background:{presenceLabel[2]}"></i>
         </div>
-      {/if}
+        {#if editingStatus}
+          <form class="account-status-edit" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
+            <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
+            <button type="submit" class="btn sm brand">Save</button>
+          </form>
+        {:else if ui.me?.customStatus}
+          <div class="account-bubble">
+            <span>{ui.me.customStatus}</span>
+            <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
+            <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
+          </div>
+        {/if}
+      </div>
       <div class="account-body">
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-        <p class="handle">
-          <span>@{ui.me?.username}</span>
+        <div class="account-handle">
+          <span class="account-user">@{ui.me?.username}{ui.me?.pronouns ? ' · ' + ui.me.pronouns : ''}</span>
           {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
           <StaffBadge rank={ui.me?.staff || ''} />
           <DevBadge on={!!ui.me?.developer} />
-        </p>
+        </div>
+        {#if ui.me?.bio}<p class="account-bio">{ui.me.bio}</p>{/if}
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
         <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
           <i style="background:{presenceLabel[2]}"></i>

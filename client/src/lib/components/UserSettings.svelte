@@ -201,6 +201,10 @@
                 {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
               </div>
             </section>
+            <div class="field">
+              <label>About me</label>
+              <textarea bind:value={form.bio} maxlength="190" rows="4" placeholder="Tell people a little about yourself"></textarea>
+            </div>
           {/if}
           {#if page !== 'look' && page !== 'notify'}
             <div style="height:16px"></div>
@@ -213,6 +217,7 @@
             <div class="preview-banner">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
+            {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
               {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
