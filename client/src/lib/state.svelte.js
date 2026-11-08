@@ -179,6 +179,7 @@ async function enterApp() {
   pollTimer = null;
   watchChat();
   startClocks();
+  startPresence();
 }
 
 export async function login(email, password) {
@@ -1641,6 +1642,56 @@ async function pollActivity() {
   } catch (err) {
     if (err && err.status === 404) activityMissing = true;
   }
+}
+
+let presenceStarted = false;
+let lastLocalActivity = Date.now();
+let lastSeenPing = 0;
+
+function applyPresence(status, lastSeen) {
+  if (!ui.me || !status) return;
+  const seen = lastSeen || ui.me.lastSeen;
+  if (ui.me.status === status && ui.me.lastSeen === seen) return;
+  ui.me = { ...ui.me, status, lastSeen: seen };
+  ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, status, lastSeen: ui.me.hideLastSeen ? null : seen } : member);
+  if (ui.popout?.user?.id === ui.me.id) {
+    ui.popout = { ...ui.popout, user: { ...ui.popout.user, status, lastSeen: ui.me.hideLastSeen ? null : seen } };
+  }
+}
+
+async function pingSeen() {
+  if (!localStorage.getItem('dc_token') || !ui.me) return;
+  try {
+    const data = await api('/api/seen', { method: 'POST', body: {} });
+    applyPresence(data.status, data.lastSeen);
+  } catch (_) {}
+}
+
+function noteActivity() {
+  if (document.hidden) return;
+  lastLocalActivity = Date.now();
+  const now = Date.now();
+  if (now - lastSeenPing < 20000) return;
+  lastSeenPing = now;
+  pingSeen();
+}
+
+function startPresence() {
+  if (presenceStarted || typeof window === 'undefined') return;
+  presenceStarted = true;
+  lastLocalActivity = Date.now();
+  for (const type of ['pointerdown', 'keydown', 'mousemove', 'touchstart']) {
+    window.addEventListener(type, noteActivity, { passive: true });
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) noteActivity();
+  });
+  pingSeen();
+  setInterval(() => {
+    if (!ui.me || (ui.me.statusChoice || 'online') !== 'online') return;
+    const idle = Date.now() - lastLocalActivity >= 10 * 60 * 1000;
+    applyPresence(idle ? 'idle' : 'online', ui.me.lastSeen);
+  }, 15000);
 }
 
 function startClocks() {

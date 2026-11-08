@@ -14,6 +14,16 @@
   const left = $derived(Math.max(8, Math.min(ui.popout?.x || 80, window.innerWidth - 340)));
   const top = $derived(Math.max(8, Math.min((ui.popout?.y || 80) - 20, window.innerHeight - 460)));
 
+  function lastSeenLabel(value) {
+    const t = Number(value);
+    if (!t) return '';
+    const d = new Date(t);
+    if (Number.isNaN(d.getTime())) return '';
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return 'Today at ' + time;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + time;
+  }
+
   async function act(kind) {
     try {
       await friendAct(kind, kind === 'request' ? { username: u.username } : { userId: u.id });
@@ -67,11 +77,17 @@
           <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
         {/if}
       </div>
-      <div class="pop-meta">
+      <div class="pop-meta" class:with-seen={!!u.lastSeen}>
         <div>
           <span>Member since</span>
           <strong>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</strong>
         </div>
+        {#if u.lastSeen}
+          <div class="pop-seen">
+            <span>Last seen</span>
+            <strong>{lastSeenLabel(u.lastSeen)}</strong>
+          </div>
+        {/if}
         <div>
           <span>User id</span>
           <strong>{u.uid ?? '—'}</strong>

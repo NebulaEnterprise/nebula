@@ -846,6 +846,16 @@ function userOwnsBadge(u, id) {
   return false;
 }
 
+const IDLE_MS = 10 * 60 * 1000;
+
+function effectiveStatus(u) {
+  const chosen = u && u.status ? u.status : 'online';
+  if (chosen !== 'online') return chosen;
+  const seen = Number(u && u.lastSeen) || 0;
+  if (!seen || Date.now() - seen > IDLE_MS) return 'idle';
+  return 'online';
+}
+
 function publicUser(u) {
   if (!u) return null;
   return {
@@ -857,7 +867,10 @@ function publicUser(u) {
     bio: String(u.bio || '').replace(/\s+/g, ' ').trim().slice(0, 29),
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
-    status: u.status || 'online',
+    status: effectiveStatus(u),
+    statusChoice: u.status || 'online',
+    lastSeen: u.hideLastSeen ? null : (Number(u.lastSeen) || null),
+    hideLastSeen: !!u.hideLastSeen,
     customStatus: u.customStatus || '',
     accentColor: u.accentColor || '#7c5cff',
     avatarColor: u.avatarColor || '#7c5cff',
@@ -1021,6 +1034,8 @@ app.post('/api/auth/verify', (req, res) => {
     passwordHash: entry.passwordHash,
     bio: '', aboutMe: '', pronouns: '',
     status: 'online',
+    lastSeen: Date.now(),
+    hideLastSeen: false,
     customStatus: '',
     accentColor: '#7c5cff',
     avatarColor: '#7c5cff',
@@ -1051,6 +1066,7 @@ app.post('/api/auth/login', (req, res) => {
   }
   user.token = makeToken();
   user.status = 'online';
+  user.lastSeen = Date.now();
   save(USERS_FILE, users);
   res.json({ ok: true, token: user.token, user: publicUser(user) });
 });
@@ -1615,9 +1631,19 @@ app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
 });
 
+app.post('/api/seen', auth, (req, res) => {
+  const now = Date.now();
+  const prev = Number(req.user.lastSeen) || 0;
+  if (now - prev > 15000) {
+    req.user.lastSeen = now;
+    save(USERS_FILE, users);
+  }
+  res.json({ ok: true, lastSeen: Number(req.user.lastSeen) || now, status: effectiveStatus(req.user) });
+});
+
 app.patch('/api/me', auth, (req, res) => {
   const {
-    username, displayName, bio, aboutMe, pronouns, customStatus, status,
+    username, displayName, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
     accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
@@ -1646,7 +1672,11 @@ app.patch('/api/me', auth, (req, res) => {
   if (aboutMe !== undefined) req.user.aboutMe = String(aboutMe).slice(0, 190);
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
-  if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) req.user.status = status;
+  if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) {
+    req.user.status = status;
+    if (status === 'online') req.user.lastSeen = Date.now();
+  }
+  if (hideLastSeen !== undefined) req.user.hideLastSeen = !!hideLastSeen;
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);

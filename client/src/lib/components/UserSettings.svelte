@@ -20,7 +20,18 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy' };
+
+  async function toggleLastSeen() {
+    const hideLastSeen = !ui.me?.hideLastSeen;
+    try {
+      const data = await api('/api/me', { method: 'PATCH', body: { hideLastSeen } });
+      ui.me = { ...ui.me, ...data.user, hideLastSeen };
+      toast(hideLastSeen ? 'Last seen hidden' : 'Last seen shown');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
   const page = $derived(ui.userPage || 'profile');
   let form = $state({
     username: ui.me?.username || '',
@@ -177,6 +188,7 @@
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}>Profile</button>
       <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}>Appearance</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}>Notifications</button>
+      <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}>Privacy</button>
       <div class="group">Account</div>
       <button class="danger" onclick={logout}>Log out</button>
     </aside>
@@ -197,6 +209,12 @@
               <label>Notification sound</label>
               <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
               <p class="hint">Plays a sound for every new message and every mention, including while this tab is in the background.</p>
+            </div>
+          {:else if page === 'privacy'}
+            <div class="field">
+              <label>Last seen</label>
+              <button type="button" class="btn" class:brand={!ui.me?.hideLastSeen} onclick={toggleLastSeen}>{ui.me?.hideLastSeen ? 'Hidden' : 'Shown'}</button>
+              <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
             <section class="look-block">
@@ -281,7 +299,7 @@
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
-          {#if page !== 'look' && page !== 'notify'}
+          {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
