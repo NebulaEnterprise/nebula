@@ -766,7 +766,13 @@ async function postMessage(payload, target) {
   const body = { content, typingToken };
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
-  if (payload.reply && payload.reply.id) body.reply = { id: payload.reply.id };
+  const replies = (Array.isArray(payload.replies) ? payload.replies : (payload.reply ? [payload.reply] : []))
+    .filter((row) => row && row.id)
+    .slice(0, 5);
+  if (replies.length) {
+    body.replies = replies.map((row) => ({ id: row.id }));
+    body.reply = { id: replies[0].id };
+  }
   const data = where.mode === 'dm' && where.dmUserId
     ? await api('/api/dms/' + where.dmUserId + '/messages', { method: 'POST', body })
     : await api('/api/channels/' + where.channelId + '/messages', { method: 'POST', body });
@@ -804,7 +810,7 @@ export async function sendMessage() {
     return;
   }
   if (!content) return;
-  const reply = ui.reply;
+  const replies = (Array.isArray(ui.reply) ? ui.reply : (ui.reply ? [ui.reply] : [])).filter((row) => row && row.id).slice(0, 5);
   const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
   ui.composer = '';
@@ -816,10 +822,11 @@ export async function sendMessage() {
     createdAt: new Date().toISOString(),
     author: ui.me,
     content,
-    reply: reply || null,
+    reply: replies[0] || null,
+    replies,
   }];
   try {
-    await postMessage({ content, reply, replaceId: tempId });
+    await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message);
@@ -861,7 +868,7 @@ export async function sendFiles(list) {
   if (!files.length) return;
   ui.attachOpen = false;
   const content = ui.composer.trim();
-  const reply = ui.reply;
+  const replies = (Array.isArray(ui.reply) ? ui.reply : (ui.reply ? [ui.reply] : [])).filter((row) => row && row.id).slice(0, 5);
   ui.composer = '';
   ui.reply = null;
   const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
@@ -875,7 +882,8 @@ export async function sendFiles(list) {
     createdAt: new Date().toISOString(),
     author: ui.me,
     content,
-    reply: reply || null,
+    reply: replies[0] || null,
+    replies,
     files: locals,
   }];
   try {
@@ -909,7 +917,7 @@ export async function sendFiles(list) {
       saved.push(row);
       report(i, 100);
     }
-    await postMessage({ content, files: saved, reply, replaceId: tempId }, target);
+    await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
   } catch (err) {
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');

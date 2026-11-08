@@ -119,29 +119,54 @@
     return 'Message';
   }
 
+  const replyTargets = $derived(Array.isArray(ui.reply) ? ui.reply : (ui.reply?.id ? [ui.reply] : []));
+
+  function setReplies(list) {
+    ui.reply = list.length ? list.slice(0, 5) : null;
+  }
+
   function beginReply(msg) {
+    if (!msg || msg.pending || msg.failed) return;
     const pinned = !box || box.scrollHeight - box.scrollTop - box.clientHeight < 140;
     ui.editing = null;
-    const author = liveAuthor(msg.author);
-    ui.reply = {
-      id: msg.id,
-      name: author?.displayName || author?.username || 'Someone',
-      preview: previewText(msg),
-      author,
-    };
+    const current = replyTargets;
+    if (current.some((row) => row.id === msg.id)) {
+      setReplies(current.filter((row) => row.id !== msg.id));
+    } else if (current.length >= 5) {
+      toast('You can reply to 5 messages');
+    } else {
+      const author = liveAuthor(msg.author);
+      setReplies([...current, {
+        id: msg.id,
+        name: author?.displayName || author?.username || 'Someone',
+        preview: previewText(msg),
+        author,
+      }]);
+    }
     menu = null;
     if (pinned) pinBottom();
     queueMicrotask(() => composerEl && composerEl.focus({ preventScroll: true }));
   }
 
-  function replyPerson(msg) {
-    const reply = msg?.reply || {};
-    const src = ui.messages.find((row) => row.id === reply.id);
-    const author = liveAuthor(src?.author || reply.author || {});
+  function onMessageClick(event, msg) {
+    if (event.target.closest('button, a, input, textarea, label, video, img, .file-card, .poll-card, .msg-tools, .reacts')) return;
+    const selected = window.getSelection();
+    if (selected && String(selected).trim()) return;
+    beginReply(msg);
+  }
+
+  function messageReplies(msg) {
+    if (Array.isArray(msg?.replies) && msg.replies.length) return msg.replies.slice(0, 5);
+    return msg?.reply?.id ? [msg.reply] : [];
+  }
+
+  function replyPerson(reply) {
+    const src = ui.messages.find((row) => row.id === reply?.id);
+    const author = liveAuthor(src?.author || reply?.author || {});
     return {
       ...author,
-      displayName: author?.displayName || reply.name || 'Someone',
-      username: author?.username || reply.name || '',
+      displayName: author?.displayName || reply?.name || 'Someone',
+      username: author?.username || reply?.name || '',
     };
   }
 
@@ -466,7 +491,7 @@
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg" class:has-reply={!!msg.reply} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id}>
+    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -475,16 +500,20 @@
         <button type="button" class="msg-more" title="More" onclick={(e) => openMenu(e, msg)}><MoreHorizontal size={18} /></button>
       </div>
       {/if}
-      {#if msg.reply}
-        {@const person = replyPerson(msg)}
-        <button type="button" class="reply-ref" onclick={() => jumpTo(msg.reply.id)}>
-          <span class="reply-main">
-            <i class="reply-spine"></i>
-            <Avatar user={person} size={16} dot={false} />
-            <strong><Name user={person} /></strong>
-            <em>{msg.reply.preview}</em>
-          </span>
-        </button>
+      {#if messageReplies(msg).length}
+        <div class="reply-stack">
+          {#each messageReplies(msg) as reply (reply.id)}
+            {@const person = replyPerson(reply)}
+            <button type="button" class="reply-ref" onclick={() => jumpTo(reply.id)}>
+              <span class="reply-main">
+                <i class="reply-spine"></i>
+                <Avatar user={person} size={16} dot={false} />
+                <strong><Name user={person} /></strong>
+                <em>{reply.preview}</em>
+              </span>
+            </button>
+          {/each}
+        </div>
       {/if}
       <button type="button" class="msg-av" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
@@ -545,7 +574,7 @@
       <button type="button" onclick={() => beginEdit(current)}><Pencil size={16} /> Edit Message</button>
     {/if}
     {#if current}
-      <button type="button" onclick={() => beginReply(current)}><Reply size={16} /> Reply</button>
+      <button type="button" onclick={() => beginReply(current)}><Reply size={16} /> {replyTargets.some((row) => row.id === current.id) ? 'Remove Reply' : 'Reply'}</button>
       <button type="button" onclick={() => beginForward(current)}><Forward size={16} /> Forward</button>
     {/if}
     {#if current && menu.mine}
@@ -566,10 +595,14 @@
   {#if ui.typers.length}
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
-  {#if ui.reply}
-    <div class="compose-note reply-note">
-      <span class="reply-label">Replying to <Name user={ui.reply.author || { displayName: ui.reply.name, username: ui.reply.name }} /></span>
-      <button type="button" class="btn icon" title="Cancel reply" onclick={() => (ui.reply = null)}>✕</button>
+  {#if replyTargets.length}
+    <div class="reply-notes">
+      {#each replyTargets as reply (reply.id)}
+        <div class="compose-note reply-note">
+          <span class="reply-label">Replying to <Name user={reply.author || { displayName: reply.name, username: reply.name }} /> <em>{reply.preview}</em></span>
+          <button type="button" class="btn icon" title="Remove reply" onclick={() => setReplies(replyTargets.filter((row) => row.id !== reply.id))}>✕</button>
+        </div>
+      {/each}
     </div>
   {/if}
   {#if ui.editing}

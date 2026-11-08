@@ -528,7 +528,11 @@ function messageStamp(list) {
   return (list || []).map((msg) => {
     if (!msg) return '';
     const reacts = (msg.reactions || []).map((row) => row.emoji + ':' + ((row.users || []).length)).join(',');
-    return [msg.id, msg.editedAt || '', reacts, msg.reply && msg.reply.id || '', msg.forward && msg.forward.name || ''].join('~');
+    const replyIds = (Array.isArray(msg.replies) && msg.replies.length ? msg.replies : (msg.reply ? [msg.reply] : []))
+      .map((row) => row && row.id)
+      .filter(Boolean)
+      .join(',');
+    return [msg.id, msg.editedAt || '', reacts, replyIds, msg.forward && msg.forward.name || ''].join('~');
   }).join('|');
 }
 
@@ -562,19 +566,41 @@ function canSeeRoom(user, roomId) {
 }
 
 function readReply(body, roomId) {
-  const reply = body && body.reply;
-  const id = reply && String(reply.id || '');
-  if (!id) return null;
+  const replies = readReplies(body, roomId);
+  return replies[0] || null;
+}
+
+function readReplies(body, roomId) {
+  const raw = body && Array.isArray(body.replies) ? body.replies : (body && body.reply ? [body.reply] : []);
   const list = messages[roomId] || [];
-  const src = list.find((msg) => msg && msg.id === id);
-  if (!src) return null;
-  const live = src.authorId ? users[src.authorId] : null;
-  const author = slimAuthor(live || src.author) || { displayName: 'Someone' };
-  if (live) author.avatarUrl = publishedMedia(live, 'avatar');
-  const name = author.displayName || author.username || 'Someone';
-  const text = String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
-  const preview = text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message'));
-  return { id: src.id, name, preview, authorId: author.id || src.authorId || '', author };
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (out.length >= 5) break;
+    const id = item && String(item.id || '');
+    if (!id || seen.has(id)) continue;
+    const src = list.find((msg) => msg && msg.id === id);
+    if (!src) continue;
+    seen.add(id);
+    const live = src.authorId ? users[src.authorId] : null;
+    const author = slimAuthor(live || src.author) || { displayName: 'Someone' };
+    if (live) author.avatarUrl = publishedMedia(live, 'avatar');
+    const name = author.displayName || author.username || 'Someone';
+    const text = String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+    const preview = text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message'));
+    out.push({ id: src.id, name, preview, authorId: author.id || src.authorId || '', author });
+  }
+  return out;
+}
+
+function presentReply(reply) {
+  if (!reply) return null;
+  const replyId = reply.authorId || (reply.author && reply.author.id);
+  const replyLive = replyId ? users[replyId] : null;
+  const replyAuthor = Object.assign({}, reply.author || {}, replyLive ? slimAuthor(replyLive) : {});
+  if (!replyAuthor.displayName) replyAuthor.displayName = reply.name || 'Someone';
+  if (replyLive) replyAuthor.avatarUrl = publishedMedia(replyLive, 'avatar');
+  return Object.assign({}, reply, { author: replyAuthor });
 }
 
 function cleanReactionEmoji(user, emoji) {
@@ -610,14 +636,10 @@ function presentMessage(msg, viewerId) {
   const author = Object.assign(base, live ? slimAuthor(live) : {});
   author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
   const out = Object.assign({}, msg, { author });
-  if (out.reply) {
-    const replyId = out.reply.authorId || (out.reply.author && out.reply.author.id);
-    const replyLive = replyId ? users[replyId] : null;
-    const replyAuthor = Object.assign({}, out.reply.author || {}, replyLive ? slimAuthor(replyLive) : {});
-    if (!replyAuthor.displayName) replyAuthor.displayName = out.reply.name || 'Someone';
-    if (replyLive) replyAuthor.avatarUrl = publishedMedia(replyLive, 'avatar');
-    out.reply = Object.assign({}, out.reply, { author: replyAuthor });
-  }
+  const storedReplies = Array.isArray(out.replies) && out.replies.length ? out.replies : (out.reply ? [out.reply] : []);
+  const replies = storedReplies.map(presentReply).filter(Boolean).slice(0, 5);
+  out.replies = replies;
+  out.reply = replies[0] || null;
   if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
   out.reactions = publicReactions(msg, viewerId);
   return out;
@@ -1970,6 +1992,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     files: extra.files,
     poll: extra.poll,
     mentions: parseMentions(found.guild, req.user, extra.content),
+    replies: readReplies(req.body, found.channel.id),
     reply: readReply(req.body, found.channel.id),
     createdAt: new Date().toISOString(),
   };
@@ -2520,6 +2543,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     content: extra.content,
     files: extra.files,
     poll: extra.poll,
+    replies: readReplies(req.body, channelId),
     reply: readReply(req.body, channelId),
     createdAt: new Date().toISOString(),
   };
