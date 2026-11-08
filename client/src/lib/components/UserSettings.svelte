@@ -81,26 +81,6 @@
 
   let aboutDraft = $state(ui.me?.aboutMe || '');
   let shadeSlot = $state(0);
-  let wheelOpen = $state(false);
-  let wheelAt = $state({ left: 0, top: 0 });
-
-  function openWheel(slot, event) {
-    const again = wheelOpen && shadeSlot === slot;
-    shadeSlot = slot;
-    if (again) {
-      wheelOpen = false;
-      return;
-    }
-    const box = event.currentTarget.getBoundingClientRect();
-    const width = 320;
-    const height = 200;
-    let left = box.left;
-    let top = box.bottom + 8;
-    if (left + width > window.innerWidth - 12) left = Math.max(12, window.innerWidth - width - 12);
-    if (top + height > window.innerHeight - 12) top = Math.max(12, box.top - height - 8);
-    wheelAt = { left, top };
-    wheelOpen = true;
-  }
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -311,21 +291,13 @@
                   <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
                 {/each}
               </div>
-              <div class="rgb-head">
-                {#if form.profileStyle === 'solid'}
-                  <button type="button" class="rgb-dot" class:on={wheelOpen} onclick={(e) => openWheel(0, e)}>
-                    <i style="background:{form.profileColors[0]}"></i>
-                    Color
-                  </button>
-                {:else}
-                  {#each [0, 1] as i}
-                    <button type="button" class="rgb-dot" class:on={wheelOpen && shadeSlot === i} onclick={(e) => openWheel(i, e)}>
-                      <i style="background:{form.profileColors[i]}"></i>
-                      {i === 0 ? 'Main' : 'Tone'}
-                    </button>
-                  {/each}
-                {/if}
-              </div>
+              {#if form.profileStyle !== 'solid'}
+                <div class="style-seg wheel-slots">
+                  <button type="button" class:on={shadeSlot === 0} onclick={() => (shadeSlot = 0)}>Main</button>
+                  <button type="button" class:on={shadeSlot === 1} onclick={() => (shadeSlot = 1)}>Tone</button>
+                </div>
+              {/if}
+              <ColorWheel value={form.profileColors[form.profileStyle === 'solid' ? 0 : shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(form.profileStyle === 'solid' ? 0 : shadeSlot, c)} />
             </section>
             <div class="field">
               <label>Bio</label>
@@ -463,10 +435,4 @@
       </div>
     </div>
   </div>
-  {#if wheelOpen}
-    <button type="button" class="wheel-back" aria-label="Close color" onclick={(e) => { e.stopPropagation(); wheelOpen = false; }}></button>
-    <div class="wheel-pop" style="left:{wheelAt.left}px;top:{wheelAt.top}px" onclick={(e) => e.stopPropagation()}>
-      <ColorWheel value={form.profileColors[shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(shadeSlot, c)} />
-    </div>
-  {/if}
 </div>

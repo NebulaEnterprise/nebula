@@ -974,22 +974,7 @@ img { max-width: 100%; }
   font-size: 13px; font-weight: 650;
 }
 .style-seg button.on { background: #2a2c38; color: #fff; }
-.rgb-head { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; }
-.wheel-back { position: fixed; inset: 0; z-index: 40; background: transparent; }
-.wheel-pop {
-  position: fixed; z-index: 41;
-  padding: 12px; border-radius: 14px; background: #1c1d26;
-  border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-  animation: none;
-}
-.wheel-pop .picker { margin: 0; animation: none; }
-.rgb-dot {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 10px 3px 3px; border-radius: 999px;
-  border: 1px solid transparent; color: var(--muted); font-size: 13px; font-weight: 650;
-}
-.rgb-dot.on { border-color: var(--line); background: #101117; color: var(--text); }
-.rgb-dot i { width: 18px; height: 18px; border-radius: 50%; display: block; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); }
+.wheel-slots { margin-top: 12px; }
 .colorbox { display: flex; align-items: flex-start; gap: 8px; }
 .colorbox-swatches { display: flex; flex-direction: column; gap: 8px; }
 .colorbox-swatch { width: 22px; height: 22px; border-radius: 6px; border: 2px solid transparent; padding: 0; }
