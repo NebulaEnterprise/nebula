@@ -1,6 +1,7 @@
 <script>
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
+  import TagPill from './TagPill.svelte';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
@@ -26,7 +27,7 @@
     <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
       <Avatar user={m} size={34} />
       <div class="meta">
-        <strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong>
+        <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><TagPill tag={shown(m).showcase} /></div>
         {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
       </div>
     </button>
@@ -37,7 +38,7 @@
       <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
         <Avatar user={m} size={34} />
         <div class="meta">
-          <strong><Name user={shown(m)} /></strong>
+          <div class="name-row"><strong><Name user={shown(m)} /></strong><TagPill tag={shown(m).showcase} /></div>
           {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
         </div>
       </button>

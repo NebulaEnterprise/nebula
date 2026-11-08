@@ -2,6 +2,7 @@
   import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
+  import TagPill from './TagPill.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
@@ -71,6 +72,7 @@
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
       staff: ui.mode === 'chat' ? (member ? (member.staff || '') : (author.staff || '')) : '',
       developer: !!(member?.developer || mine?.developer || author.developer),
+      showcase: live?.showcase || author.showcase || null,
     };
   }
 
@@ -535,6 +537,7 @@
       <div class="msg-body">
         <div class="msg-head">
           <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
+          <TagPill tag={liveAuthor(msg.author)?.showcase} />
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

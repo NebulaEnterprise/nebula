@@ -325,6 +325,9 @@ function hydrateGuild(g) {
   if (!g.joinMode) g.joinMode = 'open';
   if (g.about == null) g.about = '';
   if (g.tag == null) g.tag = '';
+  if (g.tagIcon == null) g.tagIcon = '';
+  if (g.vanity == null) g.vanity = '';
+  if (g.id === OFFICIAL_ID) g.vanity = 'nebula';
   if (g.iconUrl == null) g.iconUrl = '';
   if (g.bannerUrl == null) g.bannerUrl = '';
   if (!g.lockedUntil) g.lockedUntil = 0;
@@ -364,8 +367,62 @@ function slugChannel(name) {
     .slice(0, 32);
 }
 
+const TAG_ICONS = ['⚡', '💜', '💎', '🔥', '🌸', '💧', '💙', '🍃', '❤️', '💖', '⭐', '👑', '💀', '👻', '🌙', '☀️', '✨', '🍄', '🐾', '🎵', '🎮', '⚔️', '🛡️', '🐱', '🐰', '☁️', '🌈', '❄️', '🎃', '🦋', '🐟', '🪐', '🍀', '♥', '★', '☆', '♡', '✦'];
+const RESERVED_LINKS = new Set(['api', 'invite', 'assets', 'files', 'uploads', 'index', 'nebula', 'sw']);
+
+function memberCount(g) {
+  return Object.keys((g && g.members) || {}).length;
+}
+
+function canCustomize(g) {
+  return !!g && (g.id === OFFICIAL_ID || memberCount(g) >= 5);
+}
+
+function cleanTag(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+}
+
+function cleanSlug(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20);
+}
+
 function inviteCode() {
-  return crypto.randomBytes(4).toString('hex');
+  for (let i = 0; i < 6; i += 1) {
+    const code = crypto.randomBytes(4).toString('hex');
+    const taken = Object.values(guilds.servers || {}).some((g) =>
+      (g.vanity && String(g.vanity).toLowerCase() === code) || (g.invites && g.invites[code]));
+    if (!taken) return code;
+  }
+  return crypto.randomBytes(6).toString('hex');
+}
+
+function findByInvite(slug) {
+  const key = cleanSlug(slug);
+  if (!key) return null;
+  for (const g of Object.values(guilds.servers || {})) {
+    if (g.vanity && String(g.vanity).toLowerCase() === key) return g;
+  }
+  for (const g of Object.values(guilds.servers || {})) {
+    if (g.invites && g.invites[key]) return g;
+  }
+  return null;
+}
+
+function showcaseOf(u) {
+  if (!u || !u.showcaseServerId || !guilds.servers) return null;
+  const g = guilds.servers[u.showcaseServerId];
+  if (!g || !g.tag || !g.members || !g.members[u.id] || !canCustomize(g)) return null;
+  return { serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '' };
+}
+
+function tagChoices(u) {
+  if (!u || !guilds.servers) return [];
+  const out = [];
+  for (const g of Object.values(guilds.servers)) {
+    if (!g || !g.tag || !g.members || !g.members[u.id] || !canCustomize(g)) continue;
+    out.push({ serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '' });
+  }
+  return out;
 }
 
 const MANAGE_MASK = PERM.MANAGE_CHANNELS | PERM.MANAGE_ROLES | PERM.MANAGE_SERVER | PERM.ADMIN;
@@ -530,6 +587,7 @@ function slimAuthor(u) {
     avatarColor: u.avatarColor || '#7c5cff',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
+    showcase: showcaseOf(u),
   };
 }
 
@@ -800,6 +858,10 @@ function publicUser(u) {
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
+    shownBadges: Array.isArray(u.shownBadges) ? u.shownBadges.filter((id) => id === 'early' || id === 'staff' || id === 'developer') : null,
+    showcaseServerId: u.showcaseServerId || '',
+    showcase: showcaseOf(u),
+    tagChoices: tagChoices(u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };
@@ -1542,6 +1604,7 @@ app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status,
     accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
+    shownBadges, showcaseServerId,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -1572,6 +1635,20 @@ app.patch('/api/me', auth, (req, res) => {
     if (!req.user.bannerUrl) req.user.bannerPath = '';
   }
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
+  if (Array.isArray(shownBadges)) {
+    req.user.shownBadges = [...new Set(shownBadges.filter((id) => id === 'early' || id === 'staff' || id === 'developer'))];
+  }
+  if (showcaseServerId !== undefined) {
+    const picked = String(showcaseServerId || '');
+    if (!picked) req.user.showcaseServerId = '';
+    else {
+      const home = guilds.servers[picked];
+      if (!home || !home.members || !home.members[req.user.id] || !home.tag || !canCustomize(home)) {
+        return res.status(400).json({ error: 'You cannot showcase that server' });
+      }
+      req.user.showcaseServerId = picked;
+    }
+  }
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   save(USERS_FILE, users);
@@ -1624,7 +1701,7 @@ app.post('/api/servers', auth, (req, res) => {
   g.invites[code] = { code, inviterId: req.user.id, createdAt: new Date().toISOString(), uses: 0 };
   guilds.servers[id] = g;
   saveGuilds();
-  res.json({ ok: true, server: publicServer(g, req.user), invite: code });
+  res.json({ ok: true, server: publicServer(g, req.user), slug: code, invite: code });
 });
 
 app.patch('/api/servers/:id', auth, (req, res) => {
@@ -1979,29 +2056,30 @@ app.get('/api/servers/:id/invites', auth, (req, res) => {
   const g = requireGuild(req, res, PERM.INVITE);
   if (!g) return;
   const list = Object.values(g.invites || {}).map((inv) => ({
-    code: inv.code,
+    slug: inv.code,
     uses: inv.uses || 0,
     createdAt: inv.createdAt,
   }));
-  res.json({ ok: true, invites: list });
+  const custom = canCustomize(g) ? (g.vanity || '') : '';
+  res.json({ ok: true, vanity: custom, memberCount: memberCount(g), canCustomize: canCustomize(g), invites: custom ? [] : list });
 });
 
 app.post('/api/servers/:id/invites', auth, (req, res) => {
   const g = requireGuild(req, res, PERM.INVITE);
   if (!g) return;
+  if (canCustomize(g) && g.vanity) {
+    return res.json({ ok: true, slug: g.vanity, vanity: true });
+  }
   const code = inviteCode();
   g.invites[code] = { code, inviterId: req.user.id, createdAt: new Date().toISOString(), uses: 0 };
   saveGuilds();
-  res.json({ ok: true, code });
+  res.json({ ok: true, slug: code, vanity: false });
 });
 
 app.post('/api/invites/:code/join', auth, (req, res) => {
   ensureGuilds();
-  const code = String(req.params.code || '').trim().toLowerCase();
-  let found = null;
-  for (const g of Object.values(guilds.servers)) {
-    if (g.invites && g.invites[code]) { found = g; break; }
-  }
+  const code = cleanSlug(req.params.code);
+  const found = findByInvite(code);
   if (!found) return res.status(404).json({ error: 'Invite not found' });
   hydrateGuild(found);
   if (found.bans && found.bans[req.user.id]) return res.status(403).json({ error: 'You are banned from this server' });
@@ -2023,7 +2101,7 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
       return res.json({ ok: true, pending: true, server: publicServer(found, req.user) });
     }
     found.members[req.user.id] = { roles: ['everyone'], joinedAt: new Date().toISOString(), onboarded: !found.onboarding.enabled };
-    found.invites[code].uses = (found.invites[code].uses || 0) + 1;
+    if (found.invites && found.invites[code]) found.invites[code].uses = (found.invites[code].uses || 0) + 1;
     audit(found, req.user, 'joined the server');
     saveGuilds();
     wakeGuild(found);
@@ -2824,6 +2902,10 @@ function settingsView(g, user) {
     iconUrl: g.iconUrl || '',
     bannerUrl: g.bannerUrl || '',
     tag: g.tag || '',
+    tagIcon: g.tagIcon || '',
+    vanity: g.id === OFFICIAL_ID ? 'nebula' : (g.vanity || ''),
+    memberCount: memberCount(g),
+    canCustomize: canCustomize(g),
     about: g.about || '',
     showLobby: !!g.showLobby,
     color: g.color,
@@ -2920,7 +3002,27 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (b.icon != null) g.icon = clip(b.icon, 2) || g.icon;
     if (b.iconUrl != null) g.iconUrl = clip(b.iconUrl, 2000000);
     if (b.bannerUrl != null) g.bannerUrl = clip(b.bannerUrl, 2000000);
-    if (b.tag != null) g.tag = clip(b.tag, 4).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (b.tag != null || b.tagIcon != null || b.vanity != null) {
+      const nextTag = b.tag != null ? cleanTag(b.tag) : (g.tag || '');
+      const nextIcon = b.tagIcon != null ? String(b.tagIcon || '') : (g.tagIcon || '');
+      if (b.tag != null && nextTag && nextTag.length < 2) return res.status(400).json({ error: 'A tag is 2 to 4 letters or numbers' });
+      if (nextIcon && !TAG_ICONS.includes(nextIcon)) return res.status(400).json({ error: 'Pick a tag icon from the list' });
+      const wantsCustom = (b.tag != null && nextTag) || (b.vanity != null && g.id !== OFFICIAL_ID && cleanSlug(b.vanity));
+      if (wantsCustom && !canCustomize(g)) {
+        return res.status(400).json({ error: 'This server needs 5 members before it can have a tag or invite link' });
+      }
+      if (b.tag != null) g.tag = nextTag;
+      if (b.tagIcon != null) g.tagIcon = nextIcon && TAG_ICONS.includes(nextIcon) ? nextIcon : '';
+      if (g.id === OFFICIAL_ID) g.vanity = 'nebula';
+      else if (b.vanity != null) {
+        const slug = cleanSlug(b.vanity);
+        if (!slug) g.vanity = '';
+        else if (slug.length < 2) return res.status(400).json({ error: 'Invite link needs at least 2 characters' });
+        else if (RESERVED_LINKS.has(slug) || Object.values(guilds.servers).some((other) => other.id !== g.id && String(other.vanity || '').toLowerCase() === slug)) {
+          return res.status(409).json({ error: 'That invite link is taken' });
+        } else g.vanity = slug;
+      }
+    }
     if (b.about != null) g.about = clip(b.about, 2000);
     if (b.showLobby != null) g.showLobby = !!b.showLobby;
     if (b.color != null) g.color = clip(b.color, 20);

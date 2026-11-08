@@ -126,6 +126,7 @@ async function enterApp() {
   await loadFriends();
   await loadDms();
   await openServer(ui.serverId || 'nebula-official');
+  await consumeInvite();
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
   watchChat();
@@ -159,6 +160,29 @@ export async function verify(code) {
   ui.me = data.user;
   ui.pending = null;
   await enterApp();
+}
+
+function pendingInvite() {
+  const path = window.location.pathname || '';
+  const match = path.match(/\/invite\/([a-z0-9_-]+)/i);
+  if (match) return match[1].toLowerCase();
+  return (new URLSearchParams(window.location.search).get('invite') || '').toLowerCase();
+}
+
+export async function consumeInvite() {
+  const slug = pendingInvite();
+  if (!slug || !ui.me) return;
+  try {
+    const data = await api('/api/invites/' + encodeURIComponent(slug) + '/join', { method: 'POST', body: {} });
+    history.replaceState(null, '', '/');
+    if (data.pending) toast('Request sent. An owner has to accept you.');
+    else if (data.server) {
+      await openServer(data.server.id);
+      toast('Joined ' + (data.server.name || 'the server'));
+    }
+  } catch (err) {
+    toast(err.message);
+  }
 }
 
 export async function loadFriends() {
@@ -654,6 +678,9 @@ function adoptMe(members) {
     pronouns: mine.pronouns ?? ui.me.pronouns,
     bio: mine.bio ?? ui.me.bio,
     aboutMe: mine.aboutMe ?? ui.me.aboutMe,
+    shownBadges: Array.isArray(mine.shownBadges) ? mine.shownBadges : ui.me.shownBadges,
+    showcase: mine.showcase || ui.me.showcase || null,
+    showcaseServerId: mine.showcaseServerId ?? ui.me.showcaseServerId,
     status: mine.status || ui.me.status,
     avatarColor: mine.avatarColor || ui.me.avatarColor,
     avatarUrl: String(ui.me.avatarUrl || '').startsWith('blob:') ? ui.me.avatarUrl : (mine.avatarUrl || ui.me.avatarUrl),
@@ -1517,9 +1544,10 @@ async function watchAlerts() {
 export async function saveMe(body) {
   const previous = ui.me;
   const pending = { ...ui.me };
-  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor']) {
+  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor', 'showcaseServerId']) {
     if (body[key] !== undefined) pending[key] = body[key];
   }
+  if (Array.isArray(body.shownBadges)) pending.shownBadges = body.shownBadges;
   if (body.nameColors) pending.nameColors = body.nameColors;
   ui.me = pending;
   let data;

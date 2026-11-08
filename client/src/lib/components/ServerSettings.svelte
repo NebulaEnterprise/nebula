@@ -6,7 +6,7 @@
   import Select from './Select.svelte';
   import ColorWheel from './ColorWheel.svelte';
   import { ui, guildAction, reloadSettings, toast, loadMembers } from '../state.svelte.js';
-  import { ROLE_FLAGS, PERM } from '../format.js';
+  import { ROLE_FLAGS, PERM, TAG_ICONS, inviteLink } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api } from '../api.js';
 
@@ -30,6 +30,8 @@
 
   let name = $state(ui.settings?.name || '');
   let tag = $state(ui.settings?.tag || '');
+  let tagIcon = $state(ui.settings?.tagIcon || '');
+  let vanity = $state(ui.settings?.official ? 'nebula' : (ui.settings?.vanity || ''));
   let accent = $state(ui.settings?.theme?.accent || ui.settings?.color || '#7c6af7');
   let tint = $state(ui.settings?.theme?.tint || '');
   let about = $state(ui.settings?.about || '');
@@ -67,7 +69,7 @@
   }
 
   async function saveOverview() {
-    const body = { name, tag, color: accent, theme: { accent, tint: s.theme?.tint || '' } };
+    const body = { name, color: accent, theme: { accent, tint: s.theme?.tint || '' } };
     if (iconUrl) body.iconUrl = iconUrl;
     if (bannerUrl) body.bannerUrl = bannerUrl;
     await run(() => guildAction({ type: 'settings', ...body }));
@@ -122,7 +124,36 @@
           </label>
         </div>
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" /></div>
-        <div class="field"><label>Server tag</label><input bind:value={tag} maxlength="4" placeholder="ILY" /></div>
+        {#if s.canCustomize}
+          <div class="field">
+            <label>Server link</label>
+            {#if s.official}
+              <input value="nebula" disabled />
+            {:else}
+              <input bind:value={vanity} maxlength="20" placeholder="your-server" />
+            {/if}
+            <p class="hint">{inviteLink(s.official ? 'nebula' : vanity) || 'Pick 2 or more letters. This becomes the invite link.'}</p>
+          </div>
+          <div class="field">
+            <label>Server tag</label>
+            <p class="hint">2 to 4 letters or numbers. Members can wear it next to their name.</p>
+            <input bind:value={tag} maxlength="4" placeholder="ILY" />
+          </div>
+          <p class="label">Tag icon</p>
+          <div class="tag-icons">
+            <button type="button" class:on={!tagIcon} onclick={() => (tagIcon = '')}>None</button>
+            {#each TAG_ICONS as icon}
+              <button type="button" class:on={tagIcon === icon} onclick={() => (tagIcon = icon)}>{icon}</button>
+            {/each}
+          </div>
+          {#if tag}<p class="hint">Preview <em class="tag-pill">{#if tagIcon}<i>{tagIcon}</i>{/if}{tag}</em></p>{/if}
+          <div class="look-actions">
+            <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, vanity: s.official ? 'nebula' : vanity }))}>Save tag</button>
+            <button class="btn" style="width:auto" onclick={() => { tag = ''; tagIcon = ''; run(() => guildAction({ type: 'settings', tag: '', tagIcon: '' })); }}>Remove tag</button>
+          </div>
+        {:else}
+          <p class="hint">This server needs 5 members before it can have a custom invite link or a tag. It has {s.memberCount || 0}. Invites still work. They get a random link.</p>
+        {/if}
         <p class="label">Accent</p>
         <ColorWheel value={accent} onpick={(c) => (accent = c)} />
         <div style="height:14px"></div>

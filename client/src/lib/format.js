@@ -54,6 +54,38 @@ export function hasMoonBadge(user) {
   return Number.isFinite(created) && created <= MOON_CUTOFF;
 }
 
+export function ownedBadges(user) {
+  const list = [];
+  if (hasMoonBadge(user)) list.push('early');
+  if (user?.staff) list.push('staff');
+  if (user?.developer) list.push('developer');
+  return list;
+}
+
+export function visibleBadges(user) {
+  const owned = ownedBadges(user);
+  if (!Array.isArray(user?.shownBadges)) return owned;
+  return owned.filter((id) => user.shownBadges.includes(id));
+}
+
+export const TAG_ICONS = ['⚡', '💜', '💎', '🔥', '🌸', '💧', '💙', '🍃', '❤️', '💖', '⭐', '👑', '💀', '👻', '🌙', '☀️', '✨', '🍄', '🐾', '🎵', '🎮', '⚔️', '🛡️', '🐱', '🐰', '☁️', '🌈', '❄️', '🎃', '🦋', '🐟', '🪐', '🍀', '♥', '★', '☆', '♡', '✦'];
+
+export function inviteLink(slug) {
+  const clean = String(slug || '').trim();
+  if (!clean) return '';
+  if (/^https?:\/\//i.test(clean)) return clean;
+  return window.location.origin + '/invite/' + clean.replace(/^\/+|\/+$/g, '').replace(/^invite\//, '');
+}
+
+export function inviteSlug(input) {
+  const text = String(input || '').trim();
+  if (!text) return '';
+  const found = text.match(/invite\/([a-z0-9_-]+)/i);
+  if (found) return found[1].toLowerCase();
+  const tail = text.split(/[/?#]/).filter(Boolean).pop() || '';
+  return tail.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
 export function initial(name) {
   return (name || '?').charAt(0).toUpperCase();
 }

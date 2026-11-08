@@ -11,7 +11,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import { api } from '../api.js';
-  import { hasMoonBadge } from '../format.js';
+  import { visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe } from '../state.svelte.js';
   import { PERM } from '../format.js';
@@ -328,11 +328,10 @@
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
         <div class="account-handle">
           <span class="account-user">@{ui.me?.username}{ui.me?.pronouns ? ' · ' + ui.me.pronouns : ''}</span>
-          {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
-          <StaffBadge rank={ui.me?.staff || ''} />
-          <DevBadge on={!!ui.me?.developer} />
+          {#if visibleBadges(ui.me).includes('early')}<MoonBadge />{/if}
+          {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
+          {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
         </div>
-        {#if ui.me?.aboutMe}<p class="about-copy">{ui.me.aboutMe}</p>{/if}
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
         <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
           <i style="background:{presenceLabel[2]}"></i>

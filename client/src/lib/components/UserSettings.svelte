@@ -7,7 +7,8 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
-  import { hasMoonBadge } from '../format.js';
+  import TagPill from './TagPill.svelte';
+  import { ownedBadges } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
@@ -27,6 +28,8 @@
     pronouns: ui.me?.pronouns || '',
     bio: ui.me?.bio || '',
     aboutMe: ui.me?.aboutMe || '',
+    shownBadges: Array.isArray(ui.me?.shownBadges) ? [...ui.me.shownBadges] : null,
+    showcaseServerId: ui.me?.showcaseServerId || '',
     customStatus: ui.me?.customStatus || '',
     status: ui.me?.status || 'online',
     avatarColor: ui.me?.avatarColor || '#7c6af7',
@@ -121,6 +124,20 @@
     } catch (err) { toast(err.message); }
   }
 
+  const badgeNames = { early: 'Early Supporter', staff: 'Nebula staff', developer: 'Developer' };
+
+  function badgeOn(id) {
+    if (!Array.isArray(form.shownBadges)) return ownedBadges(ui.me).includes(id);
+    return form.shownBadges.includes(id);
+  }
+
+  function toggleBadge(id) {
+    const current = Array.isArray(form.shownBadges) ? [...form.shownBadges] : ownedBadges(ui.me);
+    form.shownBadges = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+  }
+
+  const showcaseChoice = $derived((ui.me?.tagChoices || []).find((choice) => choice.serverId === form.showcaseServerId) || null);
+
   function setNameColor(index, value) {
     const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
     next[index] = value;
@@ -208,8 +225,35 @@
             </div>
             <div class="field">
               <label>About me</label>
-              <textarea bind:value={form.aboutMe} maxlength="190" rows="4" placeholder="Shows under your name"></textarea>
+              <textarea bind:value={form.aboutMe} maxlength="190" rows="4" placeholder="A note you can keep on your profile"></textarea>
             </div>
+            <p class="label">Badge</p>
+            {#if ownedBadges(ui.me).length}
+              <div class="pick-row">
+                {#each ownedBadges(ui.me) as id}
+                  <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
+                    {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                    <span>{badgeNames[id]}</span>
+                  </button>
+                {/each}
+              </div>
+              <p class="hint">Turn a badge on or off. Only the ones you leave on show on your profile.</p>
+            {:else}
+              <p class="hint">You do not have a badge yet.</p>
+            {/if}
+            <p class="label">Showcase role</p>
+            <div class="pick-row">
+              <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
+              {#each ui.me?.tagChoices || [] as choice}
+                <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
+                  <TagPill tag={choice} />
+                  <span>{choice.name}</span>
+                </button>
+              {/each}
+            </div>
+            <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
+            <div style="height:16px"></div>
+            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
           {#if page !== 'look' && page !== 'notify'}
             <div style="height:16px"></div>
@@ -230,11 +274,11 @@
               <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>
               <div class="handle">
                 <span>@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</span>
-                {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
-                <StaffBadge rank={ui.me?.staff || ''} />
-                <DevBadge on={!!ui.me?.developer} />
+                {#if badgeOn('early')}<MoonBadge />{/if}
+                {#if badgeOn('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
+                {#if badgeOn('developer')}<DevBadge on={true} />{/if}
+                <TagPill tag={showcaseChoice} />
               </div>
-              {#if form.aboutMe}<p class="about-copy">{form.aboutMe}</p>{/if}
             </div>
           </div>
         </div>

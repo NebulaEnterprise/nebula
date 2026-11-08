@@ -2,7 +2,7 @@
   import { X } from '@lucide/svelte';
   import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers } from '../state.svelte.js';
   import { api } from '../api.js';
-  import { PERM } from '../format.js';
+  import { PERM, inviteLink, inviteSlug } from '../format.js';
   import { hasPerm } from '../state.svelte.js';
 
   let name = $state('');
@@ -10,6 +10,7 @@
   let when = $state('');
   let code = $state('');
   let invites = $state([]);
+  let vanity = $state('');
   let events = $state([]);
   let pingRoles = $state([]);
   let mine = $state(new Set());
@@ -64,6 +65,7 @@
     try {
       const data = await api('/api/servers/' + ui.serverId + '/invites');
       invites = data.invites || [];
+      vanity = data.vanity || '';
     } catch (err) { toast(err.message); ui.dialog = null; }
   }
   async function loadEvents() {
@@ -119,40 +121,54 @@
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" placeholder="A name people will remember" /></div>
         <button class="btn brand" disabled={busy} onclick={() => go(async () => {
           const data = await api('/api/servers', { method: 'POST', body: { name } });
-          try { await navigator.clipboard.writeText(data.invite); } catch (_) {}
+          const link = inviteLink(data.slug || data.invite);
+          try { await navigator.clipboard.writeText(link); } catch (_) {}
           close();
-          toast('Server created. Invite ' + data.invite + ' copied.');
+          toast('Server created. Invite link copied.');
           await openServer(data.server.id);
         })}>Create</button>
-        <div class="field" style="margin-top:18px"><label>Join with an invite</label><input bind:value={code} maxlength="16" placeholder="Invite code" /></div>
+        <div class="field" style="margin-top:18px"><label>Join with an invite link</label><input bind:value={code} maxlength="120" placeholder="https://…/invite/nebula" /></div>
         <button class="btn" disabled={busy} onclick={() => go(async () => {
-          const data = await api('/api/invites/' + encodeURIComponent(code.trim()) + '/join', { method: 'POST', body: {} });
+          const slug = inviteSlug(code);
+          if (!slug) throw new Error('Paste an invite link');
+          const data = await api('/api/invites/' + encodeURIComponent(slug) + '/join', { method: 'POST', body: {} });
           if (data.pending) { toast('Request sent. An owner has to accept you.'); return; }
           close();
           await openServer(data.server.id);
         })}>Join</button>
 
       {:else if kind === 'invite'}
-        <p class="hint">Share a code. They open + and choose Join with an invite.</p>
-        {#each invites as inv}
-          <div class="row"><code>{inv.code}</code><span class="hint">{inv.uses || 0} uses</span></div>
-        {:else}<p class="hint">No invites yet.</p>{/each}
-        <button class="btn brand" style="width:auto;margin-top:12px" onclick={() => go(async () => {
-          const data = await api('/api/servers/' + ui.serverId + '/invites', { method: 'POST', body: {} });
-          try { await navigator.clipboard.writeText(data.code); } catch (_) {}
-          toast('Invite ' + data.code + ' copied');
-          await loadInvites();
-        })}>Create invite</button>
+        {#if vanity}
+          <p class="hint">Share this link. Anyone with it can join.</p>
+          <div class="row"><code>{inviteLink(vanity)}</code></div>
+          <button class="btn brand" style="width:auto;margin-top:12px" onclick={() => go(async () => {
+            try { await navigator.clipboard.writeText(inviteLink(vanity)); } catch (_) {}
+            toast('Invite link copied');
+          })}>Copy link</button>
+        {:else}
+          <p class="hint">This server has fewer than 5 members, so each invite is a random link.</p>
+          {#each invites as inv}
+            <div class="row"><code>{inviteLink(inv.slug || inv.code)}</code><span class="hint">{inv.uses || 0} uses</span></div>
+          {:else}<p class="hint">No links yet.</p>{/each}
+          <button class="btn brand" style="width:auto;margin-top:12px" onclick={() => go(async () => {
+            const data = await api('/api/servers/' + ui.serverId + '/invites', { method: 'POST', body: {} });
+            const link = inviteLink(data.slug);
+            try { await navigator.clipboard.writeText(link); } catch (_) {}
+            toast('Invite link copied');
+            await loadInvites();
+          })}>Create invite link</button>
+        {/if}
 
       {:else if kind === 'promote'}
-        <p class="hint">This creates an invite and copies a line you can send anywhere.</p>
+        <p class="hint">Copies an invite link you can send anywhere.</p>
         <button class="btn brand" style="width:auto" onclick={() => go(async () => {
           const data = await api('/api/servers/' + ui.serverId + '/invites', { method: 'POST', body: {} });
-          const text = 'Join ' + (ui.serverMeta?.name || 'my server') + ' on Nebula. Invite code: ' + data.code;
+          const link = inviteLink(data.slug);
+          const text = 'Join ' + (ui.serverMeta?.name || 'my server') + ' on Nebula: ' + link;
           try { await navigator.clipboard.writeText(text); } catch (_) {}
           toast('Copied');
           close();
-        })}>Copy invite</button>
+        })}>Copy invite link</button>
 
       {:else if kind === 'events'}
         {#each events as ev}

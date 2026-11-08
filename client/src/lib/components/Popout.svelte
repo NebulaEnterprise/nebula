@@ -5,7 +5,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
-  import { hasMoonBadge } from '../format.js';
+  import { visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
   const u = $derived(ui.popout?.user);
@@ -39,11 +39,10 @@
           <h3><Name user={u} /></h3>
           <p class="handle">
             <span>@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</span>
-            {#if hasMoonBadge(u)}<MoonBadge />{/if}
-            <StaffBadge rank={u.staff} />
-            <DevBadge on={!!u.developer} />
+            {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
+            {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
+            {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
           </p>
-          {#if u.aboutMe}<p class="about-copy">{u.aboutMe}</p>{/if}
         </div>
       </div>
       {#if u.customStatus}<p style="margin-top:8px">{u.customStatus}</p>{/if}

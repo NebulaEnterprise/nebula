@@ -709,6 +709,28 @@ img { max-width: 100%; }
   display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 10px; width: 100%; text-align: left;
 }
 .member:hover, .friend:hover { background: var(--bg-hover); }
+.name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.name-row strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tag-pill {
+  display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+  height: 18px; padding: 0 5px; border-radius: 4px;
+  background: #2b2d31; color: #fff; font-size: 11px; font-weight: 800;
+  font-style: normal; letter-spacing: 0.02em; line-height: 1;
+}
+.tag-pill i { font-style: normal; font-size: 12px; }
+.pick-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.pick-card {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 8px 12px; border-radius: 8px;
+  background: #1e1f22; border: 2px solid transparent; color: #fff; font-weight: 650;
+}
+.pick-card.on { border-color: #f23f43; }
+.tag-icons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.tag-icons button {
+  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px;
+  background: #1e1f22; font-size: 16px;
+}
+.tag-icons button.on { outline: 2px solid #f23f43; }
 .member .meta, .friend .meta { min-width: 0; padding-top: 2px; }
 .member strong, .friend strong { display: block; font-size: 14px; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
 .member span:not(.name-fx), .friend span:not(.name-fx) { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
