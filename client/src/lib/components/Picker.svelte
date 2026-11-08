@@ -14,7 +14,7 @@
   let query = $state('');
   let gifs = $state([]);
   let gifError = $state('');
-  let tenor = $state(false);
+  let klipy = $state(false);
   let busy = $state(false);
   let cat = $state('People');
 
@@ -63,11 +63,11 @@
       try {
         const data = await api('/api/gifs?q=' + encodeURIComponent(q.trim()));
         gifs = data.gifs || [];
-        tenor = !!data.tenor;
+        klipy = !!data.klipy;
       } catch (err) {
         gifError = err.message || 'GIF search is unavailable';
         gifs = [];
-        tenor = false;
+        klipy = false;
       } finally {
         busy = false;
       }
@@ -169,8 +169,8 @@
         </button>
       {/each}
     </div>
-    {#if tenor}
-      <a class="tenor-credit" href={query.trim() ? 'https://tenor.com/search/' + encodeURIComponent(query.trim()) + '-gifs' : 'https://tenor.com'} target="_blank" rel="noreferrer">Search Tenor</a>
+    {#if klipy}
+      <a class="klipy-credit" href="https://klipy.com" target="_blank" rel="noreferrer">KLIPY</a>
     {/if}
   {/if}
 </div>
