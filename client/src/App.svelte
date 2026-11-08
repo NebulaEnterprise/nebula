@@ -19,11 +19,13 @@
       ui.menuOpen = false;
       ui.popout = null;
       ui.picker = '';
+      ui.attachOpen = false;
     };
     const onClick = (e) => {
       if (!e.target.closest?.('.menu') && !e.target.closest?.('.title')) ui.menuOpen = false;
       if (!e.target.closest?.('.pop') && !e.target.closest?.('.member') && !e.target.closest?.('.msg')) ui.popout = null;
       if (!e.target.closest?.('.picker') && !e.target.closest?.('.picker-toggle')) ui.picker = '';
+      if (!e.target.closest?.('.attach-menu') && !e.target.closest?.('.attach-toggle')) ui.attachOpen = false;
     };
     window.addEventListener('keydown', onKey);
     window.addEventListener('click', onClick);

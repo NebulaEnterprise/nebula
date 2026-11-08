@@ -4,6 +4,9 @@
   import { EMOJI, NAMED } from '../emoji.js';
 
   let tab = $state(ui.picker || 'emoji');
+  $effect(() => {
+    if (ui.picker) tab = ui.picker;
+  });
   let query = $state('');
   let gifs = $state([]);
   let gifError = $state('');
@@ -58,12 +61,6 @@
     <div class="picker-search">
       <input bind:value={query} placeholder="Find an emoji" />
     </div>
-    <div class="picker-cats">
-      {#each EMOJI as row}
-        <button type="button" class:on={cat === row[0]} onclick={() => (cat = row[0])}>{row[0]}</button>
-      {/each}
-      {#if emojiPacks.length}<button type="button" class:on={cat === 'Servers'} onclick={() => (cat = 'Servers')}>Servers</button>{/if}
-    </div>
     <div class="picker-grid emoji-grid">
       {#if cat === 'Servers'}
         {#each emojiPacks as pack}
@@ -79,6 +76,12 @@
           <button type="button" onclick={() => insertEmoji(glyph)}>{glyph}</button>
         {/each}
       {/if}
+    </div>
+    <div class="picker-cats">
+      {#each EMOJI as row}
+        <button type="button" class:on={cat === row[0]} title={row[0]} onclick={() => (cat = row[0])}>{row[1][0]}</button>
+      {/each}
+      {#if emojiPacks.length}<button type="button" class:on={cat === 'Servers'} title="Servers" onclick={() => (cat = 'Servers')}>✨</button>{/if}
     </div>
   {:else if tab === 'sticker'}
     <div class="picker-grid sticker-grid">

@@ -419,12 +419,86 @@ function slimAuthor(u) {
   };
 }
 
-function presentMessage(msg) {
+function readFiles(body) {
+  const rows = body && Array.isArray(body.files) ? body.files.slice(0, 10) : [];
+  const files = [];
+  for (const row of rows) {
+    const url = String(row && row.url || '');
+    if (!/^\/uploads\/[A-Za-z0-9._-]+$/.test(url)) continue;
+    const name = String(row && row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
+    const image = /\.(png|jpe?g|gif|webp)$/i.test(url);
+    files.push({ url, name, kind: image ? 'image' : 'file' });
+  }
+  return files;
+}
+
+function readPoll(body) {
+  const poll = body && body.poll;
+  if (!poll || typeof poll !== 'object') return null;
+  const question = String(poll.question || '').trim().slice(0, 300);
+  const options = (Array.isArray(poll.options) ? poll.options : [])
+    .map((text) => String(text || '').trim().slice(0, 100))
+    .filter(Boolean)
+    .slice(0, 10);
+  if (!question || options.length < 2) return null;
+  const allowed = [1, 4, 24, 72, 168];
+  const hours = allowed.includes(Number(poll.hours)) ? Number(poll.hours) : 24;
+  return {
+    question,
+    options: options.map((text, index) => ({ id: String(index + 1), text })),
+    multi: !!poll.multi,
+    endsAt: Date.now() + hours * 3600000,
+    votes: {},
+  };
+}
+
+function publicPoll(poll, viewerId) {
+  if (!poll) return null;
+  const counts = (poll.options || []).map((opt) => ((poll.votes && poll.votes[opt.id]) || []).length);
+  const mine = [];
+  for (const [id, voters] of Object.entries(poll.votes || {})) {
+    if ((voters || []).includes(viewerId)) mine.push(id);
+  }
+  return {
+    question: poll.question,
+    options: poll.options || [],
+    multi: !!poll.multi,
+    endsAt: poll.endsAt,
+    counts,
+    total: counts.reduce((sum, n) => sum + n, 0),
+    mine,
+    closed: Date.now() >= Number(poll.endsAt || 0),
+  };
+}
+
+function pollStamp(list) {
+  return (list || []).map((msg) => {
+    if (!msg || !msg.poll) return '';
+    const counts = (msg.poll.options || []).map((opt) => ((msg.poll.votes && msg.poll.votes[opt.id]) || []).length).join('.');
+    return msg.id + ':' + counts;
+  }).filter(Boolean).join('|');
+}
+
+function messageExtras(body) {
+  const content = String(body && body.content || '').trim().slice(0, 2000);
+  const files = readFiles(body);
+  let poll = null;
+  if (body && body.poll) {
+    poll = readPoll(body);
+    if (!poll) return { error: 'Add a question and at least two answers' };
+  }
+  if (!content && !files.length && !poll) return { error: 'Empty message' };
+  return { content, files, poll };
+}
+
+function presentMessage(msg, viewerId) {
   const live = msg && msg.authorId ? users[msg.authorId] : null;
   const base = slimAuthor(msg.author || {}) || {};
   const author = Object.assign(base, live ? slimAuthor(live) : {});
   author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
-  return Object.assign({}, msg, { author });
+  const out = Object.assign({}, msg, { author });
+  if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
+  return out;
 }
 
 function unpackImages() {
@@ -1126,9 +1200,21 @@ function sendAsset(res, file, type) {
 }
 
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
+  const slot = String(req.query.slot || '');
+  if (slot === 'file') {
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || !body.length) return res.status(400).json({ error: 'Choose a file' });
+    if (body.length > 25 * 1024 * 1024) return res.status(413).json({ error: 'Files can be up to 25 MB' });
+    const safe = String(req.query.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
+    const ext = (path.extname(safe).toLowerCase().match(/^\.[a-z0-9]{1,8}$/) || [''])[0];
+    const blocked = new Set(['.exe', '.bat', '.cmd', '.js', '.mjs', '.html', '.htm', '.svg', '.sh', '.msi']);
+    if (blocked.has(ext)) return res.status(400).json({ error: 'That file type is blocked' });
+    const stored = uuidv4() + ext;
+    fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
+    return res.json({ ok: true, url: '/uploads/' + stored, name: safe });
+  }
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
-  const slot = String(req.query.slot || '');
   if (slot === 'avatar' || slot === 'banner') {
     const saved = saveProfileFile(req.user, slot, req.body, ext);
     save(USERS_FILE, users);
@@ -1643,7 +1729,7 @@ app.get('/api/channels/:id/messages', auth, (req, res) => {
     return res.status(403).json({ error: 'You cannot view this channel' });
   }
   const list = messages[found.channel.id] || [];
-  res.json({ ok: true, messages: list.slice(-100).map(presentMessage) });
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)) });
 });
 
 app.post('/api/channels/:id/messages', auth, (req, res) => {
@@ -1678,8 +1764,8 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   if ((level === 'medium' || level === 'high') && sender.joinedAt && Date.now() - new Date(sender.joinedAt).getTime() < waitMin * 60000 && !can(found.guild, req.user, PERM.MANAGE_CHANNELS)) {
     return res.status(403).json({ error: 'Stay in the server a little longer before you talk' });
   }
-  const content = String(req.body?.content || '').trim().slice(0, 2000);
-  if (!content) return res.status(400).json({ error: 'Empty message' });
+  const extra = messageExtras(req.body);
+  if (extra.error) return res.status(400).json({ error: extra.error });
 
   if (!messages[found.channel.id]) messages[found.channel.id] = [];
   const msg = {
@@ -1687,7 +1773,9 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     channelId: found.channel.id,
     authorId: req.user.id,
     author: slimAuthor(req.user),
-    content,
+    content: extra.content,
+    files: extra.files,
+    poll: extra.poll,
     createdAt: new Date().toISOString(),
   };
   messages[found.channel.id].push(msg);
@@ -1695,7 +1783,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
   wakePulse(found.channel.id);
-  res.json({ ok: true, message: presentMessage(msg) });
+  res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
 
 const typingRooms = new Map();
@@ -1809,7 +1897,8 @@ function pulseSnap(req) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
     const roomId = 'dm:' + key;
-    const list = (messages[roomId] || []).slice(-100).map(presentMessage);
+    const raw = messages[roomId] || [];
+    const list = raw.slice(-100).map((msg) => presentMessage(msg, req.user.id));
     const typers = listTypers(roomId, req.user.id);
     const last = list[list.length - 1];
     return {
@@ -1821,13 +1910,15 @@ function pulseSnap(req) {
         cursor: last ? last.id : '',
         typing: typers.map((row) => row.id).sort().join(','),
         profiles: String(profileRev),
+        polls: pollStamp(raw.slice(-100)),
       },
     };
   }
   const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
   if (!found) return null;
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
-  const list = (messages[found.channel.id] || []).slice(-100).map(presentMessage);
+  const raw = messages[found.channel.id] || [];
+  const list = raw.slice(-100).map((msg) => presentMessage(msg, req.user.id));
   const typers = listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id);
   const last = list[list.length - 1];
   return {
@@ -1840,6 +1931,7 @@ function pulseSnap(req) {
       typing: typers.map((row) => row.id).sort().join(','),
       members: memberStamp(found.guild),
       profiles: String(profileRev),
+      polls: pollStamp(raw.slice(-100)),
     },
   };
 }
@@ -1853,7 +1945,8 @@ app.get('/api/pulse', auth, (req, res) => {
   const typing = String(req.query.typing || '');
   const members = String(req.query.members || '');
   const profiles = String(req.query.profiles || '');
-  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles;
+  const polls = String(req.query.polls || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles && (snap.body.polls || '') === polls;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -1865,8 +1958,8 @@ app.get('/api/pulse', auth, (req, res) => {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '' });
+    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles && (body.polls || '') === polls) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '' });
     }
     res.json(body);
   }
@@ -2021,7 +2114,7 @@ app.get('/api/dms', auth, (req, res) => {
         id: t.id,
         other: publicUser(users[otherId]),
         updatedAt: t.updatedAt,
-        preview: last ? dmPreview(last.content) : '',
+        preview: last ? dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '') : '',
         lastId: last ? last.id : '',
         lastFrom: last ? last.authorId : '',
       };
@@ -2035,7 +2128,7 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   const key = dmKey(req.user.id, otherId);
   const list = messages['dm:' + key] || [];
-  res.json({ ok: true, messages: list.slice(-100).map(presentMessage), other: publicUser(users[otherId]) });
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), other: publicUser(users[otherId]) });
 });
 
 app.post('/api/dms/:userId/messages', auth, (req, res) => {
@@ -2043,8 +2136,8 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   if (otherId === req.user.id) return res.status(400).json({ error: 'Cannot DM yourself' });
 
-  const content = String(req.body?.content || '').trim().slice(0, 2000);
-  if (!content) return res.status(400).json({ error: 'Empty message' });
+  const extra = messageExtras(req.body);
+  if (extra.error) return res.status(400).json({ error: extra.error });
 
   const me = ensureFriendNode(req.user.id);
   const key = dmKey(req.user.id, otherId);
@@ -2071,7 +2164,9 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     channelId,
     authorId: req.user.id,
     author: slimAuthor(req.user),
-    content,
+    content: extra.content,
+    files: extra.files,
+    poll: extra.poll,
     createdAt: new Date().toISOString(),
   };
   messages[channelId].push(msg);
@@ -2079,7 +2174,34 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   wakePulse(channelId);
-  res.json({ ok: true, message: presentMessage(msg) });
+  res.json({ ok: true, message: presentMessage(msg, req.user.id) });
+});
+
+app.post('/api/polls/:messageId/vote', auth, (req, res) => {
+  const messageId = String(req.params.messageId || '');
+  const wanted = (Array.isArray(req.body && req.body.options) ? req.body.options : [req.body && req.body.option])
+    .map((id) => String(id || ''))
+    .filter(Boolean);
+  for (const list of Object.values(messages)) {
+    if (!Array.isArray(list)) continue;
+    const msg = list.find((row) => row && row.id === messageId && row.poll);
+    if (!msg) continue;
+    if (Date.now() >= Number(msg.poll.endsAt || 0)) return res.status(400).json({ error: 'This poll has ended' });
+    const allowed = new Set((msg.poll.options || []).map((opt) => opt.id));
+    const picked = (msg.poll.multi ? wanted : wanted.slice(0, 1)).filter((id) => allowed.has(id));
+    msg.poll.votes = msg.poll.votes || {};
+    for (const id of Object.keys(msg.poll.votes)) {
+      msg.poll.votes[id] = (msg.poll.votes[id] || []).filter((userId) => userId !== req.user.id);
+    }
+    for (const id of picked) {
+      if (!msg.poll.votes[id]) msg.poll.votes[id] = [];
+      msg.poll.votes[id].push(req.user.id);
+    }
+    save(MESSAGES_FILE, messages);
+    wakePulse(msg.channelId);
+    return res.json({ ok: true, poll: publicPoll(msg.poll, req.user.id) });
+  }
+  res.status(404).json({ error: 'Poll not found' });
 });
 
 function settingsView(g, user) {

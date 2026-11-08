@@ -35,6 +35,7 @@ export const ui = $state({
   badgeDefs: {},
   menuOpen: false,
   picker: '',
+  attachOpen: false,
   packs: [],
   activity: { servers: {}, channels: {}, dms: {} },
   popout: null,
@@ -285,6 +286,7 @@ let messagesBusy = false;
 let pulseSerial = 0;
 let memberStamp = '';
 let profileStamp = '';
+let pollStamp = '';
 let pulseMissing = false;
 let watchStarted = false;
 let liveCtrl = null;
@@ -332,7 +334,7 @@ async function watchChat() {
     const started = Date.now();
     let pace = 'same';
     try {
-      pace = await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, signal });
+      pace = await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, polls: pollStamp, signal });
     } catch (err) {
       if (err && err.name === 'AbortError') continue;
       await sleep(1000);
@@ -411,7 +413,7 @@ export async function loadMessages(quiet, live) {
     let data;
     const signal = live && live.signal;
     const wait = live
-      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&wait=1'
+      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&polls=' + encodeURIComponent(live.polls || '') + '&wait=1'
       : '';
     if (ui.mode === 'dm' && ui.dmUser) {
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
@@ -432,6 +434,7 @@ export async function loadMessages(quiet, live) {
       profileStamp = data.profiles;
       if (mode === 'chat') loadMembers(true);
     }
+    if (typeof data.polls === 'string') pollStamp = data.polls;
     if (data.same) return 'same';
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
@@ -501,25 +504,72 @@ export async function loadMembers(quiet) {
   finally { membersBusy = false; }
 }
 
+async function postMessage(payload) {
+  const content = String(payload.content || '').trim();
+  const files = payload.files || [];
+  const poll = payload.poll || null;
+  if (!content && !files.length && !poll) return;
+  const typingToken = stopTyping();
+  const body = { content, typingToken };
+  if (files.length) body.files = files;
+  if (poll) body.poll = poll;
+  const data = ui.mode === 'dm' && ui.dmUser
+    ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body })
+    : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body });
+  if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
+    ui.messages = [...ui.messages, data.message];
+    paintNames(ui.messages);
+  }
+  dropLive();
+  if (ui.mode === 'dm') loadDms();
+}
+
 export async function sendMessage() {
   const content = ui.composer.trim();
   if (!content) return;
   ui.composer = '';
-  const typingToken = stopTyping();
   try {
-    const data = ui.mode === 'dm' && ui.dmUser
-      ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body: { content, typingToken } })
-      : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body: { content, typingToken } });
-    if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
-      ui.messages = [...ui.messages, data.message];
-      paintNames(ui.messages);
-    }
-    dropLive();
-    if (ui.mode === 'dm') loadDms();
+    await postMessage({ content });
   } catch (err) {
     ui.composer = content;
     toast(err.message);
   }
+}
+
+export async function sendFiles(list) {
+  const files = [...(list || [])].slice(0, 10);
+  if (!files.length) return;
+  ui.attachOpen = false;
+  try {
+    const saved = [];
+    for (const file of files) {
+      const data = await api('/api/upload?slot=file&name=' + encodeURIComponent(file.name || 'file'), {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      });
+      saved.push({ url: data.url, name: data.name || file.name || 'file' });
+    }
+    const content = ui.composer.trim();
+    ui.composer = '';
+    await postMessage({ content, files: saved });
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+export async function sendPoll(poll) {
+  ui.attachOpen = false;
+  try {
+    await postMessage({ poll });
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+export async function votePoll(messageId, options) {
+  const data = await api('/api/polls/' + encodeURIComponent(messageId) + '/vote', { method: 'POST', body: { options } });
+  ui.messages = ui.messages.map((msg) => msg.id === messageId ? { ...msg, poll: data.poll } : msg);
 }
 
 export async function sendSticker(name) {
