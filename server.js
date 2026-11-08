@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 const zlib = require('zlib');
 const { v4: uuidv4 } = require('uuid');
 
@@ -438,7 +439,9 @@ function publicUser(u) {
     avatarColor: u.avatarColor || '#7c5cff',
     bannerColor: u.bannerColor || u.accentColor || '#7c5cff',
     avatarUrl: u.avatarUrl || '',
+    avatarKey: u.avatarKey || '',
     bannerUrl: u.bannerUrl || '',
+    bannerKey: u.bannerKey || '',
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
@@ -584,7 +587,7 @@ app.post('/api/auth/verify', (req, res) => {
     accentColor: '#7c5cff',
     avatarColor: '#7c5cff',
     bannerColor: '#7c5cff',
-    avatarUrl: '', bannerUrl: '',
+    avatarUrl: '', avatarKey: '', bannerUrl: '', bannerKey: '',
     serverTag: '',
     server: SERVER_NAME,
     badges: [...new Set(badges)],
@@ -1067,21 +1070,89 @@ function sendAsset(res, file, type) {
   res.sendFile(file);
 }
 
-app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
-  const ext = sniffImage(req.body);
-  if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
-  const id = (ext === '.gif' ? 'a_' : '') + uuidv4().replace(/-/g, '');
-  fs.writeFileSync(path.join(UPLOAD_DIR, id + ext), req.body);
-  if (ext === '.gif') {
-    const copy = Buffer.from(req.body);
-    setImmediate(() => {
-      try {
-        const png = stillPng(decodeGif(copy), 512);
-        if (png && png.length) fs.writeFileSync(path.join(DERIVED_DIR, id + '.png.s512'), png);
-      } catch (err) {}
-    });
+const MEDIA_REPO = process.env.BANNER_REPO || 'uterine/nebulaa-media';
+
+function encryptWithKey(buf, key) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(buf), cipher.final()]);
+  return Buffer.concat([iv, cipher.getAuthTag(), enc]);
+}
+
+function githubPut(filePath, body) {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (!token) {
+    return Promise.reject(Object.assign(new Error('Set GITHUB_TOKEN on the server so banners can be stored in the cloud'), { status: 503 }));
   }
-  res.json({ ok: true, hash: id, url: '/uploads/' + id + ext });
+  const payload = JSON.stringify({ message: 'Add media', content: body.toString('base64') });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.github.com',
+      path: '/repos/' + MEDIA_REPO + '/contents/' + filePath,
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + token,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'nebulaa',
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve('https://raw.githubusercontent.com/' + MEDIA_REPO + '/main/' + filePath);
+          return;
+        }
+        let message = 'Cloud upload failed';
+        try { message = JSON.parse(text).message || message; } catch (err) {}
+        reject(Object.assign(new Error(message), { status: 502 }));
+      });
+    });
+    req.on('error', () => reject(Object.assign(new Error('Could not reach the cloud'), { status: 502 })));
+    req.write(payload);
+    req.end();
+  });
+}
+
+function cleanMediaUrl(value) {
+  const url = storeImage(value);
+  if (!url) return '';
+  if (url.startsWith('/uploads/')) return url;
+  const host = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/main/banners/';
+  if (url.startsWith(host) && /^[A-Za-z0-9_.-]+$/.test(url.slice(host.length))) return url;
+  return '';
+}
+
+function cloudKey(url, key) {
+  const host = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/main/banners/';
+  const clean = String(key || '').toLowerCase();
+  if (!String(url || '').startsWith(host) || !/^[0-9a-f]{64}$/.test(clean)) return '';
+  return clean;
+}
+
+app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), async (req, res) => {
+  try {
+    const ext = sniffImage(req.body);
+    if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
+    if (req.body.length > 15 * 1024 * 1024) return res.status(413).json({ error: 'Keep the picture under 15MB' });
+    const id = (ext === '.gif' ? 'a_' : '') + uuidv4().replace(/-/g, '');
+    const key = crypto.randomBytes(32);
+    const url = await githubPut('banners/' + id + '.bin', encryptWithKey(req.body, key));
+    if (ext === '.gif') {
+      try {
+        const gif = decodeGif(req.body);
+        const png = gif && stillPng(Object.assign({}, gif, { frames: gif.frames.slice(0, 1) }), 512);
+        if (png && png.length) await githubPut('banners/' + id + '.still.bin', encryptWithKey(png, key));
+      } catch (err) {}
+    }
+    res.json({ ok: true, hash: id, url, key: key.toString('hex') });
+  } catch (err) {
+    res.status(err.status || 502).json({ error: err.message || 'Cloud upload failed' });
+  }
 });
 
 app.get('/uploads/:name', (req, res) => {
@@ -1126,7 +1197,7 @@ app.get('/api/me', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, pronouns, customStatus, status,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, avatarKey, bannerUrl, bannerKey, serverTag, nameEffect, nameColors,
   } = req.body || {};
 
   if (username !== undefined) {
@@ -1147,9 +1218,13 @@ app.patch('/api/me', auth, (req, res) => {
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
-  if (avatarUrl !== undefined) req.user.avatarUrl = storeImage(avatarUrl);
+  if (avatarUrl !== undefined) {
+    req.user.avatarUrl = cleanMediaUrl(avatarUrl);
+    req.user.avatarKey = cloudKey(req.user.avatarUrl, avatarKey);
+  }
   if (bannerUrl !== undefined) {
-    req.user.bannerUrl = storeImage(bannerUrl);
+    req.user.bannerUrl = cleanMediaUrl(bannerUrl);
+    req.user.bannerKey = cloudKey(req.user.bannerUrl, bannerKey);
     req.user.bannerStill = '';
   }
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);

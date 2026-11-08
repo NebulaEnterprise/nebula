@@ -94,6 +94,51 @@ export function writeStill(ref, dataUrl) {
   } catch (_) {}
 }
 
+export function isCloud(url) {
+  return typeof url === 'string' && url.includes('raw.githubusercontent.com/') && url.includes('/banners/');
+}
+
+export function cloudStill(url) {
+  return isCloud(url) && url.includes('/banners/a_') ? url.replace(/\.bin(\?.*)?$/, '.still.bin') : '';
+}
+
+function hexToBytes(hex) {
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+
+export function openCloud(url, keyHex) {
+  if (!url) return Promise.resolve('');
+  if (!isCloud(url)) return resolveMedia(url);
+  if (!/^[0-9a-f]{64}$/i.test(keyHex || '')) return Promise.resolve('');
+  if (mediaCache.has(url)) return mediaCache.get(url);
+  const pending = (async () => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('image');
+    const raw = new Uint8Array(await res.arrayBuffer());
+    if (raw.length < 29) throw new Error('image');
+    const iv = raw.slice(0, 12);
+    const tag = raw.slice(12, 28);
+    const data = raw.slice(28);
+    const combined = new Uint8Array(data.length + tag.length);
+    combined.set(data);
+    combined.set(tag, data.length);
+    const key = await crypto.subtle.importKey('raw', hexToBytes(keyHex), { name: 'AES-GCM' }, false, ['decrypt']);
+    const plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, combined));
+    let type = 'image/png';
+    if (plain[0] === 0x47 && plain[1] === 0x49) type = 'image/gif';
+    else if (plain[0] === 0xff && plain[1] === 0xd8) type = 'image/jpeg';
+    else if (plain.length > 12 && plain[0] === 0x52 && plain[8] === 0x57) type = 'image/webp';
+    return URL.createObjectURL(new Blob([plain], { type }));
+  })().catch(() => {
+    mediaCache.delete(url);
+    return '';
+  });
+  mediaCache.set(url, pending);
+  return pending;
+}
+
 export function assetPath(ref, opts = {}) {
   if (!ref) return '';
   if (ref.startsWith('data:') || ref.startsWith('blob:')) return ref;
@@ -173,7 +218,7 @@ export function resolveMedia(url) {
 }
 
 export function seedStill(ref) {
-  if (!ref || readStill(ref)) return;
+  if (!ref || isCloud(ref) || readStill(ref)) return;
   const motion = /\/uploads\/a_|\/uploads\/[^/]+\.gif(\?|$)/i.test(String(ref));
   const stillUrl = assetPath(ref, { format: motion ? 'png' : undefined, size: 512 });
   resolveMedia(stillUrl).then(async (src) => {

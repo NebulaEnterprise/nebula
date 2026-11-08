@@ -7,7 +7,7 @@
 
 <div class="avatar" style="width:{size}px;height:{size}px;background:{user?.avatarColor || 'var(--brand)'};font-size:{Math.round(size * 0.4)}px">
   {#if user?.avatarUrl}
-    <Photo url={user.avatarUrl} />
+    <Photo url={user.avatarUrl} fileKey={user.avatarKey} />
   {:else}
     {initial(name)}
   {/if}
