@@ -2,7 +2,7 @@
   import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp } from '../state.svelte.js';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -107,6 +107,7 @@
       onkeydown={noteKeyDown}
       onkeyup={noteKeyUp}
       oninput={noteTyping}
+      onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
       placeholder={locked ? 'Finish onboarding before you chat' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}

@@ -503,7 +503,7 @@ let lastTypingPing = 0;
 let typingSerial = 0;
 let typingLive = false;
 let typingIdle = null;
-const heldKeys = new Set();
+let lastKeyAt = 0;
 
 const SKIP_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
@@ -520,28 +520,29 @@ function postTyping(extra) {
 
 function stopTyping() {
   clearTimeout(typingIdle);
-  heldKeys.clear();
   const token = ++typingSerial;
   if (typingLive || lastTypingPing) postTyping({ stop: true, token });
   typingLive = false;
   lastTypingPing = 0;
+  lastKeyAt = 0;
   return token;
 }
 
 function pingTyping() {
   const now = Date.now();
-  if (typingLive && now - lastTypingPing < 800) return;
+  if (typingLive && now - lastTypingPing < 600) return;
   lastTypingPing = now;
   typingLive = true;
   postTyping({ token: ++typingSerial });
 }
 
-function scheduleStop() {
+function armTypingIdle() {
   clearTimeout(typingIdle);
+  const mark = lastKeyAt;
   typingIdle = setTimeout(() => {
-    if (heldKeys.size) return;
+    if (lastKeyAt !== mark) return;
     stopTyping();
-  }, 700);
+  }, 280);
 }
 
 export function noteKeyDown(event) {
@@ -550,17 +551,18 @@ export function noteKeyDown(event) {
   if (SKIP_KEYS.has(event.key)) return;
   if (event.key === 'Enter') return;
   if ((event.key === 'Backspace' || event.key === 'Delete') && !ui.composer.trim()) return;
-  heldKeys.add(event.key);
-  clearTimeout(typingIdle);
+  lastKeyAt = Date.now();
   pingTyping();
+  armTypingIdle();
 }
 
-export function noteKeyUp(event) {
-  if (!event) return;
-  heldKeys.delete(event.key);
-  if (heldKeys.size) return;
+export function noteKeyUp() {
   if (!typingLive) return;
-  scheduleStop();
+  armTypingIdle();
+}
+
+export function noteTypingBlur() {
+  stopTyping();
 }
 
 export function typingLine(list) {
@@ -572,11 +574,7 @@ export function typingLine(list) {
 }
 
 export function noteTyping() {
-  if (!ui.composer.trim()) {
-    stopTyping();
-    return;
-  }
-  if (heldKeys.size) pingTyping();
+  if (!ui.composer.trim()) stopTyping();
 }
 
 let typingBusy = false;
