@@ -357,30 +357,32 @@
             {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
           </p>
         </div>
-        <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
-        <button type="button" class="account-row" onclick={() => { statusOpen = !statusOpen; accountsOpen = false; }}>
-          <i style="background:{presenceLabel[2]}"></i>
-          <span>{presenceLabel[1]}</span>
-          <ChevronRight size={16} />
-        </button>
-        {#if statusOpen}
-          <div class="account-statuses">
-            {#each presence as [id, label, color]}
-              <button type="button" class:on={ui.me?.status === id || (!ui.me?.status && id === 'online')} onclick={() => setPresence(id)}>
-                <i style="background:{color}"></i> {label}
-              </button>
-            {/each}
-            {#if !editingStatus}
-              <button type="button" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; statusOpen = false; }}>
-                <Pencil size={14} /> Custom status
-              </button>
-            {/if}
-          </div>
-        {/if}
-        <button type="button" class="account-row" onclick={() => { accountsOpen = !accountsOpen; statusOpen = false; }}>
-          <span>Switch accounts</span>
-          <ChevronRight size={16} />
-        </button>
+        <div class="account-menu">
+          <button type="button" class="account-edit" onclick={editProfile}><Pencil size={14} /> Edit Profile</button>
+          <button type="button" class="account-row" onclick={() => { statusOpen = !statusOpen; accountsOpen = false; }}>
+            <i style="background:{presenceLabel[2]}"></i>
+            <span>{presenceLabel[1]}</span>
+            <ChevronRight size={14} />
+          </button>
+          {#if statusOpen}
+            <div class="account-statuses">
+              {#each presence as [id, label, color]}
+                <button type="button" class:on={ui.me?.status === id || (!ui.me?.status && id === 'online')} onclick={() => setPresence(id)}>
+                  <i style="background:{color}"></i> {label}
+                </button>
+              {/each}
+              {#if !editingStatus}
+                <button type="button" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; statusOpen = false; }}>
+                  <Pencil size={14} /> Custom status
+                </button>
+              {/if}
+            </div>
+          {/if}
+          <button type="button" class="account-row" onclick={() => { accountsOpen = !accountsOpen; statusOpen = false; }}>
+            <span>Switch accounts</span>
+            <ChevronRight size={14} />
+          </button>
+        </div>
       </div>
     </div>
     {#if accountsOpen}
