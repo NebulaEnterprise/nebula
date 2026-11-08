@@ -120,6 +120,18 @@
   }
 
   const replyTargets = $derived(Array.isArray(ui.reply) ? ui.reply : (ui.reply?.id ? [ui.reply] : []));
+  const replyPeople = $derived.by(() => {
+    const seen = new Set();
+    const people = [];
+    for (const reply of replyTargets) {
+      const person = reply.author || { displayName: reply.name, username: reply.name };
+      const key = person.id || person.username || person.displayName || reply.id;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      people.push({ ...person, id: person.id || key });
+    }
+    return people;
+  });
 
   function setReplies(list) {
     ui.reply = list.length ? list.slice(0, 5) : null;
@@ -596,13 +608,15 @@
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
   {#if replyTargets.length}
-    <div class="reply-notes">
-      {#each replyTargets as reply (reply.id)}
-        <div class="compose-note reply-note">
-          <span class="reply-label">Replying to <Name user={reply.author || { displayName: reply.name, username: reply.name }} /> <em>{reply.preview}</em></span>
-          <button type="button" class="btn icon" title="Remove reply" onclick={() => setReplies(replyTargets.filter((row) => row.id !== reply.id))}>✕</button>
-        </div>
-      {/each}
+    <div class="compose-note reply-note">
+      <span class="reply-label">
+        <span>Replying to</span>
+        {#each replyPeople as person (person.id || person.username || person.displayName)}
+          <Avatar user={person} size={16} dot={false} />
+          <Name user={person} />
+        {/each}
+      </span>
+      <button type="button" class="btn icon" title="Cancel reply" onclick={() => (ui.reply = null)}>✕</button>
     </div>
   {/if}
   {#if ui.editing}
