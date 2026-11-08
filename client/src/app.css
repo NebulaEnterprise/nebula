@@ -1022,6 +1022,7 @@ img { max-width: 100%; }
 .profile-card .profile-hero .handle {
   display: flex; width: 100%; justify-content: center; align-items: center; gap: 6px;
 }
+.profile-card .profile-hero .handle > span { color: #4e5260; }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .skin-solid { background: color-mix(in srgb, var(--shade-a) 70%, #0c0614); }
 .skin-gradient { background: linear-gradient(180deg, color-mix(in srgb, var(--shade-a) 46%, #0c0614), color-mix(in srgb, var(--shade-b) 24%, #0c0614)); }
