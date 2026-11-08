@@ -438,9 +438,9 @@ function publicUser(u) {
     accentColor: u.accentColor || '#7c5cff',
     avatarColor: u.avatarColor || '#7c5cff',
     bannerColor: u.bannerColor || u.accentColor || '#7c5cff',
-    avatarUrl: u.avatarUrl || '',
+    avatarUrl: currentMediaUrl(u.avatarUrl || ''),
     avatarKey: u.avatarKey || '',
-    bannerUrl: u.bannerUrl || '',
+    bannerUrl: currentMediaUrl(u.bannerUrl || ''),
     bannerKey: u.bannerKey || '',
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
@@ -1070,7 +1070,9 @@ function sendAsset(res, file, type) {
   res.sendFile(file);
 }
 
-const MEDIA_REPO = process.env.BANNER_REPO || 'uterine/nebulaa-media';
+const MEDIA_REPO = process.env.BANNER_REPO || 'userxxxxxxxxx/nebulaa-media';
+const OLD_MEDIA_HOST = 'https://raw.githubusercontent.com/uterine/nebulaa-media/';
+const MEDIA_HOST = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/';
 
 function encryptWithKey(buf, key) {
   const iv = crypto.randomBytes(12);
@@ -1118,19 +1120,23 @@ function githubPut(filePath, body) {
   });
 }
 
+function currentMediaUrl(value) {
+  return String(value || '').split(OLD_MEDIA_HOST).join(MEDIA_HOST);
+}
+
 function cleanMediaUrl(value) {
-  const url = storeImage(value);
+  const url = currentMediaUrl(storeImage(value));
   if (!url) return '';
   if (url.startsWith('/uploads/')) return url;
-  const host = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/main/banners/';
+  const host = MEDIA_HOST + 'main/banners/';
   if (url.startsWith(host) && /^[A-Za-z0-9_.-]+$/.test(url.slice(host.length))) return url;
   return '';
 }
 
 function cloudKey(url, key) {
-  const host = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/main/banners/';
+  const host = MEDIA_HOST + 'main/banners/';
   const clean = String(key || '').toLowerCase();
-  if (!String(url || '').startsWith(host) || !/^[0-9a-f]{64}$/.test(clean)) return '';
+  if (!currentMediaUrl(url).startsWith(host) || !/^[0-9a-f]{64}$/.test(clean)) return '';
   return clean;
 }
 
