@@ -267,18 +267,20 @@ img { max-width: 100%; }
 }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.bio-hint {
-  display: flex; align-items: center; gap: 8px; max-width: 210px;
-  margin: 0 0 18px; padding: 5px 12px 5px 6px; border-radius: 999px;
-  background: #1e1f22; color: #949ba4; font-size: 13px; font-style: italic; line-height: 16px;
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.28);
+.account-pop .bio-bubble {
+  left: 86px; top: 102px; margin: 0;
+  display: flex; align-items: center; gap: 4px;
+  background: #4e5058; box-shadow: none;
 }
-.bio-hint i {
-  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
-  background: #2b2d31; color: #b5bac1; font-style: normal; flex-shrink: 0;
+.account-pop .bio-hint {
+  padding: 6px 10px; color: #fff; font-style: italic;
 }
-.bio-hint span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bio-hint:hover { background: #232428; color: #dbdee1; }
+.account-pop .bio-hint i {
+  width: 16px; height: 16px; display: grid; place-items: center;
+  background: transparent; color: #fff; font-style: normal; flex-shrink: 0;
+}
+.account-pop .bio-hint span { max-width: 150px; }
+.account-pop .bio-hint:hover { filter: brightness(1.08); }
 .account-body { padding: 8px 14px 14px; }
 .account-body > strong { display: block; font-size: 20px; line-height: 24px; }
 .account-handle {

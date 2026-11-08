@@ -301,23 +301,23 @@
           <i style="background:{presenceLabel[2]}"></i>
         </div>
         {#if editingBio}
-          <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
+          <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
             <input bind:value={bioDraft} maxlength="29" placeholder="Bio" />
             <button type="submit" title="Save bio">✓</button>
           </form>
         {:else if shortBio(ui.me?.bio)}
-          <div class="account-bubble">
+          <div class="bio-bubble account-bubble">
             <span>{shortBio(ui.me.bio)}</span>
             <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
             <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
           </div>
         {:else if editingStatus}
-          <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
+          <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
             <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
             <button type="submit" title="Save status">✓</button>
           </form>
         {:else}
-          <button type="button" class="bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
+          <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
             <i><Plus size={13} /></i>
             <span>Just finished reading...</span>
           </button>
