@@ -179,7 +179,7 @@
           <Avatar user={dm.other} size={28} />
           <span class="dm-copy">
             <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-            {#if dm.preview}<span class="dm-preview">{dm.preview}</span>{/if}
+            <span class="dm-preview">{dm.preview || ''}</span>
           </span>
           {#if note && ui.dmUser?.id !== dm.other?.id}
             <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>

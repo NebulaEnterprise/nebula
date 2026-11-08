@@ -171,6 +171,20 @@ export async function loadFriends() {
 const heardDm = {};
 let inboxReady = false;
 let lastSentId = '';
+let dmSerial = 0;
+
+function sameDms(prev, next) {
+  if (!Array.isArray(prev) || prev.length !== next.length) return false;
+  for (let i = 0; i < prev.length; i++) {
+    const a = prev[i];
+    const b = next[i];
+    if (!a || !b || a.id !== b.id || a.preview !== b.preview || a.lastId !== b.lastId || a.unread !== b.unread) return false;
+    const left = a.other || {};
+    const right = b.other || {};
+    if (left.id !== right.id || left.displayName !== right.displayName || left.username !== right.username || left.avatarUrl !== right.avatarUrl) return false;
+  }
+  return true;
+}
 
 function isMine(msg) {
   if (!msg || !ui.me) return false;
@@ -192,6 +206,7 @@ function rememberDm(id, at) {
 }
 
 export async function loadDms() {
+  const serial = ++dmSerial;
   try {
     const seen = seenMap();
     const seeded = localStorage.getItem('nebula-dm-baseline') === '1';
@@ -201,8 +216,9 @@ export async function loadDms() {
     } catch (_) {
       data = await api('/api/dms');
     }
+    if (serial !== dmSerial) return;
     const next = data.dms || [];
-    ui.dms = next;
+    if (!sameDms(ui.dms, next)) ui.dms = next;
     const map = seenMap();
     const ready = localStorage.getItem('nebula-dm-baseline') === '1';
     if (!ready) {
@@ -266,7 +282,7 @@ export async function loadDms() {
     if (changed) {
       try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
     }
-    ui.activity = { ...ui.activity, dms: unread };
+    if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
     if (ui.dmUser) {
       const row = next.find((dm) => dm.other && String(dm.other.id) === String(ui.dmUser.id));
       if (row && row.other) ui.dmUser = { ...ui.dmUser, ...row.other };
@@ -1146,9 +1162,22 @@ export function markSeen(id, messageId) {
 
 let serverDmNotes = {};
 let activityMissing = false;
+let activitySerial = 0;
+
+function sameNotes(prev, next) {
+  const left = Object.keys(prev || {});
+  const right = Object.keys(next || {});
+  if (left.length !== right.length) return false;
+  return right.every((id) => {
+    const a = prev[id] || {};
+    const b = next[id] || {};
+    return a.unread === b.unread && a.mentions === b.mentions;
+  });
+}
 
 async function pollActivity() {
   if (activityMissing) return;
+  const serial = ++activitySerial;
   try {
     const data = await api('/api/activity', {
       method: 'POST',
@@ -1167,6 +1196,7 @@ async function pollActivity() {
       }
       try { localStorage.setItem('nebula-channel-baseline', '1'); } catch (_) {}
     }
+    if (serial !== activitySerial) return;
     const servers = { ...(data.servers || {}) };
     const channels = { ...(data.channels || {}) };
     const dms = { ...(data.dms || {}) };
@@ -1205,7 +1235,9 @@ async function pollActivity() {
     activityReady = true;
     mentionSnap = mentions;
     dmSnap = dmUnread;
-    ui.activity = { ...ui.activity, servers, channels };
+    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels)) {
+      ui.activity = { ...ui.activity, servers, channels };
+    }
   } catch (err) {
     if (err && err.status === 404) activityMissing = true;
   }
