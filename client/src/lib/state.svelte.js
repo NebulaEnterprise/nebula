@@ -512,7 +512,7 @@ export async function loadMessages(quiet, live) {
     if (newest && newest.id) markSeen(roomKey, newest.id);
     if (ui.mode === 'dm') {
       ui.messages = list;
-      if (previousId && newest && newest.id !== previousId && !isMine(newest)) playPing();
+      if (quiet && previousId && newest && newest.id !== previousId && !isMine(newest)) playPing();
       return 'changed';
     }
     ui.messages = list;
@@ -833,10 +833,8 @@ function chime() {
 export function unlockSound() {
   try {
     const ctx = audioCtx();
-    const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
-    resume.then(() => {
-      if (pingWaiting) playPing(true);
-    }).catch(() => {});
+    pingWaiting = false;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   } catch (_) {}
 }
 
