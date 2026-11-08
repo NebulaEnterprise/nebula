@@ -1,12 +1,11 @@
 <script>
-  import { resolveMedia, isCloud, openCloud } from '../api.js';
+  import { resolveMedia } from '../api.js';
 
-  let { url = '', fill = false, fileKey = '' } = $props();
+  let { url = '', fill = false } = $props();
   let src = $state('');
 
   $effect(() => {
     const current = url;
-    const key = fileKey || '';
     let alive = true;
     if (!current) {
       src = '';
@@ -16,8 +15,7 @@
       src = current;
       return;
     }
-    const pending = isCloud(current) ? openCloud(current, key) : resolveMedia(current);
-    pending.then((next) => {
+    resolveMedia(current).then((next) => {
       if (alive && next) src = next;
     });
     return () => {

@@ -4,11 +4,10 @@
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
-  import Banner from './Banner.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
-  import { uploadFile, writeStill } from '../api.js';
-  import { fileToDataUrl, frameDataUrl } from '../image.js';
+  import { api, resolveMedia } from '../api.js';
+  import { fileToDataUrl } from '../image.js';
 
   let page = $state('profile');
   let form = $state({
@@ -21,9 +20,7 @@
     avatarColor: ui.me?.avatarColor || '#7c6af7',
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
-    avatarKey: ui.me?.avatarKey || '',
     bannerUrl: ui.me?.bannerUrl || '',
-    bannerKey: ui.me?.bannerKey || '',
     nameEffect: ui.me?.nameEffect || '',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
   });
@@ -38,42 +35,25 @@
   ];
 
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
-  let uploadNote = $state('');
 
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
-    const label = kind === 'banner' ? 'banner' : 'profile picture';
     if (!file) return;
     const preview = URL.createObjectURL(file);
     const previous = String(form[field] || '');
     form[field] = preview;
-    uploadNote = `Uploading ${label} to the cloud… 0%`;
     try {
-      const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
-      let body = file;
-      if (!isGif) {
-        const small = await fileToDataUrl(file, {
-          maxW: kind === 'banner' ? 1280 : 512,
-          maxH: kind === 'banner' ? 720 : 512,
-        });
-        body = await (await fetch(small)).blob();
-      }
-      const data = await uploadFile(body, (pct) => {
-        uploadNote = `Uploading ${label} to the cloud… ${pct}%`;
+      const data = await api('/api/upload', {
+        method: 'POST',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
       });
       if (!data.url) throw new Error('The picture did not save');
       savedUrl[field] = data.url;
-      const keyField = kind === 'banner' ? 'bannerKey' : 'avatarKey';
-      form[keyField] = data.key || '';
-      try {
-        const still = await frameDataUrl(preview);
-        if (still) writeStill(data.url, still);
-      } catch (_) {}
-      form[field] = data.url;
-      uploadNote = `Uploaded. Hit Save changes to put this ${label} on your profile.`;
+      const shown = await resolveMedia(data.url);
+      if (shown && shown.startsWith('blob:')) form[field] = data.url;
     } catch (err) {
       savedUrl[field] = '';
-      uploadNote = '';
       if (kind === 'avatar') {
         try { form.avatarUrl = await fileToDataUrl(file, { original: true }); }
         catch { form.avatarUrl = previous.startsWith('blob:') ? '' : previous; }
@@ -81,9 +61,7 @@
         form.bannerUrl = previous.startsWith('blob:') ? '' : previous;
         URL.revokeObjectURL(preview);
       }
-      toast(/not found/i.test(err.message || '')
-        ? 'Download the new server.js and restart it, then upload the GIF again.'
-        : (err.message || 'Could not upload that picture'));
+      toast(err.message || 'Could not upload that picture');
     } finally {
       if (input) input.value = '';
     }
@@ -139,7 +117,7 @@
             <section class="look-block">
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">
-                  {#if form.avatarUrl}<Photo url={form.avatarUrl} fileKey={form.avatarKey} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                  {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                 </div>
                 <div>
                   <strong>Profile picture</strong>
@@ -148,7 +126,7 @@
                     <label class="btn brand sm look-btn">Upload picture
                       <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
                     </label>
-                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => { form.avatarUrl = ''; form.avatarKey = ''; }}>Remove</button>{/if}
+                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => (form.avatarUrl = '')}>Remove</button>{/if}
                   </div>
                 </div>
               </div>
@@ -161,15 +139,14 @@
               <strong>Banner</strong>
               <p>A GIF, PNG, JPG, or WebP across the top of your profile.</p>
               <div class="look-banner">
-                {#if form.bannerUrl}<Banner url={form.bannerUrl} fileKey={form.bannerKey} />{/if}
+                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
               </div>
               <div class="look-actions">
                 <label class="btn brand sm look-btn">Upload banner
                   <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
                 </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; form.bannerKey = ''; savedUrl.bannerUrl = ''; uploadNote = ''; }}>Remove</button>{/if}
+                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => { form.bannerUrl = ''; savedUrl.bannerUrl = ''; }}>Remove</button>{/if}
               </div>
-              {#if uploadNote}<p class="hint">{uploadNote}</p>{/if}
             </section>
           {:else}
             <div class="field"><label>Custom status</label><input bind:value={form.customStatus} maxlength="128" placeholder="What's going on?" /></div>
@@ -189,11 +166,11 @@
           <p class="label">Preview</p>
           <div class="preview-card">
             <div class="preview-banner">
-              {#if form.bannerUrl}<Banner url={form.bannerUrl} fileKey={form.bannerKey} />{/if}
+              {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
             {#if form.bio}<div class="bio-bubble"><span>{form.bio}</span></div>{/if}
             <div class="preview-av" style="background:{form.avatarColor}">
-              {#if form.avatarUrl}<Photo url={form.avatarUrl} fileKey={form.avatarKey} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+              {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
             <div class="pad">
               <strong><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></strong>

@@ -2,7 +2,6 @@
   import { UserPlus } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
-  import Banner from './Banner.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
@@ -23,7 +22,7 @@
 {#if u}
   <div class="pop" style="left:{left}px;top:{top}px">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
-      {#if u.bannerUrl}<Banner url={u.bannerUrl} fileKey={u.bannerKey} />{/if}
+      {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
     {#if u.bio}<div class="bio-bubble"><span>{u.bio}</span></div>{/if}
     {#if rel === 'none'}
@@ -31,7 +30,7 @@
     {/if}
     <div class="pop-body">
       <div class="pop-av" style="background:{u.avatarColor || 'var(--brand)'}">
-        {#if u.avatarUrl}<Photo url={u.avatarUrl} fileKey={u.avatarKey} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+        {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
       </div>
       <div class="pop-head">
         <div class="pop-id">

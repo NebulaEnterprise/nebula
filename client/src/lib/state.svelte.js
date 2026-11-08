@@ -1,4 +1,4 @@
-import { api, warmMedia, seedStill } from './api.js';
+import { api, warmMedia } from './api.js';
 import { PERM } from './format.js';
 
 export const ui = $state({
@@ -100,8 +100,7 @@ export async function boot() {
   try {
     const data = await api('/api/me');
     ui.me = data.user;
-    seedStill(data.user?.bannerUrl);
-    warmMedia([data.user?.avatarUrl]);
+    warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
   } catch {
     logout();
@@ -360,8 +359,7 @@ export async function loadMembers(quiet) {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
     ui.members = data.members || [];
     ui.badgeDefs = data.badges || {};
-    for (const member of ui.members) seedStill(member.bannerUrl);
-    warmMedia(ui.members.map((m) => m.avatarUrl));
+    warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
   } catch (_) {}
   finally { membersBusy = false; }
 }
@@ -480,7 +478,7 @@ export async function openPopout(user, x, y) {
   const known = ui.members.find((m) => m.id === user.id);
   const seed = known ? { ...user, ...known, roles: known.roles || user.roles || [] } : user;
   ui.popout = { user: seed, x, y };
-  seedStill(seed.bannerUrl);
+  warmMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
   try {
     const q = ui.serverId ? ('?serverId=' + encodeURIComponent(ui.serverId)) : '';
@@ -490,7 +488,7 @@ export async function openPopout(user, x, y) {
     ui.badgeDefs = data.badges || ui.badgeDefs;
     if (!fresh) return;
     ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || seed.roles || [] }, x, y };
-    seedStill(fresh.bannerUrl);
+    warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
   } catch (_) {}
 }
 
