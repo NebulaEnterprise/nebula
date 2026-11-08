@@ -11,8 +11,6 @@
   const u = $derived(ui.popout?.user);
   const roles = $derived((u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
   const rel = $derived(u ? relation(u.id) : 'none');
-  const left = $derived(Math.max(8, Math.min(ui.popout?.x || 80, window.innerWidth - 420)));
-  const top = $derived(Math.max(8, Math.min((ui.popout?.y || 80) - 20, window.innerHeight - 640)));
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -41,7 +39,8 @@
 </script>
 
 {#if u}
-  <div class="pop profile-card" style="left:{left}px;top:{top}px">
+  <div class="pop-backdrop"></div>
+  <div class="pop profile-card">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>

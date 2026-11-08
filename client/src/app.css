@@ -977,10 +977,15 @@ img { max-width: 100%; }
 }
 .preview-av img { width: 100%; height: 100%; max-width: none; object-fit: cover; display: block; transform: scale(1.28); }
 .preview-card .pad { padding: 0 16px 16px; }
+.pop-backdrop {
+  position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, 0.55);
+}
 .pop {
-  position: fixed; z-index: 40; width: 400px; max-height: min(88vh, 760px); overflow: auto;
+  position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow: auto;
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
   background: #140d1f; border-radius: 18px;
   border: 1px solid rgba(168, 85, 247, 0.35); box-shadow: var(--shadow);
+  animation: profile-in 170ms var(--ease);
 }
 .pop-banner { height: 128px; min-height: 128px; max-height: 128px; }
 .pop-add {
@@ -1076,7 +1081,7 @@ img { max-width: 100%; }
   animation: drop-in 160ms var(--ease);
   transform-origin: top center;
 }
-.pop, .composer-wrap > .picker, .react-picker { animation: rise-in 170ms var(--ease); transform-origin: bottom right; }
+.composer-wrap > .picker, .react-picker { animation: rise-in 170ms var(--ease); transform-origin: bottom right; }
 .react-picker .picker, .picker.picker-pop { animation: none; }
 .overlay, .poll-overlay { animation: fade-in 160ms var(--ease); }
 .sheet, .settings, .poll-sheet { animation: rise-in var(--med) var(--ease); }
@@ -1087,6 +1092,10 @@ img { max-width: 100%; }
 @keyframes rise-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
+}
+@keyframes profile-in {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
 }
 @keyframes drop-in {
   from { opacity: 0; transform: translateY(-6px); }
