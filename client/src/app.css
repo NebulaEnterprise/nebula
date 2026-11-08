@@ -983,8 +983,10 @@ img { max-width: 100%; }
 .pop {
   position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow: auto;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
-  background: #140d1f; border-radius: 18px;
-  border: 1px solid rgba(168, 85, 247, 0.35); box-shadow: var(--shadow);
+  --shade-a: #7c3aed; --shade-b: #c084fc;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--shade-a) 46%, #0c0614), color-mix(in srgb, var(--shade-b) 24%, #0c0614));
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); box-shadow: var(--shadow);
   animation: profile-in 170ms var(--ease);
 }
 .pop-banner { height: 128px; min-height: 128px; max-height: 128px; }
@@ -1005,7 +1007,7 @@ img { max-width: 100%; }
 .profile-hero { display: flex; flex-direction: column; align-items: center; text-align: center; margin-top: -46px; }
 .profile-hero h3 { margin: 10px 0 0; font-size: 22px; }
 .profile-hero .handle { justify-content: center; }
-.profile-status { margin: 4px 0 0; color: #d7c6ff; font-size: 14px; }
+.profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .profile-face { position: relative; }
 .profile-dot {
   position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
@@ -1014,17 +1016,19 @@ img { max-width: 100%; }
 .profile-roles { justify-content: center; margin-top: 12px; }
 .profile-panel {
   margin-top: 14px; padding: 12px 12px 4px; border-radius: 16px;
-  background: rgba(46, 16, 84, 0.45); border: 1px solid rgba(168, 85, 247, 0.28);
+  background: color-mix(in srgb, var(--shade-a) 22%, rgba(8, 4, 16, 0.72));
+  border: 1px solid color-mix(in srgb, var(--shade-b) 38%, transparent);
 }
 .profile-panel h4 {
   display: flex; align-items: center; gap: 8px; margin: 0 0 4px;
-  color: #d7c6ff; font-size: 14px;
+  color: color-mix(in srgb, var(--shade-b) 70%, white); font-size: 14px;
 }
 .profile-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 9px 0; border-top: 1px solid rgba(255,255,255,0.06); font-size: 13px;
 }
-.profile-row span { display: inline-flex; align-items: center; gap: 8px; color: #c4b5fd; }
+.profile-row span { display: inline-flex; align-items: center; gap: 8px; color: color-mix(in srgb, var(--shade-b) 62%, white); }
+.shade-preview { height: 36px; border-radius: 12px; margin: 0 0 12px; border: 1px solid var(--line); }
 .profile-row strong { display: inline-flex; align-items: center; gap: 6px; text-align: right; font-weight: 650; }
 .profile-row strong i { width: 8px; height: 8px; border-radius: 50%; display: block; }
 .bio-bubble {

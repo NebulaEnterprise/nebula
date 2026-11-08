@@ -86,6 +86,7 @@ function memberStamp(g) {
       u.avatarUrl || '',
       u.nameEffect || '',
       Array.isArray(u.nameColors) ? u.nameColors.join(',') : '',
+      Array.isArray(u.profileColors) ? u.profileColors.join(',') : '',
       u.status || '',
     ].join('\t');
   });
@@ -882,6 +883,7 @@ function publicUser(u) {
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
+    profileColors: profileShades(u.profileColors),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
@@ -899,6 +901,13 @@ unpackImages();
 
 function cleanNameEffect(value) {
   return ['plain', 'glow', 'gradient', 'rainbow', 'glitch', 'sparkle'].includes(value) ? value : '';
+}
+
+function profileShades(input) {
+  const clean = cleanNameColors(input);
+  if (clean.length >= 2) return clean.slice(0, 2);
+  if (clean.length === 1) return [clean[0], clean[0]];
+  return ['#7c3aed', '#c084fc'];
 }
 
 function cleanNameColors(input) {
@@ -1644,7 +1653,7 @@ app.post('/api/seen', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors, profileColors,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -1706,6 +1715,11 @@ app.patch('/api/me', auth, (req, res) => {
   if (showcaseBadge !== undefined) req.user.showcaseBadge = showcaseBadge ? String(showcaseBadge) : '';
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
+  if (profileColors !== undefined) {
+    const shades = cleanNameColors(profileColors);
+    if (shades.length === 2) req.user.profileColors = shades;
+    else if (shades.length === 1) req.user.profileColors = [shades[0], shades[0]];
+  }
   save(USERS_FILE, users);
   touchProfiles();
   res.json({ ok: true, user: publicUser(req.user) });

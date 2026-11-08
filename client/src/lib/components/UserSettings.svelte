@@ -49,6 +49,7 @@
     bannerUrl: ui.me?.bannerUrl || '',
     nameEffect: ui.me?.nameEffect || '',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
+    profileColors: Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? [...ui.me.profileColors] : ['#7c3aed', '#c084fc'],
   });
 
   const effects = [
@@ -169,6 +170,12 @@
     form.nameColors = next;
   }
 
+  function setProfileColor(index, value) {
+    const next = [...(form.profileColors || ['#7c3aed', '#c084fc'])];
+    next[index] = value;
+    form.profileColors = next;
+  }
+
   async function save() {
     try {
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
@@ -217,6 +224,11 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
+            <p class="label">Profile color</p>
+            <p class="hint">Two separate shades. The first is the main color. The second is the other tone on your profile card.</p>
+            <div class="shade-preview" style="background: linear-gradient(90deg, {form.profileColors[0]}, {form.profileColors[1]})"></div>
+            <ColorBox colors={form.profileColors} slots={2} onpick={setProfileColor} />
+            <div style="height:16px"></div>
             <section class="look-block">
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">

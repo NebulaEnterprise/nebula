@@ -1744,6 +1744,7 @@ export async function saveMe(body) {
   }
   if (Array.isArray(body.shownBadges)) pending.shownBadges = body.shownBadges;
   if (body.nameColors) pending.nameColors = body.nameColors;
+  if (Array.isArray(body.profileColors)) pending.profileColors = body.profileColors;
   ui.me = pending;
   let data;
   try {

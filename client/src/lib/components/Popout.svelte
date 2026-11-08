@@ -11,6 +11,7 @@
   const u = $derived(ui.popout?.user);
   const roles = $derived((u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
   const rel = $derived(u ? relation(u.id) : 'none');
+  const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -40,7 +41,7 @@
 
 {#if u}
   <div class="pop-backdrop"></div>
-  <div class="pop profile-card">
+  <div class="pop profile-card" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
