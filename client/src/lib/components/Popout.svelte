@@ -4,6 +4,7 @@
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
+  import DevBadge from './DevBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
@@ -40,6 +41,7 @@
             <span>@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</span>
             {#if hasMoonBadge(u)}<MoonBadge />{/if}
             <StaffBadge rank={u.staff} />
+            <DevBadge on={!!u.developer} />
           </p>
         </div>
       </div>

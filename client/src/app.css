@@ -236,6 +236,12 @@ img { max-width: 100%; }
   background: linear-gradient(135deg, #7c6af7, #ff5c8a); color: #fff;
 }
 .staff-badge svg { width: 11px; height: 11px; display: block; }
+.dev-badge {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  background: linear-gradient(135deg, #5ce1ff, #7c6af7); color: #fff;
+}
+.dev-badge svg { width: 11px; height: 11px; display: block; }
 .me .who span:not(.name-fx) { color: var(--faint); font-size: 12px; }
 
 .menu {

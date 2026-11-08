@@ -70,6 +70,7 @@
       avatarUrl: mine?.avatarUrl || author.avatarUrl || member?.avatarUrl,
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
       staff: ui.mode === 'chat' ? (member ? (member.staff || '') : (author.staff || '')) : '',
+      developer: !!(member?.developer || mine?.developer || author.developer),
     };
   }
 

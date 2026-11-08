@@ -202,6 +202,10 @@ function moderatorRole() {
   return { id: 'moderator', name: 'Moderator', color: '#3ecf8e', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 50 };
 }
 
+function developerRole() {
+  return { id: 'developer', name: 'Developer', color: '#5ce1ff', permissions: ALL_PERMS, position: 85 };
+}
+
 const STAFF_RANK = { admin: 3, manager: 2, moderator: 1 };
 
 function staffRank(g, user) {
@@ -221,12 +225,21 @@ function staffKey(g, user) {
   return '';
 }
 
+function hasDeveloper(g, user) {
+  if (!g || g.id !== OFFICIAL_ID || !user || !g.members || !g.members[user.id]) return false;
+  return (g.members[user.id].roles || []).includes('developer');
+}
+
+function powerRank(g, user) {
+  return Math.max(staffRank(g, user), hasDeveloper(g, user) ? 3 : 0);
+}
+
 function canStaffTouch(g, actor, targetId) {
   const target = users[targetId];
   if (!actor || !target) return false;
   if (isOwner(g, target) && actor.id !== target.id) return false;
   if (isOwner(g, actor)) return true;
-  return staffRank(g, actor) > staffRank(g, target);
+  return powerRank(g, actor) > powerRank(g, target);
 }
 
 function ensureGuilds() {
@@ -253,7 +266,7 @@ function ensureGuilds() {
   if (!g.roles.some((r) => r.id === 'everyone')) g.roles.unshift(everyoneRole());
   if (!g.roles.some((r) => r.id === 'owner')) g.roles.push(ownerRole());
   if (!g.roles.some((r) => r.id === 'og')) g.roles.push(ogRole());
-  for (const fresh of [adminRole(), managerRole(), moderatorRole()]) {
+  for (const fresh of [adminRole(), managerRole(), moderatorRole(), developerRole()]) {
     const role = g.roles.find((r) => r.id === fresh.id);
     if (!role) {
       g.roles.push(fresh);
@@ -277,6 +290,7 @@ function ensureGuilds() {
     } else if (g.members[u.id].roles.includes('owner')) {
       g.members[u.id].roles = g.members[u.id].roles.filter((id) => id !== 'owner');
     }
+    if (Number(u.uid) === 1 && !g.members[u.id].roles.includes('developer')) g.members[u.id].roles.push('developer');
   }
   g.ownerIds = g.ownerIds.filter((id) => {
     const u = users[id];
@@ -286,7 +300,7 @@ function ensureGuilds() {
   for (const role of g.roles) {
     if (role.id !== 'everyone' && role.id !== 'here') continue;
     role.mentionBy = Array.isArray(role.mentionBy) ? role.mentionBy : [];
-    for (const id of ['og', 'admin', 'manager', 'moderator']) {
+    for (const id of ['og', 'admin', 'manager', 'moderator', 'developer']) {
       if (!role.mentionBy.includes(id)) role.mentionBy.push(id);
     }
   }
@@ -367,7 +381,7 @@ function isOwner(g, user) {
 }
 
 function stripOfficialManage(g, user, bits) {
-  if (g && g.id === OFFICIAL_ID && !isOfficialOwner(user) && staffRank(g, user) < 1) return bits & ~MANAGE_MASK;
+  if (g && g.id === OFFICIAL_ID && !isOfficialOwner(user) && powerRank(g, user) < 1) return bits & ~MANAGE_MASK;
   return bits;
 }
 
@@ -382,14 +396,14 @@ function basePerms(g, user) {
   if (isOwner(g, user)) return ALL_PERMS;
   let bits = 0;
   for (const role of memberRoles(g, user)) bits |= Number(role.permissions) || 0;
-  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || staffRank(g, user) >= 3)) return ALL_PERMS;
+  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || powerRank(g, user) >= 3)) return ALL_PERMS;
   return stripOfficialManage(g, user, bits);
 }
 
 function effectivePerms(g, user, channel) {
   let bits = basePerms(g, user);
   if (!channel || !(channel.overwrites || []).length) return stripOfficialManage(g, user, bits);
-  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || staffRank(g, user) >= 3 || isOwner(g, user))) return bits;
+  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || powerRank(g, user) >= 3 || isOwner(g, user))) return bits;
   const ids = new Set(memberRoles(g, user).map((r) => r.id));
   for (const ow of channel.overwrites) {
     if (!ids.has(ow.roleId)) continue;
@@ -699,6 +713,7 @@ function presentMessage(msg, viewerId) {
     const room = findChannel(out.channelId, '');
     if (room && live) author.staff = staffKey(room.guild, live);
   }
+  if (live) author.developer = hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], live);
   const storedReplies = Array.isArray(out.replies) && out.replies.length ? out.replies : (out.reply ? [out.reply] : []);
   const replies = storedReplies.map(presentReply).filter(Boolean).slice(0, 5);
   out.replies = replies;
@@ -783,6 +798,7 @@ function publicUser(u) {
     nameColors: cleanNameColors(u.nameColors),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
+    developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };
@@ -1902,7 +1918,7 @@ app.patch('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   const role = (g.roles || []).find((r) => r.id === req.params.roleId);
   if (!role) return res.status(404).json({ error: 'Role not found' });
   if (role.id === 'everyone' && req.body?.name) return res.status(400).json({ error: 'Cannot rename @everyone' });
-  if (g.id === OFFICIAL_ID && STAFF_RANK[role.id] && !isOwner(g, req.user) && staffRank(g, req.user) <= STAFF_RANK[role.id]) {
+  if (g.id === OFFICIAL_ID && (STAFF_RANK[role.id] || role.id === 'developer') && !isOwner(g, req.user) && powerRank(g, req.user) <= (STAFF_RANK[role.id] || 4)) {
     return res.status(403).json({ error: 'That role is above you' });
   }
   if (req.body?.name != null && role.id !== 'everyone') role.name = String(req.body.name).trim().slice(0, 32) || role.name;
@@ -1921,7 +1937,7 @@ app.delete('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   if (!g) return;
   const roleId = req.params.roleId;
   if (roleId === 'everyone' || roleId === 'owner' || roleId === 'here') return res.status(400).json({ error: 'That role cannot be deleted' });
-  if (g.id === OFFICIAL_ID && STAFF_RANK[roleId]) return res.status(400).json({ error: 'That staff role stays on Nebula' });
+  if (g.id === OFFICIAL_ID && (STAFF_RANK[roleId] || roleId === 'developer')) return res.status(400).json({ error: 'That staff role stays on Nebula' });
   if (!(g.roles || []).some((r) => r.id === roleId)) return res.status(404).json({ error: 'Role not found' });
   g.roles = g.roles.filter((r) => r.id !== roleId);
   for (const mem of Object.values(g.members)) {
@@ -1940,6 +1956,7 @@ app.post('/api/servers/:id/members/:userId/roles', auth, (req, res) => {
   const role = (g.roles || []).find((r) => r.id === roleId);
   if (!role || role.id === 'everyone') return res.status(400).json({ error: 'Pick a role' });
   if (role.id === 'owner' && !isOwner(g, req.user)) return res.status(403).json({ error: 'Only an owner can assign Owner' });
+  if (role.id === 'developer' && !isOwner(g, req.user)) return res.status(403).json({ error: 'Only an owner can assign Developer' });
   if (!isOwner(g, req.user)) {
     const mine = staffRank(g, req.user);
     const target = users[req.params.userId];
@@ -2879,7 +2896,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     const allowed = new Set((g.onboarding.questions || []).map((q) => q.roleId).filter(Boolean));
     mem.roles = mem.roles || ['everyone'];
     picked.forEach((id) => {
-      if (allowed.has(id) && !STAFF_RANK[id] && id !== 'owner' && !mem.roles.includes(id)) mem.roles.push(id);
+      if (allowed.has(id) && !STAFF_RANK[id] && id !== 'owner' && id !== 'developer' && !mem.roles.includes(id)) mem.roles.push(id);
     });
     mem.onboarded = true;
     saveGuilds();
