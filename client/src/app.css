@@ -248,16 +248,20 @@ img { max-width: 100%; }
   position: fixed; left: 44px; bottom: 72px; z-index: 50; width: min(300px, calc(100vw - 60px));
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 16px;
-  box-shadow: var(--shadow); overflow: visible;
+  box-shadow: var(--shadow); overflow: hidden;
 }
 .account-pop .pop-banner { height: 96px; min-height: 96px; max-height: 96px; border-radius: 16px 16px 0 0; overflow: hidden; }
 .account-pop .pop-body { padding: 0 12px 12px; }
-.account-pop .profile-hero { margin-top: -36px; }
+.account-pop .profile-hero { position: relative; margin-top: -36px; }
+.account-pop .profile-face { position: static; }
 .account-pop .profile-hero h3 { margin-top: 6px; font-size: 18px; }
 .account-pop .pop-av {
   width: 72px; height: 72px; border-radius: 18px; border-width: 3px; font-size: 24px;
 }
-.account-pop .profile-dot { width: 12px; height: 12px; border-width: 2px; right: 2px; bottom: 2px; }
+.account-pop .profile-dot {
+  width: 12px; height: 12px; border-width: 2px;
+  left: calc(50% + 22px); right: auto; top: 56px; bottom: auto;
+}
 .account-menu {
   display: flex; flex-direction: column; gap: 1px;
   margin-top: 10px; padding: 4px; border-radius: 10px; background: #16171c;
@@ -298,8 +302,8 @@ img { max-width: 100%; }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .account-pop .profile-face .bio-bubble {
-  left: calc(100% + 6px); top: 50%; transform: translateY(-50%);
-  margin: 0; width: max-content; max-width: 156px; z-index: 2;
+  left: calc(50% + 42px); right: 0; top: 22px; bottom: auto; transform: none;
+  margin: 0; width: auto; max-width: none; z-index: 2;
   display: flex; align-items: center; gap: 0;
   padding: 3px 2px 3px 8px; border-radius: 7px; overflow: hidden;
   background: #4e5058; box-shadow: none;

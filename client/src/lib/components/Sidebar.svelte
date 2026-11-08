@@ -345,7 +345,7 @@
             {:else}
               <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
                 <i><Plus size={13} /></i>
-                <span>Just finished reading...</span>
+                <span>Add a bio</span>
               </button>
             {/if}
           </div>
