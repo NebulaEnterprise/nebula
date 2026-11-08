@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { ui, boot } from './lib/state.svelte.js';
+  import { ui, boot, unlockSound } from './lib/state.svelte.js';
   import Auth from './lib/components/Auth.svelte';
   import Rail from './lib/components/Rail.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
@@ -27,11 +27,14 @@
       if (!e.target.closest?.('.picker') && !e.target.closest?.('.picker-toggle')) ui.picker = '';
       if (!e.target.closest?.('.attach-menu') && !e.target.closest?.('.attach-toggle')) ui.attachOpen = false;
     };
+    const onGesture = () => unlockSound();
     window.addEventListener('keydown', onKey);
     window.addEventListener('click', onClick);
+    window.addEventListener('pointerdown', onGesture);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('click', onClick);
+      window.removeEventListener('pointerdown', onGesture);
     };
   });
 </script>

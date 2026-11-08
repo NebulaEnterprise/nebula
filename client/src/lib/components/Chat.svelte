@@ -22,6 +22,13 @@
     for (const pack of ui.packs || []) for (const row of pack.stickers || []) if (row?.name) map.set(row.name, row);
     return [...map.values()];
   });
+  const mentionNames = $derived.by(() => {
+    const names = new Set();
+    for (const person of ui.members || []) if (person?.username) names.add(person.username);
+    if (ui.dmUser?.username) names.add(ui.dmUser.username);
+    if (ui.me?.username) names.add(ui.me.username);
+    return [...names];
+  });
 
   function liveAuthor(author) {
     if (!author) return author;
@@ -44,6 +51,74 @@
 
   let box = $state(null);
   let follow = true;
+  let composerEl = $state(null);
+  let mentionAt = $state(-1);
+  let mentionQ = $state('');
+  let mentionPick = $state(0);
+
+  const mentionChoices = $derived.by(() => {
+    if (mentionAt < 0) return [];
+    const q = mentionQ.toLowerCase();
+    const rows = [];
+    if (ui.mode === 'chat' && 'everyone'.startsWith(q)) rows.push({ id: 'everyone', username: 'everyone', displayName: 'everyone', detail: 'Notify everyone in this channel' });
+    if (ui.mode === 'chat' && 'here'.startsWith(q)) rows.push({ id: 'here', username: 'here', displayName: 'here', detail: 'Notify people who are online' });
+    const people = ui.mode === 'dm' && ui.dmUser ? [ui.dmUser] : (ui.members || []);
+    for (const person of people) {
+      if (!person || person.id === ui.me?.id) continue;
+      const username = String(person.username || '').toLowerCase();
+      const display = String(person.displayName || '').toLowerCase();
+      if (!q || username.includes(q) || display.includes(q)) rows.push(person);
+    }
+    return rows.slice(0, 8);
+  });
+
+  function syncMention(event) {
+    noteTyping();
+    const el = event.target;
+    const pos = el.selectionStart || 0;
+    const upto = String(ui.composer || '').slice(0, pos);
+    const match = upto.match(/(^|\s)@([a-zA-Z0-9._]{0,32})$/);
+    if (!match) {
+      mentionAt = -1;
+      return;
+    }
+    mentionAt = pos - match[2].length - 1;
+    mentionQ = match[2];
+    mentionPick = 0;
+  }
+
+  function applyMention(person) {
+    const name = person.username || 'user';
+    const end = mentionAt + 1 + mentionQ.length;
+    ui.composer = ui.composer.slice(0, mentionAt) + '@' + name + ' ' + ui.composer.slice(end);
+    mentionAt = -1;
+    queueMicrotask(() => composerEl && composerEl.focus());
+  }
+
+  function onComposerKey(event) {
+    if (mentionAt >= 0 && mentionChoices.length) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        mentionPick = (mentionPick + 1) % mentionChoices.length;
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        mentionPick = (mentionPick - 1 + mentionChoices.length) % mentionChoices.length;
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        applyMention(mentionChoices[Math.min(mentionPick, mentionChoices.length - 1)]);
+        return;
+      }
+      if (event.key === 'Escape') {
+        mentionAt = -1;
+        return;
+      }
+    }
+    noteKeyDown(event);
+  }
   let filePick = $state(null);
   let uploading = $state(false);
   let pollOpen = $state(false);
@@ -128,7 +203,7 @@
           <time>{time(msg.createdAt)}</time>
         </div>
         {#if msg.content}
-          <div class="msg-content">{@html formatContent(msg.content, emoji, stickers)}</div>
+          <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, mentionNames)}</div>
         {/if}
         {#if msg.files?.length}
           <div class="msg-files">
@@ -161,6 +236,16 @@
   {#if ui.typers.length}
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
+  {#if mentionChoices.length}
+    <div class="mention-menu">
+      {#each mentionChoices as person, index}
+        <button type="button" class:on={index === mentionPick} onclick={() => applyMention(person)}>
+          <strong>@{person.username}</strong>
+          <span>{person.detail || person.displayName || ''}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
     <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked || uploading} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
       <Plus size={20} />
@@ -172,10 +257,11 @@
       </div>
     {/if}
     <input
+      bind:this={composerEl}
       bind:value={ui.composer}
-      onkeydown={noteKeyDown}
+      onkeydown={onComposerKey}
       onkeyup={noteKeyUp}
-      oninput={noteTyping}
+      oninput={syncMention}
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}

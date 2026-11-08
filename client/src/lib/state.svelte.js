@@ -165,6 +165,9 @@ export async function loadFriends() {
   } catch (_) {}
 }
 
+const heardDm = {};
+let inboxReady = false;
+
 export async function loadDms() {
   try {
     const data = await api('/api/dms');
@@ -175,16 +178,21 @@ export async function loadDms() {
     if (!ready) {
       for (const row of next) {
         const id = row.other && row.other.id;
-        if (id && row.lastId) map['dm:' + id] = row.lastId;
+        if (id && row.lastId) {
+          map['dm:' + id] = row.lastId;
+          heardDm[id] = row.lastId;
+        }
       }
       try {
         localStorage.setItem('nebula-seen', JSON.stringify(map));
         localStorage.setItem('nebula-dm-baseline', '1');
       } catch (_) {}
+      inboxReady = true;
       return;
     }
     const unread = {};
     let changed = false;
+    let ping = false;
     for (const row of next) {
       const id = row.other && row.other.id;
       if (!id || !row.lastId) continue;
@@ -195,17 +203,25 @@ export async function loadDms() {
           map[key] = row.lastId;
           changed = true;
         }
+        heardDm[id] = row.lastId;
         continue;
       }
-      if (row.lastFrom === ui.me?.id) continue;
-      if (map[key] !== row.lastId) unread[id] = serverDmNotes[id] && serverDmNotes[id].unread ? serverDmNotes[id] : { unread: 1 };
+      if (row.lastFrom && ui.me && row.lastFrom === ui.me.id) {
+        heardDm[id] = row.lastId;
+        continue;
+      }
+      if (map[key] !== row.lastId) {
+        unread[id] = serverDmNotes[id] && serverDmNotes[id].unread ? serverDmNotes[id] : { unread: 1 };
+        if (inboxReady && heardDm[id] !== row.lastId) ping = true;
+      }
+      heardDm[id] = row.lastId;
     }
     if (changed) {
       try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
     }
-    const prev = Object.keys(ui.activity.dms || {}).length;
     ui.activity = { ...ui.activity, dms: unread };
-    if (Object.keys(unread).length > prev) playPing();
+    inboxReady = true;
+    if (ping) playPing();
   } catch (_) {}
 }
 
@@ -460,7 +476,7 @@ export async function loadMessages(quiet, live) {
       if (!first && !mine && !serverMuted() && quiet) {
         const mode = notifyMode();
         const text = newest.content || '';
-        const mention = ui.me && (text.includes('@' + ui.me.username) || text.includes('@everyone'));
+        const mention = mentionsMe(text);
         if (mention) playPing();
         if (mode === 'all' || (mode === 'mentions' && mention)) {
           const old = document.title;
@@ -740,27 +756,72 @@ export function soundEnabled() {
   return localStorage.getItem('nebula-sound') !== 'off';
 }
 
-export function playPing() {
+function audioCtx() {
+  if (!playPing.ctx) playPing.ctx = new AudioContext();
+  return playPing.ctx;
+}
+
+let pingWaiting = false;
+
+function chime() {
+  const ctx = audioCtx();
+  const start = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(880, start);
+  osc.frequency.exponentialRampToValueAtTime(440, start + 0.18);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(0.22, start + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.42);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(start);
+  osc.stop(start + 0.44);
+}
+
+export function unlockSound() {
+  try {
+    const ctx = audioCtx();
+    const resume = ctx.state === 'suspended' ? ctx.resume() : Promise.resolve();
+    resume.then(() => {
+      if (pingWaiting) playPing(true);
+    }).catch(() => {});
+  } catch (_) {}
+}
+
+export function playPing(force) {
   if (!soundEnabled()) return;
   const now = Date.now();
-  if (now - lastSound < 700) return;
-  lastSound = now;
+  if (!force && now - lastSound < 700) return;
   try {
-    const ctx = playPing.ctx || new AudioContext();
-    playPing.ctx = ctx;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(784, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(523, ctx.currentTime + 0.16);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.34);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.36);
+    const ctx = audioCtx();
+    if (ctx.state === 'suspended') {
+      pingWaiting = true;
+      if (!playPing.resuming) {
+        playPing.resuming = true;
+        ctx.resume().then(() => {
+          playPing.resuming = false;
+          if (ctx.state === 'running') playPing(true);
+        }).catch(() => { playPing.resuming = false; });
+      }
+      return;
+    }
+    if (now - lastSound < 700 && !force) return;
+    lastSound = Date.now();
+    pingWaiting = false;
+    chime();
   } catch (_) {}
+}
+
+export function mentionsMe(text) {
+  const body = String(text || '');
+  if (/(^|\s)@(everyone|here)(?![\w.])/i.test(body)) return true;
+  const names = [ui.me?.username, ui.me?.displayName].filter((name) => name && String(name).trim());
+  return names.some((name) => {
+    const safe = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|\\s)@' + safe + '(?![\\w.])', 'i').test(body);
+  });
 }
 
 function seenMap() {
@@ -848,7 +909,6 @@ async function pollActivity() {
     mentionSnap = mentions;
     dmSnap = dmUnread;
     ui.activity = { ...ui.activity, servers, channels };
-    if (!Object.keys(ui.activity.dms || {}).length) ui.activity = { ...ui.activity, dms };
   } catch (_) {}
 }
 
@@ -863,7 +923,7 @@ function startClocks() {
     if (document.hidden || !localStorage.getItem('dc_token')) return;
     pollActivity().then(() => loadDms());
   };
-  setInterval(watchInbox, 2000);
+  setInterval(watchInbox, 1000);
   watchInbox();
   loadPacks();
 }

@@ -173,7 +173,7 @@
       <button class="nav-item" class:on={ui.mode === 'friends'} onclick={() => showFriends(ui.friendsTab)}><Users size={16} /> Friends</button>
       <button class="nav-item" class:on={ui.mode === 'add'} onclick={showAddFriend}><UserPlus size={16} /> Add friend</button>
       <div class="cat"><span>Direct messages</span></div>
-      {#each ui.dms as dm}
+      {#each ui.dms as dm (dm.id)}
         {@const note = ui.activity.dms[dm.other?.id]}
         <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onclick={() => openDm(dm.other)}>
           <Avatar user={dm.other} size={28} />

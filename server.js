@@ -1392,7 +1392,6 @@ app.post('/api/activity', auth, (req, res) => {
   ensureGuilds();
   const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
   const seeded = !!(req.body && req.body.seeded);
-  const name = String(req.user.username || '');
   const servers = {};
   const channels = {};
   const heads = {};
@@ -1416,7 +1415,7 @@ app.post('/api/activity', auth, (req, res) => {
         if (!msg || msg.authorId === req.user.id) continue;
         channelUnread++;
         const text = String(msg.content || '');
-        if ((name && text.includes('@' + name)) || text.includes('@everyone')) channelMentions++;
+        if (mentionsUser(text, req.user)) channelMentions++;
       }
       if (channelUnread) {
         channels[channel.id] = { unread: channelUnread, mentions: channelMentions, serverId: g.id };
@@ -1430,8 +1429,8 @@ app.post('/api/activity', auth, (req, res) => {
   }
   const dms = {};
   for (const thread of Object.values(dmThreads)) {
-    if (!thread || (thread.a !== req.user.id && thread.b !== req.user.id)) continue;
-    const other = thread.a === req.user.id ? thread.b : thread.a;
+    if (!thread || (String(thread.a) !== String(req.user.id) && String(thread.b) !== String(req.user.id))) continue;
+    const other = String(thread.a) === String(req.user.id) ? thread.b : thread.a;
     const list = messages['dm:' + dmKey(req.user.id, other)] || [];
     const cursor = String(seen['dm:' + other] || '');
     let start = list.length;
@@ -2093,6 +2092,20 @@ app.post('/api/friends/remove', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+function mentionsUser(text, user) {
+  const body = String(text || '');
+  if (/(^|\s)@(everyone|here)(?![\w.])/i.test(body)) return true;
+  const names = [user && user.username, user && user.displayName].filter((name) => name && String(name).trim());
+  return names.some((name) => {
+    const safe = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|\\s)@' + safe + '(?![\\w.])', 'i').test(body);
+  });
+}
+
+function sharesServer(a, b) {
+  return Object.values(guilds.servers).some((g) => g && g.members && g.members[a] && g.members[b]);
+}
+
 function dmPreview(content) {
   return String(content || '')
     .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
@@ -2103,11 +2116,22 @@ function dmPreview(content) {
 }
 
 app.get('/api/dms', auth, (req, res) => {
+  for (const roomId of Object.keys(messages)) {
+    if (!String(roomId).startsWith('dm:')) continue;
+    const ids = roomId.slice(3).split(':');
+    if (!ids.map(String).includes(String(req.user.id))) continue;
+    const otherId = ids.find((id) => String(id) !== String(req.user.id));
+    const key = ids.join(':');
+    if (otherId && !dmThreads[key]) {
+      const pair = [String(req.user.id), String(otherId)].sort();
+      dmThreads[key] = { id: key, a: pair[0], b: pair[1], updatedAt: Date.now() };
+    }
+  }
   const list = Object.values(dmThreads)
-    .filter((t) => t.a === req.user.id || t.b === req.user.id)
+    .filter((t) => t && (String(t.a) === String(req.user.id) || String(t.b) === String(req.user.id)))
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .map((t) => {
-      const otherId = t.a === req.user.id ? t.b : t.a;
+      const otherId = String(t.a) === String(req.user.id) ? t.b : t.a;
       const room = messages['dm:' + t.id] || [];
       const last = room[room.length - 1];
       return {
@@ -2142,7 +2166,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   const me = ensureFriendNode(req.user.id);
   const key = dmKey(req.user.id, otherId);
   const channelId = 'dm:' + key;
-  if (!me.friends.includes(otherId) && !dmThreads[key]) {
+  if (!me.friends.map(String).includes(String(otherId)) && !dmThreads[key] && !sharesServer(req.user.id, otherId)) {
     return res.status(403).json({ error: 'Add them as a friend first' });
   }
 

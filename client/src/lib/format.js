@@ -6,7 +6,7 @@ export function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-export function formatContent(text, emoji, stickers) {
+export function formatContent(text, emoji, stickers, namesList) {
   const gifs = [];
   const raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,400})\]\]/g, (_, url) => {
     gifs.push(url);
@@ -26,6 +26,16 @@ export function formatContent(text, emoji, stickers) {
     if (!e?.name || !e?.url) continue;
     const src = String(e.url).replace(/"/g, '');
     html = html.split(':' + e.name + ':').join('<img class="emoji" alt="" src="' + src + '">');
+  }
+  const names = ['everyone', 'here', ...(namesList || [])]
+    .map((name) => String(name || '').trim())
+    .filter((name) => name.length > 0 && name.length <= 32);
+  const unique = [...new Set(names)].sort((a, b) => b.length - a.length);
+  if (unique.length) {
+    const pattern = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    html = html.replace(new RegExp('(^|\\s)@(' + pattern + ')(?![\\w.])', 'gi'), (match, lead, name) => {
+      return lead + '<span class="mention">@' + name + '</span>';
+    });
   }
   return html;
 }
