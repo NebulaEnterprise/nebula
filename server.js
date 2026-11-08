@@ -684,7 +684,7 @@ function publicUser(u) {
 unpackImages();
 
 function cleanNameEffect(value) {
-  return ['plain', 'glow', 'gradient', 'rainbow', 'glitch'].includes(value) ? value : '';
+  return ['plain', 'glow', 'gradient', 'rainbow', 'glitch', 'sparkle'].includes(value) ? value : '';
 }
 
 function cleanNameColors(input) {

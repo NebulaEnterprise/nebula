@@ -41,6 +41,7 @@
     ['gradient', 'Gradient'],
     ['rainbow', 'Rainbow'],
     ['glitch', 'Glitch'],
+    ['sparkle', 'Sparkle'],
   ];
 
   let savedUrl = { avatarUrl: '', bannerUrl: '' };

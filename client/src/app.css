@@ -398,6 +398,24 @@ img { max-width: 100%; }
 .name-fx.gradient { background-image: linear-gradient(90deg, var(--fx1, #5ce1ff), var(--fx2, #7c6af7), var(--fx1, #5ce1ff)); }
 .name-fx.rainbow { background-image: linear-gradient(90deg, var(--fx1, #ff5c8a), var(--fx2, #5cc8ff), var(--fx1, #ff5c8a)); }
 .name-fx.glitch { color: var(--fx1, #5ce1ff); animation: name-glitch 1.2s infinite; }
+.name-fx.sparkle {
+  position: relative; display: inline-block; color: transparent;
+  background-image: linear-gradient(105deg, var(--fx1, #fff) 0%, var(--fx1, #fff) 34%, #fff 46%, var(--fx2, #ffe7a3) 52%, #fff 58%, var(--fx1, #fff) 72%, var(--fx1, #fff) 100%);
+  background-size: 220% auto; -webkit-background-clip: text; background-clip: text;
+  animation: name-shift 1.8s linear infinite;
+}
+.name-fx.sparkle i {
+  position: absolute; width: 7px; height: 7px; margin: -3px 0 0 -3px; pointer-events: none;
+  animation: name-spark 1.5s ease-in-out infinite;
+}
+.name-fx.sparkle i::before {
+  content: "✦"; position: absolute; left: 0; top: 0; font-size: 8px; line-height: 1;
+  color: #fff; text-shadow: 0 0 6px var(--fx2, #fff), 0 0 2px #fff;
+}
+.name-fx.sparkle i:nth-of-type(1) { top: 18%; left: 14%; }
+.name-fx.sparkle i:nth-of-type(2) { top: 58%; left: 46%; animation-delay: .35s; }
+.name-fx.sparkle i:nth-of-type(3) { top: 12%; left: 74%; animation-delay: .7s; }
+.name-fx.sparkle i:nth-of-type(4) { top: 64%; left: 90%; animation-delay: 1.05s; }
 .effect-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .effect-head .label { margin: 0; }
 .rgb {
@@ -418,6 +436,11 @@ img { max-width: 100%; }
   0%, 100% { text-shadow: 2px 0 var(--fx2, #ff4d6d), -2px 0 var(--fx1, #3ecbff); }
   40% { text-shadow: -2px 0 var(--fx2, #ff4d6d), 2px 0 var(--fx1, #3ecbff); }
   70% { text-shadow: 1px 0 var(--fx1, #5ce1ff); }
+}
+@keyframes name-spark {
+  0%, 100% { opacity: 0; transform: scale(0.3); }
+  35% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0; transform: scale(0.45); }
 }
 .composer {
   position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px;
@@ -860,6 +883,13 @@ img { max-width: 100%; }
   animation: name-shift 3.5s linear infinite;
 }
 .name-fx.glitch { animation: name-glitch 1.2s infinite; }
+.name-fx.sparkle {
+  position: relative; display: inline-block; color: transparent;
+  background-image: linear-gradient(105deg, var(--fx1, #fff) 0%, var(--fx1, #fff) 34%, #fff 46%, var(--fx2, #ffe7a3) 52%, #fff 58%, var(--fx1, #fff) 72%, var(--fx1, #fff) 100%);
+  background-size: 220% auto; -webkit-background-clip: text; background-clip: text;
+  animation: name-shift 1.8s linear infinite;
+}
+.name-fx.sparkle i { animation: name-spark 1.5s ease-in-out infinite; }
 .badge {
   display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px;
   font-size: 12px; font-weight: 700; color: white;

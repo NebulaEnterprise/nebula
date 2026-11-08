@@ -1,7 +1,7 @@
 <script>
   let { user = null, color = '' } = $props();
   const label = $derived(user?.nick || user?.displayName || user?.username || '');
-  const fx = $derived(['plain', 'glow', 'gradient', 'rainbow', 'glitch'].includes(user?.nameEffect) ? user.nameEffect : '');
+  const fx = $derived(['plain', 'glow', 'gradient', 'rainbow', 'glitch', 'sparkle'].includes(user?.nameEffect) ? user.nameEffect : '');
   const paint = $derived.by(() => {
     const colors = Array.isArray(user?.nameColors) ? user.nameColors : [];
     const parts = [];
@@ -13,4 +13,4 @@
   });
 </script>
 
-<span class="name-fx {fx}" style={paint}>{label}</span>
+<span class="name-fx {fx}" style={paint}>{label}{#if fx === 'sparkle'}<i></i><i></i><i></i><i></i>{/if}</span>
