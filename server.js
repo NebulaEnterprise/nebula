@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
-const { execFile, execFileSync, spawn } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
@@ -972,50 +972,89 @@ function deleteSongPath(urlPath) {
   fs.unlink(path.join(UPLOAD_DIR, path.basename(clean)), () => {});
 }
 
-let ytDlp = null;
-let ytDlpLooked = false;
-function ytdlpBin() {
-  if (ytDlpLooked) return ytDlp;
-  ytDlpLooked = true;
-  if (process.platform === 'win32') return null;
-  const tries = [
-    ['yt-dlp', []],
-    ['python3', ['-m', 'yt_dlp']],
-    ['python', ['-m', 'yt_dlp']],
-  ];
-  for (const [cmd, prefix] of tries) {
-    try {
-      execFileSync(cmd, [...prefix, '--version'], { stdio: 'ignore', timeout: 8000 });
-      ytDlp = { cmd, prefix };
-      break;
-    } catch (_) {}
-  }
-  return ytDlp;
-}
+const SONG_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-function ytDlpRelease() {
-  if (process.platform === 'win32') {
-    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', file: 'yt-dlp.exe' };
-  }
-  if (process.platform === 'darwin') {
-    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos', file: 'yt-dlp' };
-  }
-  const name = process.arch === 'arm64' ? 'yt-dlp_linux_aarch64' : 'yt-dlp_linux';
-  return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/' + name, file: 'yt-dlp' };
-}
-
-function saveHttp(url, dest, redirects = 0) {
+function requestText(url, options, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 6) {
       reject(new Error('Could not save that song'));
       return;
     }
     const lib = url.startsWith('https:') ? https : http;
-    const req = lib.get(url, { headers: { 'User-Agent': 'Nebula' } }, (res) => {
+    const req = lib.request(url, {
+      method: options.method || 'GET',
+      headers: options.headers || { 'User-Agent': SONG_UA },
+    }, (res) => {
       const code = res.statusCode || 0;
       if (code >= 300 && code < 400 && res.headers.location) {
         res.resume();
-        saveHttp(new URL(res.headers.location, url).href, dest, redirects + 1).then(resolve, reject);
+        requestText(new URL(res.headers.location, url).href, options, redirects + 1).then(resolve, reject);
+        return;
+      }
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => resolve({ status: code, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => req.destroy(new Error('Could not save that song')));
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
+async function youtubeAudioChoice(videoId) {
+  const clients = [
+    { clientName: 'IOS', clientVersion: '20.10.4', deviceMake: 'Apple', deviceModel: 'iPhone16,2', osName: 'iOS', osVersion: '18.3.2.22D82', hl: 'en', gl: 'US' },
+    { clientName: 'ANDROID', clientVersion: '19.28.35', androidSdkVersion: 30, hl: 'en', gl: 'US' },
+    { clientName: 'WEB', clientVersion: '2.20241120.01.00', hl: 'en', gl: 'US' },
+  ];
+  let reason = 'Could not save that song';
+  for (const client of clients) {
+    const sent = await requestText('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': SONG_UA,
+        Cookie: 'CONSENT=YES+1; SOCS=CAI',
+      },
+      body: JSON.stringify({ context: { client }, videoId, contentCheckOk: true, racyCheckOk: true }),
+    });
+    let data = {};
+    try { data = JSON.parse(sent.body.toString('utf8')); } catch (_) {}
+    const status = data.playabilityStatus && data.playabilityStatus.status;
+    if (status && status !== 'OK') {
+      reason = data.playabilityStatus.reason || reason;
+      continue;
+    }
+    const seconds = Number(data.videoDetails && data.videoDetails.lengthSeconds) || 0;
+    if (seconds > 900) throw new Error('That video is too long to save');
+    const formats = [...((data.streamingData && data.streamingData.adaptiveFormats) || []), ...((data.streamingData && data.streamingData.formats) || [])];
+    const audio = formats.filter((item) => item && item.url && String(item.mimeType || '').startsWith('audio/'));
+    audio.sort((a, b) => (String(a.mimeType).includes('mp4') ? 0 : 1) - (String(b.mimeType).includes('mp4') ? 0 : 1) || (b.bitrate || 0) - (a.bitrate || 0));
+    if (audio[0]) return audio[0];
+  }
+  throw new Error(String(reason || 'Could not save that song').slice(0, 140));
+}
+
+function audioExt(mime) {
+  const kind = String(mime || '');
+  if (kind.includes('webm')) return '.webm';
+  if (kind.includes('mpeg')) return '.mp3';
+  return '.m4a';
+}
+
+function saveHttp(url, dest, redirects = 0, headers) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 6) {
+      reject(new Error('Could not save that song'));
+      return;
+    }
+    const lib = url.startsWith('https:') ? https : http;
+    const req = lib.get(url, { headers: Object.assign({ 'User-Agent': SONG_UA }, headers || {}) }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        saveHttp(new URL(res.headers.location, url).href, dest, redirects + 1, headers).then(resolve, reject);
         return;
       }
       if (code !== 200) {
@@ -1039,74 +1078,13 @@ function saveHttp(url, dest, redirects = 0) {
   });
 }
 
-let bundledYtDlp = null;
-function ensureYtDlp() {
-  const system = ytdlpBin();
-  if (system) return Promise.resolve(system);
-  if (bundledYtDlp) return bundledYtDlp;
-  bundledYtDlp = (async () => {
-    const rel = ytDlpRelease();
-    const dir = path.join(DATA_DIR, 'bin');
-    fs.mkdirSync(dir, { recursive: true });
-    const dest = path.join(dir, rel.file);
-    const ready = fs.existsSync(dest) && fs.statSync(dest).size > 1000000;
-    if (!ready) {
-      const tmp = dest + '.part';
-      await saveHttp(rel.url, tmp);
-      fs.renameSync(tmp, dest);
-      if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
-    }
-    try {
-      execFileSync(dest, ['--version'], { stdio: 'ignore', timeout: 15000 });
-    } catch (err) {
-      fs.unlink(dest, () => {});
-      throw err;
-    }
-    return { cmd: dest, prefix: [] };
-  })().catch((err) => {
-    bundledYtDlp = null;
-    throw err;
-  });
-  return bundledYtDlp;
-}
-
 async function downloadSongAudio(pageUrl, destBase) {
-  let bin;
-  try { bin = await ensureYtDlp(); }
-  catch (_) { throw new Error('Could not save that song'); }
-  return new Promise((resolve, reject) => {
-    const args = [
-      ...bin.prefix,
-      '--no-playlist',
-      '--no-warnings',
-      '--no-progress',
-      '--no-cache-dir',
-      '--force-overwrites',
-      '--max-filesize', '25M',
-      '--match-filter', 'duration < 900',
-      '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/bestaudio',
-      '-o', destBase + '.%(ext)s',
-      pageUrl,
-    ];
-    execFile(bin.cmd, args, { timeout: 120000, windowsHide: false }, (err, _stdout, stderr) => {
-      if (err) {
-        const detail = String(stderr || err.message || '');
-        if (/does not pass filter|duration/i.test(detail)) reject(new Error('That video is too long to save'));
-        else reject(new Error('Could not save that song'));
-        return;
-      }
-      const base = path.basename(destBase);
-      let found = '';
-      try {
-        found = fs.readdirSync(UPLOAD_DIR).find((name) => name.startsWith(base + '.') && !name.endsWith('.part')) || '';
-      } catch (_) {}
-      if (!found) {
-        reject(new Error('Could not save that song'));
-        return;
-      }
-      resolve(found);
-    });
-  });
+  const videoId = youtubeVideoId(pageUrl);
+  const format = await youtubeAudioChoice(videoId);
+  const dest = destBase + audioExt(format.mimeType);
+  await saveHttp(format.url, dest, 0, { 'User-Agent': SONG_UA, Referer: 'https://www.youtube.com/' });
+  if (!fs.existsSync(dest) || fs.statSync(dest).size < 1000) throw new Error('Could not save that song');
+  return path.basename(dest);
 }
 
 const songQueue = [];
@@ -3835,4 +3813,5 @@ function listen() {
   });
 }
 
+console.log('Nebula starting');
 setTimeout(listen, Number(process.env.NEBULA_RESTART_DELAY || 0));
