@@ -954,6 +954,29 @@ function chime() {
   osc.stop(start + 0.44);
 }
 
+let askedAccess = false;
+
+export async function askSiteAccess() {
+  unlockSound();
+  if (askedAccess) return;
+  askedAccess = true;
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) return;
+    let state = 'prompt';
+    if (navigator.permissions?.query) {
+      const perm = await navigator.permissions.query({ name: 'microphone' }).catch(() => null);
+      if (perm) state = perm.state;
+    }
+    if (state === 'granted') return;
+    if (state === 'denied') {
+      toast('Microphone is blocked. Click the lock icon in the address bar and allow Microphone and Sound.');
+      return;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((track) => track.stop());
+  } catch (_) {}
+}
+
 export function unlockSound() {
   try {
     const ctx = audioCtx();

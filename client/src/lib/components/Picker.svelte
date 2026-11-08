@@ -165,7 +165,21 @@
       {#if !busy && !gifError && !gifs.length}<p class="hint">No GIFs for that search.</p>{/if}
       {#each gifs as gif (gif.url)}
         <button type="button" title={gif.title || 'GIF'} onclick={() => sendGif(gif.url)}>
-          <img src={gif.preview || gif.url} alt="" referrerpolicy="no-referrer" />
+          <img
+            src={gif.preview || gif.url}
+            alt=""
+            width="220"
+            height="120"
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            onerror={(e) => {
+              const img = e.currentTarget;
+              if (img.dataset.tried || !gif.url || img.getAttribute('src') === gif.url) return;
+              img.dataset.tried = '1';
+              img.src = gif.url;
+            }}
+          />
         </button>
       {/each}
     </div>

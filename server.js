@@ -1634,8 +1634,8 @@ async function klipyGifs(query) {
   const seen = new Set();
   for (const item of klipyList(data)) {
     const file = item && item.file;
-    const url = klipyGifUrl(file, 'md') || klipyGifUrl(file, 'hd') || klipyGifUrl(file, 'sm') || klipyGifUrl(file, 'xs');
-    const preview = klipyGifUrl(file, 'sm') || klipyGifUrl(file, 'xs') || url;
+    const url = klipyGifUrl(file, 'sm') || klipyGifUrl(file, 'md') || klipyGifUrl(file, 'hd') || klipyGifUrl(file, 'xs');
+    const preview = klipyGifUrl(file, 'xs') || klipyGifUrl(file, 'sm') || url;
     if (!url || seen.has(url)) continue;
     seen.add(url);
     rows.push({
