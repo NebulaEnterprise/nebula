@@ -1009,8 +1009,16 @@ img { max-width: 100%; }
 .profile-hero .handle { justify-content: center; }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .profile-face { position: relative; }
-.profile-face .bio-bubble { left: calc(100% + 10px); top: 58px; max-width: 132px; }
-.profile-face .bio-bubble span { max-width: 112px; }
+.profile-face .bio-bubble {
+  left: calc(100% + 4px); top: 50%; bottom: auto; transform: translateY(-50%);
+  max-width: 140px;
+}
+.profile-face .bio-bubble span { max-width: 124px; }
+.profile-face .bio-bubble::before {
+  left: -6px; top: 50%; margin-top: -5px;
+  border-width: 5px 6px 5px 0;
+  border-color: transparent #4e5058 transparent transparent;
+}
 .profile-dot {
   position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
   border: 3px solid #140d1f;
