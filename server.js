@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
+const { execFile, spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = 3850;
@@ -732,6 +733,10 @@ app.use((req, res, next) => {
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
+  next();
+});
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
   next();
 });
 app.use(express.static(FRONTEND_DIR));
@@ -3051,9 +3056,74 @@ app.use((req, res) => {
   res.sendFile(index);
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n  Nebula backend -> http://localhost:' + PORT);
-  console.log('  Frontend folder: ' + FRONTEND_DIR);
-  console.log('  Users: ' + Object.keys(users).length);
-  console.log('  Email: ' + GMAIL_USER);
-});
+let httpServer = null;
+let listenTries = 0;
+
+function git(args, timeout = 20000) {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd: __dirname, timeout, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } }, (err, stdout) => {
+      resolve(err ? null : String(stdout || '').trim());
+    });
+  });
+}
+
+let pulling = false;
+async function pullUpdates() {
+  if (pulling || !fs.existsSync(path.join(__dirname, '.git'))) return;
+  pulling = true;
+  try {
+    const before = await git(['rev-parse', 'HEAD']);
+    if (!before || (await git(['fetch', 'origin', 'main'])) === null) return;
+    const remote = await git(['rev-parse', 'origin/main']);
+    if (!remote || remote === before) return;
+    if ((await git(['pull', '--ff-only', 'origin', 'main'])) === null) {
+      console.log('  GitHub has a newer Nebula, but this folder has local changes so it was left as-is.');
+      return;
+    }
+    const changed = await git(['diff', '--name-only', before, 'HEAD']);
+    const files = String(changed || '').split('\n').map((file) => file.trim()).filter(Boolean);
+    const siteFile = (file) => /^(client\/|dist\/|assets\/)/.test(file) || file === 'index.html' || file === 'favicon.svg' || file.endsWith('.md');
+    const serverChanged = files.some((file) => !siteFile(file));
+    if (!serverChanged) {
+      console.log('  Site files updated from GitHub. Open pages will refresh themselves.');
+      return;
+    }
+    if (files.some((file) => file === 'package.json' || file === 'package-lock.json')) {
+      const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+      await new Promise((resolve) => execFile(npm, ['install', '--omit=dev'], { cwd: __dirname, timeout: 120000 }, () => resolve()));
+    }
+    console.log('  Server updated from GitHub. Restarting.');
+    const child = spawn(process.execPath, process.argv.slice(1), {
+      cwd: __dirname,
+      detached: true,
+      stdio: 'inherit',
+      env: { ...process.env, NEBULA_RESTART_DELAY: '800' },
+    });
+    child.unref();
+    process.exit(0);
+  } finally {
+    pulling = false;
+  }
+}
+
+function listen() {
+  httpServer = app.listen(PORT, '0.0.0.0', () => {
+    console.log('\n  Nebula backend -> http://localhost:' + PORT);
+    console.log('  Frontend folder: ' + FRONTEND_DIR);
+    console.log('  Users: ' + Object.keys(users).length);
+    console.log('  Email: ' + GMAIL_USER);
+    console.log('  Checking GitHub for updates every 30s.');
+    setInterval(() => { pullUpdates().catch(() => {}); }, 30000);
+  });
+  httpServer.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && process.env.NEBULA_RESTART_DELAY && listenTries < 10) {
+      listenTries += 1;
+      setTimeout(listen, 400);
+      return;
+    }
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+setTimeout(listen, Number(process.env.NEBULA_RESTART_DELAY || 0));
