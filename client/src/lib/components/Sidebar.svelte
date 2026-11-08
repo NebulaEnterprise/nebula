@@ -53,9 +53,7 @@
   let accountOpen = $state(false);
   let statusOpen = $state(false);
   let accountsOpen = $state(false);
-  let editingStatus = $state(false);
   let editingBio = $state(false);
-  let statusDraft = $state('');
   let bioDraft = $state('');
   const presence = [
     ['online', 'Online', '#3ecf8e'],
@@ -70,9 +68,7 @@
     accountOpen = !accountOpen;
     statusOpen = false;
     accountsOpen = false;
-    editingStatus = false;
     editingBio = false;
-    statusDraft = ui.me?.customStatus || '';
     bioDraft = shortBio(ui.me?.bio);
   }
 
@@ -86,15 +82,6 @@
     try {
       await saveMe({ status: id });
       statusOpen = false;
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  async function saveCustomStatus() {
-    try {
-      await saveMe({ customStatus: statusDraft.trim() });
-      editingStatus = false;
     } catch (err) {
       toast(err.message);
     }
@@ -337,11 +324,6 @@
                 <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
                 <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
               </div>
-            {:else if editingStatus}
-              <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
-                <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
-                <button type="submit" title="Save status">✓</button>
-              </form>
             {:else}
               <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
                 <i><Plus size={13} /></i>
@@ -371,11 +353,6 @@
                   <i style="background:{color}"></i> {label}
                 </button>
               {/each}
-              {#if !editingStatus}
-                <button type="button" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; statusOpen = false; }}>
-                  <Pencil size={14} /> Custom status
-                </button>
-              {/if}
             </div>
           {/if}
           <button type="button" class="account-row" onclick={() => { accountsOpen = !accountsOpen; statusOpen = false; }}>

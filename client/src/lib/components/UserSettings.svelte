@@ -1,5 +1,5 @@
 <script>
-  import { X, User, AtSign, Smile, Sparkles, Clock, Circle } from '@lucide/svelte';
+  import { X, User, AtSign, Smile, Clock, Circle } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -379,7 +379,6 @@
                 <div class="profile-row"><span><User size={14} /> Display name</span><strong>{form.displayName || form.username}</strong></div>
                 <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{form.username}</strong></div>
                 <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
-                <div class="profile-row"><span><Sparkles size={14} /> Custom status</span><strong>{form.customStatus || '—'}</strong></div>
               </section>
               <section class="profile-panel">
                 <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{ui.me?.lastSeen ? lastSeenLabel(ui.me.lastSeen) : (ui.me?.hideLastSeen ? 'Hidden' : '—')}</strong></div>

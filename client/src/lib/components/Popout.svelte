@@ -1,5 +1,5 @@
 <script>
-  import { UserPlus, User, AtSign, Smile, Sparkles, Clock, Circle } from '@lucide/svelte';
+  import { UserPlus, User, AtSign, Smile, Clock, Circle } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -70,7 +70,7 @@
           {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
           {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
         </p>
-        {#if u.aboutMe || u.customStatus}<p class="profile-status">{u.aboutMe || u.customStatus}</p>{/if}
+        {#if u.aboutMe}<p class="profile-status">{u.aboutMe}</p>{/if}
       </div>
       {#if roles.length}
         <div class="pop-role-list profile-roles">
@@ -83,7 +83,6 @@
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
-        <div class="profile-row"><span><Sparkles size={14} /> Custom status</span><strong>{u.customStatus || '—'}</strong></div>
       </section>
       <section class="profile-panel">
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{u.lastSeen ? lastSeenLabel(u.lastSeen) : (u.hideLastSeen ? 'Hidden' : '—')}</strong></div>
