@@ -326,12 +326,6 @@
                   {/each}
                 {/if}
               </div>
-              {#if wheelOpen}
-                <button type="button" class="wheel-back" aria-label="Close color" onclick={() => (wheelOpen = false)}></button>
-                <div class="wheel-pop" style="left:{wheelAt.left}px;top:{wheelAt.top}px">
-                  <ColorWheel value={form.profileColors[shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(shadeSlot, c)} />
-                </div>
-              {/if}
             </section>
             <div class="field">
               <label>Bio</label>
@@ -469,4 +463,10 @@
       </div>
     </div>
   </div>
+  {#if wheelOpen}
+    <button type="button" class="wheel-back" aria-label="Close color" onclick={(e) => { e.stopPropagation(); wheelOpen = false; }}></button>
+    <div class="wheel-pop" style="left:{wheelAt.left}px;top:{wheelAt.top}px" onclick={(e) => e.stopPropagation()}>
+      <ColorWheel value={form.profileColors[shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(shadeSlot, c)} />
+    </div>
+  {/if}
 </div>
