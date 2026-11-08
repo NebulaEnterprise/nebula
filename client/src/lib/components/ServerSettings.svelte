@@ -42,7 +42,7 @@
   let roleColor = $state('#7c6af7');
   let roleBits = $state(PERM.VIEW | PERM.SEND);
   let roleUid = $state('');
-  let roleId = $state(ui.settings?.roles?.find((r) => r.id !== 'everyone')?.id || '');
+  let roleId = $state(ui.settings?.roles?.find((r) => r.id !== 'everyone' && r.id !== 'here' && r.id !== 'owner')?.id || '');
   let banUid = $state('');
   let banReason = $state('');
   let verify = $state(ui.settings?.verification || 'none');
@@ -71,6 +71,13 @@
     if (iconUrl) body.iconUrl = iconUrl;
     if (bannerUrl) body.bannerUrl = bannerUrl;
     await run(() => guildAction({ type: 'settings', ...body }));
+  }
+
+  async function saveMention(role, otherId, on) {
+    const mentionBy = new Set(role.mentionBy || []);
+    if (on) mentionBy.add(otherId);
+    else mentionBy.delete(otherId);
+    await run(() => api('/api/servers/' + ui.serverId + '/roles/' + role.id, { method: 'PATCH', body: { mentionBy: [...mentionBy] } }));
   }
 
   async function assignRole(action) {
@@ -189,7 +196,7 @@
             <input class="textin" bind:value={item.q} placeholder="Question" />
             <Select
               value={item.roleId || ''}
-              options={(s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner').map((r) => ({ value: r.id, label: r.name }))}
+              options={(s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner' && r.id !== 'here').map((r) => ({ value: r.id, label: r.name }))}
               onpick={(v) => (questions[i].roleId = v)}
             />
           </div>
@@ -215,7 +222,7 @@
             toast('Template added');
           } catch (err) { toast(err.message); }
         }}>Add the starter roles</button>
-        {#each (s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner') as r}
+        {#each (s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner' && r.id !== 'here') as r}
           <label class="check">
             <input type="checkbox" checked={(s.pingRoleIds || []).includes(r.id)} onchange={async (e) => {
               const set = new Set(s.pingRoleIds || []);
@@ -293,7 +300,18 @@
 
       {:else if ui.settingsPage === 'roles'}
         {#each s.roles || [] as r}
-          <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.name}</strong></div>
+          <div class="role-card">
+            <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.name}</strong></div>
+            <p class="label">Choose who can mention this role</p>
+            <div class="mention-by">
+              {#each (s.roles || []).filter((other) => other.id !== r.id && other.id !== 'here') as other}
+                <label class="check">
+                  <input type="checkbox" checked={(r.mentionBy || []).includes(other.id)} onchange={(e) => saveMention(r, other.id, e.target.checked)} />
+                  {other.name}
+                </label>
+              {/each}
+            </div>
+          </div>
         {/each}
         <div class="field"><label>New role</label><input bind:value={roleName} maxlength="32" placeholder="Moderator" /></div>
         <p class="label">Role color</p>
@@ -309,7 +327,7 @@
           } catch (err) { toast(err.message); }
         }}>Add role</button>
         <div class="field" style="margin-top:16px"><label>Member user id</label><input bind:value={roleUid} placeholder="2" /></div>
-        <Select value={roleId} options={(s.roles || []).filter((r) => r.id !== 'everyone').map((r) => ({ value: r.id, label: r.name }))} onpick={(v) => (roleId = v)} />
+        <Select value={roleId} options={(s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'here').map((r) => ({ value: r.id, label: r.name }))} onpick={(v) => (roleId = v)} />
         <div class="actions" style="margin-top:8px">
           <button class="btn sm brand" onclick={() => assignRole('add')}>Give</button>
           <button class="btn sm" onclick={() => assignRole('remove')}>Remove</button>

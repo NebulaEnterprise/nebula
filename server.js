@@ -154,6 +154,10 @@ function ownerRole() {
   return { id: 'owner', name: 'Owner', color: '#7c5cff', permissions: ALL_PERMS, position: 100 };
 }
 
+function hereRole() {
+  return { id: 'here', name: '@here', color: '#99aab5', permissions: 0, position: 1, mentionBy: ['og', 'admin'] };
+}
+
 function ogRole() {
   return { id: 'og', name: 'og', color: '#e3b34c', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 40 };
 }
@@ -232,6 +236,14 @@ function hydrateGuild(g) {
   if (!g.lockedUntil) g.lockedUntil = 0;
   if (g.showLobby == null) g.showLobby = false;
   (g.channels || []).forEach((c) => { if (c.categoryId == null) c.categoryId = ''; });
+  if (!Array.isArray(g.roles)) g.roles = [];
+  if (!g.roles.some((r) => r.id === 'here')) g.roles.push(hereRole());
+  const mentionDefault = g.id === OFFICIAL_ID ? ['og', 'admin'] : ['everyone'];
+  for (const role of g.roles) {
+    if (!Array.isArray(role.mentionBy)) {
+      role.mentionBy = (role.id === 'everyone' || role.id === 'here') ? mentionDefault.slice() : ['everyone'];
+    }
+  }
 }
 
 function audit(g, user, text) {
@@ -1416,6 +1428,7 @@ app.post('/api/activity', auth, (req, res) => {
   const servers = {};
   const channels = {};
   const heads = {};
+  const speakers = {};
   for (const g of Object.values(guilds.servers)) {
     if (!g || !g.members || !g.members[req.user.id]) continue;
     let unread = 0;
@@ -1435,8 +1448,7 @@ app.post('/api/activity', auth, (req, res) => {
         const msg = list[i];
         if (!msg || msg.authorId === req.user.id) continue;
         channelUnread++;
-        const text = String(msg.content || '');
-        if (mentionsUser(text, req.user)) channelMentions++;
+        if (messageMentions(msg, req.user, g)) channelMentions++;
       }
       if (channelUnread) {
         channels[channel.id] = { unread: channelUnread, mentions: channelMentions, serverId: g.id };
@@ -1444,13 +1456,16 @@ app.post('/api/activity', auth, (req, res) => {
         mentions += channelMentions;
       }
       const last = list[list.length - 1];
-      if (last) heads[channel.id] = last.id;
+      if (last) {
+        heads[channel.id] = last.id;
+        speakers[channel.id] = last.authorId;
+      }
     }
     if (unread || mentions) servers[g.id] = { unread, mentions };
   }
   const dmNotes = dmInbox(req.user.id, seen, seeded);
   Object.assign(heads, dmNotes.heads);
-  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads });
+  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers });
 });
 
 const gifCache = new Map();
@@ -1631,6 +1646,10 @@ app.patch('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   if (req.body?.name != null && role.id !== 'everyone') role.name = String(req.body.name).trim().slice(0, 32) || role.name;
   if (req.body?.color != null) role.color = String(req.body.color).slice(0, 20);
   if (req.body?.permissions != null && role.id !== 'owner') role.permissions = Number(req.body.permissions) || 0;
+  if (Array.isArray(req.body?.mentionBy)) {
+    const ids = new Set((g.roles || []).map((r) => r.id));
+    role.mentionBy = [...new Set(req.body.mentionBy.map((id) => String(id || '')).filter((id) => ids.has(id) && id !== role.id))].slice(0, 40);
+  }
   saveGuilds();
   res.json({ ok: true, role });
 });
@@ -1639,7 +1658,7 @@ app.delete('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   const g = requireGuild(req, res, PERM.MANAGE_ROLES);
   if (!g) return;
   const roleId = req.params.roleId;
-  if (roleId === 'everyone' || roleId === 'owner') return res.status(400).json({ error: 'That role cannot be deleted' });
+  if (roleId === 'everyone' || roleId === 'owner' || roleId === 'here') return res.status(400).json({ error: 'That role cannot be deleted' });
   if (!(g.roles || []).some((r) => r.id === roleId)) return res.status(404).json({ error: 'Role not found' });
   g.roles = g.roles.filter((r) => r.id !== roleId);
   for (const mem of Object.values(g.members)) {
@@ -1777,6 +1796,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     content: extra.content,
     files: extra.files,
     poll: extra.poll,
+    mentions: parseMentions(found.guild, req.user, extra.content),
     createdAt: new Date().toISOString(),
   };
   messages[found.channel.id].push(msg);
@@ -2129,6 +2149,65 @@ function mentionsUser(text, user) {
     const safe = String(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp('(^|\\s)@' + safe + '(?![\\w.])', 'i').test(body);
   });
+}
+
+function mentionPattern(name) {
+  const safe = String(name || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!safe) return null;
+  return new RegExp('(^|\\s)@' + safe + '(?![\\w.])', 'i');
+}
+
+function canMentionRole(g, user, role) {
+  if (!g || !user || !role) return false;
+  if (isOwner(g, user)) return true;
+  const list = Array.isArray(role.mentionBy) ? role.mentionBy : ['everyone'];
+  if (!list.length) return false;
+  const mine = new Set(memberRoles(g, user).map((r) => r.id));
+  return list.some((id) => mine.has(id));
+}
+
+function parseMentions(g, user, content) {
+  const text = String(content || '');
+  const mentions = { users: [], roles: [], everyone: false, here: false };
+  if (!g || !user) return mentions;
+  const everyone = (g.roles || []).find((r) => r.id === 'everyone');
+  const here = (g.roles || []).find((r) => r.id === 'here');
+  if (mentionPattern('everyone') && mentionPattern('everyone').test(text) && canMentionRole(g, user, everyone)) mentions.everyone = true;
+  if (mentionPattern('here') && mentionPattern('here').test(text) && canMentionRole(g, user, here)) mentions.here = true;
+  for (const role of g.roles || []) {
+    if (!role || role.id === 'everyone' || role.id === 'here' || role.id === 'owner') continue;
+    const pattern = mentionPattern(String(role.name || '').replace(/^@/, ''));
+    if (pattern && pattern.test(text) && canMentionRole(g, user, role)) mentions.roles.push(role.id);
+  }
+  for (const id of Object.keys(g.members || {})) {
+    if (String(id) === String(user.id)) continue;
+    const member = users[id];
+    if (!member) continue;
+    const nick = g.members[id] && g.members[id].nick;
+    const names = [member.username, member.displayName, nick].filter((name) => name && String(name).trim());
+    if (names.some((name) => {
+      const pattern = mentionPattern(name);
+      return pattern && pattern.test(text);
+    })) mentions.users.push(String(id));
+  }
+  return mentions;
+}
+
+function isHere(user) {
+  const status = user && user.status;
+  return status !== 'offline' && status !== 'dnd';
+}
+
+function messageMentions(msg, user, g) {
+  const mentions = msg && msg.mentions;
+  if (!mentions || typeof mentions !== 'object') return mentionsUser(msg && msg.content, user);
+  if (mentions.everyone) return true;
+  if (mentions.here && isHere(user)) return true;
+  if ((mentions.users || []).some((id) => String(id) === String(user.id))) return true;
+  const mem = g && g.members && g.members[user.id];
+  const roles = new Set((mem && mem.roles) || []);
+  roles.add('everyone');
+  return (mentions.roles || []).some((id) => roles.has(id));
 }
 
 function sharesServer(a, b) {

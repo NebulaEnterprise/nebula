@@ -515,16 +515,10 @@ export async function loadMessages(quiet, live) {
     }
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
     if (newest && newest.id) markSeen(roomKey, newest.id);
-    if (ui.mode === 'dm') {
     ui.messages = list;
     if (newest && newest.id) ui.seenMessageId = newest.id;
-    if (quiet) announceFresh(list, previousId);
+    announceFresh(list, roomKey);
     return 'changed';
-  }
-  ui.messages = list;
-  if (newest && newest.id) ui.seenMessageId = newest.id;
-  if (quiet) announceFresh(list, previousId);
-  return 'changed';
   } catch (err) {
     if (serial !== pulseSerial) return 'skip';
     if (err && err.name === 'AbortError') throw err;
@@ -936,19 +930,41 @@ function noteArrival(id, title, body) {
   deskNotice(title, body);
 }
 
-function announceFresh(list, previousId) {
-  if (!previousId) return;
-  const start = (list || []).findIndex((msg) => msg.id === previousId);
-  if (start < 0) return;
-  for (const msg of list.slice(start + 1)) {
+const roomHeard = {};
+
+function announceFresh(list, roomKey) {
+  if (!roomKey) return;
+  const rows = list || [];
+  const newest = rows[rows.length - 1];
+  const prev = roomHeard[roomKey];
+  if (!prev) {
+    if (newest && newest.id) roomHeard[roomKey] = newest.id;
+    return;
+  }
+  if (!newest || newest.id === prev) return;
+  const start = rows.findIndex((msg) => msg.id === prev);
+  const fresh = start >= 0 ? rows.slice(start + 1) : [newest];
+  for (const msg of fresh) {
     if (!msg || isMine(msg)) continue;
     const who = (msg.author && (msg.author.displayName || msg.author.username)) || 'Someone';
+    const mentioned = mentionsMessage(msg);
     const text = String(msg.content || '')
       .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
       .replace(/\[\[sticker:[^\]]+\]\]/g, 'Sticker')
       .trim() || ((msg.files && msg.files.length) ? 'Sent a file' : 'New message');
-    noteArrival(msg.id, who, text);
+    noteArrival(msg.id, mentioned ? who + ' mentioned you' : who, text);
   }
+  roomHeard[roomKey] = newest.id;
+}
+
+function mentionsMessage(msg) {
+  const mentions = msg && msg.mentions;
+  if (!mentions || typeof mentions !== 'object') return mentionsMe(msg && msg.content);
+  if (mentions.everyone || mentions.here) return true;
+  if ((mentions.users || []).some((id) => String(id) === String(ui.me && ui.me.id))) return true;
+  const me = (ui.members || []).find((member) => member.id === (ui.me && ui.me.id));
+  const mine = new Set((me && me.roles || []).map((role) => role.id));
+  return (mentions.roles || []).some((id) => mine.has(id));
 }
 
 export function mentionsMe(text) {
@@ -1052,9 +1068,10 @@ async function pollActivity() {
         }
         if (heardHeads[id] === messageId) continue;
         heardHeads[id] = messageId;
+        const speaker = (data.speakers || {})[id];
+        if (speaker && ui.me && String(speaker) === String(ui.me.id)) continue;
         const note = (data.channels || {})[id];
-        if (!note || !note.unread) continue;
-        noteArrival(messageId, 'Nebula', note.mentions ? 'You were mentioned' : 'New message');
+        noteArrival(messageId, 'Nebula', note && note.mentions ? 'You were mentioned' : 'New message');
       }
     }
     activityReady = true;

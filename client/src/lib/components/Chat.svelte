@@ -22,7 +22,7 @@
     for (const pack of ui.packs || []) for (const row of pack.stickers || []) if (row?.name) map.set(row.name, row);
     return [...map.values()];
   });
-  const mentionNames = $derived.by(() => {
+  const peopleNames = $derived.by(() => {
     const names = new Set();
     const add = (person) => {
       if (!person) return;
@@ -33,8 +33,22 @@
     for (const person of ui.members || []) add(person);
     add(ui.dmUser);
     add(ui.me);
-    return [...names];
+    return names;
   });
+
+  function namesFor(msg) {
+    const names = new Set(peopleNames);
+    const flags = msg && msg.mentions;
+    if (!flags || flags.everyone) names.add('everyone');
+    if (!flags || flags.here) names.add('here');
+    for (const role of ui.roles || []) {
+      if (!role || role.id === 'everyone' || role.id === 'here' || role.id === 'owner') continue;
+      const token = String(role.name || '').replace(/^@/, '');
+      if (!token) continue;
+      if (!flags || (flags.roles || []).includes(role.id)) names.add(token);
+    }
+    return [...names];
+  }
 
   function liveAuthor(author) {
     if (!author) return author;
@@ -64,12 +78,37 @@
   let mentionQ = $state('');
   let mentionPick = $state(0);
 
+  function myRoleIds() {
+    const ids = new Set(['everyone']);
+    const me = (ui.members || []).find((member) => member.id === ui.me?.id);
+    for (const role of me?.roles || []) if (role?.id) ids.add(role.id);
+    if (ui.serverMeta?.owner) ids.add('owner');
+    return ids;
+  }
+
+  function canMention(role) {
+    if (!role || ui.mode !== 'chat') return false;
+    if (ui.serverMeta?.owner) return true;
+    if (!Array.isArray(role.mentionBy)) return true;
+    if (!role.mentionBy.length) return false;
+    const mine = myRoleIds();
+    return role.mentionBy.some((id) => mine.has(id));
+  }
+
   const mentionChoices = $derived.by(() => {
     if (mentionAt < 0) return [];
     const q = mentionQ.toLowerCase();
     const rows = [];
-    if (ui.mode === 'chat' && 'everyone'.startsWith(q)) rows.push({ id: 'everyone', username: 'everyone', displayName: 'everyone', detail: 'Notify everyone in this channel' });
-    if (ui.mode === 'chat' && 'here'.startsWith(q)) rows.push({ id: 'here', username: 'here', displayName: 'here', detail: 'Notify people who are online' });
+    if (ui.mode === 'chat') {
+      const everyone = (ui.roles || []).find((role) => role.id === 'everyone');
+      const here = (ui.roles || []).find((role) => role.id === 'here');
+      if ('everyone'.startsWith(q) && canMention(everyone || { id: 'everyone', mentionBy: ['og', 'admin'] })) {
+        rows.push({ id: 'everyone', username: 'everyone', displayName: 'everyone', detail: 'Notify everyone in this channel' });
+      }
+      if ('here'.startsWith(q) && canMention(here || { id: 'here', mentionBy: ['og', 'admin'] })) {
+        rows.push({ id: 'here', username: 'here', displayName: 'here', detail: 'Notify people who are online' });
+      }
+    }
     const people = ui.mode === 'dm' && ui.dmUser ? [ui.dmUser] : (ui.members || []);
     for (const person of people) {
       if (!person || person.id === ui.me?.id) continue;
@@ -77,7 +116,17 @@
       const display = String(person.nick || person.displayName || '').toLowerCase();
       if (!q || username.includes(q) || display.includes(q)) rows.push(person);
     }
-    return rows.slice(0, 8);
+    if (ui.mode === 'chat') {
+      for (const role of ui.roles || []) {
+        if (!role || role.id === 'everyone' || role.id === 'here' || role.id === 'owner') continue;
+        const token = String(role.name || '').replace(/^@/, '');
+        if (!token) continue;
+        if (q && !token.toLowerCase().includes(q)) continue;
+        if (!canMention(role)) continue;
+        rows.push({ id: 'role:' + role.id, username: token, displayName: role.name, detail: 'Notify this role' });
+      }
+    }
+    return rows.slice(0, 10);
   });
 
   function syncMention(event) {
@@ -220,7 +269,7 @@
           <time>{time(msg.createdAt)}</time>
         </div>
         {#if msg.content}
-          <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, mentionNames)}</div>
+          <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
         {/if}
         {#if msg.files?.length}
           <div class="msg-files">

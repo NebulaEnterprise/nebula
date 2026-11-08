@@ -279,6 +279,8 @@ img { max-width: 100%; }
 }
 .mention-menu button.on, .mention-menu button:hover { background: var(--bg-hover); }
 .mention-menu span { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.role-card { margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.mention-by { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .lobby {
   margin: 0 16px 8px; padding: 14px 16px; border-radius: 14px;
   background: rgba(62, 207, 142, 0.08); border: 1px solid rgba(62, 207, 142, 0.2);
