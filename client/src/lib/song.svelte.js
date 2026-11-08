@@ -112,11 +112,38 @@ function seekTo(el, startAt, key) {
   try { el.currentTime = at; } catch { /* metadata not ready */ }
 }
 
-function beginSong(file, start) {
+function playFrom(el, at, key) {
+  const start = () => {
+    if (!active || active.key !== key) return;
+    el.play().then(() => {
+      if (active && active.key === key) player.playing = true;
+    }).catch(() => {
+      if (active && active.key === key) player.playing = false;
+    });
+  };
+  if (el.readyState < 1) {
+    el.addEventListener('loadedmetadata', () => playFrom(el, at, key), { once: true });
+    return;
+  }
+  const cap = Number.isFinite(el.duration) ? Math.max(0, el.duration - 0.25) : at;
+  const target = Math.min(at, cap);
+  if (Math.abs((el.currentTime || 0) - target) < 0.08) {
+    start();
+    return;
+  }
+  const onSeek = () => {
+    el.removeEventListener('seeked', onSeek);
+    start();
+  };
+  el.addEventListener('seeked', onSeek);
+  try { el.currentTime = target; } catch { start(); }
+}
+
+function beginSong(file, start, fromStart = false) {
   if (!hasSong(file)) return '';
   const startAt = startAtOf(start);
   const key = songKey(file, startAt);
-  if (player.key === key && player.playing) return key;
+  if (!fromStart && player.key === key && player.playing) return key;
   const el = ensureAudio();
   active = { file, startAt, key };
   player.key = key;
@@ -125,6 +152,10 @@ function beginSong(file, start) {
   if (el.dataset.file !== file) {
     el.dataset.file = file;
     el.src = fileUrl(file);
+  }
+  if (fromStart) {
+    playFrom(el, startAt, key);
+    return key;
   }
   if (startAt > 0) el.addEventListener('loadedmetadata', () => seekTo(el, startAt, key), { once: true });
   el.play().then(() => {
@@ -145,7 +176,7 @@ export function playSongAfterPaint(file, start) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       if (token !== paintToken) return;
-      beginSong(file, start);
+      beginSong(file, start, true);
     });
   });
 }
@@ -157,7 +188,12 @@ export function stopSong(file, start) {
   active = null;
   player.playing = false;
   player.key = '';
-  if (audio) audio.pause();
+  if (audio) {
+    audio.pause();
+    try {
+      if (audio.readyState >= 1) audio.currentTime = startAtOf(start);
+    } catch { /* metadata not ready */ }
+  }
 }
 
 export function toggleSong(file, start) {
