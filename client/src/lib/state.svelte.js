@@ -502,6 +502,10 @@ export async function reloadSettings() {
 let lastTypingPing = 0;
 let typingSerial = 0;
 let typingLive = false;
+let typingIdle = null;
+const heldKeys = new Set();
+
+const SKIP_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 function typingBody() {
   if (ui.mode === 'dm') return { dmUserId: ui.dmUser?.id };
@@ -515,11 +519,48 @@ function postTyping(extra) {
 }
 
 function stopTyping() {
+  clearTimeout(typingIdle);
+  heldKeys.clear();
   const token = ++typingSerial;
   if (typingLive || lastTypingPing) postTyping({ stop: true, token });
   typingLive = false;
   lastTypingPing = 0;
   return token;
+}
+
+function pingTyping() {
+  const now = Date.now();
+  if (typingLive && now - lastTypingPing < 800) return;
+  lastTypingPing = now;
+  typingLive = true;
+  postTyping({ token: ++typingSerial });
+}
+
+function scheduleStop() {
+  clearTimeout(typingIdle);
+  typingIdle = setTimeout(() => {
+    if (heldKeys.size) return;
+    stopTyping();
+  }, 700);
+}
+
+export function noteKeyDown(event) {
+  if (!event || event.isComposing) return;
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  if (SKIP_KEYS.has(event.key)) return;
+  if (event.key === 'Enter') return;
+  if ((event.key === 'Backspace' || event.key === 'Delete') && !ui.composer.trim()) return;
+  heldKeys.add(event.key);
+  clearTimeout(typingIdle);
+  pingTyping();
+}
+
+export function noteKeyUp(event) {
+  if (!event) return;
+  heldKeys.delete(event.key);
+  if (heldKeys.size) return;
+  if (!typingLive) return;
+  scheduleStop();
 }
 
 export function typingLine(list) {
@@ -535,11 +576,7 @@ export function noteTyping() {
     stopTyping();
     return;
   }
-  const now = Date.now();
-  if (now - lastTypingPing < 2000) return;
-  lastTypingPing = now;
-  typingLive = true;
-  postTyping({ token: ++typingSerial });
+  if (heldKeys.size) pingTyping();
 }
 
 let typingBusy = false;

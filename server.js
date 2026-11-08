@@ -1550,7 +1550,7 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 4500) {
+    if (now - row.at > 1800) {
       if (row.timer) clearTimeout(row.timer);
       room.delete(id);
       continue;
@@ -1602,7 +1602,7 @@ function armTyping(key, userId, row) {
     if (!current || current.at !== row.at) return;
     room.delete(userId);
     wakeTyping(key);
-  }, 4000);
+  }, 1500);
   room.set(userId, row);
 }
 

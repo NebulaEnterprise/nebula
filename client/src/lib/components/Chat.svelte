@@ -2,7 +2,7 @@
   import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping } from '../state.svelte.js';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -96,7 +96,7 @@
     </div>
   {/if}
   {#if ui.typers.length}
-    <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} typing....</p>
+    <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
     {#if ui.mode === 'chat'}
@@ -104,6 +104,8 @@
     {/if}
     <input
       bind:value={ui.composer}
+      onkeydown={noteKeyDown}
+      onkeyup={noteKeyUp}
       oninput={noteTyping}
       maxlength="2000"
       disabled={locked}
