@@ -12,7 +12,7 @@
   </button>
   {#each incoming as dm (dm.other.id)}
     <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onclick={() => openDm(dm.other)}>
-      <Avatar user={dm.other} size={48} dot={false} />
+      <Avatar user={dm.other} size={32} dot={false} />
       <em class="badge">{(ui.activity.dms[dm.other.id].unread || 1) > 99 ? '99+' : (ui.activity.dms[dm.other.id].unread || 1)}</em>
     </button>
   {/each}
