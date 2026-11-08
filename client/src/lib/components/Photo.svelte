@@ -1,12 +1,11 @@
 <script>
-  import { resolveMedia } from '../api.js';
+  import { fileUrl, pinnedSrc, resolveMedia } from '../api.js';
 
   let { url = '', fill = false } = $props();
   let src = $state('');
 
   $effect(() => {
     const current = url;
-    let alive = true;
     if (!current) {
       src = '';
       return;
@@ -15,16 +14,20 @@
       src = current;
       return;
     }
-    resolveMedia(current).then((next) => {
-      if (alive && next) src = next;
-    });
-    return () => {
-      alive = false;
-    };
+    const pin = pinnedSrc(current);
+    src = pin || fileUrl(current);
   });
+
+  function failed() {
+    const current = url;
+    if (!current || current.startsWith('data:') || current.startsWith('blob:')) return;
+    resolveMedia(current).then((next) => {
+      if (next && next !== src) src = next;
+    });
+  }
 </script>
 
-{#if src}<img class:fill src={src} alt="" />{/if}
+{#if src}<img class:fill src={src} alt="" onerror={failed} />{/if}
 
 <style>
   img.fill {

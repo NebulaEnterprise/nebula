@@ -162,8 +162,22 @@ function savedMedia() {
   try { return JSON.parse(localStorage.getItem(MEDIA_KEY) || '[]'); } catch (_) { return []; }
 }
 
+export function fileUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/')) return getApiBase() + url;
+  return getApiBase() + '/files/' + url.replace(/^\/+/, '');
+}
+
+const pinned = new Map();
+
+export function pinnedSrc(url) {
+  if (!url) return '';
+  return pinned.get(url) || pinned.get(fileUrl(url)) || '';
+}
+
 function rememberMedia(url) {
-  if (!url || !String(url).includes('/uploads/')) return;
+  if (!url || (!String(url).includes('/uploads/') && !String(url).includes('/files/'))) return;
   const list = savedMedia().filter((item) => item !== url);
   list.unshift(url);
   try { localStorage.setItem(MEDIA_KEY, JSON.stringify(list.slice(0, 40))); } catch (_) {}
@@ -188,8 +202,11 @@ export function warmMedia(urls) {
 
 export function pinMedia(url, file) {
   if (!url || !file) return;
-  const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
-  mediaCache.set(full, Promise.resolve(URL.createObjectURL(file)));
+  const full = fileUrl(url);
+  const local = URL.createObjectURL(file);
+  pinned.set(url, local);
+  pinned.set(full, local);
+  mediaCache.set(full, Promise.resolve(local));
   rememberMedia(url);
   if (!('caches' in window)) return;
   file.arrayBuffer().then((buf) => {
@@ -202,8 +219,8 @@ export function pinMedia(url, file) {
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
   if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);
-  const full = url.startsWith('/uploads/') ? getApiBase() + url : url;
-  if (!full.includes('/uploads/')) return Promise.resolve(url);
+  const full = fileUrl(url);
+  if (!full.includes('/uploads/') && !full.includes('/files/')) return Promise.resolve(full);
   rememberMedia(url);
   if (mediaCache.has(full)) return mediaCache.get(full);
   const pending = (async () => {

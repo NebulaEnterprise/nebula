@@ -49,7 +49,9 @@
     const label = kind === 'banner' ? 'Banner' : 'Profile picture';
     if (!file) return;
     const previous = String(form[field] || '');
-    form[field] = URL.createObjectURL(file);
+    const preview = URL.createObjectURL(file);
+    form[field] = preview;
+    paintPicture(field, preview);
     const job = (async () => {
       const data = await api('/api/upload?slot=' + kind, {
         method: 'POST',
@@ -67,7 +69,9 @@
       toast(label + ' added');
     })().catch((err) => {
       savedUrl[field] = '';
-      form[field] = previous.startsWith('blob:') ? '' : previous;
+      const back = previous.startsWith('blob:') ? '' : previous;
+      form[field] = back;
+      paintPicture(field, back);
       toast(err.message || 'Could not upload that picture');
     });
     inflight[field] = job;

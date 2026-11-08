@@ -11,6 +11,7 @@ const PORT = 3850;
 
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const FILES_DIR = path.join(DATA_DIR, 'files');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const CODES_FILE = path.join(DATA_DIR, 'codes.json');
@@ -19,6 +20,7 @@ const DMS_FILE = path.join(DATA_DIR, 'dms.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
 function load(file, fallback) {
   try {
@@ -432,6 +434,31 @@ function unpackImages() {
   if (msgChanged) save(MESSAGES_FILE, messages);
 }
 
+function publishedMedia(u, slot) {
+  const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
+  const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+  const stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
+  if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(stored)) return '/files/' + stored;
+  const url = String((u && u[urlKey]) || '');
+  if (url.startsWith('/files/') || url.startsWith('/uploads/')) return url;
+  if (url.startsWith('data:') || url.includes('githubusercontent.com')) return '';
+  return url.length > 500 ? '' : url;
+}
+
+function saveProfileFile(user, slot, buf, ext) {
+  const bucket = slot === 'avatar' ? 'avatars' : 'banners';
+  const folder = path.join(FILES_DIR, bucket, user.id);
+  fs.mkdirSync(folder, { recursive: true });
+  const name = 'r2-' + Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + ext;
+  fs.writeFileSync(path.join(folder, name), buf);
+  const rel = bucket + '/' + user.id + '/' + name;
+  const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+  const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
+  user[pathKey] = rel;
+  user[urlKey] = '/files/' + rel;
+  return { path: rel, url: '/files/' + rel };
+}
+
 function publicUser(u) {
   if (!u) return null;
   return {
@@ -447,8 +474,10 @@ function publicUser(u) {
     accentColor: u.accentColor || '#7c5cff',
     avatarColor: u.avatarColor || '#7c5cff',
     bannerColor: u.bannerColor || u.accentColor || '#7c5cff',
-    avatarUrl: u.avatarUrl || '',
-    bannerUrl: u.bannerUrl || '',
+    avatarPath: u.avatarPath || '',
+    avatarUrl: publishedMedia(u, 'avatar'),
+    bannerPath: u.bannerPath || '',
+    bannerUrl: publishedMedia(u, 'banner'),
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
@@ -1080,17 +1109,23 @@ function sendAsset(res, file, type) {
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
-  const name = uuidv4() + ext;
-  const url = '/uploads/' + name;
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
   const slot = String(req.query.slot || '');
   if (slot === 'avatar' || slot === 'banner') {
-    req.user[slot === 'avatar' ? 'avatarUrl' : 'bannerUrl'] = url;
+    const saved = saveProfileFile(req.user, slot, req.body, ext);
     save(USERS_FILE, users);
-    return res.json({ ok: true, url, user: publicUser(req.user) });
+    return res.json({ ok: true, path: saved.path, url: saved.url, user: publicUser(req.user) });
   }
-  res.json({ ok: true, url });
+  const name = uuidv4() + ext;
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
+  res.json({ ok: true, url: '/uploads/' + name });
 });
+
+app.use('/files', (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Cache-Control', 'public, max-age=31536000, immutable');
+  next();
+}, express.static(FILES_DIR, { maxAge: '365d', immutable: true }));
 
 app.use('/uploads', (req, res, next) => {
   res.set('Access-Control-Allow-Origin', '*');
@@ -1126,8 +1161,14 @@ app.patch('/api/me', auth, (req, res) => {
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
-  if (avatarUrl !== undefined) req.user.avatarUrl = storeImage(avatarUrl);
-  if (bannerUrl !== undefined) req.user.bannerUrl = storeImage(bannerUrl);
+  if (avatarUrl !== undefined) {
+    req.user.avatarUrl = storeImage(avatarUrl);
+    if (!req.user.avatarUrl) req.user.avatarPath = '';
+  }
+  if (bannerUrl !== undefined) {
+    req.user.bannerUrl = storeImage(bannerUrl);
+    if (!req.user.bannerUrl) req.user.bannerPath = '';
+  }
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
