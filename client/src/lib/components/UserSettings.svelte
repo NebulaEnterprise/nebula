@@ -62,20 +62,7 @@
     ['sparkle', 'Sparkle'],
   ];
 
-  let aboutDraft = $state(ui.me?.aboutMe || ui.me?.customStatus || '');
-  let aboutEditing = $state(false);
-  let aboutSynced = false;
-  $effect(() => {
-    const saved = ui.me?.aboutMe || '';
-    const status = ui.me?.customStatus || '';
-    if (aboutEditing) return;
-    if (!aboutSynced) {
-      aboutDraft = saved || status;
-      aboutSynced = true;
-      return;
-    }
-    aboutDraft = saved;
-  });
+  let aboutDraft = $state(ui.me?.aboutMe || '');
   let savedUrl = { avatarUrl: '', bannerUrl: '' };
   const inflight = { avatarUrl: null, bannerUrl: null };
 
@@ -269,9 +256,9 @@
             </div>
             <div class="field">
               <label>About me</label>
-              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Shows under your name" onfocus={() => (aboutEditing = true)} onblur={() => (aboutEditing = false)}></textarea>
+              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Shows under your name"></textarea>
             </div>
-            <button class="btn brand" style="width:auto" onclick={async () => { aboutEditing = false; try { await saveMe({ aboutMe: aboutDraft }); } catch (err) { toast(err.message); } }}>Save about me</button>
+            <button class="btn brand" style="width:auto" onclick={async () => { try { await saveMe({ aboutMe: aboutDraft }); } catch (err) { toast(err.message); } }}>Save about me</button>
             <p class="label">Badge</p>
             {#if ownedBadges(ui.me).length}
               <div class="pick-row">

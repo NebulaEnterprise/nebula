@@ -1763,6 +1763,9 @@ export async function saveMe(body) {
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
   };
   ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
+  if (ui.popout?.user?.id === ui.me.id) {
+    ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...ui.me, roles: ui.popout.user.roles || [] } };
+  }
   rememberAccount(ui.me, localStorage.getItem('dc_token') || '');
   ui.userSettings = false;
   await loadMembers();

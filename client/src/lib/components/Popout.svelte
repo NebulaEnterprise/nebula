@@ -8,7 +8,12 @@
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
-  const u = $derived(ui.popout?.user);
+  const u = $derived.by(() => {
+    const shown = ui.popout?.user;
+    if (!shown) return shown;
+    if (ui.me?.id && shown.id === ui.me.id) return { ...shown, ...ui.me, roles: shown.roles || [] };
+    return shown;
+  });
   const roles = $derived((u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
   const rel = $derived(u ? relation(u.id) : 'none');
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
@@ -58,12 +63,14 @@
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
         <h3><Name user={u} /></h3>
-        <p class="handle">
-          <span>@{u.username}</span>
-          {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
-          {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
-          {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
-        </p>
+        <p class="handle"><span>@{u.username}</span></p>
+        {#if visibleBadges(u).length}
+          <div class="profile-marks">
+            {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
+            {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
+            {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
+          </div>
+        {/if}
         {#if u.aboutMe || u.customStatus}<p class="profile-status">{u.aboutMe || u.customStatus}</p>{/if}
       </div>
       {#if roles.length}
