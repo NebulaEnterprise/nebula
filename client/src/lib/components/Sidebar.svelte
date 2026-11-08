@@ -331,7 +331,6 @@
           {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
           {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
         </div>
-        {#if ui.me?.aboutMe || ui.me?.customStatus}<p class="about-copy">{ui.me.aboutMe || ui.me.customStatus}</p>{/if}
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
         <button type="button" class="account-row" onclick={() => (statusOpen = !statusOpen)}>
           <i style="background:{presenceLabel[2]}"></i>
