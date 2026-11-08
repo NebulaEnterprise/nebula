@@ -34,10 +34,12 @@
     if (!author) return author;
     const member = ui.members.find((m) => m.id === author.id);
     const mine = author.id === ui.me?.id ? ui.me : null;
-    const effect = mine?.nameEffect || author.nameEffect || member?.nameEffect || '';
-    const colors = mine?.nameColors?.length
-      ? mine.nameColors
-      : (author.nameColors?.length ? author.nameColors : (member?.nameColors || []));
+    const dm = ui.dmUser && ui.dmUser.id === author.id ? ui.dmUser : null;
+    const live = mine || member || dm;
+    const effect = live ? (live.nameEffect || '') : (author.nameEffect || '');
+    const colors = live && live.nameColors && live.nameColors.length
+      ? live.nameColors
+      : (author.nameColors || []);
     return {
       ...author,
       username: mine?.username || author.username || member?.username,

@@ -262,6 +262,10 @@ export async function loadDms() {
       try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
     }
     ui.activity = { ...ui.activity, dms: unread };
+    if (ui.dmUser) {
+      const row = next.find((dm) => dm.other && String(dm.other.id) === String(ui.dmUser.id));
+      if (row && row.other) ui.dmUser = { ...ui.dmUser, ...row.other };
+    }
     inboxReady = true;
     if (ping) playPing();
   } catch (_) {}
@@ -422,8 +426,7 @@ function paintNames(list) {
     const username = author.username || member.username;
     const displayName = author.displayName || member.displayName;
     const avatarUrl = author.avatarUrl || member.avatarUrl;
-    const nameEffect = author.nameEffect || member.nameEffect || '';
-    if (username === member.username && displayName === member.displayName && avatarUrl === member.avatarUrl && nameEffect === (member.nameEffect || '')) return member;
+    if (username === member.username && displayName === member.displayName && avatarUrl === member.avatarUrl) return member;
     changed = true;
     return {
       ...member,
@@ -431,8 +434,6 @@ function paintNames(list) {
       displayName,
       avatarUrl,
       avatarColor: author.avatarColor || member.avatarColor,
-      nameEffect,
-      nameColors: author.nameColors && author.nameColors.length ? author.nameColors : member.nameColors,
     };
   });
   if (changed) ui.members = next;
@@ -448,7 +449,10 @@ function applyMemberNames(members) {
     const username = member.username || msg.author.username;
     const displayName = member.nick || member.displayName || msg.author.displayName;
     const avatarUrl = member.avatarUrl || msg.author.avatarUrl || '';
-    if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '')) return msg;
+    const nameEffect = member.nameEffect || '';
+    const nameColors = member.nameColors && member.nameColors.length ? member.nameColors : (msg.author.nameColors || []);
+    const sameColors = nameColors.join(',') === (msg.author.nameColors || []).join(',');
+    if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '') && nameEffect === (msg.author.nameEffect || '') && sameColors) return msg;
     changed = true;
     return {
       ...msg,
@@ -458,8 +462,8 @@ function applyMemberNames(members) {
         displayName,
         avatarUrl,
         avatarColor: member.avatarColor || msg.author.avatarColor,
-        nameEffect: member.nameEffect || msg.author.nameEffect || '',
-        nameColors: member.nameColors && member.nameColors.length ? member.nameColors : msg.author.nameColors,
+        nameEffect,
+        nameColors,
       },
     };
   });

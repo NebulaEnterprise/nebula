@@ -8,8 +8,8 @@
         ...m,
         username: ui.me.username || m.username,
         displayName: ui.me.displayName || m.displayName,
-        nameEffect: ui.me.nameEffect || m.nameEffect,
-        nameColors: ui.me.nameColors || m.nameColors,
+        nameEffect: ui.me.nameEffect || '',
+        nameColors: ui.me.nameColors && ui.me.nameColors.length ? ui.me.nameColors : m.nameColors,
         avatarUrl: ui.me.avatarUrl || m.avatarUrl,
         avatarColor: ui.me.avatarColor || m.avatarColor,
       };
