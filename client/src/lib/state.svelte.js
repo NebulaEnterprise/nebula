@@ -392,15 +392,19 @@ export async function loadMessages(quiet, live) {
       if (mode === 'chat') loadMembers(true);
     }
     if (data.same) return 'same';
+    const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     ui.typers = data.typers || [];
     const list = data.messages || [];
     paintNames(list);
+    const newest = list[list.length - 1];
+    if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
+      ui.typers = ui.typers.filter((row) => row.id !== newest.author.id);
+    }
     if (ui.mode === 'dm') {
       ui.messages = list;
       return 'changed';
     }
     ui.messages = list;
-    const newest = list[list.length - 1];
     if (newest && newest.id && newest.id !== ui.seenMessageId) {
       const first = !ui.seenMessageId;
       ui.seenMessageId = newest.id;
@@ -455,10 +459,11 @@ export async function sendMessage() {
   const content = ui.composer.trim();
   if (!content) return;
   ui.composer = '';
+  const typingToken = stopTyping();
   try {
     const data = ui.mode === 'dm' && ui.dmUser
-      ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body: { content } })
-      : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body: { content } });
+      ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body: { content, typingToken } })
+      : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body: { content, typingToken } });
     if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
       ui.messages = [...ui.messages, data.message];
       paintNames(ui.messages);
@@ -495,6 +500,27 @@ export async function reloadSettings() {
 }
 
 let lastTypingPing = 0;
+let typingSerial = 0;
+let typingLive = false;
+
+function typingBody() {
+  if (ui.mode === 'dm') return { dmUserId: ui.dmUser?.id };
+  return { channelId: ui.channelId, serverId: ui.serverId };
+}
+
+function postTyping(extra) {
+  if (ui.mode === 'dm' && !ui.dmUser?.id) return;
+  if (ui.mode === 'chat' && !ui.channelId) return;
+  api('/api/typing', { method: 'POST', body: { ...typingBody(), ...extra } }).catch(() => {});
+}
+
+function stopTyping() {
+  const token = ++typingSerial;
+  if (typingLive || lastTypingPing) postTyping({ stop: true, token });
+  typingLive = false;
+  lastTypingPing = 0;
+  return token;
+}
 
 export function typingLine(list) {
   const names = (list || []).map((row) => row.name).filter(Boolean);
@@ -504,17 +530,16 @@ export function typingLine(list) {
   return names.slice(0, 5).map((name) => name + ' is typing').join(', ');
 }
 
-export async function noteTyping() {
-  if (!ui.composer.trim()) return;
+export function noteTyping() {
+  if (!ui.composer.trim()) {
+    stopTyping();
+    return;
+  }
   const now = Date.now();
   if (now - lastTypingPing < 2000) return;
   lastTypingPing = now;
-  const body = ui.mode === 'dm'
-    ? { dmUserId: ui.dmUser?.id }
-    : { channelId: ui.channelId, serverId: ui.serverId };
-  if (ui.mode === 'dm' && !ui.dmUser?.id) return;
-  if (ui.mode === 'chat' && !ui.channelId) return;
-  try { await api('/api/typing', { method: 'POST', body }); } catch (_) {}
+  typingLive = true;
+  postTyping({ token: ++typingSerial });
 }
 
 let typingBusy = false;

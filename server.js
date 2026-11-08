@@ -1524,6 +1524,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
+  silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
   wakePulse(found.channel.id);
   res.json({ ok: true, message: presentMessage(msg) });
 });
@@ -1549,7 +1550,8 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 12000) {
+    if (now - row.at > 4500) {
+      if (row.timer) clearTimeout(row.timer);
       room.delete(id);
       continue;
     }
@@ -1559,17 +1561,70 @@ function listTypers(key, selfId) {
   return out;
 }
 
+const typingEpoch = new Map();
+
+function wakeTyping(key) {
+  wakePulse(key.startsWith('ch:') ? key.split(':').pop() : key);
+}
+
+function noteEpoch(key, userId, token) {
+  const next = Number(token) || 0;
+  if (!next) return true;
+  if (!typingEpoch.has(key)) typingEpoch.set(key, new Map());
+  const book = typingEpoch.get(key);
+  const prev = book.get(userId) || 0;
+  if (next < prev) return false;
+  book.set(userId, next);
+  return true;
+}
+
+function clearTyping(key, userId) {
+  const room = typingRooms.get(key);
+  const row = room && room.get(userId);
+  if (row && row.timer) clearTimeout(row.timer);
+  if (room) room.delete(userId);
+}
+
+function silenceTyping(key, userId, token) {
+  const prev = typingEpoch.get(key)?.get(userId) || 0;
+  const floor = Math.max(prev + 1, Number(token) || 0);
+  noteEpoch(key, userId, floor);
+  clearTyping(key, userId);
+}
+
+function armTyping(key, userId, row) {
+  if (!typingRooms.has(key)) typingRooms.set(key, new Map());
+  const room = typingRooms.get(key);
+  const prev = room.get(userId);
+  if (prev && prev.timer) clearTimeout(prev.timer);
+  row.timer = setTimeout(() => {
+    const current = room.get(userId);
+    if (!current || current.at !== row.at) return;
+    room.delete(userId);
+    wakeTyping(key);
+  }, 4000);
+  room.set(userId, row);
+}
+
 app.post('/api/typing', auth, (req, res) => {
   const key = typingKeyFrom(req);
   if (!key) return res.status(404).json({ error: 'Chat not found' });
-  if (!typingRooms.has(key)) typingRooms.set(key, new Map());
-  typingRooms.get(key).set(req.user.id, {
+  const token = Number(req.body && req.body.token) || 0;
+  if (req.body && req.body.stop) {
+    if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
+    clearTyping(key, req.user.id);
+    wakeTyping(key);
+    return res.json({ ok: true });
+  }
+  if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
+  armTyping(key, req.user.id, {
     name: req.user.displayName || req.user.username,
     nameEffect: cleanNameEffect(req.user.nameEffect),
     nameColors: cleanNameColors(req.user.nameColors),
     at: Date.now(),
+    token,
   });
-  wakePulse(key.startsWith('ch:') ? key.split(':').pop() : key);
+  wakeTyping(key);
   res.json({ ok: true });
 });
 
@@ -1835,6 +1890,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   messages[channelId].push(msg);
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
   save(MESSAGES_FILE, messages);
+  silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   wakePulse(channelId);
   res.json({ ok: true, message: presentMessage(msg) });
 });
