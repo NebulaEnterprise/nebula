@@ -1,5 +1,3 @@
-import { shrinkGif } from './image.js';
-
 export function fileKind(file) {
   const name = file?.name || '';
   const type = file?.type || '';
@@ -93,11 +91,7 @@ export async function packUpload(file) {
   const kind = fileKind(file);
   if (kind === 'image') {
     const gif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
-    if (gif) {
-      const shrunk = await shrinkGif(file, { max: 480, frames: 24 });
-      const body = shrunk instanceof Blob ? shrunk : file;
-      return { body, name: renamed(file.name, 'gif'), type: 'image/gif', kind };
-    }
+    if (gif) return { body: file, name: file.name || 'animation.gif', type: 'image/gif', kind };
     const scaled = await scaleStill(file, 1280, 0.8);
     let ext = 'jpg';
     if (scaled === file) ext = ((file.name || '').match(/\.([a-z0-9]{1,8})$/i) || [])[1] || 'jpg';
