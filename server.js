@@ -12,6 +12,22 @@ const { v4: uuidv4 } = require('uuid');
 
 const PORT = 3850;
 
+function loadEnvFile() {
+  const file = path.join(__dirname, '.env');
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (key && process.env[key] == null) process.env[key] = value;
+  }
+}
+loadEnvFile();
+
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const FILES_DIR = path.join(DATA_DIR, 'files');
@@ -826,15 +842,82 @@ function unpackImages() {
 function publishedMedia(u, slot) {
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+  const url = String((u && u[urlKey]) || '');
+  if (/^https:\/\/pub-[a-z0-9]+\.r2\.dev\//i.test(url)) return url;
   const stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
   if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(stored)) return '/files/' + stored;
-  const url = String((u && u[urlKey]) || '');
   if (url.startsWith('/files/') || url.startsWith('/uploads/')) return url;
   if (url.startsWith('data:') || url.includes('githubusercontent.com')) return '';
   return url.length > 500 ? '' : url;
 }
 
-function saveProfileFile(user, slot, buf, ext) {
+function r2Config() {
+  const accessKey = process.env.R2_ACCESS_KEY_ID || '';
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
+  const endpoint = String(process.env.R2_ENDPOINT || '').replace(/\/$/, '');
+  const bucket = process.env.R2_BUCKET || 'nebula-media';
+  const publicBase = String(process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+  if (!accessKey || !secretKey || !endpoint || !publicBase) return null;
+  return { accessKey, secretKey, endpoint, bucket, publicBase };
+}
+
+function sha256hex(data) {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function hmac(key, data) {
+  return crypto.createHmac('sha256', key).update(data).digest();
+}
+
+async function r2Put(cfg, key, body, type) {
+  const host = new URL(cfg.endpoint).host;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256hex(body);
+  const encodedKey = key.split('/').map((part) => encodeURIComponent(part)).join('/');
+  const canonicalUri = '/' + cfg.bucket + '/' + encodedKey;
+  const headers = {
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-type': type || 'application/octet-stream',
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const names = Object.keys(headers).sort();
+  const canonicalHeaders = names.map((name) => name + ':' + String(headers[name]).trim() + '\n').join('');
+  const signedHeaders = names.join(';');
+  const canonicalRequest = ['PUT', canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = dateStamp + '/auto/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256hex(canonicalRequest)].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac('AWS4' + cfg.secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const authorization = 'AWS4-HMAC-SHA256 Credential=' + cfg.accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  const res = await fetch(cfg.endpoint + canonicalUri, {
+    method: 'PUT',
+    headers: {
+      Authorization: authorization,
+      'Cache-Control': headers['cache-control'],
+      'Content-Type': headers['content-type'],
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+    body,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error('R2 ' + res.status + ' ' + detail.slice(0, 180));
+  }
+}
+
+function mediaType(name) {
+  if (/\.gif$/i.test(name)) return 'image/gif';
+  if (/\.png$/i.test(name)) return 'image/png';
+  if (/\.webp$/i.test(name)) return 'image/webp';
+  if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+  return 'application/octet-stream';
+}
+
+async function saveProfileFile(user, slot, buf, ext) {
   const bucket = slot === 'avatar' ? 'avatars' : 'banners';
   const folder = path.join(FILES_DIR, bucket, user.id);
   fs.mkdirSync(folder, { recursive: true });
@@ -848,11 +931,33 @@ function saveProfileFile(user, slot, buf, ext) {
     if (fs.existsSync(path.join(folder, sized))) storedName = sized;
   }
   const rel = bucket + '/' + user.id + '/' + storedName;
+  let url = '/files/' + rel;
+  const cfg = r2Config();
+  if (cfg) {
+    const names = new Set([storedName]);
+    if (slot === 'banner' && ext === '.gif') {
+      for (const size of [32, 128, 512]) {
+        const sized = name.replace(/\.gif$/i, '.' + size + '.gif');
+        if (fs.existsSync(path.join(folder, sized))) names.add(sized);
+      }
+    }
+    try {
+      for (const item of names) {
+        const objectKey = bucket + '/' + user.id + '/' + item;
+        await r2Put(cfg, objectKey, fs.readFileSync(path.join(folder, item)), mediaType(item));
+      }
+      url = cfg.publicBase + '/' + rel;
+    } catch (err) {
+      const error = new Error('Cloudflare rejected that picture. ' + (err.message || 'Upload failed'));
+      error.status = 502;
+      throw error;
+    }
+  }
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   user[pathKey] = rel;
-  user[urlKey] = '/files/' + rel;
-  return { path: rel, url: '/files/' + rel };
+  user[urlKey] = url;
+  return { path: rel, url };
 }
 
 function userOwnsBadge(u, id) {
@@ -1952,7 +2057,7 @@ app.post('/api/upload/finish', auth, (req, res) => {
   res.json({ ok: true, url: '/uploads/' + stored, name: 'animation.gif' });
 });
 
-app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
+app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), async (req, res) => {
   const slot = String(req.query.slot || '');
   if (slot === 'file') {
     const body = req.body;
@@ -1979,9 +2084,13 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
   if (slot === 'avatar' || slot === 'banner') {
-    const saved = saveProfileFile(req.user, slot, req.body, ext);
-    save(USERS_FILE, users);
-    return res.json({ ok: true, path: saved.path, url: saved.url, user: publicUser(req.user) });
+    try {
+      const saved = await saveProfileFile(req.user, slot, req.body, ext);
+      save(USERS_FILE, users);
+      return res.json({ ok: true, path: saved.path, url: saved.url, user: publicUser(req.user) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message || 'Could not save that picture' });
+    }
   }
   const name = uuidv4() + ext;
   fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
