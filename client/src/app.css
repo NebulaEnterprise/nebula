@@ -245,7 +245,7 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 8px; bottom: 78px; z-index: 50; width: min(380px, calc(100vw - 24px));
+  position: fixed; left: 0; bottom: 78px; z-index: 50; width: min(340px, calc(100vw - 16px));
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 18px;
   box-shadow: var(--shadow); overflow: hidden;
@@ -280,7 +280,7 @@ img { max-width: 100%; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .account-pop .profile-face .bio-bubble {
   left: calc(100% + 4px); top: 50%; transform: translateY(-50%);
-  margin: 0; max-width: 126px;
+  margin: 0; max-width: 108px;
   display: flex; align-items: center; gap: 2px;
   padding: 4px 5px 4px 8px; border-radius: 7px;
   background: #4e5058; box-shadow: none;
@@ -291,7 +291,7 @@ img { max-width: 100%; }
   border-width: 5px 6px 5px 0;
   border-color: transparent #4e5058 transparent transparent;
 }
-.account-pop .bio-bubble span { max-width: 128px; font-size: 12px; line-height: 15px; }
+.account-pop .bio-bubble span { max-width: 72px; font-size: 12px; line-height: 15px; }
 .account-pop .account-bubble button { width: 20px; height: 20px; }
 .account-pop .account-bubble button svg { width: 13px; height: 13px; }
 .account-pop .account-bubble input { width: 104px; padding: 2px 0; font-size: 12px; }
@@ -328,7 +328,7 @@ img { max-width: 100%; }
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .account-switch {
-  position: fixed; left: min(336px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
+  position: fixed; left: min(348px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
   width: 260px; padding: 8px; border-radius: 12px;
   background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
