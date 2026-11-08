@@ -213,7 +213,7 @@
   <div class="me">
     <Avatar user={ui.me} size={36} />
     <div class="who">
-      <strong><Name user={ui.me} /></strong>
+      <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
       <span>{ui.me?.customStatus || 'Online'}</span>
     </div>
     <button class="btn icon" title="Settings" onclick={() => (ui.userSettings = true)}><Settings size={16} /></button>

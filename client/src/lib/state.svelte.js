@@ -629,6 +629,33 @@ function paintNames(list) {
   if (changed) ui.members = next;
 }
 
+function adoptMe(members) {
+  if (!ui.me) return;
+  const mine = (members || []).find((member) => member && String(member.id) === String(ui.me.id));
+  if (!mine) return;
+  const displayName = mine.displayName || '';
+  const username = mine.username || ui.me.username || '';
+  const nameEffect = mine.nameEffect || '';
+  const same = displayName === (ui.me.displayName || '')
+    && username === (ui.me.username || '')
+    && nameEffect === (ui.me.nameEffect || '')
+    && (mine.customStatus || '') === (ui.me.customStatus || '');
+  if (same) return;
+  ui.me = {
+    ...ui.me,
+    displayName,
+    username,
+    nameEffect,
+    nameColors: mine.nameColors?.length ? mine.nameColors : ui.me.nameColors,
+    customStatus: mine.customStatus || '',
+    pronouns: mine.pronouns ?? ui.me.pronouns,
+    bio: mine.bio ?? ui.me.bio,
+    status: mine.status || ui.me.status,
+    avatarColor: mine.avatarColor || ui.me.avatarColor,
+    avatarUrl: String(ui.me.avatarUrl || '').startsWith('blob:') ? ui.me.avatarUrl : (mine.avatarUrl || ui.me.avatarUrl),
+  };
+}
+
 function applyMemberNames(members) {
   const byId = new Map((members || []).map((member) => [member.id, member]));
   if (!byId.size || !ui.messages.length) return;
@@ -749,6 +776,7 @@ export async function loadMembers(quiet) {
       const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
       ui.members = data.members || [];
       ui.badgeDefs = data.badges || {};
+      adoptMe(ui.members);
       applyMemberNames(ui.members);
       warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
     } while (membersAgain);
@@ -1483,11 +1511,26 @@ async function watchAlerts() {
 }
 
 export async function saveMe(body) {
-  const data = await api('/api/me', { method: 'PATCH', body });
+  const previous = ui.me;
+  const pending = { ...ui.me };
+  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor']) {
+    if (body[key] !== undefined) pending[key] = body[key];
+  }
+  if (body.nameColors) pending.nameColors = body.nameColors;
+  ui.me = pending;
+  let data;
+  try {
+    data = await api('/api/me', { method: 'PATCH', body });
+  } catch (err) {
+    ui.me = previous;
+    throw err;
+  }
   ui.me = {
+    ...previous,
     ...data.user,
+    displayName: data.user?.displayName ?? body.displayName ?? previous?.displayName ?? '',
     nameEffect: data.user?.nameEffect || body.nameEffect || '',
-    nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || []),
+    nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
   };
   ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
   ui.userSettings = false;
