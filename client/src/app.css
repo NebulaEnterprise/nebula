@@ -908,42 +908,6 @@ img { max-width: 100%; }
   padding: 8px 10px; border-radius: 10px; color: var(--muted); font-weight: 600; text-align: left;
 }
 .set-nav button.on, .set-nav button:hover { background: var(--bg-hover); color: var(--text); }
-.user-settings { flex-direction: column; }
-.val-nav {
-  position: relative; flex-shrink: 0; padding: 28px 64px 4px;
-}
-.val-tabs {
-  position: relative; display: flex; justify-content: space-between;
-  max-width: 760px; margin: 0 auto;
-}
-.val-tabs::before {
-  content: ""; position: absolute; top: 5px; left: 12.5%; right: 12.5%; height: 1px;
-  background: rgba(255, 255, 255, 0.28);
-}
-.val-tabs button {
-  position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 0 8px 16px; background: transparent; color: rgba(255, 255, 255, 0.38);
-  font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
-}
-.val-tabs button i {
-  width: 12px; height: 12px; display: grid; place-items: center;
-}
-.val-tabs button i::after {
-  content: ""; width: 6px; height: 6px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.42); box-shadow: 0 0 0 4px #14151b;
-}
-.val-tabs button.on { color: #fff; }
-.val-tabs button.on i::after {
-  width: 10px; height: 10px; background: #fff;
-  box-shadow: 0 0 0 4px #14151b;
-}
-.val-tabs button:hover { color: #fff; }
-.val-close { position: absolute; top: 12px; right: 14px; }
-.val-logout {
-  background: transparent; color: var(--danger); padding: 6px 2px;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
-}
-.val-logout:hover { color: #ff8d90; }
 .set-main { flex: 1; overflow: auto; padding: 28px 32px 40px; }
 .set-main h2 { margin: 0 0 6px; font-size: 22px; }
 .hint { color: var(--faint); font-size: 13px; margin: 0 0 16px; }
@@ -1202,7 +1166,7 @@ img { max-width: 100%; }
 .react-picker .picker, .picker.picker-pop { animation: none; }
 .overlay, .poll-overlay { animation: fade-in 160ms var(--ease); }
 .sheet, .settings, .poll-sheet { animation: rise-in var(--med) var(--ease); }
-.menu button, .msg-menu > button, .select-menu button, .set-nav button, .val-tabs button, .picker-tabs button, .mention-menu button {
+.menu button, .msg-menu > button, .select-menu button, .set-nav button, .picker-tabs button, .mention-menu button {
   transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -1247,9 +1211,6 @@ img { max-width: 100%; }
   .account-pop { left: 44px; width: min(252px, calc(100vw - 60px)); }
   .grid-2 { grid-template-columns: 1fr; }
   .settings { flex-direction: column; }
-  .val-nav { padding: 22px 46px 0; }
-  .val-tabs { overflow: auto; }
-  .val-tabs button { flex: 0 0 auto; min-width: 112px; letter-spacing: 0.1em; font-size: 11px; }
   .set-nav { width: 100%; display: flex; gap: 4px; overflow: auto; padding: 10px; }
   .set-nav .group { display: none; }
   .set-nav button { width: auto; white-space: nowrap; }

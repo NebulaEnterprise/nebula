@@ -222,22 +222,20 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={() => (ui.userSettings = false)}>
-  <div class="settings user-settings" role="dialog" onclick={(e) => e.stopPropagation()}>
-    <nav class="val-nav" aria-label="User settings">
-      <div class="val-tabs">
-        {#each [['profile', 'Profile'], ['look', 'Appearance'], ['notify', 'Notifications'], ['privacy', 'Privacy']] as [id, label]}
-          <button type="button" class:on={page === id} onclick={() => (ui.userPage = id)}>
-            <i></i>
-            <span>{label}</span>
-          </button>
-        {/each}
-      </div>
-      <button class="btn icon val-close" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
-    </nav>
+  <div class="settings" role="dialog" onclick={(e) => e.stopPropagation()}>
+    <aside class="set-nav">
+      <div class="group">User settings</div>
+      <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}>Profile</button>
+      <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}>Appearance</button>
+      <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}>Notifications</button>
+      <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}>Privacy</button>
+      <div class="group">Account</div>
+      <button class="danger" onclick={logout}>Log out</button>
+    </aside>
     <div class="set-main">
       <div class="row" style="border:0;padding-top:0">
         <h2>{titles[page] || 'Settings'}</h2>
-        <button type="button" class="val-logout" onclick={logout}>Log out</button>
+        <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
       <div class="grid-2">
         <div>

@@ -6,6 +6,8 @@ const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
 const { execFile, execFileSync, spawn } = require('child_process');
+const https = require('https');
+const http = require('http');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = 3850;
@@ -970,10 +972,11 @@ function deleteSongPath(urlPath) {
   fs.unlink(path.join(UPLOAD_DIR, path.basename(clean)), () => {});
 }
 
-let ytDlp = undefined;
+let ytDlp = null;
+let ytDlpLooked = false;
 function ytdlpBin() {
-  if (ytDlp !== undefined) return ytDlp;
-  ytDlp = null;
+  if (ytDlpLooked) return ytDlp;
+  ytDlpLooked = true;
   const tries = [
     ['yt-dlp', []],
     ['python', ['-m', 'yt_dlp']],
@@ -990,9 +993,87 @@ function ytdlpBin() {
   return ytDlp;
 }
 
-function downloadSongAudio(pageUrl, destBase) {
-  const bin = ytdlpBin();
-  if (!bin) return Promise.reject(new Error('Install yt-dlp on the server, then save the song again'));
+function ytDlpRelease() {
+  if (process.platform === 'win32') {
+    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', file: 'yt-dlp.exe' };
+  }
+  if (process.platform === 'darwin') {
+    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos', file: 'yt-dlp' };
+  }
+  const name = process.arch === 'arm64' ? 'yt-dlp_linux_aarch64' : 'yt-dlp_linux';
+  return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/' + name, file: 'yt-dlp' };
+}
+
+function saveHttp(url, dest, redirects = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirects > 6) {
+      reject(new Error('Could not save that song'));
+      return;
+    }
+    const lib = url.startsWith('https:') ? https : http;
+    const req = lib.get(url, { headers: { 'User-Agent': 'Nebula' } }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        saveHttp(new URL(res.headers.location, url).href, dest, redirects + 1).then(resolve, reject);
+        return;
+      }
+      if (code !== 200) {
+        res.resume();
+        reject(new Error('Could not save that song'));
+        return;
+      }
+      const len = Number(res.headers['content-length'] || 0);
+      if (len > 80 * 1024 * 1024) {
+        res.resume();
+        reject(new Error('Could not save that song'));
+        return;
+      }
+      const file = fs.createWriteStream(dest);
+      res.pipe(file);
+      file.on('finish', () => file.close(() => resolve(dest)));
+      file.on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(120000, () => req.destroy(new Error('Could not save that song')));
+  });
+}
+
+let bundledYtDlp = null;
+function ensureYtDlp() {
+  const system = ytdlpBin();
+  if (system) return Promise.resolve(system);
+  if (bundledYtDlp) return bundledYtDlp;
+  bundledYtDlp = (async () => {
+    const rel = ytDlpRelease();
+    const dir = path.join(DATA_DIR, 'bin');
+    fs.mkdirSync(dir, { recursive: true });
+    const dest = path.join(dir, rel.file);
+    const ready = fs.existsSync(dest) && fs.statSync(dest).size > 1000000;
+    if (!ready) {
+      const tmp = dest + '.part';
+      await saveHttp(rel.url, tmp);
+      fs.renameSync(tmp, dest);
+      if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+    }
+    try {
+      execFileSync(dest, ['--version'], { stdio: 'ignore', timeout: 15000, windowsHide: true });
+    } catch (err) {
+      fs.unlink(dest, () => {});
+      throw err;
+    }
+    return { cmd: dest, prefix: [] };
+  })().catch((err) => {
+    bundledYtDlp = null;
+    throw err;
+  });
+  return bundledYtDlp;
+}
+
+async function downloadSongAudio(pageUrl, destBase) {
+  let bin;
+  try { bin = await ensureYtDlp(); }
+  catch (_) { throw new Error('Could not save that song'); }
   return new Promise((resolve, reject) => {
     const args = [
       ...bin.prefix,
@@ -1011,7 +1092,6 @@ function downloadSongAudio(pageUrl, destBase) {
       if (err) {
         const detail = String(stderr || err.message || '');
         if (/does not pass filter|duration/i.test(detail)) reject(new Error('That video is too long to save'));
-        else if (/not installed|ENOENT/i.test(detail)) reject(new Error('Install yt-dlp on the server, then save the song again'));
         else reject(new Error('Could not save that song'));
         return;
       }
