@@ -782,6 +782,7 @@ function publicUser(u) {
     nameEffect: cleanNameEffect(u.nameEffect),
     nameColors: cleanNameColors(u.nameColors),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
+    staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
   };

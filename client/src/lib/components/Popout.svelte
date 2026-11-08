@@ -35,10 +35,11 @@
       </div>
       <div class="pop-head">
         <div class="pop-id">
-          <h3><Name user={u} /><StaffBadge rank={u.staff} /></h3>
+          <h3><Name user={u} /></h3>
           <p class="handle">
             <span>@{u.username}{u.pronouns ? ' · ' + u.pronouns : ''}</span>
             {#if hasMoonBadge(u)}<MoonBadge />{/if}
+            <StaffBadge rank={u.staff} />
           </p>
         </div>
       </div>

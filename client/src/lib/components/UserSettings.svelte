@@ -5,6 +5,7 @@
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
+  import StaffBadge from './StaffBadge.svelte';
   import { hasMoonBadge } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import { fileToDataUrl, shrinkGif } from '../image.js';
@@ -230,6 +231,7 @@
               <div class="handle">
                 <span>@{form.username}{form.pronouns ? ' · ' + form.pronouns : ''}</span>
                 {#if hasMoonBadge(ui.me)}<MoonBadge />{/if}
+                <StaffBadge rank={ui.me?.staff || ''} />
               </div>
             </div>
           </div>
