@@ -466,7 +466,10 @@ function showCached(id) {
 
 function rememberLog(id, list) {
   if (!id) return;
-  roomLogs.set(id, (list || []).filter((msg) => msg && !msg.pending && !msg.failed));
+  const clean = (list || []).filter((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
+  const prev = roomLogs.get(id);
+  if (!clean.length && prev && prev.length) return;
+  roomLogs.set(id, clean);
 }
 
 function msgSig(msg) {
@@ -592,7 +595,10 @@ async function watchChat() {
       await sleep(1000);
       continue;
     }
-    if (pace === 'changed') continue;
+    if (pace === 'changed') {
+      await sleep(80);
+      continue;
+    }
     if (Date.now() - started < 1500) await sleep(150);
   }
 }
@@ -689,9 +695,13 @@ export async function loadMessages(quiet, live) {
     if (typeof data.polls === 'string') pollStamp = data.polls;
     if (typeof data.edits === 'string') editStamp = data.edits;
     if (data.same) return 'same';
+    if (!Array.isArray(data.messages)) {
+      if (Array.isArray(data.typers)) acceptTypers(data.typers);
+      return 'same';
+    }
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
-    const list = data.messages || [];
+    const list = data.messages;
     paintNames(list);
     const newest = list[list.length - 1];
     if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
@@ -699,8 +709,11 @@ export async function loadMessages(quiet, live) {
     }
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
     const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
+    const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
+    if (!list.length && hadReal) return 'same';
     if (newest && newest.id) markSeen(roomKey, newest.id);
-    const local = ui.messages.filter((msg) => msg && (msg.pending || msg.failed) && msg.roomKey === roomKey && String(msg.id).startsWith('local-'));
+    const known = new Set(list.map((msg) => msg && msg.id));
+    const local = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && !known.has(msg.id) && (msg.roomKey === roomKey || !msg.roomKey));
     const next = local.length ? [...list, ...local] : list;
     if (!sameLog(ui.messages, next)) ui.messages = next;
     rememberLog(logKey, next);
@@ -758,12 +771,14 @@ async function postMessage(payload, target) {
     ? await api('/api/dms/' + where.dmUserId + '/messages', { method: 'POST', body })
     : await api('/api/channels/' + where.channelId + '/messages', { method: 'POST', body });
   const sameRoom = where.mode === ui.mode && (where.mode === 'dm' ? where.dmUserId === (ui.dmUser?.id || '') : where.channelId === ui.channelId);
-  if (sameRoom && data.message && !ui.messages.some((m) => m.id === data.message.id)) {
+  if (sameRoom && data.message) {
     lastSentId = data.message.id;
-    ui.messages = [...ui.messages, data.message];
+    const without = ui.messages.filter((msg) => msg.id !== data.message.id && msg.id !== payload.replaceId);
+    ui.messages = [...without, data.message];
     paintNames(ui.messages);
   } else if (data.message) {
     lastSentId = data.message.id;
+    if (payload.replaceId) ui.messages = ui.messages.filter((msg) => msg.id !== payload.replaceId);
   }
   dropLive();
   if (where.mode === 'dm') loadDms();
@@ -790,13 +805,23 @@ export async function sendMessage() {
   }
   if (!content) return;
   const reply = ui.reply;
+  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
   ui.composer = '';
   ui.reply = null;
+  ui.messages = [...ui.messages, {
+    id: tempId,
+    pending: true,
+    roomKey,
+    createdAt: new Date().toISOString(),
+    author: ui.me,
+    content,
+    reply: reply || null,
+  }];
   try {
-    await postMessage({ content, reply });
+    await postMessage({ content, reply, replaceId: tempId });
   } catch (err) {
-    ui.composer = content;
-    ui.reply = reply;
+    patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message);
   }
 }
@@ -884,8 +909,7 @@ export async function sendFiles(list) {
       saved.push(row);
       report(i, 100);
     }
-    await postMessage({ content, files: saved, reply }, target);
-    dismissLocal(tempId);
+    await postMessage({ content, files: saved, reply, replaceId: tempId }, target);
   } catch (err) {
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');

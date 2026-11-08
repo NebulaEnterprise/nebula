@@ -29,8 +29,29 @@ function load(file, fallback) {
   } catch (e) {}
   return fallback;
 }
+const dirtyFiles = new Map();
+let saveSoon = false;
 function save(file, data) {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  dirtyFiles.set(file, data);
+  if (saveSoon) return;
+  saveSoon = true;
+  setImmediate(flushSaves);
+}
+async function flushSaves() {
+  const batch = [...dirtyFiles.entries()];
+  dirtyFiles.clear();
+  saveSoon = false;
+  for (const [file, payload] of batch) {
+    const tmp = file + '.tmp';
+    try {
+      await fs.promises.writeFile(tmp, JSON.stringify(payload));
+      await fs.promises.rename(tmp, file);
+    } catch (_) {}
+  }
+  if (dirtyFiles.size) {
+    saveSoon = true;
+    setImmediate(flushSaves);
+  }
 }
 
 let users = load(USERS_FILE, {});
