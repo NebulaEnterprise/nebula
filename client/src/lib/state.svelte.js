@@ -1,5 +1,4 @@
 import { api, pinMedia, warmMedia, uploadFile } from './api.js';
-import { hasSong, playSong, warmSong } from './song.svelte.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -975,10 +974,6 @@ export async function loadMembers(quiet) {
       adoptMe(ui.members);
       applyMemberNames(ui.members);
       warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
-      const songs = [];
-      if (hasSong(ui.me?.songFile)) songs.push(ui.me.songFile);
-      for (const member of ui.members) if (hasSong(member.songFile)) songs.push(member.songFile);
-      for (const file of new Set(songs)) warmSong(file);
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
@@ -1817,7 +1812,6 @@ export async function openPopout(user, x, y) {
   const known = ui.members.find((m) => m.id === user.id);
   const seed = known ? { ...user, ...known, roles: known.roles || user.roles || [] } : user;
   ui.popout = { user: seed, x, y };
-  if (seed.songAutoplay && hasSong(seed.songFile)) playSong(seed.songFile, seed.songStart);
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
   try {

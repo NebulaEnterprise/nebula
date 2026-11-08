@@ -8,7 +8,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
-  import { hasSong, playSong, stopSong } from '../song.svelte.js';
+  import { hasSong, playSongAfterPaint, stopSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
     const shown = ui.popout?.user;
@@ -45,7 +45,7 @@
     const file = u?.songFile || '';
     const start = u?.songStart || 0;
     if (!id || !u?.songAutoplay || !hasSong(file)) return;
-    playSong(file, start);
+    playSongAfterPaint(file, start);
     return () => stopSong(file, start);
   });
 
