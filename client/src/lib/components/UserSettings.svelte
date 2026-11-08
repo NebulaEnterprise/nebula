@@ -282,6 +282,16 @@
                 {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
               </div>
             </section>
+            <section class="look-block">
+              <strong>Profile color</strong>
+              <p>Solid, gradient, glow, or rainbow.</p>
+              <div class="style-seg">
+                {#each profileStyles as [id, label]}
+                  <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
+                {/each}
+              </div>
+              <RgbPick colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+            </section>
             <div class="field">
               <label>Bio</label>
               <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="Shows in the bubble beside your picture"></textarea>
@@ -327,14 +337,6 @@
               {/each}
             </div>
             <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
-            <p class="label">Profile color</p>
-            <p class="hint">Solid, gradient, glow, or rainbow. Main is the base. Tone is the second color.</p>
-            <div class="pick-row">
-              {#each profileStyles as [id, label]}
-                <button type="button" class="pick-card" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
-              {/each}
-            </div>
-            <RgbPick colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}

@@ -29,15 +29,19 @@
 </script>
 
 <div class="rgb-pick">
-  {#if slots > 1}
-    <div class="rgb-swatches">
+  <div class="rgb-head">
+    {#if slots > 1}
       {#each [0, 1] as i}
-        <button type="button" class:on={which === i} style="background:{colors[i] || '#7c3aed'}" onclick={() => (which = i)}>
+        <button type="button" class="rgb-dot" class:on={which === i} onclick={() => (which = i)}>
+          <i style="background:{colors[i] || '#7c3aed'}"></i>
           {i === 0 ? 'Main' : 'Tone'}
         </button>
       {/each}
-    </div>
-  {/if}
+    {:else}
+      <span class="rgb-dot on"><i style="background:{colors[0] || '#7c3aed'}"></i>Color</span>
+    {/if}
+    <code>{hex(rgb.r, rgb.g, rgb.b)}</code>
+  </div>
   {#each [['r', 'R'], ['g', 'G'], ['b', 'B']] as [key, label]}
     <label>
       <span>{label}</span>
