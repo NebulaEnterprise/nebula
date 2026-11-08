@@ -241,6 +241,7 @@ export function pickChannel(ch) {
 }
 
 let messagesBusy = false;
+let pulseSerial = 0;
 let memberStamp = '';
 let profileStamp = '';
 let pulseMissing = false;
@@ -288,19 +289,79 @@ async function watchChat() {
     const after = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     const typing = (ui.typers || []).map((row) => row.id).sort().join(',');
     const started = Date.now();
+    let pace = 'same';
     try {
-      await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, signal });
+      pace = await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, signal });
     } catch (err) {
       if (err && err.name === 'AbortError') continue;
-      await sleep(8000);
+      await sleep(1000);
       continue;
     }
-    if (Date.now() - started < 1500) await sleep(8000);
+    if (pace === 'changed') continue;
+    if (Date.now() - started < 1500) await sleep(1000);
   }
 }
 
+function paintNames(list) {
+  const fresh = new Map();
+  for (const msg of list || []) {
+    if (msg && msg.author && msg.author.id) fresh.set(msg.author.id, msg.author);
+  }
+  if (!fresh.size || !ui.members.length) return;
+  let changed = false;
+  const next = ui.members.map((member) => {
+    const author = fresh.get(member.id);
+    if (!author) return member;
+    const username = author.username || member.username;
+    const displayName = author.displayName || member.displayName;
+    const avatarUrl = author.avatarUrl || member.avatarUrl;
+    const nameEffect = author.nameEffect || member.nameEffect || '';
+    if (username === member.username && displayName === member.displayName && avatarUrl === member.avatarUrl && nameEffect === (member.nameEffect || '')) return member;
+    changed = true;
+    return {
+      ...member,
+      username,
+      displayName,
+      avatarUrl,
+      avatarColor: author.avatarColor || member.avatarColor,
+      nameEffect,
+      nameColors: author.nameColors && author.nameColors.length ? author.nameColors : member.nameColors,
+    };
+  });
+  if (changed) ui.members = next;
+}
+
+function applyMemberNames(members) {
+  const byId = new Map((members || []).map((member) => [member.id, member]));
+  if (!byId.size || !ui.messages.length) return;
+  let changed = false;
+  const next = ui.messages.map((msg) => {
+    const member = msg.author && byId.get(msg.author.id);
+    if (!member) return msg;
+    const username = member.username || msg.author.username;
+    const displayName = member.nick || member.displayName || msg.author.displayName;
+    const avatarUrl = member.avatarUrl || msg.author.avatarUrl || '';
+    if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '')) return msg;
+    changed = true;
+    return {
+      ...msg,
+      author: {
+        ...msg.author,
+        username,
+        displayName,
+        avatarUrl,
+        avatarColor: member.avatarColor || msg.author.avatarColor,
+        nameEffect: member.nameEffect || msg.author.nameEffect || '',
+        nameColors: member.nameColors && member.nameColors.length ? member.nameColors : msg.author.nameColors,
+      },
+    };
+  });
+  if (changed) ui.messages = next;
+}
+
 export async function loadMessages(quiet, live) {
-  if (quiet && messagesBusy) return;
+  if (quiet && messagesBusy) return 'skip';
+  const serial = ++pulseSerial;
   messagesBusy = true;
   const mode = ui.mode;
   const channelId = ui.channelId;
@@ -320,7 +381,8 @@ export async function loadMessages(quiet, live) {
     } else {
       data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || '') + wait, signal);
     }
-    if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return;
+    if (serial !== pulseSerial) return 'skip';
+    if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return 'skip';
     if (mode === 'chat' && data.members && data.members !== memberStamp) {
       memberStamp = data.members;
       loadMembers(true);
@@ -329,12 +391,13 @@ export async function loadMessages(quiet, live) {
       profileStamp = data.profiles;
       if (mode === 'chat') loadMembers(true);
     }
-    if (data.same) return;
+    if (data.same) return 'same';
     ui.typers = data.typers || [];
     const list = data.messages || [];
+    paintNames(list);
     if (ui.mode === 'dm') {
       ui.messages = list;
-      return;
+      return 'changed';
     }
     ui.messages = list;
     const newest = list[list.length - 1];
@@ -355,24 +418,35 @@ export async function loadMessages(quiet, live) {
         }
       }
     }
+    return 'changed';
   } catch (err) {
+    if (serial !== pulseSerial) return 'skip';
     if (err && err.name === 'AbortError') throw err;
     if (!quiet) toast(err.message);
+    return 'same';
   } finally {
-    messagesBusy = false;
+    if (serial === pulseSerial) messagesBusy = false;
   }
 }
 
 let membersBusy = false;
+let membersAgain = false;
 
 export async function loadMembers(quiet) {
-  if (quiet && membersBusy) return;
+  if (membersBusy) {
+    membersAgain = true;
+    return;
+  }
   membersBusy = true;
   try {
-    const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
-    ui.members = data.members || [];
-    ui.badgeDefs = data.badges || {};
-    warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
+    do {
+      membersAgain = false;
+      const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
+      ui.members = data.members || [];
+      ui.badgeDefs = data.badges || {};
+      applyMemberNames(ui.members);
+      warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
+    } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
 }
@@ -382,12 +456,14 @@ export async function sendMessage() {
   if (!content) return;
   ui.composer = '';
   try {
-    if (ui.mode === 'dm' && ui.dmUser) {
-      await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body: { content } });
-    } else {
-      await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body: { content } });
+    const data = ui.mode === 'dm' && ui.dmUser
+      ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body: { content } })
+      : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body: { content } });
+    if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
+      ui.messages = [...ui.messages, data.message];
+      paintNames(ui.messages);
     }
-    await loadMessages();
+    dropLive();
   } catch (err) {
     ui.composer = content;
     toast(err.message);
@@ -468,8 +544,10 @@ export async function saveMe(body) {
     nameEffect: data.user?.nameEffect || body.nameEffect || '',
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || []),
   };
+  ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
   ui.userSettings = false;
   await loadMembers();
+  dropLive();
   toast('Profile saved');
 }
 

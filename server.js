@@ -46,7 +46,21 @@ function wakePulse(roomId) {
   }
 }
 function memberStamp(g) {
-  return crypto.createHash('sha1').update(Object.keys((g && g.members) || {}).sort().join('\n')).digest('hex').slice(0, 16);
+  const rows = Object.keys((g && g.members) || {}).sort().map((id) => {
+    const u = users[id] || {};
+    const m = (g.members && g.members[id]) || {};
+    return [
+      id,
+      u.username || '',
+      u.displayName || '',
+      m.nick || '',
+      u.avatarUrl || '',
+      u.nameEffect || '',
+      Array.isArray(u.nameColors) ? u.nameColors.join(',') : '',
+      u.status || '',
+    ].join('\t');
+  });
+  return crypto.createHash('sha1').update(rows.join('\n')).digest('hex').slice(0, 16);
 }
 function wakeGuild(g) {
   if (!g) return;

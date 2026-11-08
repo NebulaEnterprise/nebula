@@ -21,18 +21,39 @@
     if (!author) return author;
     const member = ui.members.find((m) => m.id === author.id);
     const mine = author.id === ui.me?.id ? ui.me : null;
-    const effect = mine?.nameEffect || member?.nameEffect || author.nameEffect || '';
-    const colors = mine?.nameColors?.length ? mine.nameColors : (member?.nameColors || author.nameColors || []);
+    const effect = mine?.nameEffect || author.nameEffect || member?.nameEffect || '';
+    const colors = mine?.nameColors?.length
+      ? mine.nameColors
+      : (author.nameColors?.length ? author.nameColors : (member?.nameColors || []));
     return {
       ...author,
-      username: mine?.username || member?.username || author.username,
-      displayName: member?.nick || mine?.displayName || member?.displayName || author.displayName,
+      username: mine?.username || author.username || member?.username,
+      displayName: member?.nick || mine?.displayName || author.displayName || member?.displayName,
       nameEffect: effect,
       nameColors: colors,
-      avatarUrl: mine?.avatarUrl || member?.avatarUrl || author.avatarUrl,
-      avatarColor: mine?.avatarColor || member?.avatarColor || author.avatarColor,
+      avatarUrl: mine?.avatarUrl || author.avatarUrl || member?.avatarUrl,
+      avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
     };
   }
+
+  let box = $state(null);
+  let follow = true;
+
+  function trackScroll() {
+    if (!box) return;
+    follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+  }
+
+  $effect(() => {
+    ui.messages.length;
+    ui.messages[ui.messages.length - 1]?.id;
+    ui.typers.length;
+    if (!box || !follow) return;
+    const node = box;
+    queueMicrotask(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+  });
 
   function time(iso) {
     const d = new Date(iso);
@@ -46,17 +67,17 @@
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
 </div>
-<div class="messages">
+<div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if !ui.messages.length}
     <div class="welcome">
       <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : '#' + (channel?.name || 'channel')}</h2>
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
-  {#each ui.messages as msg}
+  {#each ui.messages as msg (msg.id)}
     <article class="msg">
-      <button type="button" onclick={(e) => openPopout(msg.author, e.clientX, e.clientY)}>
-        <Avatar user={msg.author} size={40} dot={false} />
+      <button type="button" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
+        <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
       <div class="msg-body">
         <div class="msg-head">
