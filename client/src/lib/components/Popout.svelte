@@ -64,7 +64,7 @@
         </div>
         <h3><Name user={u} /></h3>
         <p class="handle">
-          <span>@{u.username}</span>
+          <span>@{u.username}{u.uid != null ? ` #${u.uid}` : ''}</span>
           {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
           {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
           {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
@@ -80,7 +80,7 @@
       {/if}
       <section class="profile-panel">
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
-        <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
+        <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}{u.uid != null ? ` #${u.uid}` : ''}</strong></div>
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
         <div class="profile-row"><span><Sparkles size={14} /> Custom status</span><strong>{u.customStatus || '—'}</strong></div>
       </section>
