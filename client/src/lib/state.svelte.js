@@ -223,6 +223,7 @@ export async function openServer(id, opts = {}) {
   const ch = current || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
   ui.channelId = ch ? ch.id : '';
   ui.seenMessageId = '';
+  memberStamp = '';
   dropLive();
   await loadMessages();
   await loadMembers();
@@ -240,6 +241,7 @@ export function pickChannel(ch) {
 }
 
 let messagesBusy = false;
+let memberStamp = '';
 let pulseMissing = false;
 let watchStarted = false;
 let liveCtrl = null;
@@ -286,7 +288,7 @@ async function watchChat() {
     const typing = (ui.typers || []).map((row) => row.id).sort().join(',');
     const started = Date.now();
     try {
-      await loadMessages(true, { after, typing, signal });
+      await loadMessages(true, { after, typing, members: memberStamp, signal });
     } catch (err) {
       if (err && err.name === 'AbortError') continue;
       await sleep(8000);
@@ -305,7 +307,9 @@ export async function loadMessages(quiet, live) {
   try {
     let data;
     const signal = live && live.signal;
-    const wait = live ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&wait=1' : '';
+    const wait = live
+      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&wait=1'
+      : '';
     if (ui.mode === 'dm' && ui.dmUser) {
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
     } else if (!ui.channelId) {
@@ -316,6 +320,10 @@ export async function loadMessages(quiet, live) {
       data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || '') + wait, signal);
     }
     if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return;
+    if (mode === 'chat' && data.members && data.members !== memberStamp) {
+      memberStamp = data.members;
+      loadMembers(true);
+    }
     if (data.same) return;
     ui.typers = data.typers || [];
     const list = data.messages || [];

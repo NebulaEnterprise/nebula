@@ -38,6 +38,16 @@ function wakePulse(roomId) {
     if (waiter.roomId === roomId) waiter.finish();
   }
 }
+function memberStamp(g) {
+  return crypto.createHash('sha1').update(Object.keys((g && g.members) || {}).sort().join('\n')).digest('hex').slice(0, 16);
+}
+function wakeGuild(g) {
+  if (!g) return;
+  const rooms = new Set((g.channels || []).map((c) => c.id));
+  for (const waiter of [...pulseWaiters]) {
+    if (rooms.has(waiter.roomId)) waiter.finish();
+  }
+}
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
@@ -1390,6 +1400,7 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
     found.invites[code].uses = (found.invites[code].uses || 0) + 1;
     audit(found, req.user, 'joined the server');
     saveGuilds();
+    wakeGuild(found);
   }
   res.json({ ok: true, server: publicServer(found, req.user) });
 });
@@ -1541,6 +1552,7 @@ function pulseSnap(req) {
       typers,
       cursor: last ? last.id : '',
       typing: typers.map((row) => row.id).sort().join(','),
+      members: memberStamp(found.guild),
     },
   };
 }
@@ -1552,7 +1564,8 @@ app.get('/api/pulse', auth, (req, res) => {
   if (snap.forbidden) return res.status(403).json({ error: 'You cannot view this channel' });
   const after = String(req.query.after || '');
   const typing = String(req.query.typing || '');
-  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing;
+  const members = String(req.query.members || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -1564,7 +1577,9 @@ app.get('/api/pulse', auth, (req, res) => {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    if (body.cursor === after && body.typing === typing) return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing });
+    if (body.cursor === after && body.typing === typing && (body.members || '') === members) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '' });
+    }
     res.json(body);
   }
   const timer = setTimeout(finish, 25000);
@@ -1978,6 +1993,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     delete g.members[userId];
     audit(g, req.user, (type === 'ban' ? 'banned ' : 'kicked ') + name);
     saveGuilds();
+    wakeGuild(g);
     return res.json({ ok: true });
   }
   if (type === 'unban') {
@@ -2032,6 +2048,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
       audit(g, req.user, 'accepted a join request');
     } else audit(g, req.user, 'declined a join request');
     saveGuilds();
+    wakeGuild(g);
     return res.json({ ok: true });
   }
   if (type === 'delete') {
