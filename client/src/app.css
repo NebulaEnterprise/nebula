@@ -950,12 +950,12 @@ img { max-width: 100%; }
 }
 .bio-bubble {
   position: absolute; left: 82px; top: 94px; z-index: 2;
-  max-width: 168px; padding: 8px 10px; border-radius: 8px;
-  background: #4e5058; color: #fff; font-size: 13px; line-height: 1.35;
+  width: max-content; max-width: 200px; padding: 6px 10px; border-radius: 8px;
+  background: #4e5058; color: #fff; font-size: 13px; line-height: 16px;
 }
 .bio-bubble span {
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden; max-width: 148px; word-break: break-word;
+  display: block; max-width: 180px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
 }
 .bio-bubble::before {
   content: ""; position: absolute; left: 16px; top: -7px;

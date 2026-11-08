@@ -1,5 +1,5 @@
 export function shortBio(text) {
-  return String(text || '').slice(0, 29);
+  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 29);
 }
 
 export function escapeHtml(s) {
