@@ -805,9 +805,13 @@ function adoptMe(members) {
   const displayName = mine.displayName || '';
   const username = mine.username || ui.me.username || '';
   const nameEffect = mine.nameEffect || '';
+  const nameFont = mine.nameFont || '';
+  const profileStyle = mine.profileStyle || 'gradient';
   const same = displayName === (ui.me.displayName || '')
     && username === (ui.me.username || '')
     && nameEffect === (ui.me.nameEffect || '')
+    && nameFont === (ui.me.nameFont || '')
+    && profileStyle === (ui.me.profileStyle || 'gradient')
     && (mine.customStatus || '') === (ui.me.customStatus || '')
     && (mine.bio || '') === (ui.me.bio || '')
     && (mine.aboutMe || '') === (ui.me.aboutMe || '');
@@ -817,6 +821,9 @@ function adoptMe(members) {
     displayName,
     username,
     nameEffect,
+    nameFont,
+    profileStyle,
+    profileColors: mine.profileColors?.length ? mine.profileColors : ui.me.profileColors,
     nameColors: mine.nameColors?.length ? mine.nameColors : ui.me.nameColors,
     customStatus: mine.customStatus || '',
     pronouns: mine.pronouns ?? ui.me.pronouns,
@@ -843,9 +850,10 @@ function applyMemberNames(members) {
     const displayName = member.nick || member.displayName || msg.author.displayName;
     const avatarUrl = member.avatarUrl || msg.author.avatarUrl || '';
     const nameEffect = member.nameEffect || '';
+    const nameFont = member.nameFont || '';
     const nameColors = member.nameColors && member.nameColors.length ? member.nameColors : (msg.author.nameColors || []);
     const sameColors = nameColors.join(',') === (msg.author.nameColors || []).join(',');
-    if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '') && nameEffect === (msg.author.nameEffect || '') && sameColors) return msg;
+    if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '') && nameEffect === (msg.author.nameEffect || '') && nameFont === (msg.author.nameFont || '') && sameColors) return msg;
     changed = true;
     return {
       ...msg,
@@ -856,6 +864,7 @@ function applyMemberNames(members) {
         avatarUrl,
         avatarColor: member.avatarColor || msg.author.avatarColor,
         nameEffect,
+        nameFont,
         nameColors,
       },
     };
@@ -1739,7 +1748,7 @@ async function watchAlerts() {
 export async function saveMe(body) {
   const previous = ui.me;
   const pending = { ...ui.me };
-  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'avatarColor', 'accentColor', 'showcaseServerId', 'showcaseBadge']) {
+  for (const key of ['displayName', 'username', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'nameFont', 'profileStyle', 'avatarColor', 'accentColor', 'showcaseServerId', 'showcaseBadge']) {
     if (body[key] !== undefined) pending[key] = body[key];
   }
   if (Array.isArray(body.shownBadges)) pending.shownBadges = body.shownBadges;
@@ -1760,6 +1769,8 @@ export async function saveMe(body) {
     aboutMe: data.user?.aboutMe ?? body.aboutMe ?? previous?.aboutMe ?? '',
     showcaseBadge: data.user?.showcaseBadge ?? body.showcaseBadge ?? previous?.showcaseBadge ?? '',
     nameEffect: data.user?.nameEffect || body.nameEffect || '',
+    nameFont: data.user?.nameFont ?? body.nameFont ?? previous?.nameFont ?? '',
+    profileStyle: data.user?.profileStyle || body.profileStyle || previous?.profileStyle || 'gradient',
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
   };
   ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);

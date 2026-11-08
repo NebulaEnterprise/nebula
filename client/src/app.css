@@ -245,8 +245,9 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 88px; bottom: 78px; z-index: 50; width: min(320px, calc(100vw - 104px));
-  background: #111214; border: 1px solid var(--line); border-radius: 12px;
+  position: fixed; left: 88px; bottom: 78px; z-index: 50; width: min(380px, calc(100vw - 104px));
+  --shade-a: #7c3aed; --shade-b: #c084fc;
+  border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 18px;
   box-shadow: var(--shadow); overflow: hidden;
 }
 .account-banner { height: 84px; position: relative; }
@@ -277,16 +278,18 @@ img { max-width: 100%; }
 }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.account-pop .bio-bubble {
-  left: 88px; top: 104px; margin: 0; max-width: 180px;
+.account-pop .profile-face .bio-bubble {
+  left: calc(100% + 4px); top: 50%; transform: translateY(-50%);
+  margin: 0; max-width: 126px;
   display: flex; align-items: center; gap: 2px;
   padding: 4px 5px 4px 8px; border-radius: 7px;
   background: #4e5058; box-shadow: none;
   font-size: 12px; line-height: 15px;
 }
-.account-pop .bio-bubble::before {
-  left: 12px; top: -6px;
-  border-width: 0 5px 6px 5px;
+.account-pop .profile-face .bio-bubble::before {
+  left: -6px; top: 50%; margin-top: -5px;
+  border-width: 5px 6px 5px 0;
+  border-color: transparent #4e5058 transparent transparent;
 }
 .account-pop .bio-bubble span { max-width: 128px; font-size: 12px; line-height: 15px; }
 .account-pop .account-bubble button { width: 20px; height: 20px; }
@@ -555,6 +558,11 @@ img { max-width: 100%; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .composer-wrap { flex-shrink: 0; padding: 0 16px 16px; }
+.name-font-serif { font-family: Fraunces, Georgia, serif; }
+.name-font-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.name-font-round { font-family: Nunito, sans-serif; }
+.name-font-script { font-family: Caveat, cursive; font-size: 1.15em; }
+.name-font-display { font-family: Bungee, sans-serif; letter-spacing: 0.01em; }
 .name-fx.plain { color: var(--fx1, #fff); }
 .name-fx.glow { color: var(--fx1, #5ce1ff); text-shadow: 0 0 8px var(--fx1, #3ecbff), 0 0 18px var(--fx2, #1aa7ff); }
 .name-fx.gradient, .name-fx.rainbow {
@@ -954,9 +962,24 @@ img { max-width: 100%; }
 .preview-card {
   position: relative; width: 100%; overflow: hidden;
   --shade-a: #7c3aed; --shade-b: #c084fc;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--shade-a) 46%, #0c0614), color-mix(in srgb, var(--shade-b) 24%, #0c0614));
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent);
+}
+.rgb-pick { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.rgb-swatches { display: flex; gap: 8px; }
+.rgb-swatches button {
+  flex: 1; height: 36px; border-radius: 10px; border: 2px solid transparent;
+  color: #fff; font-weight: 750; text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+.rgb-swatches button.on { border-color: #fff; }
+.rgb-pick label { display: grid; grid-template-columns: 16px 1fr 32px; align-items: center; gap: 8px; }
+.rgb-pick span, .rgb-pick em { font-size: 12px; font-weight: 750; font-style: normal; color: var(--muted); }
+.rgb-pick input[type="range"] {
+  appearance: none; height: 8px; border-radius: 99px; background: #1c1d26;
+  background-image: linear-gradient(90deg, #111, var(--track, #fff));
+}
+.rgb-pick input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #111;
 }
 .colorbox { display: flex; align-items: flex-start; gap: 8px; }
 .colorbox-swatches { display: flex; flex-direction: column; gap: 8px; }
@@ -981,7 +1004,6 @@ img { max-width: 100%; }
   position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow: auto;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
   --shade-a: #7c3aed; --shade-b: #c084fc;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--shade-a) 46%, #0c0614), color-mix(in srgb, var(--shade-b) 24%, #0c0614));
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); box-shadow: var(--shadow);
   animation: profile-in 170ms var(--ease);
@@ -1007,6 +1029,23 @@ img { max-width: 100%; }
   display: flex; width: 100%; justify-content: center; align-items: center; gap: 6px;
 }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
+.skin-solid { background: color-mix(in srgb, var(--shade-a) 70%, #0c0614); }
+.skin-gradient { background: linear-gradient(180deg, color-mix(in srgb, var(--shade-a) 46%, #0c0614), color-mix(in srgb, var(--shade-b) 24%, #0c0614)); }
+.skin-glow {
+  background:
+    radial-gradient(90% 55% at 50% 0%, color-mix(in srgb, var(--shade-b) 78%, white), transparent 62%),
+    color-mix(in srgb, var(--shade-a) 58%, #0c0614);
+}
+.skin-rainbow {
+  background: linear-gradient(120deg, var(--shade-a), var(--shade-b), color-mix(in srgb, var(--shade-a) 30%, white), var(--shade-b));
+  background-size: 240% 240%;
+  animation: skin-shift 9s ease infinite;
+}
+@keyframes skin-shift {
+  0% { background-position: 0% 40%; }
+  50% { background-position: 100% 60%; }
+  100% { background-position: 0% 40%; }
+}
 .profile-face { position: relative; }
 .profile-face .bio-bubble {
   left: calc(100% + 4px); top: 50%; bottom: auto; transform: translateY(-50%);

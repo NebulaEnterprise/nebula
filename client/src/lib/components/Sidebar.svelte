@@ -313,45 +313,49 @@
     </div>
   {/if}
   {#if accountOpen}
-    <div class="account-pop" onclick={(e) => e.stopPropagation()}>
-      <div class="account-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
+    {@const cardShades = Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? ui.me.profileColors : ['#7c3aed', '#c084fc']}
+    {@const cardSkin = ['solid', 'glow', 'rainbow'].includes(ui.me?.profileStyle) ? ui.me.profileStyle : 'gradient'}
+    <div class="account-pop profile-card skin-{cardSkin}" style="--shade-a:{cardShades[0]};--shade-b:{cardShades[1]}" onclick={(e) => e.stopPropagation()}>
+      <div class="pop-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
         {#if ui.me?.bannerUrl}<Photo url={ui.me.bannerUrl} fill />{/if}
       </div>
-      <div class="account-face">
-        <div class="account-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
-          {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
-          <i style="background:{presenceLabel[2]}"></i>
-        </div>
-        {#if editingBio}
-          <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
-            <input bind:value={bioDraft} maxlength="29" placeholder="Bio" />
-            <button type="submit" title="Save bio">✓</button>
-          </form>
-        {:else if shortBio(ui.me?.bio)}
-          <div class="bio-bubble account-bubble">
-            <span>{shortBio(ui.me.bio)}</span>
-            <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
-            <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
+      <div class="pop-body">
+        <div class="profile-hero">
+          <div class="profile-face">
+            <div class="pop-av profile-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
+              {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
+            </div>
+            <i class="profile-dot" style="background:{presenceLabel[2]}"></i>
+            {#if editingBio}
+              <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
+                <input bind:value={bioDraft} maxlength="29" placeholder="Bio" />
+                <button type="submit" title="Save bio">✓</button>
+              </form>
+            {:else if shortBio(ui.me?.bio)}
+              <div class="bio-bubble account-bubble">
+                <span>{shortBio(ui.me.bio)}</span>
+                <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
+                <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
+              </div>
+            {:else if editingStatus}
+              <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
+                <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
+                <button type="submit" title="Save status">✓</button>
+              </form>
+            {:else}
+              <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
+                <i><Plus size={13} /></i>
+                <span>Just finished reading...</span>
+              </button>
+            {/if}
           </div>
-        {:else if editingStatus}
-          <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
-            <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
-            <button type="submit" title="Save status">✓</button>
-          </form>
-        {:else}
-          <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
-            <i><Plus size={13} /></i>
-            <span>Just finished reading...</span>
-          </button>
-        {/if}
-      </div>
-      <div class="account-body">
-        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-        <div class="account-handle">
-          <span class="account-user">@{ui.me?.username}</span>
-          {#if visibleBadges(ui.me).includes('early')}<MoonBadge />{/if}
-          {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
-          {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
+          <h3><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></h3>
+          <p class="handle">
+            <span>@{ui.me?.username}</span>
+            {#if visibleBadges(ui.me).includes('early')}<MoonBadge />{/if}
+            {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
+            {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
+          </p>
         </div>
         <button type="button" class="account-edit" onclick={editProfile}><Pencil size={16} /> Edit Profile</button>
         <button type="button" class="account-row" onclick={() => { statusOpen = !statusOpen; accountsOpen = false; }}>
@@ -402,7 +406,7 @@
     <button type="button" class="me-card" onclick={openAccount}>
       <Avatar user={ui.me} size={36} />
       <div class="who">
-        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
+        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
       </div>
     </button>
     <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={16} /></button>

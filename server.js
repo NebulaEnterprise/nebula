@@ -85,6 +85,8 @@ function memberStamp(g) {
       m.nick || '',
       u.avatarUrl || '',
       u.nameEffect || '',
+      u.nameFont || '',
+      u.profileStyle || '',
       Array.isArray(u.nameColors) ? u.nameColors.join(',') : '',
       Array.isArray(u.profileColors) ? u.profileColors.join(',') : '',
       u.status || '',
@@ -589,6 +591,7 @@ function slimAuthor(u) {
     displayName: u.displayName || u.username,
     avatarColor: u.avatarColor || '#7c5cff',
     nameEffect: cleanNameEffect(u.nameEffect),
+    nameFont: cleanNameFont(u.nameFont),
     nameColors: cleanNameColors(u.nameColors),
     showcase: showcaseOf(u),
     showcaseBadge: userOwnsBadge(u, u.showcaseBadge) ? u.showcaseBadge : '',
@@ -882,7 +885,9 @@ function publicUser(u) {
     bannerUrl: publishedMedia(u, 'banner'),
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
+    nameFont: cleanNameFont(u.nameFont),
     nameColors: cleanNameColors(u.nameColors),
+    profileStyle: cleanProfileStyle(u.profileStyle),
     profileColors: profileShades(u.profileColors),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
@@ -901,6 +906,14 @@ unpackImages();
 
 function cleanNameEffect(value) {
   return ['plain', 'glow', 'gradient', 'rainbow', 'glitch', 'sparkle'].includes(value) ? value : '';
+}
+
+function cleanNameFont(value) {
+  return ['serif', 'mono', 'round', 'script', 'display'].includes(value) ? value : '';
+}
+
+function cleanProfileStyle(value) {
+  return ['solid', 'glow', 'rainbow'].includes(value) ? value : 'gradient';
 }
 
 function profileShades(input) {
@@ -1653,7 +1666,7 @@ app.post('/api/seen', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameColors, profileColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -1714,7 +1727,9 @@ app.patch('/api/me', auth, (req, res) => {
   }
   if (showcaseBadge !== undefined) req.user.showcaseBadge = showcaseBadge ? String(showcaseBadge) : '';
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
+  if (nameFont !== undefined) req.user.nameFont = cleanNameFont(nameFont);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
+  if (profileStyle !== undefined) req.user.profileStyle = cleanProfileStyle(profileStyle);
   if (profileColors !== undefined) {
     const shades = cleanNameColors(profileColors);
     if (shades.length === 2) req.user.profileColors = shades;

@@ -3,6 +3,7 @@
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
+  import RgbPick from './RgbPick.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
@@ -48,10 +49,26 @@
     avatarUrl: ui.me?.avatarUrl || '',
     bannerUrl: ui.me?.bannerUrl || '',
     nameEffect: ui.me?.nameEffect || '',
+    nameFont: ['serif', 'mono', 'round', 'script', 'display'].includes(ui.me?.nameFont) ? ui.me.nameFont : '',
+    profileStyle: ['solid', 'glow', 'rainbow'].includes(ui.me?.profileStyle) ? ui.me.profileStyle : 'gradient',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
     profileColors: Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? [...ui.me.profileColors] : ['#7c3aed', '#c084fc'],
   });
 
+  const profileStyles = [
+    ['solid', 'Solid'],
+    ['gradient', 'Gradient'],
+    ['glow', 'Glow'],
+    ['rainbow', 'Rainbow'],
+  ];
+  const fonts = [
+    ['', 'Default', 'Outfit, sans-serif'],
+    ['serif', 'Serif', 'Fraunces, Georgia, serif'],
+    ['mono', 'Mono', '"JetBrains Mono", ui-monospace, monospace'],
+    ['round', 'Round', 'Nunito, sans-serif'],
+    ['script', 'Script', 'Caveat, cursive'],
+    ['display', 'Display', 'Bungee, sans-serif'],
+  ];
   const effects = [
     ['', 'None'],
     ['plain', 'Plain'],
@@ -311,8 +328,13 @@
             </div>
             <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
             <p class="label">Profile color</p>
-            <p class="hint">Two separate shades. The first is the main color. The second is the other tone on your profile card.</p>
-            <ColorBox colors={form.profileColors} slots={2} onpick={setProfileColor} />
+            <p class="hint">Solid, gradient, glow, or rainbow. Main is the base. Tone is the second color.</p>
+            <div class="pick-row">
+              {#each profileStyles as [id, label]}
+                <button type="button" class="pick-card" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
+              {/each}
+            </div>
+            <RgbPick colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
@@ -323,7 +345,7 @@
         </div>
         <div>
           <p class="label">Preview</p>
-          <div class="preview-card profile-card" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
+          <div class="preview-card profile-card skin-{form.profileStyle || 'gradient'}" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
             <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
             </div>
@@ -336,7 +358,7 @@
                   <i class="profile-dot" style="background:{statusColor[form.status] || statusColor.offline}"></i>
                   {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}
                 </div>
-                <h3><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameColors: form.nameColors }} /></h3>
+                <h3><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameFont: form.nameFont, nameColors: form.nameColors }} /></h3>
                 <p class="handle">
                   <span>@{form.username}</span>
                   {#if badgeOn('early')}<MoonBadge />{/if}
@@ -377,11 +399,21 @@
         </div>
         {#if page === 'look'}
           <div>
+            <p class="label">Name font</p>
+            <div class="effect-picks">
+              {#each fonts as [id, label, family]}
+                <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
+                  <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
+                  <span>{label}</span>
+                </button>
+              {/each}
+            </div>
+            <div style="height:16px"></div>
             <p class="label">Name effect</p>
             <div class="effect-picks">
               {#each effects as [id, label]}
                 <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameColors: form.nameColors }} />
+                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
                   <span>{label}</span>
                 </button>
               {/each}
