@@ -245,7 +245,7 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 76px; bottom: 72px; z-index: 50; width: min(300px, calc(100vw - 92px));
+  position: fixed; left: 44px; bottom: 72px; z-index: 50; width: min(300px, calc(100vw - 60px));
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 16px;
   box-shadow: var(--shadow); overflow: hidden;
@@ -339,7 +339,7 @@ img { max-width: 100%; }
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .account-switch {
-  position: fixed; left: min(384px, calc(100vw - 276px)); bottom: 86px; z-index: 51;
+  position: fixed; left: min(352px, calc(100vw - 276px)); bottom: 86px; z-index: 51;
   width: 260px; padding: 8px; border-radius: 12px;
   background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
@@ -1184,7 +1184,7 @@ img { max-width: 100%; }
 @media (max-width: 900px) {
   .members { display: none; }
   .side { width: 228px; }
-  .account-pop { left: 76px; width: min(252px, calc(100vw - 92px)); }
+  .account-pop { left: 44px; width: min(252px, calc(100vw - 60px)); }
   .grid-2 { grid-template-columns: 1fr; }
   .settings { flex-direction: column; }
   .set-nav { width: 100%; display: flex; gap: 4px; overflow: auto; padding: 10px; }
