@@ -201,11 +201,11 @@
   {:else}
     <div class="picker-search gif-search">
       {#if gifFav}
-        <button type="button" class="gif-back" aria-label="Back" onclick={() => (gifFav = false)}>←</button>
+        <button type="button" class="gif-back" aria-label="Back" onclick={(e) => { e.stopPropagation(); gifFav = false; }}>←</button>
       {/if}
       <input bind:value={query} placeholder={gifFav ? 'Search Favorites' : 'Search GIFs'} />
       {#if !gifFav}
-        <button type="button" class="gif-fav-tab" onclick={() => (gifFav = true)}>★ Favorites</button>
+        <button type="button" class="gif-fav-tab" onclick={(e) => { e.stopPropagation(); gifFav = true; }}>★ Favorites</button>
       {/if}
     </div>
     <div class="picker-grid gif-grid">
@@ -216,7 +216,7 @@
         {/each}
       {:else}
         {#if !query.trim()}
-          <button type="button" class="gif-fav-card" onclick={() => (gifFav = true)}>
+          <button type="button" class="gif-fav-card" onclick={(e) => { e.stopPropagation(); gifFav = true; }}>
             <span class="gif-fav-mark">★</span>
             <strong>Favorites</strong>
             <span>{favs.length ? favs.length + ' saved' : 'Save GIFs here'}</span>

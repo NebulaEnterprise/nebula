@@ -22,10 +22,13 @@
       ui.attachOpen = false;
     };
     const onClick = (e) => {
-      if (!e.target.closest?.('.menu') && !e.target.closest?.('.title')) ui.menuOpen = false;
-      if (!e.target.closest?.('.pop') && !e.target.closest?.('.member') && !e.target.closest?.('.msg')) ui.popout = null;
-      if (!e.target.closest?.('.picker') && !e.target.closest?.('.picker-toggle')) ui.picker = '';
-      if (!e.target.closest?.('.attach-menu') && !e.target.closest?.('.attach-toggle')) ui.attachOpen = false;
+      const node = e.target instanceof Element ? e.target : null;
+      if (node && !node.isConnected) return;
+      const inside = (selector) => !!(node && node.closest(selector));
+      if (!inside('.menu') && !inside('.title')) ui.menuOpen = false;
+      if (!inside('.pop') && !inside('.member') && !inside('.msg')) ui.popout = null;
+      if (!inside('.picker') && !inside('.picker-toggle') && !inside('.react-picker')) ui.picker = '';
+      if (!inside('.attach-menu') && !inside('.attach-toggle')) ui.attachOpen = false;
     };
     const onGesture = () => askSiteAccess();
     window.addEventListener('keydown', onKey);
