@@ -243,8 +243,16 @@
     return rows.slice(0, 10);
   });
 
+  function fitComposer() {
+    const el = composerEl;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+  }
+
   function syncMention(event) {
     noteTyping();
+    fitComposer();
     const el = event.currentTarget || event.target;
     const value = String(el.value || '');
     const pos = el.selectionStart ?? value.length;
@@ -304,8 +312,18 @@
       ui.composer = '';
       return;
     }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+      return;
+    }
     noteKeyDown(event);
   }
+
+  $effect(() => {
+    ui.composer;
+    queueMicrotask(fitComposer);
+  });
   let pollOpen = $state(false);
   let pollQuestion = $state('');
   let pollAnswers = $state(['', '']);
@@ -504,9 +522,10 @@
         <button type="button" onclick={openPoll}><BarChart3 size={16} /> Create Poll</button>
       </div>
     {/if}
-    <input
+    <textarea
       bind:this={composerEl}
       bind:value={ui.composer}
+      rows="1"
       onkeydown={onComposerKey}
       onkeyup={noteKeyUp}
       oninput={syncMention}
@@ -514,7 +533,7 @@
       maxlength="2000"
       disabled={locked}
       placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}
-    />
+    ></textarea>
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
