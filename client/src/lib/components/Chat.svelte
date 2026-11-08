@@ -5,6 +5,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
+  import StaffBadge from './StaffBadge.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast } from '../state.svelte.js';
   import { formatContent } from '../format.js';
   import { fileUrl, api } from '../api.js';
@@ -69,6 +70,7 @@
       nameColors: colors,
       avatarUrl: mine?.avatarUrl || author.avatarUrl || member?.avatarUrl,
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
+      staff: ui.mode === 'chat' ? (member ? (member.staff || '') : (author.staff || '')) : '',
     };
   }
 
@@ -533,6 +535,7 @@
       <div class="msg-body">
         <div class="msg-head">
           <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
+          <StaffBadge rank={liveAuthor(msg.author).staff} />
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

@@ -185,7 +185,48 @@ function ogRole() {
 }
 
 function adminRole() {
-  return { id: 'admin', name: 'admin', color: '#f06a6a', permissions: ALL_PERMS, position: 90 };
+  return { id: 'admin', name: 'Admin', color: '#f06a6a', permissions: ALL_PERMS, position: 90 };
+}
+
+function managerRole() {
+  return {
+    id: 'manager',
+    name: 'Manager',
+    color: '#f0b429',
+    permissions: PERM.VIEW | PERM.SEND | PERM.INVITE | PERM.MANAGE_CHANNELS | PERM.MANAGE_ROLES | PERM.MANAGE_SERVER,
+    position: 70,
+  };
+}
+
+function moderatorRole() {
+  return { id: 'moderator', name: 'Moderator', color: '#3ecf8e', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 50 };
+}
+
+const STAFF_RANK = { admin: 3, manager: 2, moderator: 1 };
+
+function staffRank(g, user) {
+  if (!g || !user || !g.members || !g.members[user.id]) return 0;
+  const ids = g.members[user.id].roles || [];
+  let rank = 0;
+  for (const id of ids) rank = Math.max(rank, STAFF_RANK[id] || 0);
+  return rank;
+}
+
+function staffKey(g, user) {
+  if (!g || g.id !== OFFICIAL_ID) return '';
+  const rank = staffRank(g, user);
+  if (rank >= 3) return 'admin';
+  if (rank === 2) return 'manager';
+  if (rank === 1) return 'moderator';
+  return '';
+}
+
+function canStaffTouch(g, actor, targetId) {
+  const target = users[targetId];
+  if (!actor || !target) return false;
+  if (isOwner(g, target) && actor.id !== target.id) return false;
+  if (isOwner(g, actor)) return true;
+  return staffRank(g, actor) > staffRank(g, target);
 }
 
 function ensureGuilds() {
@@ -212,7 +253,17 @@ function ensureGuilds() {
   if (!g.roles.some((r) => r.id === 'everyone')) g.roles.unshift(everyoneRole());
   if (!g.roles.some((r) => r.id === 'owner')) g.roles.push(ownerRole());
   if (!g.roles.some((r) => r.id === 'og')) g.roles.push(ogRole());
-  if (!g.roles.some((r) => r.id === 'admin')) g.roles.push(adminRole());
+  for (const fresh of [adminRole(), managerRole(), moderatorRole()]) {
+    const role = g.roles.find((r) => r.id === fresh.id);
+    if (!role) {
+      g.roles.push(fresh);
+      continue;
+    }
+    role.name = fresh.name;
+    role.permissions = fresh.permissions;
+    role.position = fresh.position;
+    if (!role.color) role.color = fresh.color;
+  }
   for (const u of Object.values(users)) {
     if (!g.members[u.id]) {
       g.members[u.id] = { roles: ['everyone'], joinedAt: u.createdAt || new Date().toISOString() };
@@ -232,6 +283,13 @@ function ensureGuilds() {
     return u && (Number(u.uid) === 1 || Number(u.uid) === 2);
   });
   for (const srv of Object.values(guilds.servers)) hydrateGuild(srv);
+  for (const role of g.roles) {
+    if (role.id !== 'everyone' && role.id !== 'here') continue;
+    role.mentionBy = Array.isArray(role.mentionBy) ? role.mentionBy : [];
+    for (const id of ['og', 'admin', 'manager', 'moderator']) {
+      if (!role.mentionBy.includes(id)) role.mentionBy.push(id);
+    }
+  }
   save(GUILDS_FILE, guilds);
 }
 
@@ -260,7 +318,7 @@ function hydrateGuild(g) {
   (g.channels || []).forEach((c) => { if (c.categoryId == null) c.categoryId = ''; });
   if (!Array.isArray(g.roles)) g.roles = [];
   if (!g.roles.some((r) => r.id === 'here')) g.roles.push(hereRole());
-  const mentionDefault = g.id === OFFICIAL_ID ? ['og', 'admin'] : ['everyone'];
+  const mentionDefault = g.id === OFFICIAL_ID ? ['og', 'admin', 'manager', 'moderator'] : ['everyone'];
   for (const role of g.roles) {
     if (!Array.isArray(role.mentionBy)) {
       role.mentionBy = (role.id === 'everyone' || role.id === 'here') ? mentionDefault.slice() : ['everyone'];
@@ -309,7 +367,7 @@ function isOwner(g, user) {
 }
 
 function stripOfficialManage(g, user, bits) {
-  if (g && g.id === OFFICIAL_ID && !isOfficialOwner(user)) return bits & ~MANAGE_MASK;
+  if (g && g.id === OFFICIAL_ID && !isOfficialOwner(user) && staffRank(g, user) < 1) return bits & ~MANAGE_MASK;
   return bits;
 }
 
@@ -324,14 +382,14 @@ function basePerms(g, user) {
   if (isOwner(g, user)) return ALL_PERMS;
   let bits = 0;
   for (const role of memberRoles(g, user)) bits |= Number(role.permissions) || 0;
-  if ((bits & PERM.ADMIN) && !(g && g.id === OFFICIAL_ID)) return ALL_PERMS;
+  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || staffRank(g, user) >= 3)) return ALL_PERMS;
   return stripOfficialManage(g, user, bits);
 }
 
 function effectivePerms(g, user, channel) {
   let bits = basePerms(g, user);
   if (!channel || !(channel.overwrites || []).length) return stripOfficialManage(g, user, bits);
-  if ((bits & PERM.ADMIN) && !(g && g.id === OFFICIAL_ID)) return bits;
+  if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || staffRank(g, user) >= 3 || isOwner(g, user))) return bits;
   const ids = new Set(memberRoles(g, user).map((r) => r.id));
   for (const ow of channel.overwrites) {
     if (!ids.has(ow.roleId)) continue;
@@ -380,6 +438,7 @@ function memberView(g, u) {
   const top = roles.find((r) => r.id !== 'everyone' && r.id !== 'owner');
   const mem = (g.members && g.members[u.id]) || {};
   pub.roles = roles.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position || 0 }));
+  pub.staff = staffKey(g, u);
   pub.roleColor = top && top.color ? top.color : '';
   pub.nick = mem.nick || '';
   pub.serverOwner = isOwner(g, u);
@@ -636,6 +695,10 @@ function presentMessage(msg, viewerId) {
   const author = Object.assign(base, live ? slimAuthor(live) : {});
   author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
   const out = Object.assign({}, msg, { author });
+  if (out.channelId && !String(out.channelId).startsWith('dm:')) {
+    const room = findChannel(out.channelId, '');
+    if (room && live) author.staff = staffKey(room.guild, live);
+  }
   const storedReplies = Array.isArray(out.replies) && out.replies.length ? out.replies : (out.reply ? [out.reply] : []);
   const replies = storedReplies.map(presentReply).filter(Boolean).slice(0, 5);
   out.replies = replies;
@@ -1838,6 +1901,9 @@ app.patch('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   const role = (g.roles || []).find((r) => r.id === req.params.roleId);
   if (!role) return res.status(404).json({ error: 'Role not found' });
   if (role.id === 'everyone' && req.body?.name) return res.status(400).json({ error: 'Cannot rename @everyone' });
+  if (g.id === OFFICIAL_ID && STAFF_RANK[role.id] && !isOwner(g, req.user) && staffRank(g, req.user) <= STAFF_RANK[role.id]) {
+    return res.status(403).json({ error: 'That role is above you' });
+  }
   if (req.body?.name != null && role.id !== 'everyone') role.name = String(req.body.name).trim().slice(0, 32) || role.name;
   if (req.body?.color != null) role.color = String(req.body.color).slice(0, 20);
   if (req.body?.permissions != null && role.id !== 'owner') role.permissions = Number(req.body.permissions) || 0;
@@ -1854,6 +1920,7 @@ app.delete('/api/servers/:id/roles/:roleId', auth, (req, res) => {
   if (!g) return;
   const roleId = req.params.roleId;
   if (roleId === 'everyone' || roleId === 'owner' || roleId === 'here') return res.status(400).json({ error: 'That role cannot be deleted' });
+  if (g.id === OFFICIAL_ID && STAFF_RANK[roleId]) return res.status(400).json({ error: 'That staff role stays on Nebula' });
   if (!(g.roles || []).some((r) => r.id === roleId)) return res.status(404).json({ error: 'Role not found' });
   g.roles = g.roles.filter((r) => r.id !== roleId);
   for (const mem of Object.values(g.members)) {
@@ -1872,6 +1939,14 @@ app.post('/api/servers/:id/members/:userId/roles', auth, (req, res) => {
   const role = (g.roles || []).find((r) => r.id === roleId);
   if (!role || role.id === 'everyone') return res.status(400).json({ error: 'Pick a role' });
   if (role.id === 'owner' && !isOwner(g, req.user)) return res.status(403).json({ error: 'Only an owner can assign Owner' });
+  if (!isOwner(g, req.user)) {
+    const mine = staffRank(g, req.user);
+    const target = users[req.params.userId];
+    const roleRank = STAFF_RANK[role.id] || 0;
+    if ((roleRank && roleRank >= mine) || (target && staffRank(g, target) >= mine && mine > 0) || (target && staffRank(g, target) > 0 && mine < 1)) {
+      return res.status(403).json({ error: 'That role is above you' });
+    }
+  }
   mem.roles = mem.roles || ['everyone'];
   const action = req.body?.action === 'remove' ? 'remove' : 'add';
   if (action === 'remove') mem.roles = mem.roles.filter((id) => id !== roleId);
@@ -2771,6 +2846,10 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   hydrateGuild(g);
   const type = String(req.body?.type || '');
   const manage = can(g, req.user, PERM.MANAGE_SERVER);
+  const staff = staffRank(g, req.user);
+  const moderate = staff >= 2
+    ? ['kick', 'ban', 'unban', 'timeout', 'nick-other', 'report-handle']
+    : (staff >= 1 ? ['kick', 'timeout', 'nick-other'] : []);
   const clip = (v, n) => String(v || '').slice(0, n);
 
   if (type === 'nick') {
@@ -2798,12 +2877,18 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     const picked = Array.isArray(req.body.roleIds) ? req.body.roleIds : [];
     const allowed = new Set((g.onboarding.questions || []).map((q) => q.roleId).filter(Boolean));
     mem.roles = mem.roles || ['everyone'];
-    picked.forEach((id) => { if (allowed.has(id) && !mem.roles.includes(id)) mem.roles.push(id); });
+    picked.forEach((id) => {
+      if (allowed.has(id) && !STAFF_RANK[id] && id !== 'owner' && !mem.roles.includes(id)) mem.roles.push(id);
+    });
     mem.onboarded = true;
     saveGuilds();
     return res.json({ ok: true });
   }
-  if (!manage && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
+  if (!manage && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
+  if (['kick', 'ban', 'timeout', 'nick-other'].includes(type)) {
+    const targetId = String(req.body.userId || '');
+    if (!canStaffTouch(g, req.user, targetId)) return res.status(403).json({ error: 'That member is above you' });
+  }
 
   if (type === 'settings') {
     const b = req.body || {};

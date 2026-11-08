@@ -229,7 +229,16 @@ img { max-width: 100%; }
   margin: 8px; border-radius: 14px; background: #0e0f14;
 }
 .me .who { flex: 1; min-width: 0; }
-.me .who strong, .me .who span { display: block; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
+.me .who strong, .me .who span { display: flex; align-items: center; gap: 4px; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
+.staff-badge {
+  width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0;
+  display: inline-grid; place-items: center;
+  background: linear-gradient(180deg, #9b8cff, #6d5ef0); color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+}
+.staff-badge svg { width: 11px; height: 11px; display: block; }
+.member-name { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.member-name strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .me .who span:not(.name-fx) { color: var(--faint); font-size: 12px; }
 
 .menu {
@@ -872,6 +881,7 @@ img { max-width: 100%; }
 }
 .pop-role i { width: 10px; height: 10px; border-radius: 50%; display: block; }
 .pop h3, .pop p { margin: 0; }
+.pop h3 { display: flex; align-items: center; gap: 6px; }
 .pop .handle, .preview-card .handle {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--muted); font-size: 13px; margin: 0;

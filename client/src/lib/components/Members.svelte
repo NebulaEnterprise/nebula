@@ -1,6 +1,7 @@
 <script>
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
+  import StaffBadge from './StaffBadge.svelte';
   import { ui, openPopout } from '../state.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
@@ -26,7 +27,10 @@
     <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
       <Avatar user={m} size={34} />
       <div class="meta">
-        <strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong>
+        <span class="member-name">
+          <strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong>
+          <StaffBadge rank={m.staff} />
+        </span>
         {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
       </div>
     </button>
@@ -37,7 +41,10 @@
       <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)}>
         <Avatar user={m} size={34} />
         <div class="meta">
-          <strong><Name user={shown(m)} /></strong>
+          <span class="member-name">
+            <strong><Name user={shown(m)} /></strong>
+            <StaffBadge rank={m.staff} />
+          </span>
           {#if m.bio || m.customStatus}<span>{m.bio || m.customStatus}</span>{/if}
         </div>
       </button>

@@ -5,7 +5,7 @@
   } from '@lucide/svelte';
   import Select from './Select.svelte';
   import ColorWheel from './ColorWheel.svelte';
-  import { ui, guildAction, reloadSettings, toast } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers } from '../state.svelte.js';
   import { ROLE_FLAGS, PERM } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api } from '../api.js';
@@ -87,6 +87,7 @@
       if (!user) throw new Error('No member with that id');
       await api('/api/servers/' + ui.serverId + '/members/' + user.id + '/roles', { method: 'POST', body: { roleId, action } });
       await reloadSettings();
+      await loadMembers();
       toast(action === 'add' ? 'Role given' : 'Role removed');
     } catch (err) { toast(err.message); }
   }
