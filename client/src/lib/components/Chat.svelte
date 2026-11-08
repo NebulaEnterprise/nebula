@@ -394,6 +394,8 @@
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
+  {#key (ui.mode === 'dm' ? 'dm:' + (ui.dmUser?.id || '') : ui.mode === 'chat' ? 'ch:' + (ui.channelId || '') : ui.mode)}
+  <div class="room-in">
   {#if !ui.messages.length && !ui.chatLoading}
     <div class="welcome">
       <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : '#' + (channel?.name || 'channel')}</h2>
@@ -458,6 +460,8 @@
       </div>
     </article>
   {/each}
+  </div>
+  {/key}
 </div>
 {#if menu}
   {@const current = ui.messages.find((msg) => msg.id === menu.id)}
