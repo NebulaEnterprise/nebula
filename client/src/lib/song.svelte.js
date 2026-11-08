@@ -70,6 +70,7 @@ export function playing(file, start) {
 let audio = null;
 let active = null;
 let paintToken = 0;
+let releaseTimer = 0;
 
 function ensureAudio() {
   if (audio) return audio;
@@ -112,33 +113,6 @@ function seekTo(el, startAt, key) {
   try { el.currentTime = at; } catch { /* metadata not ready */ }
 }
 
-function playFrom(el, at, key) {
-  const start = () => {
-    if (!active || active.key !== key) return;
-    el.play().then(() => {
-      if (active && active.key === key) player.playing = true;
-    }).catch(() => {
-      if (active && active.key === key) player.playing = false;
-    });
-  };
-  if (el.readyState < 1) {
-    el.addEventListener('loadedmetadata', () => playFrom(el, at, key), { once: true });
-    return;
-  }
-  const cap = Number.isFinite(el.duration) ? Math.max(0, el.duration - 0.25) : at;
-  const target = Math.min(at, cap);
-  if (Math.abs((el.currentTime || 0) - target) < 0.08) {
-    start();
-    return;
-  }
-  const onSeek = () => {
-    el.removeEventListener('seeked', onSeek);
-    start();
-  };
-  el.addEventListener('seeked', onSeek);
-  try { el.currentTime = target; } catch { start(); }
-}
-
 function beginSong(file, start, fromStart = false) {
   if (!hasSong(file)) return '';
   const startAt = startAtOf(start);
@@ -153,11 +127,12 @@ function beginSong(file, start, fromStart = false) {
     el.dataset.file = file;
     el.src = fileUrl(file);
   }
-  if (fromStart) {
-    playFrom(el, startAt, key);
-    return key;
+  if (fromStart && el.readyState >= 1) {
+    const cap = Number.isFinite(el.duration) ? Math.max(0, el.duration - 0.25) : startAt;
+    try { el.currentTime = Math.min(startAt, cap); } catch { /* metadata not ready */ }
+  } else if (startAt > 0) {
+    el.addEventListener('loadedmetadata', () => seekTo(el, startAt, key), { once: true });
   }
-  if (startAt > 0) el.addEventListener('loadedmetadata', () => seekTo(el, startAt, key), { once: true });
   el.play().then(() => {
     if (active && active.key === key) player.playing = true;
   }).catch(() => {
@@ -172,6 +147,10 @@ export function playSong(file, start) {
 }
 
 export function playSongAfterPaint(file, start) {
+  clearTimeout(releaseTimer);
+  releaseTimer = 0;
+  const key = songKey(file, startAtOf(start));
+  if (player.key === key && player.playing) return;
   const token = ++paintToken;
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -179,6 +158,14 @@ export function playSongAfterPaint(file, start) {
       beginSong(file, start, true);
     });
   });
+}
+
+export function releaseSong(file, start) {
+  clearTimeout(releaseTimer);
+  releaseTimer = setTimeout(() => {
+    releaseTimer = 0;
+    stopSong(file, start);
+  }, 0);
 }
 
 export function stopSong(file, start) {
