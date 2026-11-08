@@ -25,6 +25,23 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
+function loadEnvFile() {
+  const file = path.join(__dirname, '.env');
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    let value = trimmed.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+loadEnvFile();
+
 function load(file, fallback) {
   try {
     if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -821,18 +838,122 @@ function unpackImages() {
   if (msgChanged) save(MESSAGES_FILE, messages);
 }
 
+function isR2Url(url) {
+  return /^https:\/\/(?:pub-[a-z0-9]+\.r2\.dev|[a-z0-9]+\.r2\.cloudflarestorage\.com)\//i.test(String(url || ''));
+}
+
 function publishedMedia(u, slot) {
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+  const url = String((u && u[urlKey]) || '');
+  if (isR2Url(url)) return url;
   const stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
   if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(stored)) return '/files/' + stored;
-  const url = String((u && u[urlKey]) || '');
   if (url.startsWith('/files/') || url.startsWith('/uploads/')) return url;
   if (url.startsWith('data:') || url.includes('githubusercontent.com')) return '';
   return url.length > 500 ? '' : url;
 }
 
-function saveProfileFile(user, slot, buf, ext) {
+function r2Config() {
+  const accessKey = process.env.R2_ACCESS_KEY_ID || '';
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
+  let endpoint = String(process.env.R2_ENDPOINT || 'https://128e913f1812bcd8b647d916b3c01211.r2.cloudflarestorage.com').replace(/\/$/, '');
+  let bucket = process.env.R2_BUCKET || 'nebula';
+  const bucketInPath = endpoint.match(/^(https:\/\/[^/]+)\/([^/]+)$/);
+  if (bucketInPath) {
+    endpoint = bucketInPath[1];
+    bucket = bucketInPath[2];
+  }
+  if (bucket === 'nebula-media') bucket = 'nebula';
+  const publicBase = String(process.env.R2_PUBLIC_URL || 'https://pub-319cb74e889b480d8902e6404eff14b3.r2.dev').replace(/\/$/, '');
+  if (!accessKey || !secretKey || !endpoint || !publicBase) return null;
+  return { accessKey, secretKey, endpoint, bucket, publicBase };
+}
+
+function sha256hex(data) {
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function hmac(key, data) {
+  return crypto.createHmac('sha256', key).update(data).digest();
+}
+
+async function r2Put(cfg, key, body, type) {
+  const host = new URL(cfg.endpoint).host;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256hex(body);
+  const encodedKey = key.split('/').map((part) => encodeURIComponent(part)).join('/');
+  const canonicalUri = '/' + cfg.bucket + '/' + encodedKey;
+  const headers = {
+    'cache-control': 'public, max-age=31536000, immutable',
+    'content-type': type || 'application/octet-stream',
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const names = Object.keys(headers).sort();
+  const canonicalHeaders = names.map((name) => name + ':' + String(headers[name]).trim() + '\n').join('');
+  const signedHeaders = names.join(';');
+  const canonicalRequest = ['PUT', canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = dateStamp + '/auto/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256hex(canonicalRequest)].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac('AWS4' + cfg.secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const authorization = 'AWS4-HMAC-SHA256 Credential=' + cfg.accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  const res = await fetch(cfg.endpoint + canonicalUri, {
+    method: 'PUT',
+    headers: {
+      Authorization: authorization,
+      'Cache-Control': headers['cache-control'],
+      'Content-Type': headers['content-type'],
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+    body,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error('R2 ' + res.status + ' ' + detail.slice(0, 180));
+  }
+}
+
+function mediaType(name) {
+  if (/\.gif$/i.test(name)) return 'image/gif';
+  if (/\.png$/i.test(name)) return 'image/png';
+  if (/\.webp$/i.test(name)) return 'image/webp';
+  if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+  return 'application/octet-stream';
+}
+
+async function putProfileObjects(cfg, folder, rel, names) {
+  const dir = path.posix.dirname(rel);
+  for (const item of names) {
+    await r2Put(cfg, dir + '/' + item, fs.readFileSync(path.join(folder, item)), mediaType(item));
+  }
+}
+
+function bannerObjectNames(folder, storedName) {
+  const names = new Set([storedName]);
+  if (!/\.gif$/i.test(storedName)) return names;
+  const stem = storedName.replace(/\.(?:32|128|512)\.gif$/i, '.gif').replace(/\.gif$/i, '');
+  const original = stem + '.gif';
+  const originalPath = path.join(folder, original);
+  if (fs.existsSync(originalPath)) {
+    names.add(original);
+    const missing = [32, 128, 512].some((size) => !fs.existsSync(path.join(folder, stem + '.' + size + '.gif')));
+    if (missing) {
+      try { writeBannerSizes(originalPath); } catch (_) {}
+    }
+  }
+  for (const size of [32, 128, 512]) {
+    const sized = stem + '.' + size + '.gif';
+    if (fs.existsSync(path.join(folder, sized))) names.add(sized);
+  }
+  return names;
+}
+
+async function saveProfileFile(user, slot, buf, ext) {
   const bucket = slot === 'avatar' ? 'avatars' : 'banners';
   const folder = path.join(FILES_DIR, bucket, user.id);
   fs.mkdirSync(folder, { recursive: true });
@@ -846,11 +967,53 @@ function saveProfileFile(user, slot, buf, ext) {
     if (fs.existsSync(path.join(folder, sized))) storedName = sized;
   }
   const rel = bucket + '/' + user.id + '/' + storedName;
+  let url = '/files/' + rel;
+  const cfg = r2Config();
+  if (cfg) {
+    try {
+      const names = slot === 'banner' && ext === '.gif' ? bannerObjectNames(folder, storedName) : new Set([storedName]);
+      await putProfileObjects(cfg, folder, rel, names);
+      url = cfg.publicBase + '/' + rel;
+    } catch (err) {
+      const error = new Error('Cloudflare rejected that picture. ' + (err.message || 'Upload failed'));
+      error.status = 502;
+      throw error;
+    }
+  }
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   user[pathKey] = rel;
-  user[urlKey] = '/files/' + rel;
-  return { path: rel, url: '/files/' + rel };
+  user[urlKey] = url;
+  return { path: rel, url };
+}
+
+async function publishExistingMedia() {
+  const cfg = r2Config();
+  if (!cfg) return;
+  let changed = false;
+  for (const user of Object.values(users)) {
+    if (!user) continue;
+    for (const slot of ['avatar', 'banner']) {
+      const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
+      const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+      const rel = String(user[pathKey] || '').replace(/^\/+/, '');
+      if (!/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(rel)) continue;
+      if (isR2Url(user[urlKey])) continue;
+      const folder = path.join(FILES_DIR, path.dirname(rel));
+      const storedName = path.basename(rel);
+      if (!fs.existsSync(path.join(folder, storedName))) continue;
+      try {
+        const names = slot === 'banner' ? bannerObjectNames(folder, storedName) : new Set([storedName]);
+        await putProfileObjects(cfg, folder, rel, names);
+        user[urlKey] = cfg.publicBase + '/' + rel;
+        changed = true;
+        console.log('  Cloudflare has ' + rel);
+      } catch (err) {
+        console.log('  Cloudflare skipped ' + rel + ': ' + (err.message || err));
+      }
+    }
+  }
+  if (changed) save(USERS_FILE, users);
 }
 
 function userOwnsBadge(u, id) {
@@ -1971,7 +2134,7 @@ app.post('/api/upload/finish', auth, (req, res) => {
   res.json({ ok: true, url: '/uploads/' + stored, name: 'animation.gif' });
 });
 
-app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), (req, res) => {
+app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), async (req, res) => {
   const slot = String(req.query.slot || '');
   if (slot === 'file') {
     const body = req.body;
@@ -1998,9 +2161,13 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   const ext = sniffImage(req.body);
   if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
   if (slot === 'avatar' || slot === 'banner') {
-    const saved = saveProfileFile(req.user, slot, req.body, ext);
-    save(USERS_FILE, users);
-    return res.json({ ok: true, path: saved.path, url: saved.url, user: publicUser(req.user) });
+    try {
+      const saved = await saveProfileFile(req.user, slot, req.body, ext);
+      save(USERS_FILE, users);
+      return res.json({ ok: true, path: saved.path, url: saved.url, user: publicUser(req.user) });
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message || 'Could not save that picture' });
+    }
   }
   const name = uuidv4() + ext;
   fs.writeFileSync(path.join(UPLOAD_DIR, name), req.body);
@@ -3988,6 +4155,8 @@ function listen() {
     console.log('  Frontend folder: ' + FRONTEND_DIR);
     console.log('  Users: ' + Object.keys(users).length);
     console.log('  Email: ' + GMAIL_USER);
+    console.log(r2Config() ? '  Pictures: Cloudflare R2' : '  Pictures: this PC (.env has no Cloudflare keys)');
+    publishExistingMedia().catch((err) => console.log('  Cloudflare sync skipped: ' + (err.message || err)));
     console.log('  Checking GitHub for updates every 30s.');
     setInterval(() => { pullUpdates().catch(() => {}); }, 30000);
     try { queueSavedSongs(); } catch (err) { console.log('  Profile songs will save when you open settings.'); }
