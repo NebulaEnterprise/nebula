@@ -285,16 +285,23 @@ export async function shrinkGif(file, opts = {}) {
       const { image } = await dec.decode({ frameIndex: i });
       const srcW = image.displayWidth || image.codedWidth || 1;
       const srcH = image.displayHeight || image.codedHeight || 1;
+      const rect = image.visibleRect || { x: 0, y: 0, width: srcW, height: srcH };
+      const crop = 1;
+      const sx = rect.x + crop;
+      const sy = rect.y + crop;
+      const sw = Math.max(1, rect.width - crop * 2);
+      const sh = Math.max(1, rect.height - crop * 2);
       if (!width) {
-        const scale = Math.min(1, max / Math.max(srcW, srcH));
-        width = Math.max(1, Math.round(srcW * scale));
-        height = Math.max(1, Math.round(srcH * scale));
+        const scale = Math.min(1, max / Math.max(sw, sh));
+        width = Math.max(1, Math.round(sw * scale));
+        height = Math.max(1, Math.round(sh * scale));
       }
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      ctx.drawImage(image, 0, 0, width, height);
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
       const delay = image.duration ? Math.max(2, Math.round(image.duration / 10000)) : 10;
       frames.push({ rgba: ctx.getImageData(0, 0, width, height).data, delay: delay * step });
       image.close();

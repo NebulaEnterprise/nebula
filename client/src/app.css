@@ -424,7 +424,13 @@ img { max-width: 100%; }
   position: relative; border-radius: 50%; display: grid; place-items: center;
   font-weight: 700; flex-shrink: 0; color: white; overflow: visible;
 }
-.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.avatar-photo {
+  position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+}
+.avatar img, .avatar-photo img {
+  width: 100%; height: 100%; max-width: none; object-fit: cover; object-position: center;
+  display: block; transform: scale(1.28); transform-origin: center;
+}
 .dot {
   position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border-radius: 50%;
   border: 2px solid var(--bg-side); background: #80848e;
@@ -527,7 +533,7 @@ img { max-width: 100%; }
   width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center;
   font-size: 26px; font-weight: 700; overflow: hidden; flex-shrink: 0; color: #fff;
 }
-.look-av img { width: 100%; height: 100%; object-fit: cover; }
+.look-av img { width: 100%; height: 100%; max-width: none; object-fit: cover; display: block; transform: scale(1.28); }
 .look-banner, .preview-banner, .pop-banner {
   position: relative; overflow: hidden; background: var(--brand); flex-shrink: 0;
 }
@@ -586,7 +592,7 @@ img { max-width: 100%; }
   width: 72px; height: 72px; border-radius: 50%; margin: -36px 16px 8px; border: 4px solid #101117;
   display: grid; place-items: center; font-size: 26px; font-weight: 700; background: #7c6af7;
 }
-.preview-av img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.preview-av img { width: 100%; height: 100%; max-width: none; object-fit: cover; display: block; transform: scale(1.28); }
 .preview-card .pad { padding: 0 16px 16px; }
 .pop {
   position: fixed; z-index: 40; width: 320px; background: #16171e; border-radius: 16px;
@@ -621,7 +627,7 @@ img { max-width: 100%; }
   border-width: 0 6px 7px 6px; border-style: solid;
   border-color: transparent transparent #4e5058 transparent;
 }
-.pop-av img { width: 100%; height: 100%; object-fit: cover; }
+.pop-av img { width: 100%; height: 100%; max-width: none; object-fit: cover; display: block; transform: scale(1.28); }
 .pop-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .pop-id { min-width: 0; flex: 1; }
 .moon-badge {
