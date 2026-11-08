@@ -167,7 +167,44 @@ export async function loadFriends() {
 export async function loadDms() {
   try {
     const data = await api('/api/dms');
-    ui.dms = data.dms || [];
+    const next = data.dms || [];
+    ui.dms = next;
+    const map = seenMap();
+    const ready = localStorage.getItem('nebula-dm-baseline') === '1';
+    if (!ready) {
+      for (const row of next) {
+        const id = row.other && row.other.id;
+        if (id && row.lastId) map['dm:' + id] = row.lastId;
+      }
+      try {
+        localStorage.setItem('nebula-seen', JSON.stringify(map));
+        localStorage.setItem('nebula-dm-baseline', '1');
+      } catch (_) {}
+      return;
+    }
+    const unread = {};
+    let changed = false;
+    for (const row of next) {
+      const id = row.other && row.other.id;
+      if (!id || !row.lastId) continue;
+      const key = 'dm:' + id;
+      const viewing = ui.mode === 'dm' && ui.dmUser && ui.dmUser.id === id;
+      if (viewing) {
+        if (map[key] !== row.lastId) {
+          map[key] = row.lastId;
+          changed = true;
+        }
+        continue;
+      }
+      if (row.lastFrom === ui.me?.id) continue;
+      if (map[key] !== row.lastId) unread[id] = serverDmNotes[id] && serverDmNotes[id].unread ? serverDmNotes[id] : { unread: 1 };
+    }
+    if (changed) {
+      try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
+    }
+    const prev = Object.keys(ui.activity.dms || {}).length;
+    ui.activity = { ...ui.activity, dms: unread };
+    if (Object.keys(unread).length > prev) playPing();
   } catch (_) {}
 }
 
@@ -178,6 +215,7 @@ export function showFriends(tab) {
   ui.menuOpen = false;
   applyTheme();
   loadFriends();
+  loadDms();
 }
 
 export function showAddFriend() {
@@ -477,6 +515,7 @@ export async function sendMessage() {
       paintNames(ui.messages);
     }
     dropLive();
+    if (ui.mode === 'dm') loadDms();
   } catch (err) {
     ui.composer = content;
     toast(err.message);
@@ -713,21 +752,26 @@ export function markSeen(id, messageId) {
   forgetActivity(id);
 }
 
+let serverDmNotes = {};
+
 async function pollActivity() {
   try {
-    const data = await api('/api/activity', { method: 'POST', body: { seen: seenMap() } });
-    if (data.heads) {
+    const data = await api('/api/activity', {
+      method: 'POST',
+      body: { seen: seenMap(), seeded: localStorage.getItem('nebula-dm-baseline') === '1' },
+    });
+    if (localStorage.getItem('nebula-channel-baseline') !== '1' && data.heads) {
       const map = seenMap();
       let dirty = false;
       for (const [id, messageId] of Object.entries(data.heads)) {
-        if (!map[id] && messageId) {
-          map[id] = messageId;
-          dirty = true;
-        }
+        if (String(id).startsWith('dm:') || map[id] || !messageId) continue;
+        map[id] = messageId;
+        dirty = true;
       }
       if (dirty) {
         try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
       }
+      try { localStorage.setItem('nebula-channel-baseline', '1'); } catch (_) {}
     }
     const servers = { ...(data.servers || {}) };
     const channels = { ...(data.channels || {}) };
@@ -744,6 +788,7 @@ async function pollActivity() {
       }
     }
     if (ui.mode === 'dm' && ui.dmUser) delete dms[ui.dmUser.id];
+    serverDmNotes = dms;
     let mentions = 0;
     let dmUnread = 0;
     for (const row of Object.values(servers)) mentions += row.mentions || 0;
@@ -752,9 +797,8 @@ async function pollActivity() {
     activityReady = true;
     mentionSnap = mentions;
     dmSnap = dmUnread;
-    ui.activity = { servers, channels, dms };
-    const known = new Set((ui.dms || []).map((row) => row.other && row.other.id));
-    if (Object.keys(dms).some((id) => !known.has(id))) loadDms();
+    ui.activity = { ...ui.activity, servers, channels };
+    if (!Object.keys(ui.activity.dms || {}).length) ui.activity = { ...ui.activity, dms };
   } catch (_) {}
 }
 
@@ -765,11 +809,12 @@ function startClocks() {
     if (document.hidden || !localStorage.getItem('dc_token')) return;
     if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
   }, 1000);
-  setInterval(() => {
+  const watchInbox = () => {
     if (document.hidden || !localStorage.getItem('dc_token')) return;
-    pollActivity();
-  }, 2000);
-  pollActivity();
+    pollActivity().then(() => loadDms());
+  };
+  setInterval(watchInbox, 2000);
+  watchInbox();
   loadPacks();
 }
 

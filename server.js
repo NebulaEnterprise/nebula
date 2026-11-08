@@ -1305,6 +1305,7 @@ app.get('/api/media', auth, (req, res) => {
 app.post('/api/activity', auth, (req, res) => {
   ensureGuilds();
   const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  const seeded = !!(req.body && req.body.seeded);
   const name = String(req.user.username || '');
   const servers = {};
   const channels = {};
@@ -1351,6 +1352,8 @@ app.post('/api/activity', auth, (req, res) => {
     if (cursor) {
       const idx = list.findIndex((msg) => msg.id === cursor);
       start = idx === -1 ? 0 : idx + 1;
+    } else if (seeded) {
+      start = 0;
     }
     let unread = 0;
     for (let i = start; i < list.length; i++) {
@@ -1997,13 +2000,31 @@ app.post('/api/friends/remove', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+function dmPreview(content) {
+  return String(content || '')
+    .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
+    .replace(/\[\[sticker:([^\]]+)\]\]/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
 app.get('/api/dms', auth, (req, res) => {
   const list = Object.values(dmThreads)
     .filter((t) => t.a === req.user.id || t.b === req.user.id)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .map((t) => {
       const otherId = t.a === req.user.id ? t.b : t.a;
-      return { id: t.id, other: publicUser(users[otherId]), updatedAt: t.updatedAt };
+      const room = messages['dm:' + t.id] || [];
+      const last = room[room.length - 1];
+      return {
+        id: t.id,
+        other: publicUser(users[otherId]),
+        updatedAt: t.updatedAt,
+        preview: last ? dmPreview(last.content) : '',
+        lastId: last ? last.id : '',
+        lastFrom: last ? last.authorId : '',
+      };
     })
     .filter((t) => t.other);
   res.json({ ok: true, dms: list });

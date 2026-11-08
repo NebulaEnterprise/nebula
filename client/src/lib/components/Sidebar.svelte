@@ -177,7 +177,10 @@
         {@const note = ui.activity.dms[dm.other?.id]}
         <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onclick={() => openDm(dm.other)}>
           <Avatar user={dm.other} size={28} />
-          <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+          <span class="dm-copy">
+            <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+            {#if dm.preview}<span class="dm-preview">{dm.preview}</span>{/if}
+          </span>
           {#if note && ui.dmUser?.id !== dm.other?.id}
             <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>
           {/if}
