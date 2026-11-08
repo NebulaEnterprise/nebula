@@ -245,7 +245,7 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 88px; bottom: 78px; z-index: 50; width: min(380px, calc(100vw - 104px));
+  position: fixed; left: 8px; bottom: 78px; z-index: 50; width: min(380px, calc(100vw - 24px));
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 18px;
   box-shadow: var(--shadow); overflow: hidden;
@@ -328,7 +328,7 @@ img { max-width: 100%; }
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .account-switch {
-  position: fixed; left: min(416px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
+  position: fixed; left: min(336px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
   width: 260px; padding: 8px; border-radius: 12px;
   background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
