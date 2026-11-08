@@ -38,10 +38,20 @@ img { max-width: 100%; }
 }
 
 .auth {
-  min-height: 100%; display: grid; place-items: center; padding: 24px;
+  min-height: 100%; display: flex; align-items: center; justify-content: center; gap: 36px; padding: 24px;
   background:
     radial-gradient(900px 420px at 50% -10%, rgba(124, 106, 247, 0.28), transparent 60%),
     var(--bg);
+}
+.auth-rail { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.auth-rail button {
+  width: 88px; display: flex; flex-direction: column; align-items: center; gap: 8px;
+  background: transparent; color: #fff; padding: 0;
+}
+.auth-rail button:hover { transform: translateY(-2px); }
+.auth-rail span {
+  max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: 700;
 }
 .auth-card {
   width: min(420px, 100%);
@@ -329,7 +339,6 @@ img { max-width: 100%; }
 .account-switch em { color: var(--muted); font-style: normal; font-size: 12px; }
 .account-switch .add { font-weight: 700; color: #dbdee1; }
 .account-switch p { margin: 6px 8px 2px; color: var(--faint); font-size: 12px; }
-.auth-accounts { position: static; width: 100%; margin: 4px 0 12px; background: #101117; }
 .me .who strong, .me .who span { display: block; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
 .staff-badge {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
