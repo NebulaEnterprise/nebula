@@ -519,7 +519,7 @@
             <button type="button" class="reply-ref" onclick={() => jumpTo(reply.id)}>
               <span class="reply-main">
                 <i class="reply-spine"></i>
-                <Avatar user={person} size={16} dot={false} />
+                <Avatar user={person} size={12} dot={false} />
                 <strong><Name user={person} /></strong>
                 <em>{reply.preview}</em>
               </span>
