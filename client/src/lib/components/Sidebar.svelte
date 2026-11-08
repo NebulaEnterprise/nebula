@@ -8,7 +8,7 @@
   import Name from './Name.svelte';
   import { api } from '../api.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -112,7 +112,7 @@
             {#each texts as ch}
               {@const note = ui.activity.channels[ch.id]}
               <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id}>
-                <button class="channel-hit" onclick={() => pickChannel(ch)}>
+                <button class="channel-hit" onpointerenter={() => warmChannel(ch.id)} onclick={() => pickChannel(ch)}>
                   <Hash size={16} />
                   <span class="ch-name">{ch.name}</span>
                   {#if note && ui.channelId !== ch.id}

@@ -294,6 +294,7 @@ export async function loadDms() {
 }
 
 export function showFriends(tab) {
+  leaveChat();
   ui.mode = 'friends';
   ui.friendsTab = tab || 'online';
   ui.dmUser = null;
@@ -304,6 +305,7 @@ export function showFriends(tab) {
 }
 
 export function showAddFriend() {
+  leaveChat();
   ui.mode = 'add';
   ui.dmUser = null;
   applyTheme();
@@ -327,6 +329,7 @@ export async function openDm(user) {
   ui.editing = null;
   applyTheme();
   if (!same) {
+    if (prev.startsWith('ch:')) snapServer(ui.serverId);
     stashRoom(prev);
     showCached(user && user.id ? 'dm:' + user.id : '');
   }
@@ -335,23 +338,27 @@ export async function openDm(user) {
 }
 
 export async function openServer(id, opts = {}) {
-  if (id && ui.voice && id !== ui.serverId) {
-    const { leaveVoice } = await import('./voice.js');
-    await leaveVoice();
-  }
+  const voiceLeave = id && ui.voice && id !== ui.serverId;
   const prev = currentRoom();
-  const leavingRoom = ui.mode !== 'chat' || (id && id !== ui.serverId);
-  if (leavingRoom) {
-    stashRoom(prev);
-    ui.messages = [];
-    ui.typers = [];
-    ui.chatLoading = true;
-  }
+  const fromServer = ui.serverId;
+  const fromChannel = ui.channelId;
+  const target = id || ui.serverId;
+  const leavingRoom = ui.mode !== 'chat' || (target && target !== ui.serverId);
+  if (ui.mode === 'chat') snapServer(fromServer);
+  if (leavingRoom) stashRoom(prev);
   if (id) ui.serverId = id;
   ui.mode = 'chat';
   ui.dmUser = null;
   ui.menuOpen = false;
   ui.picker = '';
+  ui.reply = null;
+  ui.editing = null;
+  if (leavingRoom) {
+    const known = restoreServer(target) || (target === fromServer ? fromChannel : '');
+    if (known) ui.channelId = known;
+    showCached(known ? 'ch:' + known : '');
+  }
+  if (voiceLeave) import('./voice.js').then((mod) => mod.leaveVoice()).catch(() => {});
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
   ui.channels = data.channels || [];
   if (data.servers) ui.servers = data.servers;
@@ -369,8 +376,13 @@ export async function openServer(id, opts = {}) {
   applyTheme();
   const current = ui.channels.find((c) => c.id === ui.channelId && c.type === 'text');
   const ch = current || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
-  ui.channelId = ch ? ch.id : '';
-  if (leavingRoom) showCached(ui.channelId ? 'ch:' + ui.channelId : '');
+  const nextId = ch ? ch.id : '';
+  if (nextId !== ui.channelId) {
+    ui.channelId = nextId;
+    showCached(nextId ? 'ch:' + nextId : '');
+  }
+  snapServer(ui.serverId);
+  warmServerChannels(ui.channels, ui.serverId);
   ui.seenMessageId = '';
   memberStamp = '';
   dropLive();
@@ -391,6 +403,54 @@ function currentRoom() {
 function stashRoom(id) {
   if (!id) return;
   roomLogs.set(id, ui.messages.filter((msg) => msg && !msg.pending && !msg.failed));
+}
+
+function leaveChat() {
+  if (ui.mode !== 'chat') return;
+  snapServer(ui.serverId);
+  stashRoom(currentRoom());
+}
+
+const serverSnap = new Map();
+
+function snapServer(id) {
+  if (!id) return;
+  serverSnap.set(id, {
+    channels: ui.channels.slice(),
+    servers: ui.servers.slice(),
+    serverPerms: ui.serverPerms,
+    roles: ui.roles.slice(),
+    categories: ui.categories.slice(),
+    serverMeta: ui.serverMeta,
+    theme: ui.theme,
+    bannerUrl: ui.bannerUrl,
+    about: ui.about,
+    showLobby: ui.showLobby,
+    emoji: ui.emoji.slice(),
+    stickers: ui.stickers.slice(),
+    onboarding: ui.onboarding,
+    channelId: ui.channelId,
+  });
+}
+
+function restoreServer(id) {
+  const snap = serverSnap.get(id);
+  if (!snap) return '';
+  ui.channels = snap.channels.slice();
+  if (snap.servers.length) ui.servers = snap.servers.slice();
+  ui.serverPerms = snap.serverPerms;
+  ui.roles = snap.roles.slice();
+  ui.categories = snap.categories.slice();
+  ui.serverMeta = snap.serverMeta;
+  ui.theme = snap.theme;
+  ui.bannerUrl = snap.bannerUrl;
+  ui.about = snap.about;
+  ui.showLobby = snap.showLobby;
+  ui.emoji = snap.emoji.slice();
+  ui.stickers = snap.stickers.slice();
+  ui.onboarding = snap.onboarding;
+  applyTheme();
+  return snap.channelId || '';
 }
 
 function showCached(id) {
@@ -426,13 +486,26 @@ let warmTail = Promise.resolve();
 
 export function warmDm(id) {
   if (!id) return;
-  const key = 'dm:' + id;
-  if (roomLogs.has(key) || warmSeen.has(key)) return;
+  warmRoom('dm:' + id, '/api/dms/' + encodeURIComponent(id) + '/messages');
+}
+
+export function warmChannel(id, serverId) {
+  if (!id) return;
+  const server = serverId || ui.serverId || '';
+  warmRoom('ch:' + id, '/api/channels/' + encodeURIComponent(id) + '/messages?serverId=' + encodeURIComponent(server));
+}
+
+function warmServerChannels(channels, serverId) {
+  for (const ch of (channels || []).filter((row) => row && row.type === 'text').slice(0, 12)) warmChannel(ch.id, serverId);
+}
+
+function warmRoom(key, path) {
+  if (!key || roomLogs.has(key) || warmSeen.has(key)) return;
   warmSeen.add(key);
   warmTail = warmTail.then(async () => {
     if (roomLogs.has(key)) return;
     try {
-      const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages');
+      const data = await api(path);
       if (!roomLogs.has(key)) roomLogs.set(key, data.messages || []);
     } catch (_) {
       warmSeen.delete(key);
@@ -444,13 +517,17 @@ export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
   const prev = currentRoom();
+  if (ui.mode === 'chat') snapServer(ui.serverId);
   stashRoom(prev);
+  ui.mode = 'chat';
+  ui.dmUser = null;
   ui.channelId = ch.id;
   ui.seenMessageId = '';
   ui.picker = '';
   ui.reply = null;
   ui.editing = null;
   showCached('ch:' + ch.id);
+  snapServer(ui.serverId);
   dropLive();
   loadMessages();
 }
