@@ -1,8 +1,8 @@
 <script>
-  import { Hash, Smile } from '@lucide/svelte';
+  import { Hash, RefreshCw, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur } from '../state.svelte.js';
+  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, refreshProfiles } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -29,6 +29,14 @@
 
   let box = $state(null);
   let follow = true;
+  let refreshing = $state(false);
+
+  async function refreshNow() {
+    if (refreshing) return;
+    refreshing = true;
+    try { await refreshProfiles(); }
+    finally { refreshing = false; }
+  }
 
   function trackScroll() {
     if (!box) return;
@@ -57,6 +65,10 @@
   <Hash size={18} />
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
+  <button type="button" class="refresh-profiles" disabled={refreshing} onclick={refreshNow} title="Refresh profiles">
+    <RefreshCw size={14} />
+    {refreshing ? 'Refreshing' : 'Refresh'}
+  </button>
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if !ui.messages.length}

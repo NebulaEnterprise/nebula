@@ -1550,13 +1550,13 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 1400) {
+    if (now - row.at > 500) {
       if (row.timer) clearTimeout(row.timer);
       room.delete(id);
       continue;
     }
     if (id === selfId) continue;
-    out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [] });
+    out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [], tick: Math.floor(row.at / 250) });
   }
   return out;
 }
@@ -1602,7 +1602,7 @@ function armTyping(key, userId, row) {
     if (!current || current.at !== row.at) return;
     room.delete(userId);
     wakeTyping(key);
-  }, 1200);
+  }, 420);
   room.set(userId, row);
 }
 

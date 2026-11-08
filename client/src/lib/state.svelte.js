@@ -287,7 +287,7 @@ async function watchChat() {
     liveCtrl = new AbortController();
     const signal = liveCtrl.signal;
     const after = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
-    const typing = (ui.typers || []).map((row) => row.id).sort().join(',');
+    const typing = (ui.typers || []).map((row) => row.id + '@' + (row.tick || '')).sort().join(',');
     const started = Date.now();
     let pace = 'same';
     try {
@@ -298,7 +298,7 @@ async function watchChat() {
       continue;
     }
     if (pace === 'changed') continue;
-    if (Date.now() - started < 1500) await sleep(1000);
+    if (Date.now() - started < 1500) await sleep(150);
   }
 }
 
@@ -393,7 +393,7 @@ export async function loadMessages(quiet, live) {
     }
     if (data.same) return 'same';
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
-    ui.typers = data.typers || [];
+    acceptTypers(data.typers || []);
     const list = data.messages || [];
     paintNames(list);
     const newest = list[list.length - 1];
@@ -503,7 +503,26 @@ let lastTypingPing = 0;
 let typingSerial = 0;
 let typingLive = false;
 let typingIdle = null;
-let lastKeyAt = 0;
+let keysDown = 0;
+const typerSeen = new Map();
+
+function acceptTypers(list) {
+  const now = Date.now();
+  const rows = Array.isArray(list) ? list : [];
+  const ids = new Set(rows.map((row) => row && row.id).filter(Boolean));
+  for (const id of [...typerSeen.keys()]) if (!ids.has(id)) typerSeen.delete(id);
+  for (const row of rows) if (row && row.id) typerSeen.set(row.id, now);
+  ui.typers = rows;
+}
+
+setInterval(() => {
+  if (!ui.typers.length) return;
+  const now = Date.now();
+  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 420);
+  if (next.length === ui.typers.length) return;
+  for (const row of ui.typers) if (!next.includes(row)) typerSeen.delete(row.id);
+  ui.typers = next;
+}, 80);
 
 const SKIP_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
@@ -520,17 +539,17 @@ function postTyping(extra) {
 
 function stopTyping() {
   clearTimeout(typingIdle);
+  keysDown = 0;
   const token = ++typingSerial;
   if (typingLive || lastTypingPing) postTyping({ stop: true, token });
   typingLive = false;
   lastTypingPing = 0;
-  lastKeyAt = 0;
   return token;
 }
 
 function pingTyping() {
   const now = Date.now();
-  if (typingLive && now - lastTypingPing < 600) return;
+  if (typingLive && now - lastTypingPing < 180) return;
   lastTypingPing = now;
   typingLive = true;
   postTyping({ token: ++typingSerial });
@@ -538,11 +557,7 @@ function pingTyping() {
 
 function armTypingIdle() {
   clearTimeout(typingIdle);
-  const mark = lastKeyAt;
-  typingIdle = setTimeout(() => {
-    if (lastKeyAt !== mark) return;
-    stopTyping();
-  }, 280);
+  typingIdle = setTimeout(() => stopTyping(), 120);
 }
 
 export function noteKeyDown(event) {
@@ -551,14 +566,15 @@ export function noteKeyDown(event) {
   if (SKIP_KEYS.has(event.key)) return;
   if (event.key === 'Enter') return;
   if ((event.key === 'Backspace' || event.key === 'Delete') && !ui.composer.trim()) return;
-  lastKeyAt = Date.now();
+  if (!event.repeat) keysDown += 1;
   pingTyping();
   armTypingIdle();
 }
 
-export function noteKeyUp() {
-  if (!typingLive) return;
-  armTypingIdle();
+export function noteKeyUp(event) {
+  if (event && !event.repeat) keysDown = Math.max(0, keysDown - 1);
+  if (keysDown > 0) return;
+  stopTyping();
 }
 
 export function noteTypingBlur() {
@@ -592,9 +608,24 @@ export async function refreshTyping() {
   typingBusy = true;
   try {
     const data = await api('/api/typing?' + q);
-    ui.typers = data.typers || [];
+    acceptTypers(data.typers || []);
   } catch (_) {}
   finally { typingBusy = false; }
+}
+
+export async function refreshProfiles() {
+  try {
+    const data = await api('/api/me');
+    if (data.user) {
+      ui.me = { ...ui.me, ...data.user };
+      ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
+    }
+    await loadMembers();
+    dropLive();
+    toast('Profiles refreshed');
+  } catch (err) {
+    toast(err.message || 'Could not refresh profiles');
+  }
 }
 
 export async function saveMe(body) {
