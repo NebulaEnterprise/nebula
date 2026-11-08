@@ -53,7 +53,9 @@
   let accountOpen = $state(false);
   let statusOpen = $state(false);
   let editingStatus = $state(false);
+  let editingBio = $state(false);
   let statusDraft = $state('');
+  let bioDraft = $state('');
   const presence = [
     ['online', 'Online', '#3ecf8e'],
     ['idle', 'Idle', '#f0b429'],
@@ -67,7 +69,9 @@
     accountOpen = !accountOpen;
     statusOpen = false;
     editingStatus = false;
+    editingBio = false;
     statusDraft = ui.me?.customStatus || '';
+    bioDraft = ui.me?.bio || '';
   }
 
   function editProfile() {
@@ -89,6 +93,15 @@
     try {
       await saveMe({ customStatus: statusDraft.trim() });
       editingStatus = false;
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function saveBio() {
+    try {
+      await saveMe({ bio: bioDraft.trim() });
+      editingBio = false;
     } catch (err) {
       toast(err.message);
     }
@@ -282,25 +295,34 @@
       <div class="account-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
         {#if ui.me?.bannerUrl}<Photo url={ui.me.bannerUrl} fill />{/if}
       </div>
-      {#if ui.me?.bio}
-        <div class="bio-bubble"><span>{ui.me.bio}</span></div>
-      {:else if editingStatus}
-        <form class="account-status-edit" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
-          <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
-          <button type="submit" class="btn sm brand">Save</button>
-        </form>
-      {:else if ui.me?.customStatus}
-        <div class="account-bubble">
-          <span>{ui.me.customStatus}</span>
-          <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
-          <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
-        </div>
-      {/if}
       <div class="account-face">
         <div class="account-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
           {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
           <i style="background:{presenceLabel[2]}"></i>
         </div>
+        {#if editingBio}
+          <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
+            <input bind:value={bioDraft} maxlength="190" placeholder="Bio" />
+            <button type="submit" title="Save bio">✓</button>
+          </form>
+        {:else if ui.me?.bio}
+          <div class="account-bubble">
+            <span>{ui.me.bio}</span>
+            <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
+            <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
+          </div>
+        {:else if editingStatus}
+          <form class="account-bubble" onsubmit={(e) => { e.preventDefault(); saveCustomStatus(); }}>
+            <input bind:value={statusDraft} maxlength="128" placeholder="Set a custom status" />
+            <button type="submit" title="Save status">✓</button>
+          </form>
+        {:else if ui.me?.customStatus}
+          <div class="account-bubble">
+            <span>{ui.me.customStatus}</span>
+            <button type="button" title="Edit status" onclick={() => { statusDraft = ui.me?.customStatus || ''; editingStatus = true; }}><Pencil size={14} /></button>
+            <button type="button" title="Clear status" onclick={() => { statusDraft = ''; saveCustomStatus(); }}>✕</button>
+          </div>
+        {/if}
       </div>
       <div class="account-body">
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameColors: ui.me?.nameColors || [] }} /></strong>
