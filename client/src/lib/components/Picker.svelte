@@ -217,9 +217,7 @@
       {:else}
         {#if !query.trim()}
           <button type="button" class="gif-fav-card" onclick={(e) => { e.stopPropagation(); gifFav = true; }}>
-            <span class="gif-fav-mark">★</span>
-            <strong>Favorites</strong>
-            <span>{favs.length ? favs.length + ' saved' : 'Save GIFs here'}</span>
+            <span class="gif-fav-label"><span class="gif-fav-mark">★</span> Favorites</span>
           </button>
         {/if}
         {#if busy && !gifs.length}<p class="hint">Searching…</p>{/if}
