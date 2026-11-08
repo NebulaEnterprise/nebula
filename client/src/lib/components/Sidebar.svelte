@@ -110,10 +110,18 @@
               {/if}
             </div>
             {#each texts as ch}
-              <div class="channel" class:on={ui.channelId === ch.id}>
+              {@const note = ui.activity.channels[ch.id]}
+              <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id}>
                 <button class="channel-hit" onclick={() => pickChannel(ch)}>
                   <Hash size={16} />
                   <span class="ch-name">{ch.name}</span>
+                  {#if note && ui.channelId !== ch.id}
+                    {#if note.mentions}
+                      <em class="pill-count">{note.mentions > 99 ? '99+' : note.mentions}</em>
+                    {:else if note.unread}
+                      <i class="pill-dot"></i>
+                    {/if}
+                  {/if}
                 </button>
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
                   <span class="row-actions">
@@ -166,9 +174,13 @@
       <button class="nav-item" class:on={ui.mode === 'add'} onclick={showAddFriend}><UserPlus size={16} /> Add friend</button>
       <div class="cat"><span>Direct messages</span></div>
       {#each ui.dms as dm}
-        <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} onclick={() => openDm(dm.other)}>
+        {@const note = ui.activity.dms[dm.other?.id]}
+        <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onclick={() => openDm(dm.other)}>
           <Avatar user={dm.other} size={28} />
           <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+          {#if note && ui.dmUser?.id !== dm.other?.id}
+            <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>
+          {/if}
         </button>
       {/each}
       {#if !ui.dms.length}<p class="hint" style="padding:8px">No conversations yet.</p>{/if}

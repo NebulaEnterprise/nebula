@@ -1289,6 +1289,172 @@ app.get('/api/channels', auth, (req, res) => {
   });
 });
 
+app.get('/api/media', auth, (req, res) => {
+  ensureGuilds();
+  const packs = Object.values(guilds.servers)
+    .filter((g) => g.members && g.members[req.user.id])
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      emoji: (g.emoji || []).map((e) => ({ id: e.id, name: e.name, url: e.url })),
+      stickers: (g.stickers || []).map((e) => ({ id: e.id, name: e.name, url: e.url })),
+    }));
+  res.json({ ok: true, packs });
+});
+
+app.post('/api/activity', auth, (req, res) => {
+  ensureGuilds();
+  const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  const name = String(req.user.username || '');
+  const servers = {};
+  const channels = {};
+  const heads = {};
+  for (const g of Object.values(guilds.servers)) {
+    if (!g || !g.members || !g.members[req.user.id]) continue;
+    let unread = 0;
+    let mentions = 0;
+    for (const channel of g.channels || []) {
+      if (channel.type && channel.type !== 'text') continue;
+      const list = messages[channel.id] || [];
+      const cursor = String(seen[channel.id] || '');
+      let start = list.length;
+      if (cursor) {
+        const idx = list.findIndex((msg) => msg.id === cursor);
+        start = idx === -1 ? Math.max(0, list.length - 40) : idx + 1;
+      }
+      let channelUnread = 0;
+      let channelMentions = 0;
+      for (let i = start; i < list.length; i++) {
+        const msg = list[i];
+        if (!msg || msg.authorId === req.user.id) continue;
+        channelUnread++;
+        const text = String(msg.content || '');
+        if ((name && text.includes('@' + name)) || text.includes('@everyone')) channelMentions++;
+      }
+      if (channelUnread) {
+        channels[channel.id] = { unread: channelUnread, mentions: channelMentions, serverId: g.id };
+        unread += channelUnread;
+        mentions += channelMentions;
+      }
+      const last = list[list.length - 1];
+      if (last) heads[channel.id] = last.id;
+    }
+    if (unread || mentions) servers[g.id] = { unread, mentions };
+  }
+  const dms = {};
+  for (const thread of Object.values(dmThreads)) {
+    if (!thread || (thread.a !== req.user.id && thread.b !== req.user.id)) continue;
+    const other = thread.a === req.user.id ? thread.b : thread.a;
+    const list = messages['dm:' + dmKey(req.user.id, other)] || [];
+    const cursor = String(seen['dm:' + other] || '');
+    let start = list.length;
+    if (cursor) {
+      const idx = list.findIndex((msg) => msg.id === cursor);
+      start = idx === -1 ? 0 : idx + 1;
+    }
+    let unread = 0;
+    for (let i = start; i < list.length; i++) {
+      if (list[i] && list[i].authorId !== req.user.id) unread++;
+    }
+    if (unread) dms[other] = { unread };
+    const last = list[list.length - 1];
+    if (last) heads['dm:' + other] = last.id;
+  }
+  res.json({ ok: true, servers, channels, dms, heads });
+});
+
+const gifCache = new Map();
+let gifReactions = ['wave', 'hug', 'dance', 'laugh', 'cry', 'love', 'happy', 'sad', 'blush', 'pat', 'kiss', 'celebrate', 'clap', 'shy', 'peek', 'run', 'sleep', 'smile', 'thumbsup', 'wink'];
+
+async function klipyGifs(query) {
+  const key = process.env.KLIPY_KEY || '';
+  if (!key) return null;
+  const path = query
+    ? '/gifs/search?q=' + encodeURIComponent(query) + '&per_page=24&page=1'
+    : '/gifs/trending?per_page=24&page=1';
+  const response = await fetch('https://api.klipy.com/api/v1/' + key + path);
+  if (!response.ok) return [];
+  const data = await response.json();
+  const rows = [];
+  const walk = (node) => {
+    if (!node || rows.length > 40) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const gif = node.gif && node.gif.url;
+    const md = node.md && node.md.gif && node.md.gif.url;
+    const sm = node.sm && node.sm.gif && node.sm.gif.url;
+    if (gif || md || sm) {
+      rows.push({ id: node.slug || gif || md || sm, preview: sm || md || gif, url: gif || md || sm });
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(data);
+  const unique = [];
+  const seen = new Set();
+  for (const row of rows) {
+    if (!row.url || seen.has(row.url)) continue;
+    seen.add(row.url);
+    unique.push(row);
+  }
+  return unique.slice(0, 24);
+}
+
+let reactionCatalogReady = false;
+async function reactionGifs(query) {
+  if (!reactionCatalogReady) {
+    reactionCatalogReady = true;
+    try {
+      const response = await fetch('https://api.otakugifs.xyz/gif/allreactions');
+      const data = await response.json();
+      if (Array.isArray(data.reactions) && data.reactions.length) gifReactions = data.reactions;
+    } catch (_) {
+      reactionCatalogReady = false;
+    }
+  }
+  const q = String(query || '').toLowerCase();
+  const words = q.split(/[^a-z0-9]+/).filter(Boolean);
+  const hints = {
+    hi: ['wave'], hello: ['wave'], hey: ['wave'], bye: ['wave'],
+    happy: ['happy', 'celebrate', 'dance', 'laugh'], birthday: ['celebrate', 'happy'],
+    love: ['love', 'kiss', 'hug', 'blush'], hug: ['hug'], kiss: ['kiss'],
+    sad: ['sad', 'cry'], cry: ['cry'], lol: ['laugh'], funny: ['laugh'],
+    angry: ['mad'], mad: ['mad'], sleep: ['sleep'], party: ['celebrate', 'dance'],
+    cat: ['nyah'], shy: ['shy'], scared: ['scared'], cool: ['cool'],
+  };
+  const wanted = new Set();
+  for (const word of words) (hints[word] || []).forEach((name) => wanted.add(name));
+  const hits = gifReactions.filter((name) => !q || wanted.has(name) || name.includes(q) || q.includes(name));
+  const picks = (hits.length ? hits : gifReactions).slice(0, 8);
+  const found = [];
+  await Promise.all(picks.map(async (name) => {
+    for (let i = 0; i < 2; i++) {
+      try {
+        const response = await fetch('https://api.otakugifs.xyz/gif?reaction=' + encodeURIComponent(name));
+        const data = await response.json();
+        if (data.url && !found.some((row) => row.url === data.url)) found.push({ id: data.url, preview: data.url, url: data.url, title: name });
+      } catch (_) {}
+    }
+  }));
+  return found;
+}
+
+app.get('/api/gifs', auth, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 40).toLowerCase();
+  const cached = gifCache.get(q);
+  if (cached && Date.now() - cached.at < 60000) return res.json({ ok: true, gifs: cached.gifs });
+  try {
+    const remote = await klipyGifs(q);
+    const gifs = remote && remote.length ? remote : await reactionGifs(q);
+    gifCache.set(q, { at: Date.now(), gifs });
+    res.json({ ok: true, gifs });
+  } catch (err) {
+    res.status(502).json({ error: 'GIF search is unavailable' });
+  }
+});
+
 app.post('/api/servers/:id/channels', auth, (req, res) => {
   const g = requireGuild(req, res, PERM.MANAGE_CHANNELS);
   if (!g) return;

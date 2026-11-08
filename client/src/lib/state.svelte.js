@@ -34,7 +34,9 @@ export const ui = $state({
   members: [],
   badgeDefs: {},
   menuOpen: false,
-  stickersOpen: false,
+  picker: '',
+  packs: [],
+  activity: { servers: {}, channels: {}, dms: {} },
   popout: null,
   userSettings: false,
   serverSettings: false,
@@ -121,6 +123,7 @@ async function enterApp() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
   watchChat();
+  startClocks();
 }
 
 export async function login(email, password) {
@@ -187,7 +190,7 @@ export async function openDm(user) {
   ui.mode = 'dm';
   ui.dmUser = user;
   ui.menuOpen = false;
-  ui.stickersOpen = false;
+  ui.picker = '';
   ui.popout = null;
   applyTheme();
   dropLive();
@@ -203,7 +206,7 @@ export async function openServer(id, opts = {}) {
   ui.mode = 'chat';
   ui.dmUser = null;
   ui.menuOpen = false;
-  ui.stickersOpen = false;
+  ui.picker = '';
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
   ui.channels = data.channels || [];
   if (data.servers) ui.servers = data.servers;
@@ -235,7 +238,7 @@ export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   ui.channelId = ch.id;
   ui.seenMessageId = '';
-  ui.stickersOpen = false;
+  ui.picker = '';
   dropLive();
   loadMessages();
 }
@@ -400,8 +403,12 @@ export async function loadMessages(quiet, live) {
     if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
       ui.typers = ui.typers.filter((row) => row.id !== newest.author.id);
     }
+    const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+    if (newest && newest.id) markSeen(roomKey, newest.id);
     if (ui.mode === 'dm') {
       ui.messages = list;
+      const mine = ui.me && newest && newest.author && newest.author.id === ui.me.id;
+      if (previousId && newest && newest.id !== previousId && !mine) playPing();
       return 'changed';
     }
     ui.messages = list;
@@ -413,6 +420,7 @@ export async function loadMessages(quiet, live) {
         const mode = notifyMode();
         const text = newest.content || '';
         const mention = ui.me && (text.includes('@' + ui.me.username) || text.includes('@everyone'));
+        if (mention) playPing();
         if (mode === 'all' || (mode === 'mentions' && mention)) {
           const old = document.title;
           document.title = 'New message · Nebula';
@@ -476,9 +484,29 @@ export async function sendMessage() {
 }
 
 export async function sendSticker(name) {
-  ui.stickersOpen = false;
+  ui.picker = '';
   ui.composer = '[[sticker:' + name + ']]';
   await sendMessage();
+}
+
+export async function sendGif(url) {
+  if (!/^https:\/\//.test(String(url || ''))) return;
+  ui.picker = '';
+  ui.composer = '[[gif:' + url + ']]';
+  await sendMessage();
+}
+
+export function insertEmoji(token) {
+  const text = String(token || '');
+  if (!text) return;
+  ui.composer = (ui.composer ? ui.composer + text : text);
+}
+
+export async function loadPacks() {
+  try {
+    const data = await api('/api/media');
+    ui.packs = data.packs || [];
+  } catch (_) {}
 }
 
 export async function guildAction(body) {
@@ -613,19 +641,136 @@ export async function refreshTyping() {
   finally { typingBusy = false; }
 }
 
-export async function refreshProfiles() {
+let clocksStarted = false;
+let activityReady = false;
+let mentionSnap = 0;
+let dmSnap = 0;
+let lastSound = 0;
+
+export function soundEnabled() {
+  return localStorage.getItem('nebula-sound') !== 'off';
+}
+
+export function playPing() {
+  if (!soundEnabled()) return;
+  const now = Date.now();
+  if (now - lastSound < 700) return;
+  lastSound = now;
   try {
-    const data = await api('/api/me');
-    if (data.user) {
-      ui.me = { ...ui.me, ...data.user };
-      ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
-    }
-    await loadMembers();
-    dropLive();
-    toast('Profiles refreshed');
-  } catch (err) {
-    toast(err.message || 'Could not refresh profiles');
+    const ctx = playPing.ctx || new AudioContext();
+    playPing.ctx = ctx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(784, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(523, ctx.currentTime + 0.16);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.34);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.36);
+  } catch (_) {}
+}
+
+function seenMap() {
+  try { return JSON.parse(localStorage.getItem('nebula-seen') || '{}'); }
+  catch { return {}; }
+}
+
+function forgetActivity(id) {
+  if (String(id).startsWith('dm:')) {
+    const userId = id.slice(3);
+    if (!ui.activity.dms[userId]) return;
+    const dms = { ...ui.activity.dms };
+    delete dms[userId];
+    ui.activity = { ...ui.activity, dms };
+    return;
   }
+  const note = ui.activity.channels[id];
+  if (!note) return;
+  const channels = { ...ui.activity.channels };
+  delete channels[id];
+  const servers = { ...ui.activity.servers };
+  const srv = servers[note.serverId];
+  if (srv) {
+    const unread = Math.max(0, (srv.unread || 0) - (note.unread || 0));
+    const mentions = Math.max(0, (srv.mentions || 0) - (note.mentions || 0));
+    if (unread || mentions) servers[note.serverId] = { unread, mentions };
+    else delete servers[note.serverId];
+  }
+  ui.activity = { ...ui.activity, channels, servers };
+}
+
+export function markSeen(id, messageId) {
+  if (!id || !messageId) return;
+  const map = seenMap();
+  if (map[id] !== messageId) {
+    map[id] = messageId;
+    try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
+  }
+  forgetActivity(id);
+}
+
+async function pollActivity() {
+  try {
+    const data = await api('/api/activity', { method: 'POST', body: { seen: seenMap() } });
+    if (data.heads) {
+      const map = seenMap();
+      let dirty = false;
+      for (const [id, messageId] of Object.entries(data.heads)) {
+        if (!map[id] && messageId) {
+          map[id] = messageId;
+          dirty = true;
+        }
+      }
+      if (dirty) {
+        try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
+      }
+    }
+    const servers = { ...(data.servers || {}) };
+    const channels = { ...(data.channels || {}) };
+    const dms = { ...(data.dms || {}) };
+    if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId]) {
+      const note = channels[ui.channelId];
+      delete channels[ui.channelId];
+      const srv = servers[note.serverId];
+      if (srv) {
+        const unread = Math.max(0, (srv.unread || 0) - (note.unread || 0));
+        const mentionsLeft = Math.max(0, (srv.mentions || 0) - (note.mentions || 0));
+        if (unread || mentionsLeft) servers[note.serverId] = { unread, mentions: mentionsLeft };
+        else delete servers[note.serverId];
+      }
+    }
+    if (ui.mode === 'dm' && ui.dmUser) delete dms[ui.dmUser.id];
+    let mentions = 0;
+    let dmUnread = 0;
+    for (const row of Object.values(servers)) mentions += row.mentions || 0;
+    for (const row of Object.values(dms)) dmUnread += row.unread || 0;
+    if (activityReady && (mentions > mentionSnap || dmUnread > dmSnap)) playPing();
+    activityReady = true;
+    mentionSnap = mentions;
+    dmSnap = dmUnread;
+    ui.activity = { servers, channels, dms };
+    const known = new Set((ui.dms || []).map((row) => row.other && row.other.id));
+    if (Object.keys(dms).some((id) => !known.has(id))) loadDms();
+  } catch (_) {}
+}
+
+function startClocks() {
+  if (clocksStarted) return;
+  clocksStarted = true;
+  setInterval(() => {
+    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
+  }, 1000);
+  setInterval(() => {
+    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    pollActivity();
+  }, 2000);
+  pollActivity();
+  loadPacks();
 }
 
 export async function saveMe(body) {

@@ -7,7 +7,16 @@ export function escapeHtml(s) {
 }
 
 export function formatContent(text, emoji, stickers) {
-  let html = escapeHtml(text || '');
+  const gifs = [];
+  const raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,400})\]\]/g, (_, url) => {
+    gifs.push(url);
+    return '\u0000GIF' + (gifs.length - 1) + '\u0000';
+  });
+  let html = escapeHtml(raw);
+  html = html.replace(/\u0000GIF(\d+)\u0000/g, (_, index) => {
+    const url = gifs[Number(index)] || '';
+    return '<img class="gif" alt="" src="' + escapeHtml(url) + '">';
+  });
   for (const e of stickers || []) {
     if (!e?.name || !e?.url) continue;
     const src = String(e.url).replace(/"/g, '');

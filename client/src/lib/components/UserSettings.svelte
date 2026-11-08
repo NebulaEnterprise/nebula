@@ -1,6 +1,6 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, saveMe, logout, toast } from '../state.svelte.js';
+  import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
@@ -10,6 +10,15 @@
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let page = $state('profile');
+  let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
+
+  function toggleSound() {
+    sound = !sound;
+    localStorage.setItem('nebula-sound', sound ? 'on' : 'off');
+    if (sound) playPing();
+  }
+
+  const titles = { profile: 'Profile', look: 'Appearance', status: 'Status', notify: 'Notifications' };
   let form = $state({
     username: ui.me?.username || '',
     displayName: ui.me?.displayName || '',
@@ -133,12 +142,13 @@
       <button class:on={page === 'profile'} onclick={() => (page = 'profile')}>Profile</button>
       <button class:on={page === 'look'} onclick={() => (page = 'look')}>Appearance</button>
       <button class:on={page === 'status'} onclick={() => (page = 'status')}>Status</button>
+      <button class:on={page === 'notify'} onclick={() => (page = 'notify')}>Notifications</button>
       <div class="group">Account</div>
       <button class="danger" onclick={logout}>Log out</button>
     </aside>
     <div class="set-main">
       <div class="row" style="border:0;padding-top:0">
-        <h2>{page === 'profile' ? 'Profile' : page === 'look' ? 'Appearance' : 'Status'}</h2>
+        <h2>{titles[page] || 'Settings'}</h2>
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
       <div class="grid-2">
@@ -149,6 +159,12 @@
             <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
             <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
             <div class="field"><label>Bio</label><textarea bind:value={form.bio} maxlength="190" rows="4"></textarea></div>
+          {:else if page === 'notify'}
+            <div class="field">
+              <label>Notification sound</label>
+              <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
+              <p class="hint">Plays a sound when someone mentions you or sends you a direct message.</p>
+            </div>
           {:else if page === 'look'}
             <section class="look-block">
               <div class="look-row">
@@ -193,7 +209,7 @@
               {/each}
             </div>
           {/if}
-          {#if page !== 'look'}
+          {#if page !== 'look' && page !== 'notify'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}

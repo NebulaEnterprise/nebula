@@ -226,13 +226,20 @@ img { max-width: 100%; }
 }
 .top h2 { margin: 0; font-size: 16px; }
 .topic { color: var(--faint); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.refresh-profiles {
-  margin-left: auto; flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
-  height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line);
-  background: #101117; color: var(--muted); font-size: 13px; font-weight: 700;
+.badge {
+  position: absolute; right: -6px; bottom: -4px; z-index: 2; pointer-events: none;
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: #f23f43; color: white; font-size: 11px; font-weight: 800; font-style: normal;
+  display: grid; place-items: center; box-shadow: 0 0 0 4px var(--bg-rail); line-height: 1;
 }
-.refresh-profiles:hover { color: white; background: var(--bg-hover); }
-.refresh-profiles:disabled { opacity: 0.55; }
+.badge.dot { width: 10px; height: 10px; min-width: 10px; padding: 0; background: #fff; border-radius: 50%; }
+.channel.unread .ch-name, .dm-item.unread { color: #fff; font-weight: 700; }
+.pill-count {
+  margin-left: auto; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px;
+  background: #f23f43; color: #fff; font-size: 11px; font-weight: 800; font-style: normal;
+  display: inline-grid; place-items: center; flex-shrink: 0;
+}
+.pill-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #fff; flex-shrink: 0; }
 .messages { flex: 1; overflow: auto; padding: 18px 8px 8px; }
 .welcome { padding: 28px 18px; }
 .welcome h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.03em; }
@@ -246,6 +253,7 @@ img { max-width: 100%; }
 .msg-content { white-space: pre-wrap; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
 .msg-content .emoji { width: 22px; height: 22px; vertical-align: middle; }
 .msg-content .sticker { width: 148px; display: block; border-radius: 12px; }
+.msg-content .gif { max-width: min(320px, 100%); max-height: 280px; border-radius: 12px; display: block; margin-top: 4px; }
 .lobby {
   margin: 0 16px 8px; padding: 14px 16px; border-radius: 14px;
   background: rgba(62, 207, 142, 0.08); border: 1px solid rgba(62, 207, 142, 0.2);
@@ -292,12 +300,31 @@ img { max-width: 100%; }
   background: #101117; border: 1px solid var(--line); border-radius: 14px; padding: 6px 8px 6px 6px;
 }
 .composer input { flex: 1; background: transparent; border: 0; outline: none; padding: 10px 6px; }
-.sticker-pop {
-  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; padding: 10px;
-  background: #101117; border: 1px solid var(--line); border-radius: 14px;
+.composer-wrap { position: relative; }
+.picker {
+  position: absolute; left: 16px; bottom: 62px; z-index: 6; width: min(420px, calc(100% - 32px));
+  background: #1c1d26; border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; max-height: 380px;
 }
-.sticker-pop button { width: 72px; height: 72px; border-radius: 12px; overflow: hidden; background: var(--bg-elev); }
-.sticker-pop img { width: 100%; height: 100%; object-fit: contain; }
+.picker-tabs { display: flex; gap: 6px; padding: 10px 10px 0; }
+.picker-tabs button { padding: 6px 12px; border-radius: 8px; color: var(--muted); font-weight: 700; font-size: 13px; }
+.picker-tabs button.on { background: var(--bg-active); color: white; }
+.picker-search { padding: 10px; }
+.picker-search input { width: 100%; }
+.picker-cats { display: flex; gap: 4px; overflow: auto; padding: 0 10px 8px; }
+.picker-cats button { padding: 4px 8px; border-radius: 8px; color: var(--faint); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.picker-cats button.on { color: white; background: var(--bg-hover); }
+.picker-grid { overflow: auto; padding: 0 10px 10px; display: grid; gap: 6px; }
+.emoji-grid { grid-template-columns: repeat(8, 1fr); }
+.sticker-grid { grid-template-columns: repeat(4, 1fr); }
+.gif-grid { grid-template-columns: repeat(2, 1fr); }
+.picker-grid button { border-radius: 8px; background: transparent; min-height: 36px; display: grid; place-items: center; overflow: hidden; }
+.picker-grid button:hover { background: var(--bg-hover); }
+.emoji-grid button { font-size: 22px; }
+.emoji-grid img, .sticker-grid img { width: 100%; height: 64px; object-fit: contain; }
+.emoji-grid img { width: 28px; height: 28px; }
+.gif-grid img { width: 100%; height: 110px; object-fit: cover; border-radius: 8px; }
+.picker-label { grid-column: 1 / -1; margin: 8px 0 0; color: var(--faint); font-size: 12px; font-weight: 700; }
 
 .members {
   width: 260px; background: var(--bg-side); border-left: 1px solid var(--line);

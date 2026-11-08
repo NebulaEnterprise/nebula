@@ -1,12 +1,25 @@
 <script>
-  import { Hash, RefreshCw, Smile } from '@lucide/svelte';
+  import { Hash, Smile } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, sendMessage, sendSticker, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, refreshProfiles } from '../state.svelte.js';
+  import Picker from './Picker.svelte';
+  import { ui, sendMessage, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
+  const emoji = $derived.by(() => {
+    const map = new Map();
+    for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);
+    for (const pack of ui.packs || []) for (const row of pack.emoji || []) if (row?.name) map.set(row.name, row);
+    return [...map.values()];
+  });
+  const stickers = $derived.by(() => {
+    const map = new Map();
+    for (const row of ui.stickers || []) if (row?.name) map.set(row.name, row);
+    for (const pack of ui.packs || []) for (const row of pack.stickers || []) if (row?.name) map.set(row.name, row);
+    return [...map.values()];
+  });
 
   function liveAuthor(author) {
     if (!author) return author;
@@ -29,14 +42,6 @@
 
   let box = $state(null);
   let follow = true;
-  let refreshing = $state(false);
-
-  async function refreshNow() {
-    if (refreshing) return;
-    refreshing = true;
-    try { await refreshProfiles(); }
-    finally { refreshing = false; }
-  }
 
   function trackScroll() {
     if (!box) return;
@@ -65,10 +70,6 @@
   <Hash size={18} />
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
-  <button type="button" class="refresh-profiles" disabled={refreshing} onclick={refreshNow} title="Refresh profiles">
-    <RefreshCw size={14} />
-    {refreshing ? 'Refreshing' : 'Refresh'}
-  </button>
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if !ui.messages.length}
@@ -87,7 +88,7 @@
           <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
           <time>{time(msg.createdAt)}</time>
         </div>
-        <div class="msg-content">{@html formatContent(msg.content, ui.emoji, ui.stickers)}</div>
+        <div class="msg-content">{@html formatContent(msg.content, emoji, stickers)}</div>
       </div>
     </article>
   {/each}
@@ -99,21 +100,14 @@
       <p>{ui.about}</p>
     </div>
   {/if}
-  {#if ui.stickersOpen}
-    <div class="sticker-pop">
-      {#if !ui.stickers.length}<p class="hint">No stickers on this server yet.</p>{/if}
-      {#each ui.stickers as s}
-        <button type="button" onclick={() => sendSticker(s.name)}><img src={s.url} alt={s.name} /></button>
-      {/each}
-    </div>
+  {#if ui.picker}
+    <Picker />
   {/if}
   {#if ui.typers.length}
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
-    {#if ui.mode === 'chat'}
-      <button type="button" class="btn icon" title="Stickers" onclick={() => (ui.stickersOpen = !ui.stickersOpen)}><Smile size={18} /></button>
-    {/if}
+    <button type="button" class="btn icon picker-toggle" title="GIFs, stickers, and emoji" onclick={() => (ui.picker = ui.picker ? '' : 'emoji')}><Smile size={18} /></button>
     <input
       bind:value={ui.composer}
       onkeydown={noteKeyDown}
