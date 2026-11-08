@@ -125,7 +125,7 @@
     >
       <span class="sv-dot" style="left:{sat * 100}%;top:{(1 - val) * 100}%"></span>
     </button>
-    <span class="hue-dot" style="transform: rotate({h}deg) translateY(-73px); background: hsl({h}, 100%, 50%)"></span>
+    <span class="hue-dot" style="--hue:{h}deg; background: hsl({h}, 100%, 50%)"></span>
   </div>
   <div class="picker-side">
     <span class="picker-preview" style="background:{hex}"></span>

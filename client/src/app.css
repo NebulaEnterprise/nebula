@@ -892,7 +892,7 @@ img { max-width: 100%; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .color-chip { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
 .picker { display: flex; align-items: center; gap: 16px; margin: 4px 0 12px; }
-.wheel { position: relative; width: 168px; height: 168px; flex-shrink: 0; touch-action: none; }
+.wheel { position: relative; --wheel: 168px; width: var(--wheel); height: var(--wheel); flex-shrink: 0; touch-action: none; }
 .ring, .sv { border: 0; appearance: none; }
 .ring {
   position: absolute; inset: 0; border-radius: 50%; padding: 0; cursor: crosshair;
@@ -901,7 +901,7 @@ img { max-width: 100%; }
   mask: radial-gradient(circle, transparent 56%, #000 59%);
 }
 .sv {
-  position: absolute; left: 38px; top: 38px; width: 92px; height: 92px; border-radius: 10px;
+  position: absolute; left: 22.6%; top: 22.6%; width: 54.8%; height: 54.8%; border-radius: 10px;
   padding: 0; cursor: crosshair; border: 0;
 }
 .sv-dot, .hue-dot {
@@ -909,7 +909,7 @@ img { max-width: 100%; }
   border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.45); pointer-events: none;
 }
 .sv-dot { margin: -7px 0 0 -7px; background: transparent; }
-.hue-dot { left: 50%; top: 50%; margin: -7px 0 0 -7px; }
+.hue-dot { left: 50%; top: 50%; margin: -7px 0 0 -7px; transform: rotate(var(--hue, 0deg)) translateY(calc(var(--wheel) * -0.435)); }
 .picker-side { display: flex; flex-direction: column; gap: 8px; }
 .picker-preview { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--line); }
 .picker-hex {
@@ -974,7 +974,16 @@ img { max-width: 100%; }
   font-size: 13px; font-weight: 650;
 }
 .style-seg button.on { background: #2a2c38; color: #fff; }
+.shade-anchor { position: relative; }
 .rgb-head { display: flex; align-items: center; gap: 6px; margin: 12px 0 4px; }
+.wheel-back { position: fixed; inset: 0; z-index: 40; background: transparent; }
+.wheel-pop {
+  position: absolute; z-index: 41; left: 0; top: calc(100% + 6px);
+  padding: 10px; border-radius: 14px; background: #1c1d26;
+  border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+.wheel-pop .picker { margin: 0; gap: 10px; }
+.wheel-pop .wheel { --wheel: 132px; }
 .rgb-dot {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 3px 10px 3px 3px; border-radius: 999px;

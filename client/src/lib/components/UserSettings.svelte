@@ -81,6 +81,7 @@
 
   let aboutDraft = $state(ui.me?.aboutMe || '');
   let shadeSlot = $state(0);
+  let wheelOpen = $state(false);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -291,17 +292,29 @@
                   <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
                 {/each}
               </div>
-              {#if form.profileStyle !== 'solid'}
+              <div class="shade-anchor">
                 <div class="rgb-head">
-                  {#each [0, 1] as i}
-                    <button type="button" class="rgb-dot" class:on={shadeSlot === i} onclick={() => (shadeSlot = i)}>
-                      <i style="background:{form.profileColors[i]}"></i>
-                      {i === 0 ? 'Main' : 'Tone'}
+                  {#if form.profileStyle === 'solid'}
+                    <button type="button" class="rgb-dot" class:on={wheelOpen} onclick={() => { shadeSlot = 0; wheelOpen = !wheelOpen; }}>
+                      <i style="background:{form.profileColors[0]}"></i>
+                      Color
                     </button>
-                  {/each}
+                  {:else}
+                    {#each [0, 1] as i}
+                      <button type="button" class="rgb-dot" class:on={wheelOpen && shadeSlot === i} onclick={() => { if (wheelOpen && shadeSlot === i) wheelOpen = false; else { shadeSlot = i; wheelOpen = true; } }}>
+                        <i style="background:{form.profileColors[i]}"></i>
+                        {i === 0 ? 'Main' : 'Tone'}
+                      </button>
+                    {/each}
+                  {/if}
                 </div>
-              {/if}
-              <ColorWheel value={form.profileColors[form.profileStyle === 'solid' ? 0 : shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(form.profileStyle === 'solid' ? 0 : shadeSlot, c)} />
+                {#if wheelOpen}
+                  <button type="button" class="wheel-back" aria-label="Close color" onclick={() => (wheelOpen = false)}></button>
+                  <div class="wheel-pop">
+                    <ColorWheel value={form.profileColors[form.profileStyle === 'solid' ? 0 : shadeSlot] || '#7c3aed'} onpick={(c) => setProfileColor(form.profileStyle === 'solid' ? 0 : shadeSlot, c)} />
+                  </div>
+                {/if}
+              </div>
             </section>
             <div class="field">
               <label>Bio</label>
