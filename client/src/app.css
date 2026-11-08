@@ -287,7 +287,7 @@ img { max-width: 100%; }
 .msg.flash { background: rgba(250, 168, 26, 0.16); }
 .msg-av { grid-column: 1; grid-row: 1; padding: 2px 0 0; border-radius: 50%; line-height: 0; }
 .msg-body { grid-column: 2; grid-row: 1; min-width: 0; padding-top: 2px; }
-.msg.has-reply { row-gap: 0; padding-top: 1px; }
+.msg.many { row-gap: 0; padding-top: 1px; }
 .msg.has-reply .msg-av,
 .msg.has-reply .msg-body { grid-row: 2; }
 .reply-stack {
@@ -297,28 +297,37 @@ img { max-width: 100%; }
 .reply-ref {
   grid-column: 1 / -1; grid-row: 1;
   display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 12px;
-  width: 100%; height: 14px; min-width: 0; margin: 0; padding: 0;
-  color: var(--muted); font-size: 11px; font-weight: 500; text-align: left; line-height: 14px;
+  width: 100%; min-width: 0; margin: 0; padding: 0;
+  color: var(--muted); font-size: 13px; font-weight: 500; text-align: left; line-height: 1.2;
 }
 .reply-main {
   grid-column: 2; position: relative; display: flex; align-items: center; gap: 4px;
-  min-width: 0; max-width: 100%; height: 14px;
+  min-width: 0; max-width: 100%; height: 22px;
 }
-.reply-ref .avatar { width: 12px; height: 12px; overflow: hidden; flex-shrink: 0; }
+.reply-ref .avatar { width: 16px; height: 16px; overflow: hidden; flex-shrink: 0; }
 .reply-ref strong {
   flex: 0 1 auto; min-width: 0; max-width: 40%;
-  font-size: 11px; font-weight: 600; line-height: 14px;
+  font-size: 13px; font-weight: 600; line-height: 22px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .reply-ref em {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--faint); font-style: normal; font-weight: 400; font-size: 11px; line-height: 14px;
+  color: var(--faint); font-style: normal; font-weight: 400; line-height: 22px;
 }
 .reply-ref:hover em { color: var(--text); }
 .reply-spine {
-  position: absolute; left: -22px; top: 1px; width: 14px; height: 7px;
+  position: absolute; left: -30px; top: 2px; width: 26px; height: 12px;
   border-left: 2px solid #4e5058; border-top: 2px solid #4e5058;
-  border-top-left-radius: 4px; pointer-events: none;
+  border-top-left-radius: 6px; pointer-events: none;
+}
+.reply-stack.many .reply-ref { height: 14px; font-size: 11px; line-height: 14px; }
+.reply-stack.many .reply-main { height: 14px; }
+.reply-stack.many .reply-ref .avatar { width: 12px; height: 12px; }
+.reply-stack.many .reply-ref strong,
+.reply-stack.many .reply-ref em,
+.reply-stack.many .name-fx { font-size: 11px; line-height: 14px; }
+.reply-stack.many .reply-spine {
+  left: -22px; top: 1px; width: 14px; height: 7px; border-top-left-radius: 4px;
 }
 .msg-tools {
   position: absolute; right: 8px; top: -14px; z-index: 2;
@@ -379,7 +388,7 @@ img { max-width: 100%; }
 .reply-label .avatar { width: 16px; height: 16px; flex-shrink: 0; }
 .composer-wrap:has(.reply-note) .composer { border-top-left-radius: 0; border-top-right-radius: 0; }
 .reply-label .name-fx,
-.reply-ref .name-fx { display: inline; position: static; font-size: 11px; font-weight: 600; line-height: 14px; vertical-align: baseline; }
+.reply-ref .name-fx { display: inline; position: static; font-size: inherit; font-weight: 600; line-height: inherit; vertical-align: baseline; }
 .reply-label .name-fx.sparkle i,
 .reply-ref .name-fx.sparkle i { display: none; }
 .reply-label .name-fx.glitch,

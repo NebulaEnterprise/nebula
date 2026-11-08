@@ -503,7 +503,7 @@
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)}>
+    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -513,13 +513,13 @@
       </div>
       {/if}
       {#if messageReplies(msg).length}
-        <div class="reply-stack">
+        <div class="reply-stack" class:many={messageReplies(msg).length > 1}>
           {#each messageReplies(msg) as reply (reply.id)}
             {@const person = replyPerson(reply)}
             <button type="button" class="reply-ref" onclick={() => jumpTo(reply.id)}>
               <span class="reply-main">
                 <i class="reply-spine"></i>
-                <Avatar user={person} size={12} dot={false} />
+                <Avatar user={person} size={messageReplies(msg).length > 1 ? 12 : 16} dot={false} />
                 <strong><Name user={person} /></strong>
                 <em>{reply.preview}</em>
               </span>
