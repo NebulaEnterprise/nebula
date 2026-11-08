@@ -233,7 +233,7 @@ img { max-width: 100%; }
 .staff-badge {
   width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
   display: inline-grid; place-items: center;
-  background: #3a3d4a; color: #c4b5fd;
+  background: linear-gradient(135deg, #7c6af7, #ff5c8a); color: #fff;
 }
 .staff-badge svg { width: 11px; height: 11px; display: block; }
 .me .who span:not(.name-fx) { color: var(--faint); font-size: 12px; }
