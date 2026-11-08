@@ -101,8 +101,12 @@ img { max-width: 100%; }
 .rail-btn:hover, .srv:hover, .srv.on { border-radius: 16px; background: var(--brand); color: white; }
 .srv img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .rail-btn.on { background: var(--brand); color: white; border-radius: 16px; }
-.dm-rail, .dm-rail:hover { width: 32px; height: 32px; border-radius: 50%; padding: 0; overflow: hidden; background: transparent; }
-.dm-rail .avatar, .dm-rail:hover .avatar { width: 32px; height: 32px; border-radius: 50%; }
+.dm-rail, .dm-rail:hover { width: 40px; height: 40px; border-radius: 50%; padding: 0; overflow: visible; background: transparent; }
+.dm-rail .avatar, .dm-rail:hover .avatar { width: 40px; height: 40px; border-radius: 50%; }
+.dm-rail .badge {
+  right: -4px; bottom: -4px; width: 20px; height: 20px; min-width: 20px; padding: 0;
+  border-radius: 50%; font-size: 11px; box-shadow: 0 0 0 3px var(--bg-rail);
+}
 .sep { width: 32px; height: 2px; border-radius: 2px; background: var(--line); }
 .rail-add { color: var(--ok); background: rgba(62, 207, 142, 0.1); }
 .rail-add:hover { background: var(--ok); color: #062217; }
