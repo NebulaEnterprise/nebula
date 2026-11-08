@@ -1,4 +1,4 @@
-import { api, pinMedia, warmMedia, uploadFile, uploadGif } from './api.js';
+import { api, pinMedia, warmMedia, uploadFile } from './api.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -661,7 +661,7 @@ export async function sendFiles(list) {
   const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
   const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
-  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file) }));
+  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file), progress: 1 }));
   ui.messages = [...ui.messages, {
     id: tempId,
     pending: true,
@@ -674,21 +674,34 @@ export async function sendFiles(list) {
   }];
   try {
     const saved = [];
+    const report = (index, n) => {
+      patchLocal(tempId, (msg) => ({ files: msg.files.map((row, at) => at === index ? { ...row, progress: Math.max(1, n) } : row) }));
+    };
     for (let i = 0; i < files.length; i++) {
+      const head = new Uint8Array(await files[i].slice(0, 6).arrayBuffer());
+      const gif = /image\/gif/i.test(files[i].type || '') || /\.gif$/i.test(files[i].name || '') || (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46);
+      if (gif) {
+        const data = await uploadFile(files[i], (n) => report(i, n), files[i].name || 'animation.gif');
+        if (!data.url) throw new Error('The file did not upload');
+        pinMedia(data.url, files[i]);
+        saved.push({ url: data.url, name: files[i].name || 'animation.gif' });
+        report(i, 100);
+        continue;
+      }
       const packed = await packUpload(files[i]);
-      const gif = packed.type === 'image/gif' || /\.gif$/i.test(packed.name || files[i].name || '');
       let poster = '';
-      if (!gif && packed.poster) {
-        const preview = await uploadFile(packed.poster, null, packed.posterName);
+      if (packed.poster) {
+        const preview = await uploadFile(packed.poster, (n) => report(i, Math.round(n * 0.2)), packed.posterName);
         poster = preview.url || '';
         if (poster) pinMedia(poster, packed.poster);
       }
-      const data = gif ? await uploadGif(files[i]) : await uploadFile(packed.body, null, packed.name);
+      const data = await uploadFile(packed.body, (n) => report(i, poster ? 20 + Math.round(n * 0.8) : n), packed.name);
       if (!data.url) throw new Error('The file did not upload');
-      pinMedia(data.url, gif ? files[i] : packed.body);
+      pinMedia(data.url, packed.body);
       const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file' };
       if (poster) row.poster = poster;
       saved.push(row);
+      report(i, 100);
     }
     await postMessage({ content, files: saved, reply }, target);
     dismissLocal(tempId);
