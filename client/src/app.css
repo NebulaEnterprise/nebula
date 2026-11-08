@@ -268,18 +268,26 @@ img { max-width: 100%; }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .account-pop .bio-bubble {
-  left: 86px; top: 102px; margin: 0;
-  display: flex; align-items: center; gap: 4px;
+  left: 92px; top: 108px; margin: 0; max-width: 160px;
+  display: flex; align-items: center; gap: 1px;
+  padding: 2px 3px 2px 7px; border-radius: 6px;
   background: #4e5058; box-shadow: none;
+  font-size: 11px; line-height: 14px;
 }
-.account-pop .bio-hint {
-  padding: 6px 10px; color: #fff; font-style: italic;
+.account-pop .bio-bubble::before {
+  left: 10px; top: -5px;
+  border-width: 0 4px 5px 4px;
 }
+.account-pop .bio-bubble span { max-width: 108px; font-size: 11px; line-height: 14px; }
+.account-pop .account-bubble button { width: 16px; height: 16px; }
+.account-pop .account-bubble button svg { width: 11px; height: 11px; }
+.account-pop .account-bubble input { width: 88px; padding: 1px 0; font-size: 11px; }
+.account-pop .bio-hint { padding: 3px 8px; color: #fff; font-style: italic; }
 .account-pop .bio-hint i {
-  width: 16px; height: 16px; display: grid; place-items: center;
+  width: 12px; height: 12px; display: grid; place-items: center;
   background: transparent; color: #fff; font-style: normal; flex-shrink: 0;
 }
-.account-pop .bio-hint span { max-width: 150px; }
+.account-pop .bio-hint span { max-width: 128px; }
 .account-pop .bio-hint:hover { filter: brightness(1.08); }
 .account-body { padding: 8px 14px 14px; }
 .account-body > strong { display: block; font-size: 20px; line-height: 24px; }
