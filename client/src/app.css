@@ -248,9 +248,9 @@ img { max-width: 100%; }
   position: fixed; left: 44px; bottom: 72px; z-index: 50; width: min(300px, calc(100vw - 60px));
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 16px;
-  box-shadow: var(--shadow); overflow: hidden;
+  box-shadow: var(--shadow); overflow: visible;
 }
-.account-pop .pop-banner { height: 96px; min-height: 96px; max-height: 96px; }
+.account-pop .pop-banner { height: 96px; min-height: 96px; max-height: 96px; border-radius: 16px 16px 0 0; overflow: hidden; }
 .account-pop .pop-body { padding: 0 12px 12px; }
 .account-pop .profile-hero { margin-top: -36px; }
 .account-pop .profile-hero h3 { margin-top: 6px; font-size: 18px; }
@@ -298,10 +298,10 @@ img { max-width: 100%; }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .account-pop .profile-face .bio-bubble {
-  left: calc(100% + 4px); top: 50%; transform: translateY(-50%);
-  margin: 0; max-width: 84px;
-  display: flex; align-items: center; gap: 2px;
-  padding: 4px 5px 4px 8px; border-radius: 7px;
+  left: calc(100% + 6px); top: 50%; transform: translateY(-50%);
+  margin: 0; width: max-content; max-width: 156px; z-index: 2;
+  display: flex; align-items: center; gap: 0;
+  padding: 3px 2px 3px 8px; border-radius: 7px; overflow: hidden;
   background: #4e5058; box-shadow: none;
   font-size: 12px; line-height: 15px;
 }
@@ -310,16 +310,20 @@ img { max-width: 100%; }
   border-width: 5px 6px 5px 0;
   border-color: transparent #4e5058 transparent transparent;
 }
-.account-pop .bio-bubble span { max-width: 44px; font-size: 12px; line-height: 15px; }
-.account-pop .account-bubble button { width: 20px; height: 20px; }
-.account-pop .account-bubble button svg { width: 13px; height: 13px; }
-.account-pop .account-bubble input { width: 104px; padding: 2px 0; font-size: 12px; }
-.account-pop .bio-hint { padding: 4px 9px; color: #fff; font-style: italic; }
+.account-pop .bio-bubble span {
+  display: block; flex: 1 1 auto; min-width: 0; max-width: 112px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; line-height: 15px;
+}
+.account-pop .account-bubble button { width: 18px; height: 18px; flex: 0 0 auto; }
+.account-pop .account-bubble button svg { width: 12px; height: 12px; }
+.account-pop .account-bubble input { width: auto; max-width: 112px; min-width: 0; flex: 1; padding: 2px 0; font-size: 12px; }
+.account-pop .bio-hint { padding: 4px 8px; color: #fff; font-style: italic; }
 .account-pop .bio-hint i {
   width: 14px; height: 14px; display: grid; place-items: center;
   background: transparent; color: #fff; font-style: normal; flex-shrink: 0;
 }
-.account-pop .bio-hint span { max-width: 52px; }
+.account-pop .bio-hint span { max-width: 112px; }
 .account-pop .bio-hint:hover { filter: brightness(1.08); }
 .account-body { padding: 8px 14px 14px; }
 .account-body > strong { display: block; font-size: 20px; line-height: 24px; }
