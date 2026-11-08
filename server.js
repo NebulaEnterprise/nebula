@@ -499,6 +499,71 @@ function pollStamp(list) {
   }).filter(Boolean).join('|');
 }
 
+function messageStamp(list) {
+  return (list || []).map((msg) => {
+    if (!msg) return '';
+    const reacts = (msg.reactions || []).map((row) => row.emoji + ':' + ((row.users || []).length)).join(',');
+    return [msg.id, msg.editedAt || '', reacts, msg.reply && msg.reply.id || '', msg.forward && msg.forward.name || ''].join('~');
+  }).join('|');
+}
+
+function publicReactions(msg, viewerId) {
+  return (msg && Array.isArray(msg.reactions) ? msg.reactions : [])
+    .filter((row) => row && row.emoji && row.users && row.users.length)
+    .map((row) => ({
+      emoji: row.emoji,
+      count: row.users.length,
+      me: row.users.map(String).includes(String(viewerId)),
+    }));
+}
+
+function locateMessage(id) {
+  for (const [roomId, list] of Object.entries(messages)) {
+    if (!Array.isArray(list)) continue;
+    const index = list.findIndex((msg) => msg && msg.id === id);
+    if (index >= 0) return { roomId, list, index, msg: list[index] };
+  }
+  return null;
+}
+
+function canSeeRoom(user, roomId) {
+  if (!user || !roomId) return false;
+  if (String(roomId).startsWith('dm:')) {
+    const ids = String(roomId).slice(3).split(':');
+    return ids.map(String).includes(String(user.id));
+  }
+  const found = findChannel(roomId, '');
+  return !!(found && can(found.guild, user, PERM.VIEW, found.channel));
+}
+
+function readReply(body, roomId) {
+  const reply = body && body.reply;
+  const id = reply && String(reply.id || '');
+  if (!id) return null;
+  const list = messages[roomId] || [];
+  const src = list.find((msg) => msg && msg.id === id);
+  if (!src) return null;
+  const name = (src.author && (src.author.displayName || src.author.username)) || 'Someone';
+  const text = String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+  const preview = text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message'));
+  return { id: src.id, name, preview };
+}
+
+function cleanReactionEmoji(user, emoji) {
+  const text = String(emoji || '').trim();
+  if (!text || text.length > 64 || /[<>]/.test(text)) return '';
+  const custom = text.match(/^:([a-z0-9_]{1,32}):$/i);
+  if (custom) {
+    const name = custom[1].toLowerCase();
+    for (const g of Object.values(guilds.servers)) {
+      if (!g || !g.members || !g.members[user.id]) continue;
+      if ((g.emoji || []).some((item) => String(item.name || '').toLowerCase() === name)) return ':' + name + ':';
+    }
+    return '';
+  }
+  return [...text].slice(0, 8).join('');
+}
+
 function messageExtras(body) {
   const content = String(body && body.content || '').trim().slice(0, 2000);
   const files = readFiles(body);
@@ -518,6 +583,7 @@ function presentMessage(msg, viewerId) {
   author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
   const out = Object.assign({}, msg, { author });
   if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
+  out.reactions = publicReactions(msg, viewerId);
   return out;
 }
 
@@ -1797,6 +1863,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     files: extra.files,
     poll: extra.poll,
     mentions: parseMentions(found.guild, req.user, extra.content),
+    reply: readReply(req.body, found.channel.id),
     createdAt: new Date().toISOString(),
   };
   messages[found.channel.id].push(msg);
@@ -1933,6 +2000,7 @@ function pulseSnap(req) {
         typing: typers.map((row) => row.id).sort().join(','),
         profiles: String(profileRev),
         polls: pollStamp(raw.slice(-100)),
+        edits: messageStamp(raw.slice(-100)),
       },
     };
   }
@@ -1954,6 +2022,7 @@ function pulseSnap(req) {
       members: memberStamp(found.guild),
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),
+      edits: messageStamp(raw.slice(-100)),
     },
   };
 }
@@ -1994,7 +2063,8 @@ app.get('/api/pulse', auth, (req, res) => {
   const members = String(req.query.members || '');
   const profiles = String(req.query.profiles || '');
   const polls = String(req.query.polls || '');
-  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles && (snap.body.polls || '') === polls;
+  const edits = String(req.query.edits || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles && (snap.body.polls || '') === polls && (snap.body.edits || '') === edits;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -2006,8 +2076,8 @@ app.get('/api/pulse', auth, (req, res) => {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles && (body.polls || '') === polls) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '' });
+    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles && (body.polls || '') === polls && (body.edits || '') === edits) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '' });
     }
     res.json(body);
   }
@@ -2343,6 +2413,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     content: extra.content,
     files: extra.files,
     poll: extra.poll,
+    reply: readReply(req.body, channelId),
     createdAt: new Date().toISOString(),
   };
   messages[channelId].push(msg);
@@ -2350,6 +2421,142 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   wakePulse(channelId);
+  touchAlerts();
+  res.json({ ok: true, message: presentMessage(msg, req.user.id) });
+});
+
+app.get('/api/forward-targets', auth, (req, res) => {
+  ensureGuilds();
+  const channels = [];
+  for (const g of Object.values(guilds.servers)) {
+    if (!g || !g.members || !g.members[req.user.id]) continue;
+    for (const channel of g.channels || []) {
+      if (channel.type && channel.type !== 'text') continue;
+      if (!can(g, req.user, PERM.SEND, channel)) continue;
+      channels.push({ serverId: g.id, serverName: g.name, channelId: channel.id, name: channel.name });
+    }
+  }
+  const seen = new Set();
+  const dms = [];
+  const addDm = (id) => {
+    const other = users[id];
+    if (!other || seen.has(String(id)) || String(id) === String(req.user.id)) return;
+    seen.add(String(id));
+    dms.push({ id: other.id, name: other.displayName || other.username });
+  };
+  for (const thread of Object.values(dmThreads)) {
+    if (!thread || (String(thread.a) !== String(req.user.id) && String(thread.b) !== String(req.user.id))) continue;
+    addDm(String(thread.a) === String(req.user.id) ? thread.b : thread.a);
+  }
+  const node = ensureFriendNode(req.user.id);
+  for (const id of node.friends || []) addDm(id);
+  res.json({ ok: true, channels, dms });
+});
+
+app.post('/api/messages/:id/reactions', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  const emoji = cleanReactionEmoji(req.user, req.body && req.body.emoji);
+  if (!emoji) return res.status(400).json({ error: 'Pick an emoji' });
+  const msg = found.msg;
+  msg.reactions = Array.isArray(msg.reactions) ? msg.reactions : [];
+  let row = msg.reactions.find((item) => item && item.emoji === emoji);
+  if (!row) {
+    row = { emoji, users: [] };
+    msg.reactions.push(row);
+  }
+  row.users = Array.isArray(row.users) ? row.users : [];
+  const mine = row.users.findIndex((id) => String(id) === String(req.user.id));
+  if (mine >= 0) row.users.splice(mine, 1);
+  else row.users.push(String(req.user.id));
+  msg.reactions = msg.reactions.filter((item) => item && item.users && item.users.length);
+  save(MESSAGES_FILE, messages);
+  wakePulse(found.roomId);
+  res.json({ ok: true, message: presentMessage(msg, req.user.id) });
+});
+
+app.patch('/api/messages/:id', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  if (String(found.msg.authorId) !== String(req.user.id)) return res.status(403).json({ error: 'You can only edit your own messages' });
+  const content = String(req.body && req.body.content || '').trim().slice(0, 2000);
+  if (!content && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
+  found.msg.content = content;
+  found.msg.editedAt = new Date().toISOString();
+  if (!String(found.roomId).startsWith('dm:')) {
+    const channel = findChannel(found.roomId, '');
+    if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
+  }
+  save(MESSAGES_FILE, messages);
+  wakePulse(found.roomId);
+  res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
+});
+
+app.delete('/api/messages/:id', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  const channel = String(found.roomId).startsWith('dm:') ? null : findChannel(found.roomId, '');
+  const manage = channel && (isOwner(channel.guild, req.user) || can(channel.guild, req.user, PERM.MANAGE_CHANNELS));
+  if (String(found.msg.authorId) !== String(req.user.id) && !manage) return res.status(403).json({ error: 'You can only delete your own messages' });
+  found.list.splice(found.index, 1);
+  save(MESSAGES_FILE, messages);
+  wakePulse(found.roomId);
+  res.json({ ok: true });
+});
+
+app.post('/api/messages/:id/forward', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  const src = found.msg;
+  const name = (src.author && (src.author.displayName || src.author.username)) || 'Someone';
+  const text = String(src.content || '').trim().slice(0, 2000);
+  const preview = text.replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim().slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : 'Message');
+  const copiedFiles = readFiles({ files: src.files || [] });
+  if (!text && !copiedFiles.length) return res.status(400).json({ error: 'Nothing to forward' });
+  const userId = String(req.body && req.body.userId || '');
+  const channelId = String(req.body && req.body.channelId || '');
+  let roomId = '';
+  let mentions = null;
+  if (userId) {
+    if (!users[userId] || userId === req.user.id) return res.status(400).json({ error: 'Pick someone to message' });
+    const me = ensureFriendNode(req.user.id);
+    const key = dmKey(req.user.id, userId);
+    if (!me.friends.map(String).includes(String(userId)) && !dmThreads[key] && !sharesServer(req.user.id, userId)) {
+      return res.status(403).json({ error: 'Add them as a friend first' });
+    }
+    if (!dmThreads[key]) {
+      dmThreads[key] = { id: key, a: [req.user.id, userId].sort()[0], b: [req.user.id, userId].sort()[1], updatedAt: Date.now() };
+      save(DMS_FILE, dmThreads);
+    } else {
+      dmThreads[key].updatedAt = Date.now();
+      save(DMS_FILE, dmThreads);
+    }
+    roomId = 'dm:' + key;
+  } else if (channelId) {
+    const channel = findChannel(channelId, String(req.body && req.body.serverId || ''));
+    if (!channel || channel.channel.type === 'voice') return res.status(404).json({ error: 'Channel not found' });
+    if (!can(channel.guild, req.user, PERM.SEND, channel.channel)) return res.status(403).json({ error: 'You cannot send messages there' });
+    roomId = channel.channel.id;
+    mentions = parseMentions(channel.guild, req.user, text);
+  } else {
+    return res.status(400).json({ error: 'Pick a channel or a direct message' });
+  }
+  if (!messages[roomId]) messages[roomId] = [];
+  const msg = {
+    id: uuidv4(),
+    channelId: roomId,
+    authorId: req.user.id,
+    author: slimAuthor(req.user),
+    content: text,
+    files: copiedFiles,
+    forward: { name, preview },
+    mentions,
+    createdAt: new Date().toISOString(),
+  };
+  messages[roomId].push(msg);
+  if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
+  save(MESSAGES_FILE, messages);
+  wakePulse(roomId);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });

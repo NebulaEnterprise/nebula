@@ -47,6 +47,8 @@ export const ui = $state({
   toast: '',
   seenMessageId: '',
   composer: '',
+  reply: null,
+  editing: null,
   typers: [],
   voice: null,
   voiceRooms: {},
@@ -300,6 +302,8 @@ export async function openDm(user) {
   ui.menuOpen = false;
   ui.picker = '';
   ui.popout = null;
+  ui.reply = null;
+  ui.editing = null;
   applyTheme();
   dropLive();
   await loadMessages();
@@ -344,9 +348,11 @@ export async function openServer(id, opts = {}) {
 
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
-  ui.channelId = ch.id;
+    ui.channelId = ch.id;
   ui.seenMessageId = '';
   ui.picker = '';
+  ui.reply = null;
+  ui.editing = null;
   dropLive();
   loadMessages();
 }
@@ -356,6 +362,7 @@ let pulseSerial = 0;
 let memberStamp = '';
 let profileStamp = '';
 let pollStamp = '';
+let editStamp = '';
 let pulseMissing = false;
 let watchStarted = false;
 let liveCtrl = null;
@@ -403,7 +410,7 @@ async function watchChat() {
     const started = Date.now();
     let pace = 'same';
     try {
-      pace = await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, polls: pollStamp, signal });
+      pace = await loadMessages(true, { after, typing, members: memberStamp, profiles: profileStamp, polls: pollStamp, edits: editStamp, signal });
     } catch (err) {
       if (err && err.name === 'AbortError') continue;
       await sleep(1000);
@@ -482,7 +489,7 @@ export async function loadMessages(quiet, live) {
     let data;
     const signal = live && live.signal;
     const wait = live
-      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&polls=' + encodeURIComponent(live.polls || '') + '&wait=1'
+      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&polls=' + encodeURIComponent(live.polls || '') + '&edits=' + encodeURIComponent(live.edits || '') + '&wait=1'
       : '';
     if (ui.mode === 'dm' && ui.dmUser) {
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
@@ -504,6 +511,7 @@ export async function loadMessages(quiet, live) {
       if (mode === 'chat') loadMembers(true);
     }
     if (typeof data.polls === 'string') pollStamp = data.polls;
+    if (typeof data.edits === 'string') editStamp = data.edits;
     if (data.same) return 'same';
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
@@ -560,6 +568,7 @@ async function postMessage(payload) {
   const body = { content, typingToken };
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
+  if (payload.reply && payload.reply.id) body.reply = { id: payload.reply.id };
   const data = ui.mode === 'dm' && ui.dmUser
     ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body })
     : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body });
@@ -576,14 +585,56 @@ async function postMessage(payload) {
 
 export async function sendMessage() {
   const content = ui.composer.trim();
+  if (ui.editing) {
+    if (!content) return;
+    const id = ui.editing.id;
+    const previous = ui.composer;
+    ui.composer = '';
+    ui.editing = null;
+    try {
+      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { content } });
+      if (data.message) ui.messages = ui.messages.map((msg) => msg.id === id ? data.message : msg);
+      dropLive();
+    } catch (err) {
+      ui.composer = previous;
+      ui.editing = { id };
+      toast(err.message);
+    }
+    return;
+  }
   if (!content) return;
+  const reply = ui.reply;
   ui.composer = '';
+  ui.reply = null;
   try {
-    await postMessage({ content });
+    await postMessage({ content, reply });
   } catch (err) {
     ui.composer = content;
+    ui.reply = reply;
     toast(err.message);
   }
+}
+
+export async function reactTo(messageId, emoji) {
+  const data = await api('/api/messages/' + encodeURIComponent(messageId) + '/reactions', { method: 'POST', body: { emoji } });
+  if (data.message) ui.messages = ui.messages.map((msg) => msg.id === messageId ? data.message : msg);
+}
+
+export async function removeMessage(messageId) {
+  await api('/api/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
+  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  ui.messages = ui.messages.filter((msg) => msg.id !== messageId);
+  if (roomHeard[roomKey] === messageId) {
+    const last = ui.messages[ui.messages.length - 1];
+    roomHeard[roomKey] = last ? last.id : '';
+  }
+  dropLive();
+}
+
+export async function forwardMessage(messageId, target) {
+  await api('/api/messages/' + encodeURIComponent(messageId) + '/forward', { method: 'POST', body: target });
+  dropLive();
+  if (target.userId) loadDms();
 }
 
 export async function sendFiles(list) {
@@ -943,7 +994,11 @@ function announceFresh(list, roomKey) {
   }
   if (!newest || newest.id === prev) return;
   const start = rows.findIndex((msg) => msg.id === prev);
-  const fresh = start >= 0 ? rows.slice(start + 1) : [newest];
+  if (start < 0) {
+    roomHeard[roomKey] = newest.id;
+    return;
+  }
+  const fresh = rows.slice(start + 1);
   for (const msg of fresh) {
     if (!msg || isMine(msg)) continue;
     const who = (msg.author && (msg.author.displayName || msg.author.username)) || 'Someone';

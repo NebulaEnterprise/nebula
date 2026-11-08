@@ -259,9 +259,66 @@ img { max-width: 100%; }
 .welcome { padding: 28px 18px; }
 .welcome h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.03em; }
 .welcome p { margin: 0; color: var(--muted); }
-.msg { display: flex; gap: 12px; padding: 8px 12px; border-radius: 12px; }
+.msg { position: relative; display: flex; gap: 12px; padding: 8px 12px; border-radius: 12px; }
 .msg:hover { background: rgba(255,255,255,0.025); }
+.msg-tools {
+  position: absolute; right: 8px; top: 4px; z-index: 2;
+  display: flex; align-items: center; gap: 2px;
+  padding: 2px; border-radius: 8px; background: #111214; border: 1px solid var(--line);
+  opacity: 0; pointer-events: none;
+}
+.msg:hover .msg-tools, .msg.menu-open .msg-tools { opacity: 1; pointer-events: auto; }
+.msg-tools button {
+  width: 30px; height: 28px; border-radius: 6px; font-size: 15px;
+  display: grid; place-items: center;
+}
+.msg-tools button:hover { background: var(--bg-hover); }
 .msg-body { min-width: 0; }
+.edited { color: var(--faint); font-size: 11px; }
+.forward-tag { margin: 0 0 4px; color: var(--faint); font-size: 12px; }
+.reply-quote {
+  display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px; padding-left: 8px;
+  border-left: 2px solid var(--brand); color: var(--muted); font-size: 13px;
+}
+.reply-quote strong { color: var(--text, #fff); font-size: 12px; }
+.reply-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.reacts button {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px;
+  border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid transparent; font-size: 14px;
+}
+.reacts button.on { background: rgba(124, 106, 247, 0.22); border-color: var(--brand); }
+.reacts img, .react-flyout img { width: 18px; height: 18px; object-fit: contain; }
+.msg-menu {
+  position: fixed; z-index: 40; width: 220px; padding: 6px;
+  background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+}
+.msg-menu > button {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 8px; text-align: left; font-weight: 650;
+}
+.msg-menu > button:hover { background: var(--bg-hover); }
+.msg-menu > button.danger { color: #f23f43; }
+.react-flyout {
+  position: absolute; left: calc(100% + 8px); top: 0; width: 280px; max-height: 280px; overflow: auto;
+  display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start;
+  padding: 8px; background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+}
+.react-flyout .picker-label { width: 100%; }
+.react-flyout button { width: 36px; height: 36px; border-radius: 8px; font-size: 20px; display: grid; place-items: center; }
+.react-flyout button:hover { background: var(--bg-hover); }
+.compose-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: #111214; border-left: 3px solid var(--brand);
+}
+.compose-note p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.forward-row {
+  width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-weight: 650;
+}
+.forward-row:hover { background: var(--bg-hover); }
+@media (hover: none) {
+  .msg-tools { opacity: 1; pointer-events: auto; }
+}
 .msg-head { display: flex; gap: 8px; align-items: baseline; }
 .msg-head strong { font-size: 15px; }
 .msg-head time { color: var(--faint); font-size: 12px; }

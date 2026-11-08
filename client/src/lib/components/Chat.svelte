@@ -1,12 +1,13 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2 } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, toast } from '../state.svelte.js';
   import { formatContent } from '../format.js';
+  import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
@@ -70,6 +71,119 @@
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
     };
   }
+
+  let menu = $state(null);
+  let forward = $state(null);
+  let forwardTargets = $state({ channels: [], dms: [] });
+  let forwardBusy = $state(false);
+  const quickReacts = ['💯', '👍', '👎', '❤️'];
+
+  const reactionEmoji = $derived.by(() => {
+    const rows = [];
+    const seen = new Set();
+    const add = (emoji, url, pack) => {
+      if (!emoji || seen.has(emoji)) return;
+      seen.add(emoji);
+      rows.push({ emoji, url: url || '', pack: pack || '' });
+    };
+    for (const glyph of ['💯', '👍', '👎', '❤️', '☝️', '👀', '😩', '😂', '✅', '❌']) add(glyph);
+    for (const pack of ui.packs || []) {
+      for (const item of pack.emoji || []) add(':' + item.name + ':', item.url, pack.name);
+    }
+    for (const item of ui.emoji || []) add(':' + item.name + ':', item.url, ui.serverMeta?.name || 'This server');
+    return rows;
+  });
+
+  function emojiSrc(token) {
+    const hit = reactionEmoji.find((row) => row.emoji === token);
+    return hit && hit.url ? fileUrl(hit.url) : '';
+  }
+
+  function openMenu(event, msg) {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    menu = {
+      id: msg.id,
+      mine: msg.author?.id === ui.me?.id,
+      x: Math.max(8, Math.min(rect.right - 232, window.innerWidth - 520)),
+      y: Math.min(rect.bottom + 6, window.innerHeight - 320),
+      react: false,
+    };
+  }
+
+  function previewText(msg) {
+    const text = String(msg?.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+    if (text) return text.slice(0, 140);
+    if (msg?.files?.length) return msg.files[0].name || 'Attachment';
+    if (msg?.poll) return msg.poll.question || 'Poll';
+    return 'Message';
+  }
+
+  function beginReply(msg) {
+    ui.editing = null;
+    ui.reply = { id: msg.id, name: msg.author?.displayName || msg.author?.username || 'Someone', preview: previewText(msg) };
+    menu = null;
+    queueMicrotask(() => composerEl && composerEl.focus());
+  }
+
+  function beginEdit(msg) {
+    ui.reply = null;
+    ui.editing = { id: msg.id };
+    ui.composer = msg.content || '';
+    menu = null;
+    queueMicrotask(() => composerEl && composerEl.focus());
+  }
+
+  async function beginForward(msg) {
+    menu = null;
+    forward = msg;
+    forwardBusy = true;
+    try {
+      const data = await api('/api/forward-targets');
+      forwardTargets = { channels: data.channels || [], dms: data.dms || [] };
+    } catch (err) {
+      toast(err.message);
+      forward = null;
+    } finally {
+      forwardBusy = false;
+    }
+  }
+
+  async function sendForward(target) {
+    if (!forward) return;
+    forwardBusy = true;
+    try {
+      await forwardMessage(forward.id, target);
+      toast('Forwarded');
+      forward = null;
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      forwardBusy = false;
+    }
+  }
+
+  async function onReact(id, emoji) {
+    menu = null;
+    try { await reactTo(id, emoji); }
+    catch (err) { toast(err.message); }
+  }
+
+  async function onDelete(id) {
+    menu = null;
+    try { await removeMessage(id); }
+    catch (err) { toast(err.message); }
+  }
+
+  $effect(() => {
+    if (!menu) return;
+    const close = (event) => {
+      if (event.target?.closest?.('.msg-menu') || event.target?.closest?.('.msg-more')) return;
+      menu = null;
+    };
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  });
 
   let box = $state(null);
   let follow = true;
@@ -184,6 +298,12 @@
         return;
       }
     }
+    if (event.key === 'Escape' && (ui.editing || ui.reply)) {
+      ui.editing = null;
+      ui.reply = null;
+      ui.composer = '';
+      return;
+    }
     noteKeyDown(event);
   }
   let uploading = $state(false);
@@ -259,7 +379,13 @@
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg">
+    <article class="msg" class:menu-open={menu?.id === msg.id}>
+      <div class="msg-tools">
+        {#each quickReacts as glyph}
+          <button type="button" title="React" onclick={() => onReact(msg.id, glyph)}>{glyph}</button>
+        {/each}
+        <button type="button" class="msg-more" title="More" onclick={(e) => openMenu(e, msg)}><MoreHorizontal size={18} /></button>
+      </div>
       <button type="button" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
@@ -267,7 +393,14 @@
         <div class="msg-head">
           <strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong>
           <time>{time(msg.createdAt)}</time>
+          {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>
+        {#if msg.forward}
+          <p class="forward-tag">Forwarded from {msg.forward.name}</p>
+        {/if}
+        {#if msg.reply}
+          <div class="reply-quote"><strong>{msg.reply.name}</strong><span>{msg.reply.preview}</span></div>
+        {/if}
         {#if msg.content}
           <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
         {/if}
@@ -281,10 +414,52 @@
         {#if msg.poll}
           <PollCard poll={msg.poll} messageId={msg.id} />
         {/if}
+        {#if msg.reactions?.length}
+          <div class="reacts">
+            {#each msg.reactions as react}
+              <button type="button" class:on={react.me} onclick={() => onReact(msg.id, react.emoji)}>
+                {#if emojiSrc(react.emoji)}
+                  <img src={emojiSrc(react.emoji)} alt={react.emoji} />
+                {:else}
+                  {react.emoji}
+                {/if}
+                <span>{react.count}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     </article>
   {/each}
 </div>
+{#if menu}
+  {@const current = ui.messages.find((msg) => msg.id === menu.id)}
+  <div class="msg-menu" style="left:{menu.x}px;top:{menu.y}px" onclick={(e) => e.stopPropagation()}>
+    <button type="button" onclick={() => (menu = { ...menu, react: !menu.react })}><SmilePlus size={16} /> Add Reaction</button>
+    {#if menu.react}
+      <div class="react-flyout">
+        {#each reactionEmoji as row}
+          {#if row.pack && row.pack !== reactionEmoji[reactionEmoji.indexOf(row) - 1]?.pack}
+            <p class="picker-label">{row.pack}</p>
+          {/if}
+          <button type="button" title={row.emoji} onclick={() => current && onReact(current.id, row.emoji)}>
+            {#if row.url}<img src={fileUrl(row.url)} alt={row.emoji} />{:else}{row.emoji}{/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
+    {#if current && menu.mine}
+      <button type="button" onclick={() => beginEdit(current)}><Pencil size={16} /> Edit Message</button>
+    {/if}
+    {#if current}
+      <button type="button" onclick={() => beginReply(current)}><Reply size={16} /> Reply</button>
+      <button type="button" onclick={() => beginForward(current)}><Forward size={16} /> Forward</button>
+    {/if}
+    {#if current && menu.mine}
+      <button type="button" class="danger" onclick={() => onDelete(current.id)}><Trash2 size={16} /> Delete Message</button>
+    {/if}
+  </div>
+{/if}
 <div class="composer-wrap">
   {#if ui.mode === 'chat' && ui.showLobby && ui.about}
     <div class="lobby">
@@ -297,6 +472,21 @@
   {/if}
   {#if ui.typers.length}
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
+  {/if}
+  {#if ui.reply}
+    <div class="compose-note">
+      <div>
+        <strong>Replying to {ui.reply.name}</strong>
+        <p>{ui.reply.preview}</p>
+      </div>
+      <button type="button" class="btn icon" onclick={() => (ui.reply = null)}>✕</button>
+    </div>
+  {/if}
+  {#if ui.editing}
+    <div class="compose-note">
+      <strong>Editing message</strong>
+      <button type="button" class="btn icon" onclick={() => { ui.editing = null; ui.composer = ''; }}>✕</button>
+    </div>
   {/if}
   {#if mentionChoices.length}
     <div class="mention-menu">
@@ -329,13 +519,39 @@
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
-      placeholder={locked ? 'Finish onboarding before you chat' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}
+      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}
     />
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
     <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple disabled={uploading} onchange={onFiles} />
   </form>
+  {#if forward}
+    <div class="poll-overlay" role="presentation" onclick={() => (forward = null)}>
+      <div class="poll-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
+        <div class="row">
+          <h3>Forward message</h3>
+          <button type="button" class="btn icon" onclick={() => (forward = null)}>✕</button>
+        </div>
+        <p class="hint">{previewText(forward)}</p>
+        {#if forwardBusy && !forwardTargets.channels.length && !forwardTargets.dms.length}
+          <p class="hint">Loading places you can send…</p>
+        {/if}
+        <p class="label">Direct messages</p>
+        {#each forwardTargets.dms as dm}
+          <button type="button" class="forward-row" disabled={forwardBusy} onclick={() => sendForward({ userId: dm.id })}>{dm.name}</button>
+        {:else}
+          <p class="hint">No direct messages yet.</p>
+        {/each}
+        <p class="label">Channels you can send in</p>
+        {#each forwardTargets.channels as ch}
+          <button type="button" class="forward-row" disabled={forwardBusy} onclick={() => sendForward({ channelId: ch.channelId, serverId: ch.serverId })}>{ch.serverName} · #{ch.name}</button>
+        {:else}
+          <p class="hint">No text channels you can send in.</p>
+        {/each}
+      </div>
+    </div>
+  {/if}
   {#if pollOpen}
     <div class="poll-overlay" role="presentation" onclick={() => (pollOpen = false)}>
       <div class="poll-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
