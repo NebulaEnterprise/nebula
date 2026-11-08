@@ -977,15 +977,15 @@ let ytDlpLooked = false;
 function ytdlpBin() {
   if (ytDlpLooked) return ytDlp;
   ytDlpLooked = true;
+  if (process.platform === 'win32') return null;
   const tries = [
     ['yt-dlp', []],
-    ['python', ['-m', 'yt_dlp']],
     ['python3', ['-m', 'yt_dlp']],
-    ['py', ['-m', 'yt_dlp']],
+    ['python', ['-m', 'yt_dlp']],
   ];
   for (const [cmd, prefix] of tries) {
     try {
-      execFileSync(cmd, [...prefix, '--version'], { stdio: 'ignore', timeout: 8000, windowsHide: true });
+      execFileSync(cmd, [...prefix, '--version'], { stdio: 'ignore', timeout: 8000 });
       ytDlp = { cmd, prefix };
       break;
     } catch (_) {}
@@ -1057,7 +1057,7 @@ function ensureYtDlp() {
       if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
     }
     try {
-      execFileSync(dest, ['--version'], { stdio: 'ignore', timeout: 15000, windowsHide: true });
+      execFileSync(dest, ['--version'], { stdio: 'ignore', timeout: 15000 });
     } catch (err) {
       fs.unlink(dest, () => {});
       throw err;
@@ -1088,7 +1088,7 @@ async function downloadSongAudio(pageUrl, destBase) {
       '-o', destBase + '.%(ext)s',
       pageUrl,
     ];
-    execFile(bin.cmd, args, { timeout: 120000, windowsHide: true }, (err, _stdout, stderr) => {
+    execFile(bin.cmd, args, { timeout: 120000, windowsHide: false }, (err, _stdout, stderr) => {
       if (err) {
         const detail = String(stderr || err.message || '');
         if (/does not pass filter|duration/i.test(detail)) reject(new Error('That video is too long to save'));
@@ -1171,7 +1171,6 @@ function queueSavedSongs() {
   }
 }
 
-queueSavedSongs();
 
 function profileShades(input) {
   const clean = cleanNameColors(input);
@@ -3803,8 +3802,9 @@ async function pullUpdates() {
     console.log('  Server updated from GitHub. Restarting.');
     const child = spawn(process.execPath, process.argv.slice(1), {
       cwd: __dirname,
-      detached: true,
+      detached: process.platform !== 'win32',
       stdio: 'inherit',
+      windowsHide: false,
       env: { ...process.env, NEBULA_RESTART_DELAY: '800' },
     });
     child.unref();
@@ -3822,6 +3822,7 @@ function listen() {
     console.log('  Email: ' + GMAIL_USER);
     console.log('  Checking GitHub for updates every 30s.');
     setInterval(() => { pullUpdates().catch(() => {}); }, 30000);
+    try { queueSavedSongs(); } catch (err) { console.log('  Profile songs will save when you open settings.'); }
   });
   httpServer.on('error', (err) => {
     if (err.code === 'EADDRINUSE' && process.env.NEBULA_RESTART_DELAY && listenTries < 10) {
