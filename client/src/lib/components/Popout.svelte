@@ -5,6 +5,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
+  import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
 
@@ -57,8 +58,11 @@
     <div class="pop-body">
       <div class="profile-hero">
         <div class="profile-face">
-          <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
-            {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+          <div class="song-av">
+            <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
+              {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+            </div>
+            <SongButton url={u.songUrl} start={u.songStart} />
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}

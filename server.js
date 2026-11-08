@@ -89,6 +89,8 @@ function memberStamp(g) {
       u.profileStyle || '',
       Array.isArray(u.nameColors) ? u.nameColors.join(',') : '',
       Array.isArray(u.profileColors) ? u.profileColors.join(',') : '',
+      u.songUrl || '',
+      String(u.songStart || 0),
       u.status || '',
     ].join('\t');
   });
@@ -889,6 +891,8 @@ function publicUser(u) {
     nameColors: cleanNameColors(u.nameColors),
     profileStyle: cleanProfileStyle(u.profileStyle),
     profileColors: profileShades(u.profileColors),
+    songUrl: cleanSongUrl(u.songUrl),
+    songStart: cleanSongStart(u.songStart),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
@@ -914,6 +918,32 @@ function cleanNameFont(value) {
 
 function cleanProfileStyle(value) {
   return ['solid', 'glow', 'rainbow'].includes(value) ? value : 'gradient';
+}
+
+function cleanSongStart(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  let sec = 0;
+  if (/^\d+$/.test(raw)) sec = Number(raw);
+  else {
+    const clock = raw.match(/^(?:(\d+):)?(\d+):(\d+)$/);
+    if (clock) sec = Number(clock[1] || 0) * 3600 + Number(clock[2] || 0) * 60 + Number(clock[3] || 0);
+  }
+  if (!Number.isFinite(sec) || sec < 0) return 0;
+  return Math.min(Math.floor(sec), 21600);
+}
+
+function cleanSongUrl(value) {
+  const raw = String(value || '').trim().slice(0, 300);
+  if (!raw) return '';
+  if (/^spotify:track:[A-Za-z0-9]{10,}/.test(raw)) return raw.split('?')[0];
+  let url;
+  try { url = new URL(raw); } catch { return ''; }
+  const host = url.hostname.replace(/^www\./, '').replace(/^m\./, '');
+  if (host === 'youtu.be' || host === 'youtube.com' || host === 'music.youtube.com' || host === 'open.spotify.com') {
+    if (host === 'open.spotify.com' && !url.pathname.includes('/track/')) return '';
+    return raw;
+  }
+  return '';
 }
 
 function profileShades(input) {
@@ -1666,7 +1696,7 @@ app.post('/api/seen', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -1730,6 +1760,12 @@ app.patch('/api/me', auth, (req, res) => {
   if (nameFont !== undefined) req.user.nameFont = cleanNameFont(nameFont);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
   if (profileStyle !== undefined) req.user.profileStyle = cleanProfileStyle(profileStyle);
+  if (songUrl !== undefined) {
+    const next = cleanSongUrl(songUrl);
+    if (String(songUrl || '').trim() && !next) return res.status(400).json({ error: 'Use a YouTube or Spotify link' });
+    req.user.songUrl = next;
+  }
+  if (songStart !== undefined) req.user.songStart = cleanSongStart(songStart);
   if (profileColors !== undefined) {
     const shades = cleanNameColors(profileColors);
     if (shades.length === 2) req.user.profileColors = shades;

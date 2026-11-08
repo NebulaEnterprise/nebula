@@ -8,6 +8,8 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import TagPill from './TagPill.svelte';
+  import SongButton from './SongButton.svelte';
+  import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import { fileToDataUrl, shrinkGif } from '../image.js';
@@ -52,6 +54,8 @@
     profileStyle: ['solid', 'glow', 'rainbow'].includes(ui.me?.profileStyle) ? ui.me.profileStyle : 'gradient',
     nameColors: Array.isArray(ui.me?.nameColors) && ui.me.nameColors.length ? [...ui.me.nameColors] : ['#5ce1ff', '#7c6af7'],
     profileColors: Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? [...ui.me.profileColors] : ['#7c3aed', '#c084fc'],
+    songUrl: ui.me?.songUrl || '',
+    songStart: ui.me?.songStart ? formatStamp(ui.me.songStart) : '',
   });
 
   const profileStyles = [
@@ -202,7 +206,12 @@
   async function save() {
     try {
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
-      const body = { ...form, bio: shortBio(form.bio), aboutMe: aboutDraft };
+      const songUrl = String(form.songUrl || '').trim();
+      if (songUrl && !parseSong(songUrl)) {
+        toast('Use a YouTube or Spotify link');
+        return;
+      }
+      const body = { ...form, bio: shortBio(form.bio), aboutMe: aboutDraft, songUrl, songStart: parseStamp(form.songStart) };
       for (const field of ['avatarUrl', 'bannerUrl']) {
         if (String(body[field] || '').startsWith('blob:')) body[field] = savedUrl[field] || '';
       }
@@ -292,6 +301,16 @@
               <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
             </section>
             <div class="field">
+              <label>Profile song</label>
+              <input bind:value={form.songUrl} maxlength="300" placeholder="YouTube or Spotify link" />
+              <p class="hint">Shows a play button on your picture. The song loops.</p>
+            </div>
+            <div class="field">
+              <label>Start at</label>
+              <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
+              <p class="hint">Where playback starts, like 1:30.</p>
+            </div>
+            <div class="field">
               <label>Bio</label>
               <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="Shows in the bubble beside your picture"></textarea>
             </div>
@@ -353,8 +372,11 @@
             <div class="pop-body">
               <div class="profile-hero">
                 <div class="profile-face">
-                  <div class="pop-av profile-av" style="background:{form.avatarColor}">
-                    {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                  <div class="song-av">
+                    <div class="pop-av profile-av" style="background:{form.avatarColor}">
+                      {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                    </div>
+                    <SongButton url={form.songUrl} start={parseStamp(form.songStart)} />
                   </div>
                   <i class="profile-dot" style="background:{statusColor[form.status] || statusColor.offline}"></i>
                   {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}

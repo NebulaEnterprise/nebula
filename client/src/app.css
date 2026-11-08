@@ -1082,6 +1082,14 @@ img { max-width: 100%; }
   position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
   border: 3px solid #140d1f;
 }
+.song-av { position: relative; display: inline-grid; }
+.song-btn {
+  position: absolute; left: 2px; bottom: 2px; z-index: 4;
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: #111214; color: #fff; border: 2px solid #140d1f;
+}
+.song-btn:hover { background: #2a2b31; }
 .profile-roles { justify-content: center; margin-top: 12px; }
 .profile-panel {
   margin-top: 14px; padding: 2px 12px 4px; border-radius: 16px;

@@ -10,6 +10,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
+  import SongButton from './SongButton.svelte';
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
@@ -309,8 +310,11 @@
       <div class="pop-body">
         <div class="profile-hero">
           <div class="profile-face">
-            <div class="pop-av profile-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
-              {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
+            <div class="song-av">
+              <div class="pop-av profile-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
+                {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
+              </div>
+              <SongButton url={ui.me?.songUrl} start={ui.me?.songStart} />
             </div>
             <i class="profile-dot" style="background:{presenceLabel[2]}"></i>
             {#if editingBio}
