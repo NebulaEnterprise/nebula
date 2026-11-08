@@ -245,10 +245,11 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 88px; bottom: 78px; z-index: 50; width: min(380px, calc(100vw - 104px));
+  position: fixed; left: 84px; bottom: 68px; z-index: 50; width: 252px;
+  max-height: calc(100vh - 84px);
   --shade-a: #7c3aed; --shade-b: #c084fc;
-  border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 18px;
-  box-shadow: var(--shadow); overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 16px;
+  box-shadow: var(--shadow); overflow: auto;
 }
 .account-banner { height: 84px; position: relative; }
 .account-banner img, .account-av img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -278,29 +279,40 @@ img { max-width: 100%; }
 }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
+.account-pop .pop-banner { height: 64px; min-height: 64px; max-height: 64px; }
+.account-pop .pop-body { padding: 0 10px 10px; }
+.account-pop .profile-hero { margin-top: -30px; }
+.account-pop .profile-hero h3 { margin-top: 4px; font-size: 18px; }
+.account-pop .pop-av {
+  width: 60px; height: 60px; border-radius: 16px; border-width: 3px; font-size: 22px;
+}
+.account-pop .profile-dot { width: 12px; height: 12px; border-width: 2px; right: 1px; bottom: 1px; }
+.account-pop .account-edit, .account-pop .account-row {
+  margin-top: 6px; padding: 7px 10px; font-size: 13px;
+}
 .account-pop .profile-face .bio-bubble {
   left: calc(100% + 4px); top: 50%; transform: translateY(-50%);
-  margin: 0; max-width: 126px;
+  margin: 0; max-width: 86px;
   display: flex; align-items: center; gap: 2px;
-  padding: 4px 5px 4px 8px; border-radius: 7px;
+  padding: 3px 4px 3px 7px; border-radius: 7px;
   background: #4e5058; box-shadow: none;
-  font-size: 12px; line-height: 15px;
+  font-size: 11px; line-height: 14px;
 }
 .account-pop .profile-face .bio-bubble::before {
   left: -6px; top: 50%; margin-top: -5px;
   border-width: 5px 6px 5px 0;
   border-color: transparent #4e5058 transparent transparent;
 }
-.account-pop .bio-bubble span { max-width: 128px; font-size: 12px; line-height: 15px; }
+.account-pop .bio-bubble span { max-width: 52px; font-size: 11px; line-height: 14px; }
 .account-pop .account-bubble button { width: 20px; height: 20px; }
 .account-pop .account-bubble button svg { width: 13px; height: 13px; }
-.account-pop .account-bubble input { width: 104px; padding: 2px 0; font-size: 12px; }
+.account-pop .account-bubble input { width: 48px; padding: 2px 0; font-size: 11px; }
 .account-pop .bio-hint { padding: 4px 9px; color: #fff; font-style: italic; }
 .account-pop .bio-hint i {
   width: 14px; height: 14px; display: grid; place-items: center;
   background: transparent; color: #fff; font-style: normal; flex-shrink: 0;
 }
-.account-pop .bio-hint span { max-width: 140px; }
+.account-pop .bio-hint span { max-width: 52px; }
 .account-pop .bio-hint:hover { filter: brightness(1.08); }
 .account-body { padding: 8px 14px 14px; }
 .account-body > strong { display: block; font-size: 20px; line-height: 24px; }
@@ -328,7 +340,7 @@ img { max-width: 100%; }
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .account-switch {
-  position: fixed; left: min(416px, calc(100vw - 276px)); bottom: 92px; z-index: 51;
+  position: fixed; left: min(344px, calc(100vw - 276px)); bottom: 76px; z-index: 51;
   width: 260px; padding: 8px; border-radius: 12px;
   background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
@@ -1173,6 +1185,7 @@ img { max-width: 100%; }
 @media (max-width: 900px) {
   .members { display: none; }
   .side { width: 228px; }
+  .account-pop { width: 212px; }
   .grid-2 { grid-template-columns: 1fr; }
   .settings { flex-direction: column; }
   .set-nav { width: 100%; display: flex; gap: 4px; overflow: auto; padding: 10px; }
