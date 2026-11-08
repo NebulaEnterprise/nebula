@@ -167,6 +167,26 @@ export async function loadFriends() {
 
 const heardDm = {};
 let inboxReady = false;
+let lastSentId = '';
+
+function isMine(msg) {
+  if (!msg || !ui.me) return false;
+  if (msg.id && msg.id === lastSentId) return true;
+  const id = msg.authorId || (msg.author && msg.author.id);
+  return String(id || '') === String(ui.me.id);
+}
+
+function dmSeenAt() {
+  try { return JSON.parse(localStorage.getItem('nebula-dm-at') || '{}'); }
+  catch { return {}; }
+}
+
+function rememberDm(id, at) {
+  if (!id) return;
+  const map = dmSeenAt();
+  map[id] = at || Date.now();
+  try { localStorage.setItem('nebula-dm-at', JSON.stringify(map)); } catch (_) {}
+}
 
 export async function loadDms() {
   try {
@@ -178,10 +198,12 @@ export async function loadDms() {
     if (!ready) {
       for (const row of next) {
         const id = row.other && row.other.id;
-        if (id && row.lastId) {
+        if (!id) continue;
+        if (row.lastId) {
           map['dm:' + id] = row.lastId;
           heardDm[id] = row.lastId;
         }
+        rememberDm(id, row.updatedAt || Date.now());
       }
       try {
         localStorage.setItem('nebula-seen', JSON.stringify(map));
@@ -190,31 +212,33 @@ export async function loadDms() {
       inboxReady = true;
       return;
     }
+    const seenAt = dmSeenAt();
     const unread = {};
     let changed = false;
     let ping = false;
     for (const row of next) {
       const id = row.other && row.other.id;
-      if (!id || !row.lastId) continue;
+      if (!id) continue;
       const key = 'dm:' + id;
-      const viewing = ui.mode === 'dm' && ui.dmUser && ui.dmUser.id === id;
-      if (viewing) {
-        if (map[key] !== row.lastId) {
+      const stamp = row.lastId || String(row.updatedAt || '');
+      const viewing = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id);
+      const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
+      if (viewing || own) {
+        if (row.lastId && map[key] !== row.lastId) {
           map[key] = row.lastId;
           changed = true;
         }
-        heardDm[id] = row.lastId;
+        rememberDm(id, row.updatedAt || Date.now());
+        heardDm[id] = stamp;
         continue;
       }
-      if (row.lastFrom && ui.me && row.lastFrom === ui.me.id) {
-        heardDm[id] = row.lastId;
-        continue;
-      }
-      if (map[key] !== row.lastId) {
+      const freshId = row.lastId && map[key] !== row.lastId;
+      const freshAt = row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0);
+      if (freshId || freshAt) {
         unread[id] = serverDmNotes[id] && serverDmNotes[id].unread ? serverDmNotes[id] : { unread: 1 };
-        if (inboxReady && heardDm[id] !== row.lastId) ping = true;
+        if (inboxReady && heardDm[id] !== stamp) ping = true;
       }
-      heardDm[id] = row.lastId;
+      heardDm[id] = stamp;
     }
     if (changed) {
       try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
@@ -244,6 +268,12 @@ export function showAddFriend() {
 export async function openDm(user) {
   ui.mode = 'dm';
   ui.dmUser = user;
+  if (user && user.id && ui.activity.dms[user.id]) {
+    const dms = { ...ui.activity.dms };
+    delete dms[user.id];
+    ui.activity = { ...ui.activity, dms };
+    rememberDm(user.id, Date.now());
+  }
   ui.menuOpen = false;
   ui.picker = '';
   ui.popout = null;
@@ -464,15 +494,14 @@ export async function loadMessages(quiet, live) {
     if (newest && newest.id) markSeen(roomKey, newest.id);
     if (ui.mode === 'dm') {
       ui.messages = list;
-      const mine = ui.me && newest && newest.author && newest.author.id === ui.me.id;
-      if (previousId && newest && newest.id !== previousId && !mine) playPing();
+      if (previousId && newest && newest.id !== previousId && !isMine(newest)) playPing();
       return 'changed';
     }
     ui.messages = list;
     if (newest && newest.id && newest.id !== ui.seenMessageId) {
       const first = !ui.seenMessageId;
       ui.seenMessageId = newest.id;
-      const mine = ui.me && newest.author && newest.author.id === ui.me.id;
+      const mine = isMine(newest);
       if (!first && !mine && !serverMuted() && quiet) {
         const mode = notifyMode();
         const text = newest.content || '';
@@ -533,8 +562,11 @@ async function postMessage(payload) {
     ? await api('/api/dms/' + ui.dmUser.id + '/messages', { method: 'POST', body })
     : await api('/api/channels/' + ui.channelId + '/messages', { method: 'POST', body });
   if (data.message && !ui.messages.some((m) => m.id === data.message.id)) {
+    lastSentId = data.message.id;
     ui.messages = [...ui.messages, data.message];
     paintNames(ui.messages);
+  } else if (data.message) {
+    lastSentId = data.message.id;
   }
   dropLive();
   if (ui.mode === 'dm') loadDms();
@@ -904,7 +936,7 @@ async function pollActivity() {
     let dmUnread = 0;
     for (const row of Object.values(servers)) mentions += row.mentions || 0;
     for (const row of Object.values(dms)) dmUnread += row.unread || 0;
-    if (activityReady && (mentions > mentionSnap || dmUnread > dmSnap)) playPing();
+    if (activityReady && mentions > mentionSnap) playPing();
     activityReady = true;
     mentionSnap = mentions;
     dmSnap = dmUnread;
