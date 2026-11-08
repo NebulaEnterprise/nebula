@@ -1009,7 +1009,7 @@ img { max-width: 100%; }
 .profile-hero .handle { justify-content: center; }
 .profile-status { margin: 4px 0 0; color: color-mix(in srgb, var(--shade-b) 72%, white); font-size: 14px; }
 .profile-face { position: relative; }
-.profile-face .bio-bubble { left: calc(100% + 10px); top: 22px; max-width: 132px; }
+.profile-face .bio-bubble { left: calc(100% + 10px); top: 58px; max-width: 132px; }
 .profile-face .bio-bubble span { max-width: 112px; }
 .profile-dot {
   position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
