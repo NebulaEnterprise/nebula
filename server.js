@@ -67,9 +67,7 @@ function touchProfiles() {
 }
 function touchAlerts() {
   alertRev += 1;
-  for (const waiter of [...pulseWaiters]) {
-    if (waiter.alert) waiter.finish();
-  }
+  for (const waiter of [...pulseWaiters]) waiter.finish();
 }
 function wakePulse(roomId) {
   for (const waiter of pulseWaiters) {
@@ -1312,7 +1310,28 @@ const FRONTEND_DIR = resolveFrontendDir();
 
 const app = express();
 app.set('etag', false);
-app.use(cors({ maxAge: 7200 }));
+app.use(cors({ maxAge: 86400 }));
+app.use((req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    let raw;
+    try { raw = Buffer.from(JSON.stringify(body)); } catch (_) { return json(body); }
+    const accept = String(req.headers['accept-encoding'] || '');
+    if (raw.length < 1024 || !/\bgzip\b/.test(accept) || res.headersSent) return json(body);
+    zlib.gzip(raw, (err, zipped) => {
+      if (err || res.writableEnded) {
+        if (!res.writableEnded) json(body);
+        return;
+      }
+      res.set('Content-Encoding', 'gzip');
+      res.set('Content-Type', 'application/json; charset=utf-8');
+      res.set('Vary', 'Accept-Encoding');
+      res.set('Content-Length', String(zipped.length));
+      res.end(zipped);
+    });
+  };
+  next();
+});
 app.use((req, res, next) => {
   if (req.path === '/api/upload' || req.path === '/api/upload/part') return next();
   return express.json({ limit: '512mb' })(req, res, next);
@@ -2773,8 +2792,26 @@ app.get('/api/typing', auth, (req, res) => {
   res.json({ ok: true, typers: listTypers(key, req.user.id) });
 });
 
+function liveFields(req) {
+  const src = Object.assign({}, req.query || {}, req.body && typeof req.body === 'object' ? req.body : {});
+  return {
+    dmUserId: String(src.dmUserId || ''),
+    channelId: String(src.channelId || ''),
+    serverId: String(src.serverId || ''),
+    after: String(src.after || ''),
+    typing: String(src.typing || ''),
+    members: String(src.members || ''),
+    profiles: String(src.profiles || ''),
+    polls: String(src.polls || ''),
+    edits: String(src.edits || ''),
+    alert: String(src.alert || ''),
+    wait: String(src.wait || '') === '1',
+  };
+}
+
 function pulseSnap(req) {
-  const dmUserId = String(req.query.dmUserId || '');
+  const fields = liveFields(req);
+  const dmUserId = fields.dmUserId;
   if (dmUserId) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
@@ -2794,10 +2831,11 @@ function pulseSnap(req) {
         profiles: String(profileRev),
         polls: pollStamp(raw.slice(-100)),
         edits: messageStamp(raw.slice(-100)),
+        alert: String(alertRev),
       },
     };
   }
-  const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
+  const found = findChannel(fields.channelId, fields.serverId);
   if (!found) return null;
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
   const raw = messages[found.channel.id] || [];
@@ -2816,14 +2854,16 @@ function pulseSnap(req) {
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),
       edits: messageStamp(raw.slice(-100)),
+      alert: String(alertRev),
     },
   };
 }
 
-app.get('/api/alert', auth, (req, res) => {
-  const cursor = String(req.query.cursor || '');
+function handleAlert(req, res) {
+  const fields = liveFields(req);
+  const cursor = fields.alert || String((req.body && req.body.cursor) || req.query.cursor || '');
   const current = String(alertRev);
-  if (req.query.wait === '1' && cursor === current) {
+  if (fields.wait && cursor === current) {
     let settled = false;
     const waiter = { alert: true, finish };
     function finish() {
@@ -2844,20 +2884,16 @@ app.get('/api/alert', auth, (req, res) => {
     return;
   }
   res.json({ ok: true, cursor: current });
-});
+}
 
-app.get('/api/pulse', auth, (req, res) => {
+function handlePulse(req, res) {
   ensureGuilds();
   const snap = pulseSnap(req);
   if (!snap) return res.status(404).json({ error: 'Channel not found' });
   if (snap.forbidden) return res.status(403).json({ error: 'You cannot view this channel' });
-  const after = String(req.query.after || '');
-  const typing = String(req.query.typing || '');
-  const members = String(req.query.members || '');
-  const profiles = String(req.query.profiles || '');
-  const polls = String(req.query.polls || '');
-  const edits = String(req.query.edits || '');
-  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles && (snap.body.polls || '') === polls && (snap.body.edits || '') === edits;
+  const fields = liveFields(req);
+  const alertSame = !fields.alert || fields.alert === String(alertRev);
+  const hold = fields.wait && snap.body.cursor === fields.after && snap.body.typing === fields.typing && (snap.body.members || '') === fields.members && (snap.body.profiles || '') === fields.profiles && (snap.body.polls || '') === fields.polls && (snap.body.edits || '') === fields.edits && alertSame;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -2869,8 +2905,13 @@ app.get('/api/pulse', auth, (req, res) => {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles && (body.polls || '') === polls && (body.edits || '') === edits) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '' });
+    body.alert = String(alertRev);
+    const still = body.cursor === fields.after && body.typing === fields.typing && (body.members || '') === fields.members && (body.profiles || '') === fields.profiles && (body.polls || '') === fields.polls && (body.edits || '') === fields.edits && (!fields.alert || fields.alert === body.alert);
+    if (still) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '', alert: body.alert });
+    }
+    if (fields.alert && fields.alert !== body.alert && body.cursor === fields.after && body.typing === fields.typing && (body.members || '') === fields.members && (body.profiles || '') === fields.profiles && (body.polls || '') === fields.polls && (body.edits || '') === fields.edits) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '', alert: body.alert });
     }
     res.json(body);
   }
@@ -2882,7 +2923,12 @@ app.get('/api/pulse', auth, (req, res) => {
     clearTimeout(timer);
     pulseWaiters.delete(waiter);
   });
-});
+}
+
+app.get('/api/alert', auth, handleAlert);
+app.post('/api/alert', auth, handleAlert);
+app.get('/api/pulse', auth, handlePulse);
+app.post('/api/pulse', auth, handlePulse);
 
 app.get('/api/friends', auth, (req, res) => {
   const node = ensureFriendNode(req.user.id);
