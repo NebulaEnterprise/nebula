@@ -106,13 +106,17 @@
   {/if}
   {#if ui.typers.length}
     <p class="typing">
-      {#if ui.typers.length > 5}
-        5+ are typing
+      {#if ui.typers.length > 3}
+        <Name user={typerName(ui.typers[0])} /><span>, </span>
+        <Name user={typerName(ui.typers[1])} /><span> and {ui.typers.length - 2} others are typing</span>
       {:else}
-        {#each ui.typers.slice(0, 5) as person, i}
-          {#if i > 0}, {/if}<Name user={typerName(person)} /> is typing
+        {#each ui.typers as person, i}
+          {#if i > 0}<span>{i === ui.typers.length - 1 ? ' and ' : ', '}</span>{/if}
+          <Name user={typerName(person)} />
         {/each}
+        <span>{ui.typers.length === 1 ? ' is typing' : ' are typing'}</span>
       {/if}
+      <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
     </p>
   {/if}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
