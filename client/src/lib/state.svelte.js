@@ -912,8 +912,10 @@ export function markSeen(id, messageId) {
 }
 
 let serverDmNotes = {};
+let activityMissing = false;
 
 async function pollActivity() {
+  if (activityMissing) return;
   try {
     const data = await api('/api/activity', {
       method: 'POST',
@@ -957,7 +959,9 @@ async function pollActivity() {
     mentionSnap = mentions;
     dmSnap = dmUnread;
     ui.activity = { ...ui.activity, servers, channels };
-  } catch (_) {}
+  } catch (err) {
+    if (err && err.status === 404) activityMissing = true;
+  }
 }
 
 function startClocks() {

@@ -47,7 +47,11 @@ export async function api(path, opts = {}) {
     throw new Error('Session expired');
   }
   if (res.status === 413) throw new Error('That image is too large for the connection. Try a shorter GIF.');
-  if (!res.ok) throw new Error(data.error || 'Request failed');
+  if (!res.ok) {
+    const error = new Error(data.error || 'Request failed');
+    error.status = res.status;
+    throw error;
+  }
   return data;
 }
 
