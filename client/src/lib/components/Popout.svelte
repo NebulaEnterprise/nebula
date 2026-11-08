@@ -42,11 +42,11 @@
 
   $effect(() => {
     const id = u?.id;
-    const url = u?.songUrl || '';
+    const file = u?.songFile || '';
     const start = u?.songStart || 0;
-    if (!id || !u?.songAutoplay || !hasSong(url)) return;
-    playSong(url, start);
-    return () => stopSong(url, start);
+    if (!id || !u?.songAutoplay || !hasSong(file)) return;
+    playSong(file, start);
+    return () => stopSong(file, start);
   });
 
   async function act(kind) {
@@ -72,7 +72,7 @@
             <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
               {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
             </div>
-            <SongButton url={u.songUrl} start={u.songStart} />
+            <SongButton file={u.songFile} start={u.songStart} />
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}

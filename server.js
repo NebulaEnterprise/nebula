@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const zlib = require('zlib');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
 const PORT = 3850;
@@ -92,6 +92,7 @@ function memberStamp(g) {
       u.songUrl || '',
       String(u.songStart || 0),
       u.songAutoplay ? '1' : '',
+      u.songFile || '',
       u.status || '',
     ].join('\t');
   });
@@ -895,6 +896,8 @@ function publicUser(u) {
     songUrl: cleanSongUrl(u.songUrl),
     songStart: cleanSongStart(u.songStart),
     songAutoplay: !!u.songAutoplay,
+    songFile: cleanSongFile(u.songFile),
+    songError: String(u.songError || '').slice(0, 140),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
@@ -934,19 +937,161 @@ function cleanSongStart(value) {
   return Math.min(Math.floor(sec), 21600);
 }
 
-function cleanSongUrl(value) {
-  const raw = String(value || '').trim().slice(0, 300);
+function youtubeVideoId(value) {
+  const raw = String(value || '').trim();
   if (!raw) return '';
-  if (/^spotify:track:[A-Za-z0-9]{10,}/.test(raw)) return raw.split('?')[0];
   let url;
   try { url = new URL(raw); } catch { return ''; }
   const host = url.hostname.replace(/^www\./, '').replace(/^m\./, '');
-  if (host === 'youtu.be' || host === 'youtube.com' || host === 'music.youtube.com' || host === 'open.spotify.com') {
-    if (host === 'open.spotify.com' && !url.pathname.includes('/track/')) return '';
-    return raw;
+  let id = '';
+  if (host === 'youtu.be') id = (url.pathname.split('/').filter(Boolean)[0] || '');
+  else if (host === 'youtube.com' || host === 'music.youtube.com') {
+    id = url.searchParams.get('v') || '';
+    const parts = url.pathname.split('/').filter(Boolean);
+    if (!id && (parts[0] === 'embed' || parts[0] === 'shorts' || parts[0] === 'live')) id = parts[1] || '';
   }
-  return '';
+  id = String(id).replace(/[^A-Za-z0-9_-]/g, '');
+  return /^[A-Za-z0-9_-]{6,}$/.test(id) ? id : '';
 }
+
+function cleanSongUrl(value) {
+  const id = youtubeVideoId(value);
+  return id ? 'https://www.youtube.com/watch?v=' + id : '';
+}
+
+function cleanSongFile(value) {
+  const raw = String(value || '');
+  return /^\/uploads\/song-[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/.test(raw) ? raw : '';
+}
+
+function deleteSongPath(urlPath) {
+  const clean = cleanSongFile(urlPath);
+  if (!clean) return;
+  fs.unlink(path.join(UPLOAD_DIR, path.basename(clean)), () => {});
+}
+
+let ytDlp = undefined;
+function ytdlpBin() {
+  if (ytDlp !== undefined) return ytDlp;
+  ytDlp = null;
+  const tries = [
+    ['yt-dlp', []],
+    ['python', ['-m', 'yt_dlp']],
+    ['python3', ['-m', 'yt_dlp']],
+    ['py', ['-m', 'yt_dlp']],
+  ];
+  for (const [cmd, prefix] of tries) {
+    try {
+      execFileSync(cmd, [...prefix, '--version'], { stdio: 'ignore', timeout: 8000, windowsHide: true });
+      ytDlp = { cmd, prefix };
+      break;
+    } catch (_) {}
+  }
+  return ytDlp;
+}
+
+function downloadSongAudio(pageUrl, destBase) {
+  const bin = ytdlpBin();
+  if (!bin) return Promise.reject(new Error('Install yt-dlp on the server, then save the song again'));
+  return new Promise((resolve, reject) => {
+    const args = [
+      ...bin.prefix,
+      '--no-playlist',
+      '--no-warnings',
+      '--no-progress',
+      '--no-cache-dir',
+      '--force-overwrites',
+      '--max-filesize', '25M',
+      '--match-filter', 'duration < 900',
+      '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/bestaudio',
+      '-o', destBase + '.%(ext)s',
+      pageUrl,
+    ];
+    execFile(bin.cmd, args, { timeout: 120000, windowsHide: true }, (err, _stdout, stderr) => {
+      if (err) {
+        const detail = String(stderr || err.message || '');
+        if (/does not pass filter|duration/i.test(detail)) reject(new Error('That video is too long to save'));
+        else if (/not installed|ENOENT/i.test(detail)) reject(new Error('Install yt-dlp on the server, then save the song again'));
+        else reject(new Error('Could not save that song'));
+        return;
+      }
+      const base = path.basename(destBase);
+      let found = '';
+      try {
+        found = fs.readdirSync(UPLOAD_DIR).find((name) => name.startsWith(base + '.') && !name.endsWith('.part')) || '';
+      } catch (_) {}
+      if (!found) {
+        reject(new Error('Could not save that song'));
+        return;
+      }
+      resolve(found);
+    });
+  });
+}
+
+const songQueue = [];
+let songBusy = false;
+
+function enqueueSong(userId) {
+  const id = String(userId || '');
+  if (!id || songQueue.includes(id)) return;
+  songQueue.push(id);
+  pumpSongs();
+}
+
+function pumpSongs() {
+  if (songBusy) return;
+  const id = songQueue.shift();
+  if (!id) return;
+  const user = users[id];
+  if (!user) {
+    pumpSongs();
+    return;
+  }
+  songBusy = true;
+  saveUserSong(user).finally(() => {
+    songBusy = false;
+    pumpSongs();
+  });
+}
+
+async function saveUserSong(user) {
+  const job = user.songJob;
+  const pageUrl = cleanSongUrl(user.songUrl);
+  if (!pageUrl || user.songJob !== job) return;
+  const destBase = path.join(UPLOAD_DIR, 'song-' + String(user.id).replace(/[^A-Za-z0-9_-]/g, '') + '-' + job);
+  try {
+    const filename = await downloadSongAudio(pageUrl, destBase);
+    if (user.songJob !== job) {
+      fs.unlink(path.join(UPLOAD_DIR, filename), () => {});
+      return;
+    }
+    const previous = user.songFile;
+    user.songFile = '/uploads/' + filename;
+    user.songError = '';
+    save(USERS_FILE, users);
+    touchProfiles();
+    if (previous && previous !== user.songFile) deleteSongPath(previous);
+  } catch (err) {
+    if (user.songJob !== job) return;
+    user.songFile = '';
+    user.songError = err.message || 'Could not save that song';
+    save(USERS_FILE, users);
+    touchProfiles();
+  }
+}
+
+function queueSavedSongs() {
+  for (const user of Object.values(users)) {
+    const pageUrl = cleanSongUrl(user.songUrl);
+    if (!pageUrl || cleanSongFile(user.songFile)) continue;
+    user.songJob = (Number(user.songJob) || 0) + 1;
+    user.songError = '';
+    enqueueSong(user.id);
+  }
+}
+
+queueSavedSongs();
 
 function profileShades(input) {
   const clean = cleanNameColors(input);
@@ -1679,7 +1824,17 @@ app.use('/files', allowMedia, (req, res, next) => {
 app.use('/uploads', allowMedia, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=604800, immutable');
   next();
-}, express.static(UPLOAD_DIR, { maxAge: '7d', immutable: true, acceptRanges: true }));
+}, express.static(UPLOAD_DIR, {
+  maxAge: '7d',
+  immutable: true,
+  acceptRanges: true,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.m4a')) res.setHeader('Content-Type', 'audio/mp4');
+    else if (filePath.endsWith('.webm')) res.setHeader('Content-Type', 'audio/webm');
+    else if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
+    else if (filePath.endsWith('.opus')) res.setHeader('Content-Type', 'audio/opus');
+  },
+}));
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
@@ -1764,8 +1919,20 @@ app.patch('/api/me', auth, (req, res) => {
   if (profileStyle !== undefined) req.user.profileStyle = cleanProfileStyle(profileStyle);
   if (songUrl !== undefined) {
     const next = cleanSongUrl(songUrl);
-    if (String(songUrl || '').trim() && !next) return res.status(400).json({ error: 'Use a YouTube or Spotify link' });
-    req.user.songUrl = next;
+    if (String(songUrl || '').trim() && !next) return res.status(400).json({ error: 'Use a YouTube link' });
+    const changed = next !== cleanSongUrl(req.user.songUrl);
+    if (changed) {
+      const previous = req.user.songFile;
+      req.user.songUrl = next;
+      req.user.songFile = '';
+      req.user.songError = '';
+      deleteSongPath(previous);
+    }
+    if (next && !cleanSongFile(req.user.songFile)) {
+      req.user.songJob = (Number(req.user.songJob) || 0) + 1;
+      req.user.songError = '';
+      enqueueSong(req.user.id);
+    }
   }
   if (songStart !== undefined) req.user.songStart = cleanSongStart(songStart);
   if (songAutoplay !== undefined) req.user.songAutoplay = !!songAutoplay;

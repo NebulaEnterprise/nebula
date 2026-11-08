@@ -314,7 +314,7 @@
               <div class="pop-av profile-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
                 {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
               </div>
-              <SongButton url={ui.me?.songUrl} start={ui.me?.songStart} />
+              <SongButton file={ui.me?.songFile} start={ui.me?.songStart} />
             </div>
             <i class="profile-dot" style="background:{presenceLabel[2]}"></i>
             {#if editingBio}

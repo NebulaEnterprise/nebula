@@ -209,7 +209,7 @@
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
       const songUrl = String(form.songUrl || '').trim();
       if (songUrl && !parseSong(songUrl)) {
-        toast('Use a YouTube or Spotify link');
+        toast('Use a YouTube link');
         return;
       }
       const body = { ...form, bio: shortBio(form.bio), aboutMe: aboutDraft, songUrl, songStart: parseStamp(form.songStart) };
@@ -305,8 +305,14 @@
             </section>
             <div class="field">
               <label>Profile song</label>
-              <input bind:value={form.songUrl} maxlength="300" placeholder="YouTube or Spotify link" />
-              <p class="hint">Shows a play button on your picture. The song loops.</p>
+              <input bind:value={form.songUrl} maxlength="300" placeholder="YouTube link" />
+              {#if ui.me?.songError}
+                <p class="hint" style="color:var(--danger)">{ui.me.songError}</p>
+              {:else if ui.me?.songUrl && !ui.me?.songFile}
+                <p class="hint">Saving the song onto the server…</p>
+              {:else}
+                <p class="hint">The audio is saved on the server, then the profile plays that copy.</p>
+              {/if}
             </div>
             <div class="field">
               <label>Start at</label>
@@ -384,7 +390,7 @@
                     <div class="pop-av profile-av" style="background:{form.avatarColor}">
                       {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                     </div>
-                    <SongButton url={form.songUrl} start={parseStamp(form.songStart)} />
+                    <SongButton file={ui.me?.songFile || ''} start={parseStamp(form.songStart)} />
                   </div>
                   <i class="profile-dot" style="background:{statusColor[form.status] || statusColor.offline}"></i>
                   {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}

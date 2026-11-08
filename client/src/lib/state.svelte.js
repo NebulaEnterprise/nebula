@@ -1,4 +1,5 @@
 import { api, pinMedia, warmMedia, uploadFile } from './api.js';
+import { hasSong, playSong, warmSong } from './song.svelte.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -814,7 +815,12 @@ function adoptMe(members) {
     && profileStyle === (ui.me.profileStyle || 'gradient')
     && (mine.customStatus || '') === (ui.me.customStatus || '')
     && (mine.bio || '') === (ui.me.bio || '')
-    && (mine.aboutMe || '') === (ui.me.aboutMe || '');
+    && (mine.aboutMe || '') === (ui.me.aboutMe || '')
+    && (mine.songFile || '') === (ui.me.songFile || '')
+    && (mine.songUrl || '') === (ui.me.songUrl || '')
+    && (mine.songError || '') === (ui.me.songError || '')
+    && Number(mine.songStart || 0) === Number(ui.me.songStart || 0)
+    && !!mine.songAutoplay === !!ui.me.songAutoplay;
   if (same) return;
   ui.me = {
     ...ui.me,
@@ -835,6 +841,11 @@ function adoptMe(members) {
     status: mine.status || ui.me.status,
     avatarColor: mine.avatarColor || ui.me.avatarColor,
     avatarUrl: String(ui.me.avatarUrl || '').startsWith('blob:') ? ui.me.avatarUrl : (mine.avatarUrl || ui.me.avatarUrl),
+    songUrl: mine.songUrl || '',
+    songFile: mine.songFile || '',
+    songError: mine.songError || '',
+    songStart: mine.songStart || 0,
+    songAutoplay: !!mine.songAutoplay,
   };
   rememberAccount(ui.me, localStorage.getItem('dc_token') || '');
 }
@@ -964,6 +975,10 @@ export async function loadMembers(quiet) {
       adoptMe(ui.members);
       applyMemberNames(ui.members);
       warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
+      const songs = [];
+      if (hasSong(ui.me?.songFile)) songs.push(ui.me.songFile);
+      for (const member of ui.members) if (hasSong(member.songFile)) songs.push(member.songFile);
+      for (const file of new Set(songs)) warmSong(file);
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
@@ -1802,6 +1817,7 @@ export async function openPopout(user, x, y) {
   const known = ui.members.find((m) => m.id === user.id);
   const seed = known ? { ...user, ...known, roles: known.roles || user.roles || [] } : user;
   ui.popout = { user: seed, x, y };
+  if (seed.songAutoplay && hasSong(seed.songFile)) playSong(seed.songFile, seed.songStart);
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
   try {
