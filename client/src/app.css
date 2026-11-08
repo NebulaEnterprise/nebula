@@ -710,9 +710,9 @@ img { max-width: 100%; }
   display: flex; align-items: flex-start; gap: 10px; padding: 7px 8px; border-radius: 10px; width: 100%; text-align: left;
 }
 .member:hover, .friend:hover { background: var(--bg-hover); }
-.name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.name-row strong { flex: 0 1 auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-.name-extras { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; }
+.name-row { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; }
+.name-row strong { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.name-extras { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; height: 18px; }
 .role-ico { font-style: normal; font-size: 14px; line-height: 1; }
 .tag-pill {
   display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
@@ -734,9 +734,16 @@ img { max-width: 100%; }
   background: #1e1f22; font-size: 16px;
 }
 .tag-icons button.on { outline: 2px solid #f23f43; }
-.member .meta, .friend .meta { min-width: 0; padding-top: 2px; }
-.member strong, .friend strong { display: block; font-size: 14px; overflow: visible; text-overflow: ellipsis; white-space: nowrap; }
-.member span:not(.name-fx), .friend span:not(.name-fx) { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+.member .meta, .friend .meta { min-width: 0; flex: 1; padding-top: 2px; }
+.friend .meta strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .name-row strong { display: block; font-size: 14px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.member .meta > span, .friend .meta > span { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+.member .name-extras, .friend .name-extras,
+.member .name-extras span, .friend .name-extras span {
+  display: inline-flex; align-items: center; justify-content: center;
+  margin: 0; color: inherit; font-size: inherit; line-height: 1;
+  white-space: nowrap; word-break: normal;
+}
 .member .name-fx, .friend .name-fx, .me .who .name-fx, .msg-head .name-fx, .pop h3 .name-fx {
   display: inline; margin: 0; font-size: inherit; font-weight: inherit; line-height: inherit;
   white-space: nowrap; word-break: normal;
