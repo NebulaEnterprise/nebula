@@ -1599,40 +1599,37 @@ app.post('/api/activity', auth, (req, res) => {
 const gifCache = new Map();
 let gifReactions = ['wave', 'hug', 'dance', 'laugh', 'cry', 'love', 'happy', 'sad', 'blush', 'pat', 'kiss', 'celebrate', 'clap', 'shy', 'peek', 'run', 'sleep', 'smile', 'thumbsup', 'wink'];
 
-async function klipyGifs(query) {
-  const key = process.env.KLIPY_KEY || '';
+async function tenorGifs(query) {
+  const key = process.env.TENOR_KEY || process.env.TENOR_API_KEY || '';
   if (!key) return null;
-  const path = query
-    ? '/gifs/search?q=' + encodeURIComponent(query) + '&per_page=24&page=1'
-    : '/gifs/trending?per_page=24&page=1';
-  const response = await fetch('https://api.klipy.com/api/v1/' + key + path);
+  const params = new URLSearchParams({
+    key,
+    client_key: 'nebula',
+    limit: '24',
+    contentfilter: 'medium',
+    media_filter: 'gif,tinygif,nanogif',
+  });
+  if (query) params.set('q', query);
+  const response = await fetch('https://tenor.googleapis.com/v2/' + (query ? 'search' : 'featured') + '?' + params);
   if (!response.ok) return [];
   const data = await response.json();
   const rows = [];
-  const walk = (node) => {
-    if (!node || rows.length > 40) return;
-    if (Array.isArray(node)) {
-      node.forEach(walk);
-      return;
-    }
-    if (typeof node !== 'object') return;
-    const gif = node.gif && node.gif.url;
-    const md = node.md && node.md.gif && node.md.gif.url;
-    const sm = node.sm && node.sm.gif && node.sm.gif.url;
-    if (gif || md || sm) {
-      rows.push({ id: node.slug || gif || md || sm, preview: sm || md || gif, url: gif || md || sm });
-    }
-    Object.values(node).forEach(walk);
-  };
-  walk(data);
-  const unique = [];
   const seen = new Set();
-  for (const row of rows) {
-    if (!row.url || seen.has(row.url)) continue;
-    seen.add(row.url);
-    unique.push(row);
+  for (const item of data.results || []) {
+    const formats = item.media_formats || {};
+    const full = formats.gif || formats.mediumgif || formats.tinygif;
+    const preview = formats.tinygif || formats.nanogif || full;
+    const url = full && full.url;
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    rows.push({
+      id: String(item.id || url),
+      preview: (preview && preview.url) || url,
+      url,
+      title: String(item.content_description || item.title || ''),
+    });
   }
-  return unique.slice(0, 24);
+  return rows.slice(0, 24);
 }
 
 let reactionCatalogReady = false;
@@ -1679,10 +1676,10 @@ app.get('/api/gifs', auth, async (req, res) => {
   const cached = gifCache.get(q);
   if (cached && Date.now() - cached.at < 60000) return res.json({ ok: true, gifs: cached.gifs });
   try {
-    const remote = await klipyGifs(q);
+    const remote = await tenorGifs(q);
     const gifs = remote && remote.length ? remote : await reactionGifs(q);
     gifCache.set(q, { at: Date.now(), gifs });
-    res.json({ ok: true, gifs });
+    res.json({ ok: true, gifs, tenor: !!(remote && remote.length) });
   } catch (err) {
     res.status(502).json({ error: 'GIF search is unavailable' });
   }

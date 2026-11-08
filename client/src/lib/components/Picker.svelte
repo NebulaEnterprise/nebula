@@ -14,6 +14,7 @@
   let query = $state('');
   let gifs = $state([]);
   let gifError = $state('');
+  let tenor = $state(false);
   let busy = $state(false);
   let cat = $state('People');
 
@@ -62,9 +63,11 @@
       try {
         const data = await api('/api/gifs?q=' + encodeURIComponent(q.trim()));
         gifs = data.gifs || [];
+        tenor = !!data.tenor;
       } catch (err) {
         gifError = err.message || 'GIF search is unavailable';
         gifs = [];
+        tenor = false;
       } finally {
         busy = false;
       }
@@ -162,9 +165,12 @@
       {#if !busy && !gifError && !gifs.length}<p class="hint">No GIFs for that search.</p>{/if}
       {#each gifs as gif (gif.url)}
         <button type="button" onclick={() => sendGif(gif.url)}>
-          <img src={gif.preview || gif.url} alt="" />
+          <img src={gif.preview || gif.url} alt={gif.title || ''} />
         </button>
       {/each}
     </div>
+    {#if tenor}
+      <a class="tenor-credit" href={query.trim() ? 'https://tenor.com/search/' + encodeURIComponent(query.trim()) + '-gifs' : 'https://tenor.com'} target="_blank" rel="noreferrer">Search Tenor</a>
+    {/if}
   {/if}
 </div>

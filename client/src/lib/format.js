@@ -8,7 +8,7 @@ export function escapeHtml(s) {
 
 export function formatContent(text, emoji, stickers, namesList) {
   const gifs = [];
-  let raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,400})\]\]/g, (_, url) => {
+  let raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,1000})\]\]/g, (_, url) => {
     gifs.push(url);
     return '\u0000GIF' + (gifs.length - 1) + '\u0000';
   });
