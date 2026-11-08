@@ -277,8 +277,31 @@ img { max-width: 100%; }
 .skel { display: flex; align-items: center; gap: 12px; }
 .skel span { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.06); flex-shrink: 0; }
 .skel i { display: block; height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); }
-.msg { position: relative; display: flex; gap: 12px; align-items: flex-start; max-width: 100%; padding: 8px 12px; border-radius: 12px; transition: background-color var(--fast) var(--ease); }
+.msg { position: relative; display: flex; flex-wrap: wrap; column-gap: 12px; row-gap: 0; align-items: flex-start; max-width: 100%; padding: 8px 12px; border-radius: 12px; transition: background-color var(--fast) var(--ease); }
 .msg:hover { background: rgba(255,255,255,0.025); }
+.msg.flash { background: rgba(250, 168, 26, 0.16); }
+.msg-av { padding: 0; border-radius: 50%; line-height: 0; }
+.reply-ref {
+  position: relative; flex: 0 0 100%; display: flex; align-items: center; gap: 6px;
+  min-width: 0; max-width: 100%; margin: 0 0 2px 52px; padding: 0;
+  color: var(--muted); font-size: 14px; font-weight: 500; text-align: left;
+}
+.reply-ref .avatar { width: 16px; height: 16px; overflow: hidden; flex-shrink: 0; }
+.reply-ref strong {
+  flex-shrink: 1; min-width: 0; max-width: 40%;
+  font-size: 14px; font-weight: 600; line-height: 1.2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reply-ref em {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--faint); font-style: normal; font-weight: 400;
+}
+.reply-ref:hover em { color: var(--text); }
+.reply-spine {
+  position: absolute; left: -34px; top: 8px; bottom: -12px; width: 28px;
+  border-left: 2px solid #4e5058; border-top: 2px solid #4e5058;
+  border-top-left-radius: 8px; pointer-events: none;
+}
 .msg-tools {
   position: absolute; right: 8px; top: -14px; z-index: 2;
   display: flex; align-items: center; gap: 2px;
@@ -295,12 +318,6 @@ img { max-width: 100%; }
 .msg-body { flex: 1; min-width: 0; max-width: 100%; }
 .edited { color: var(--faint); font-size: 11px; }
 .forward-tag { margin: 0 0 4px; color: var(--faint); font-size: 12px; }
-.reply-quote {
-  display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px; padding-left: 8px;
-  border-left: 2px solid var(--brand); color: var(--muted); font-size: 13px;
-}
-.reply-quote strong { color: var(--text, #fff); font-size: 12px; }
-.reply-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reacts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .reacts button {
   display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 8px;
@@ -331,6 +348,10 @@ img { max-width: 100%; }
   margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: #111214; border-left: 3px solid var(--brand);
 }
 .compose-note p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.reply-note { gap: 8px; }
+.reply-note .avatar { width: 16px; height: 16px; overflow: hidden; flex-shrink: 0; }
+.reply-note > div { flex: 1; min-width: 0; }
+.reply-note strong, .reply-note p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .forward-row {
   width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-weight: 650;
 }

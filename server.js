@@ -547,10 +547,13 @@ function readReply(body, roomId) {
   const list = messages[roomId] || [];
   const src = list.find((msg) => msg && msg.id === id);
   if (!src) return null;
-  const name = (src.author && (src.author.displayName || src.author.username)) || 'Someone';
+  const live = src.authorId ? users[src.authorId] : null;
+  const author = slimAuthor(live || src.author) || { displayName: 'Someone' };
+  if (live) author.avatarUrl = publishedMedia(live, 'avatar');
+  const name = author.displayName || author.username || 'Someone';
   const text = String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
   const preview = text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message'));
-  return { id: src.id, name, preview };
+  return { id: src.id, name, preview, authorId: author.id || src.authorId || '', author };
 }
 
 function cleanReactionEmoji(user, emoji) {
@@ -586,6 +589,14 @@ function presentMessage(msg, viewerId) {
   const author = Object.assign(base, live ? slimAuthor(live) : {});
   author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
   const out = Object.assign({}, msg, { author });
+  if (out.reply) {
+    const replyId = out.reply.authorId || (out.reply.author && out.reply.author.id);
+    const replyLive = replyId ? users[replyId] : null;
+    const replyAuthor = Object.assign({}, out.reply.author || {}, replyLive ? slimAuthor(replyLive) : {});
+    if (!replyAuthor.displayName) replyAuthor.displayName = out.reply.name || 'Someone';
+    if (replyLive) replyAuthor.avatarUrl = publishedMedia(replyLive, 'avatar');
+    out.reply = Object.assign({}, out.reply, { author: replyAuthor });
+  }
   if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
   out.reactions = publicReactions(msg, viewerId);
   return out;

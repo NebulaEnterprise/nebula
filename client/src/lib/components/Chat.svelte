@@ -121,9 +121,37 @@
 
   function beginReply(msg) {
     ui.editing = null;
-    ui.reply = { id: msg.id, name: msg.author?.displayName || msg.author?.username || 'Someone', preview: previewText(msg) };
+    const author = liveAuthor(msg.author);
+    ui.reply = {
+      id: msg.id,
+      name: author?.displayName || author?.username || 'Someone',
+      preview: previewText(msg),
+      author,
+    };
     menu = null;
     queueMicrotask(() => composerEl && composerEl.focus());
+  }
+
+  function replyPerson(msg) {
+    const reply = msg?.reply || {};
+    const src = ui.messages.find((row) => row.id === reply.id);
+    const author = liveAuthor(src?.author || reply.author || {});
+    return {
+      ...author,
+      displayName: author?.displayName || reply.name || 'Someone',
+      username: author?.username || reply.name || '',
+    };
+  }
+
+  let flashId = $state('');
+  function jumpTo(id) {
+    if (!id || !box) return;
+    const node = box.querySelector('[data-id="' + CSS.escape(id) + '"]');
+    if (!node) return;
+    follow = false;
+    node.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flashId = id;
+    setTimeout(() => { if (flashId === id) flashId = ''; }, 1600);
   }
 
   function beginEdit(msg) {
@@ -420,7 +448,7 @@
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg" class:menu-open={menu?.id === msg.id} class:pending={msg.pending}>
+    <article class="msg" class:has-reply={!!msg.reply} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -429,7 +457,16 @@
         <button type="button" class="msg-more" title="More" onclick={(e) => openMenu(e, msg)}><MoreHorizontal size={18} /></button>
       </div>
       {/if}
-      <button type="button" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
+      {#if msg.reply}
+        {@const person = replyPerson(msg)}
+        <button type="button" class="reply-ref" onclick={() => jumpTo(msg.reply.id)}>
+          <i class="reply-spine"></i>
+          <Avatar user={person} size={16} dot={false} />
+          <strong><Name user={person} /></strong>
+          <em>{msg.reply.preview}</em>
+        </button>
+      {/if}
+      <button type="button" class="msg-av" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
       <div class="msg-body">
@@ -440,9 +477,6 @@
         </div>
         {#if msg.forward}
           <p class="forward-tag">Forwarded from {msg.forward.name}</p>
-        {/if}
-        {#if msg.reply}
-          <div class="reply-quote"><strong>{msg.reply.name}</strong><span>{msg.reply.preview}</span></div>
         {/if}
         {#if msg.content}
           <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
@@ -513,9 +547,10 @@
     <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
   {/if}
   {#if ui.reply}
-    <div class="compose-note">
+    <div class="compose-note reply-note">
+      <Avatar user={ui.reply.author || { displayName: ui.reply.name }} size={16} dot={false} />
       <div>
-        <strong>Replying to {ui.reply.name}</strong>
+        <strong>Replying to <Name user={ui.reply.author || { displayName: ui.reply.name }} /></strong>
         <p>{ui.reply.preview}</p>
       </div>
       <button type="button" class="btn icon" onclick={() => (ui.reply = null)}>✕</button>
