@@ -1078,13 +1078,109 @@ function saveHttp(url, dest, redirects = 0, headers) {
   });
 }
 
-async function downloadSongAudio(pageUrl, destBase) {
-  const videoId = youtubeVideoId(pageUrl);
-  const format = await youtubeAudioChoice(videoId);
+function runFile(cmd, args) {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 180000, windowsHide: false, maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        err.stderr = String(stderr || '');
+        reject(err);
+        return;
+      }
+      resolve(String(stdout || ''));
+    });
+  });
+}
+
+function ytDlpAsset() {
+  if (process.platform === 'win32') {
+    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe', file: 'yt-dlp.exe' };
+  }
+  if (process.platform === 'darwin') {
+    return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos', file: 'yt-dlp' };
+  }
+  const name = process.arch === 'arm64' ? 'yt-dlp_linux_aarch64' : 'yt-dlp_linux';
+  return { url: 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/' + name, file: 'yt-dlp' };
+}
+
+let ytDlpReady = null;
+function bundledYtDlp() {
+  if (ytDlpReady) return ytDlpReady;
+  ytDlpReady = (async () => {
+    const asset = ytDlpAsset();
+    const dir = path.join(DATA_DIR, 'bin');
+    fs.mkdirSync(dir, { recursive: true });
+    const dest = path.join(dir, asset.file);
+    if (!fs.existsSync(dest) || fs.statSync(dest).size < 1000000) {
+      const tmp = dest + '.part';
+      await saveHttp(asset.url, tmp);
+      fs.renameSync(tmp, dest);
+      if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+    }
+    await runFile(dest, ['--version']);
+    return dest;
+  })().catch((err) => {
+    ytDlpReady = null;
+    throw err;
+  });
+  return ytDlpReady;
+}
+
+async function downloadWithYtDlp(pageUrl, destBase) {
+  const bin = await bundledYtDlp();
+  const browsers = ['chrome', 'edge', 'brave', 'firefox', 'chromium'];
+  const tries = [[], ...browsers.map((name) => ['--cookies-from-browser', name])];
+  let needsSignIn = false;
+  for (const extra of tries) {
+    try {
+      await runFile(bin, [
+        '--no-playlist',
+        '--no-warnings',
+        '--no-progress',
+        '--no-cache-dir',
+        '--force-overwrites',
+        '--js-runtimes', 'node',
+        '--max-filesize', '25M',
+        '--match-filter', 'duration < 900',
+        '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[ext=mp3]/bestaudio',
+        '-o', destBase + '.%(ext)s',
+        ...extra,
+        pageUrl,
+      ]);
+    } catch (err) {
+      const detail = String((err && err.stderr) || err.message || '');
+      if (/does not pass filter|duration/i.test(detail)) throw new Error('That video is too long to save');
+      if (/unavailable|private video|removed/i.test(detail)) throw new Error('That video is not available');
+      if (/not a bot|Sign in to confirm|cookies/i.test(detail)) {
+        needsSignIn = true;
+        continue;
+      }
+      if (extra.length) continue;
+      throw new Error('Could not save that song');
+    }
+    const base = path.basename(destBase);
+    const found = fs.readdirSync(UPLOAD_DIR).find((name) => name.startsWith(base + '.') && !/\.(part|ytdl)$/i.test(name)) || '';
+    if (found && fs.statSync(path.join(UPLOAD_DIR, found)).size > 1000) return found;
+  }
+  if (needsSignIn) throw new Error('Sign in to YouTube in Chrome or Edge, then save the link again');
+  throw new Error('Could not save that song');
+}
+
+async function downloadDirect(pageUrl, destBase) {
+  const format = await youtubeAudioChoice(youtubeVideoId(pageUrl));
   const dest = destBase + audioExt(format.mimeType);
   await saveHttp(format.url, dest, 0, { 'User-Agent': SONG_UA, Referer: 'https://www.youtube.com/' });
   if (!fs.existsSync(dest) || fs.statSync(dest).size < 1000) throw new Error('Could not save that song');
   return path.basename(dest);
+}
+
+async function downloadSongAudio(pageUrl, destBase) {
+  try {
+    return await downloadDirect(pageUrl, destBase);
+  } catch (err) {
+    if (err && err.message === 'That video is too long to save') throw err;
+    for (const ext of ['.m4a', '.webm', '.mp3', '.opus', '.part']) fs.unlink(destBase + ext, () => {});
+  }
+  return downloadWithYtDlp(pageUrl, destBase);
 }
 
 const songQueue = [];
