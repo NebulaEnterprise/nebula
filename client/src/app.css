@@ -399,10 +399,8 @@ img { max-width: 100%; }
 .name-fx.rainbow { background-image: linear-gradient(90deg, var(--fx1, #ff5c8a), var(--fx2, #5cc8ff), var(--fx1, #ff5c8a)); }
 .name-fx.glitch { color: var(--fx1, #5ce1ff); animation: name-glitch 1.2s infinite; }
 .name-fx.sparkle {
-  position: relative; display: inline-block; color: transparent;
-  background-image: linear-gradient(105deg, var(--fx1, #fff) 0%, var(--fx1, #fff) 34%, #fff 46%, var(--fx2, #ffe7a3) 52%, #fff 58%, var(--fx1, #fff) 72%, var(--fx1, #fff) 100%);
-  background-size: 220% auto; -webkit-background-clip: text; background-clip: text;
-  animation: name-shift 1.8s linear infinite;
+  position: relative; display: inline-block; color: var(--fx1, #fff);
+  background: none; text-shadow: 0 0 8px var(--fx2, #ffe7a3);
 }
 .name-fx.sparkle i {
   position: absolute; width: 7px; height: 7px; margin: -3px 0 0 -3px; pointer-events: none;
@@ -884,10 +882,8 @@ img { max-width: 100%; }
 }
 .name-fx.glitch { animation: name-glitch 1.2s infinite; }
 .name-fx.sparkle {
-  position: relative; display: inline-block; color: transparent;
-  background-image: linear-gradient(105deg, var(--fx1, #fff) 0%, var(--fx1, #fff) 34%, #fff 46%, var(--fx2, #ffe7a3) 52%, #fff 58%, var(--fx1, #fff) 72%, var(--fx1, #fff) 100%);
-  background-size: 220% auto; -webkit-background-clip: text; background-clip: text;
-  animation: name-shift 1.8s linear infinite;
+  position: relative; display: inline-block; color: var(--fx1, #fff);
+  background: none; text-shadow: 0 0 8px var(--fx2, #ffe7a3); animation: none;
 }
 .name-fx.sparkle i { animation: name-spark 1.5s ease-in-out infinite; }
 .badge {
