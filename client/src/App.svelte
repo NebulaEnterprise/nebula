@@ -51,15 +51,11 @@
     <Rail />
     <Sidebar />
     <main class="main">
-      {#key ui.mode === 'friends' || ui.mode === 'add' ? 'people' : 'talk'}
-        <div class="view-in">
-          {#if ui.mode === 'friends' || ui.mode === 'add'}
-            <Friends />
-          {:else}
-            <Chat />
-          {/if}
-        </div>
-      {/key}
+      {#if ui.mode === 'friends' || ui.mode === 'add'}
+        <Friends />
+      {:else}
+        <Chat />
+      {/if}
     </main>
     {#if ui.mode === 'chat'}
       <Members />

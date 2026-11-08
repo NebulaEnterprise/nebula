@@ -220,6 +220,7 @@ export async function loadDms() {
     if (serial !== dmSerial) return;
     const next = data.dms || [];
     if (!sameDms(ui.dms, next)) ui.dms = next;
+    for (const row of next.slice(0, 12)) warmDm(row.other && row.other.id);
     const map = seenMap();
     const ready = localStorage.getItem('nebula-dm-baseline') === '1';
     if (!ready) {
@@ -408,6 +409,37 @@ function rememberLog(id, list) {
   roomLogs.set(id, (list || []).filter((msg) => msg && !msg.pending && !msg.failed));
 }
 
+function msgSig(msg) {
+  if (!msg) return '';
+  const reacts = (msg.reactions || []).map((row) => (row.emoji || '') + row.count + (row.me ? '1' : '0')).join('.');
+  return [msg.id, msg.content || '', msg.editedAt || '', msg.pending ? 1 : 0, msg.failed ? 1 : 0, reacts, (msg.files || []).length, msg.poll ? JSON.stringify(msg.poll) : ''].join('|');
+}
+
+function sameLog(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (msgSig(a[i]) !== msgSig(b[i])) return false;
+  return true;
+}
+
+const warmSeen = new Set();
+let warmTail = Promise.resolve();
+
+export function warmDm(id) {
+  if (!id) return;
+  const key = 'dm:' + id;
+  if (roomLogs.has(key) || warmSeen.has(key)) return;
+  warmSeen.add(key);
+  warmTail = warmTail.then(async () => {
+    if (roomLogs.has(key)) return;
+    try {
+      const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages');
+      if (!roomLogs.has(key)) roomLogs.set(key, data.messages || []);
+    } catch (_) {
+      warmSeen.delete(key);
+    }
+  });
+}
+
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
@@ -592,8 +624,9 @@ export async function loadMessages(quiet, live) {
     const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
     if (newest && newest.id) markSeen(roomKey, newest.id);
     const local = ui.messages.filter((msg) => msg && (msg.pending || msg.failed) && msg.roomKey === roomKey && String(msg.id).startsWith('local-'));
-    ui.messages = local.length ? [...list, ...local] : list;
-    rememberLog(logKey, ui.messages);
+    const next = local.length ? [...list, ...local] : list;
+    if (!sameLog(ui.messages, next)) ui.messages = next;
+    rememberLog(logKey, next);
     ui.chatLoading = false;
     if (newest && newest.id) ui.seenMessageId = newest.id;
     announceFresh(list, roomKey);

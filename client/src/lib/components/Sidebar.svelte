@@ -8,7 +8,7 @@
   import Name from './Name.svelte';
   import { api } from '../api.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, pickChannel, logout, openServerSettings, openServer, toast } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -175,7 +175,7 @@
       <div class="cat"><span>Direct messages</span></div>
       {#each ui.dms as dm (dm.id)}
         {@const note = ui.activity.dms[dm.other?.id]}
-        <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onclick={() => openDm(dm.other)}>
+        <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)}>
           <Avatar user={dm.other} size={28} />
           <span class="dm-copy">
             <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>

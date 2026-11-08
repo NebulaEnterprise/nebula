@@ -357,9 +357,12 @@
     pollOpen = false;
   }
 
+  const roomScroll = new Map();
+
   function trackScroll() {
     if (!box) return;
     follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
+    if (roomKey) roomScroll.set(roomKey, { top: box.scrollTop, follow });
   }
 
   let roomKey = '';
@@ -367,7 +370,14 @@
     const next = ui.mode + ':' + (ui.mode === 'dm' ? (ui.dmUser?.id || '') : (ui.channelId || ''));
     if (next === roomKey) return;
     roomKey = next;
-    follow = true;
+    const saved = roomScroll.get(next);
+    follow = saved ? saved.follow : true;
+    const node = box;
+    const top = saved && !saved.follow ? saved.top : null;
+    queueMicrotask(() => {
+      if (!node) return;
+      node.scrollTop = top == null ? node.scrollHeight : top;
+    });
   });
 
   $effect(() => {
@@ -394,9 +404,16 @@
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
-  {#key (ui.mode === 'dm' ? 'dm:' + (ui.dmUser?.id || '') : ui.mode === 'chat' ? 'ch:' + (ui.channelId || '') : ui.mode)}
-  <div class="room-in">
-  {#if !ui.messages.length && !ui.chatLoading}
+  {#if ui.chatLoading && !ui.messages.length}
+    <div class="skel-list" aria-hidden="true">
+      {#each [78, 64, 86, 58, 72, 48] as width}
+        <div class="skel">
+          <span></span>
+          <i style="width:{width}%"></i>
+        </div>
+      {/each}
+    </div>
+  {:else if !ui.messages.length}
     <div class="welcome">
       <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : '#' + (channel?.name || 'channel')}</h2>
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : 'This is the start of the channel. Say hi.'}</p>
@@ -460,8 +477,6 @@
       </div>
     </article>
   {/each}
-  </div>
-  {/key}
 </div>
 {#if menu}
   {@const current = ui.messages.find((msg) => msg.id === menu.id)}

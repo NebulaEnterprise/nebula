@@ -273,6 +273,10 @@ img { max-width: 100%; }
 .welcome { padding: 28px 18px; }
 .welcome h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.03em; }
 .welcome p { margin: 0; color: var(--muted); }
+.skel-list { display: flex; flex-direction: column; gap: 18px; padding: 8px 16px 12px; }
+.skel { display: flex; align-items: center; gap: 12px; }
+.skel span { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.06); flex-shrink: 0; }
+.skel i { display: block; height: 12px; border-radius: 999px; background: rgba(255,255,255,0.06); }
 .msg { position: relative; display: flex; gap: 12px; align-items: flex-start; max-width: 100%; padding: 8px 12px; border-radius: 12px; transition: background-color var(--fast) var(--ease); }
 .msg:hover { background: rgba(255,255,255,0.025); }
 .msg-tools {
@@ -802,11 +806,6 @@ img { max-width: 100%; }
   z-index: 50; box-shadow: var(--shadow); font-weight: 600;
   animation: toast-in var(--med) var(--ease);
 }
-.view-in {
-  flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
-  animation: rise-in 180ms var(--ease);
-}
-.room-in { animation: rise-in 160ms var(--ease); }
 .menu, .msg-menu, .attach-menu, .select-menu, .mention-menu {
   animation: drop-in 160ms var(--ease);
   transform-origin: top center;
@@ -815,7 +814,6 @@ img { max-width: 100%; }
 .react-picker .picker, .picker.picker-pop { animation: none; }
 .overlay, .poll-overlay { animation: fade-in 160ms var(--ease); }
 .sheet, .settings, .poll-sheet { animation: rise-in var(--med) var(--ease); }
-.members { animation: rise-in 180ms var(--ease); }
 .menu button, .msg-menu > button, .select-menu button, .set-nav button, .picker-tabs button, .mention-menu button {
   transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
 }

@@ -1,7 +1,7 @@
 <script>
   import { MessageSquare, Plus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
-  import { ui, openServer, showFriends, openDm } from '../state.svelte.js';
+  import { ui, openServer, showFriends, openDm, warmDm } from '../state.svelte.js';
 
   const incoming = $derived((ui.dms || []).filter((dm) => dm.other && ui.activity.dms[dm.other.id]));
 </script>
@@ -11,7 +11,7 @@
     <MessageSquare size={22} />
   </button>
   {#each incoming as dm (dm.other.id)}
-    <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onclick={() => openDm(dm.other)}>
+    <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onpointerenter={() => warmDm(dm.other.id)} onclick={() => openDm(dm.other)}>
       <Avatar user={dm.other} size={40} dot={false} />
       <em class="badge">{(ui.activity.dms[dm.other.id].unread || 1) > 99 ? '99+' : (ui.activity.dms[dm.other.id].unread || 1)}</em>
     </button>
