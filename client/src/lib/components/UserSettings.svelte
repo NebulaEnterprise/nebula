@@ -163,7 +163,7 @@
             <div class="field">
               <label>Notification sound</label>
               <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
-              <p class="hint">Plays a sound when someone mentions you or sends you a direct message.</p>
+              <p class="hint">Plays a sound for every new message and every mention, including while this tab is in the background.</p>
             </div>
           {:else if page === 'look'}
             <section class="look-block">

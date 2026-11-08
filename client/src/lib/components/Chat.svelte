@@ -5,7 +5,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers } from '../state.svelte.js';
   import { formatContent } from '../format.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -24,9 +24,15 @@
   });
   const mentionNames = $derived.by(() => {
     const names = new Set();
-    for (const person of ui.members || []) if (person?.username) names.add(person.username);
-    if (ui.dmUser?.username) names.add(ui.dmUser.username);
-    if (ui.me?.username) names.add(ui.me.username);
+    const add = (person) => {
+      if (!person) return;
+      if (person.username) names.add(person.username);
+      if (person.displayName) names.add(person.displayName);
+      if (person.nick) names.add(person.nick);
+    };
+    for (const person of ui.members || []) add(person);
+    add(ui.dmUser);
+    add(ui.me);
     return [...names];
   });
 
@@ -68,7 +74,7 @@
     for (const person of people) {
       if (!person || person.id === ui.me?.id) continue;
       const username = String(person.username || '').toLowerCase();
-      const display = String(person.displayName || '').toLowerCase();
+      const display = String(person.nick || person.displayName || '').toLowerCase();
       if (!q || username.includes(q) || display.includes(q)) rows.push(person);
     }
     return rows.slice(0, 8);
@@ -76,10 +82,11 @@
 
   function syncMention(event) {
     noteTyping();
-    const el = event.target;
-    const pos = el.selectionStart || 0;
-    const upto = String(ui.composer || '').slice(0, pos);
-    const match = upto.match(/(^|\s)@([a-zA-Z0-9._]{0,32})$/);
+    const el = event.currentTarget || event.target;
+    const value = String(el.value || '');
+    const pos = el.selectionStart ?? value.length;
+    const upto = value.slice(0, pos);
+    const match = upto.match(/(^|\s)@([^\s@]{0,32})$/);
     if (!match) {
       mentionAt = -1;
       return;
@@ -87,14 +94,23 @@
     mentionAt = pos - match[2].length - 1;
     mentionQ = match[2];
     mentionPick = 0;
+    if (ui.mode === 'chat' && !(ui.members || []).length) loadMembers(true);
   }
 
   function applyMention(person) {
     const name = person.username || 'user';
+    const el = composerEl;
+    const value = el ? String(el.value || '') : String(ui.composer || '');
     const end = mentionAt + 1 + mentionQ.length;
-    ui.composer = ui.composer.slice(0, mentionAt) + '@' + name + ' ' + ui.composer.slice(end);
+    const next = value.slice(0, mentionAt) + '@' + name + ' ' + value.slice(end);
+    const caret = mentionAt + name.length + 2;
+    ui.composer = next;
     mentionAt = -1;
-    queueMicrotask(() => composerEl && composerEl.focus());
+    queueMicrotask(() => {
+      if (!composerEl) return;
+      composerEl.focus();
+      composerEl.setSelectionRange(caret, caret);
+    });
   }
 
   function onComposerKey(event) {
@@ -121,7 +137,6 @@
     }
     noteKeyDown(event);
   }
-  let filePick = $state(null);
   let uploading = $state(false);
   let pollOpen = $state(false);
   let pollQuestion = $state('');
@@ -135,9 +150,9 @@
   }
 
   async function onFiles(event) {
-    const list = event.target.files;
+    const list = [...(event.target.files || [])];
     event.target.value = '';
-    if (!list || !list.length) return;
+    if (!list.length) return;
     uploading = true;
     try { await sendFiles(list); }
     finally { uploading = false; }
@@ -237,7 +252,7 @@
   {#if mentionChoices.length}
     <div class="mention-menu">
       {#each mentionChoices as person, index}
-        <button type="button" class:on={index === mentionPick} onclick={() => applyMention(person)}>
+        <button type="button" class:on={index === mentionPick} onmousedown={(e) => e.preventDefault()} onclick={() => applyMention(person)}>
           <strong>@{person.username}</strong>
           <span>{person.detail || person.displayName || ''}</span>
         </button>
@@ -250,7 +265,9 @@
     </button>
     {#if ui.attachOpen}
       <div class="attach-menu">
-        <button type="button" onclick={() => filePick && filePick.click()}><FileUp size={16} /> {uploading ? 'Uploading…' : 'Upload a File'}</button>
+        <label class="attach-file" for="nebula-file">
+          <FileUp size={16} /> {uploading ? 'Uploading…' : 'Upload a File'}
+        </label>
         <button type="button" onclick={openPoll}><BarChart3 size={16} /> Create Poll</button>
       </div>
     {/if}
@@ -268,7 +285,7 @@
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
-    <input bind:this={filePick} class="file-input" type="file" accept="image/*,video/*" multiple onchange={onFiles} />
+    <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple disabled={uploading} onchange={onFiles} />
   </form>
   {#if pollOpen}
     <div class="poll-overlay" role="presentation" onclick={() => (pollOpen = false)}>

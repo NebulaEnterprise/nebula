@@ -8,11 +8,26 @@ export function escapeHtml(s) {
 
 export function formatContent(text, emoji, stickers, namesList) {
   const gifs = [];
-  const raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,400})\]\]/g, (_, url) => {
+  let raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,400})\]\]/g, (_, url) => {
     gifs.push(url);
     return '\u0000GIF' + (gifs.length - 1) + '\u0000';
   });
+  const mentions = [];
+  const names = ['everyone', 'here', ...(namesList || [])]
+    .map((name) => String(name || '').trim())
+    .filter((name) => name.length > 0 && name.length <= 32);
+  const unique = [...new Set(names)].sort((a, b) => b.length - a.length);
+  if (unique.length) {
+    const pattern = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    raw = raw.replace(new RegExp('(^|\\s)@(' + pattern + ')(?![\\w.])', 'gi'), (match, lead, name) => {
+      mentions.push(name);
+      return lead + '\u0000MEN' + (mentions.length - 1) + '\u0000';
+    });
+  }
   let html = escapeHtml(raw);
+  html = html.replace(/\u0000MEN(\d+)\u0000/g, (_, index) => {
+    return '<span class="mention">@' + escapeHtml(mentions[Number(index)] || '') + '</span>';
+  });
   html = html.replace(/\u0000GIF(\d+)\u0000/g, (_, index) => {
     const url = gifs[Number(index)] || '';
     return '<img class="gif" alt="" src="' + escapeHtml(url) + '">';
@@ -26,16 +41,6 @@ export function formatContent(text, emoji, stickers, namesList) {
     if (!e?.name || !e?.url) continue;
     const src = String(e.url).replace(/"/g, '');
     html = html.split(':' + e.name + ':').join('<img class="emoji" alt="" src="' + src + '">');
-  }
-  const names = ['everyone', 'here', ...(namesList || [])]
-    .map((name) => String(name || '').trim())
-    .filter((name) => name.length > 0 && name.length <= 32);
-  const unique = [...new Set(names)].sort((a, b) => b.length - a.length);
-  if (unique.length) {
-    const pattern = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    html = html.replace(new RegExp('(^|\\s)@(' + pattern + ')(?![\\w.])', 'gi'), (match, lead, name) => {
-      return lead + '<span class="mention">@' + name + '</span>';
-    });
   }
   return html;
 }

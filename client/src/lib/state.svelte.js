@@ -222,7 +222,6 @@ export async function loadDms() {
     const seenAt = dmSeenAt();
     const unread = {};
     let changed = false;
-    let ping = false;
     for (const row of next) {
       const id = row.other && row.other.id;
       if (!id) continue;
@@ -254,7 +253,10 @@ export async function loadDms() {
       }
       if (count > 0) {
         unread[id] = { unread: count };
-        if (inboxReady && heardDm[id] !== stamp) ping = true;
+        if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
+          const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
+          noteArrival(stamp || key, who, 'New direct message');
+        }
       }
       heardDm[id] = stamp;
     }
@@ -267,7 +269,6 @@ export async function loadDms() {
       if (row && row.other) ui.dmUser = { ...ui.dmUser, ...row.other };
     }
     inboxReady = true;
-    if (ping) playPing();
   } catch (_) {}
 }
 
@@ -390,7 +391,7 @@ async function watchChat() {
   if (watchStarted) return;
   watchStarted = true;
   while (true) {
-    const looking = !document.hidden && !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm');
+    const looking = !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm');
     if (!looking) {
       await sleep(1500);
       continue;
@@ -515,30 +516,15 @@ export async function loadMessages(quiet, live) {
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
     if (newest && newest.id) markSeen(roomKey, newest.id);
     if (ui.mode === 'dm') {
-      ui.messages = list;
-      if (quiet && previousId && newest && newest.id !== previousId && !isMine(newest)) playPing();
-      return 'changed';
-    }
     ui.messages = list;
-    if (newest && newest.id && newest.id !== ui.seenMessageId) {
-      const first = !ui.seenMessageId;
-      ui.seenMessageId = newest.id;
-      const mine = isMine(newest);
-      if (!first && !mine && !serverMuted() && quiet) {
-        const mode = notifyMode();
-        const text = newest.content || '';
-        const mention = mentionsMe(text);
-        if (mention) playPing();
-        if (mode === 'all' || (mode === 'mentions' && mention)) {
-          const old = document.title;
-          document.title = 'New message · Nebula';
-          setTimeout(() => {
-            if (document.title === 'New message · Nebula') document.title = old;
-          }, 2500);
-        }
-      }
-    }
+    if (newest && newest.id) ui.seenMessageId = newest.id;
+    if (quiet) announceFresh(list, previousId);
     return 'changed';
+  }
+  ui.messages = list;
+  if (newest && newest.id) ui.seenMessageId = newest.id;
+  if (quiet) announceFresh(list, previousId);
+  return 'changed';
   } catch (err) {
     if (serial !== pulseSerial) return 'skip';
     if (err && err.name === 'AbortError') throw err;
@@ -807,6 +793,8 @@ let activityReady = false;
 let mentionSnap = 0;
 let dmSnap = 0;
 let lastSound = 0;
+const heardHeads = {};
+const heardIds = new Set();
 
 export function soundEnabled() {
   return localStorage.getItem('nebula-sound') !== 'off';
@@ -817,7 +805,42 @@ function audioCtx() {
   return playPing.ctx;
 }
 
-let pingWaiting = false;
+function chimeWav() {
+  const sampleRate = 22050;
+  const samples = Math.floor(sampleRate * 0.32);
+  const data = new Int16Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const t = i / sampleRate;
+    const env = Math.exp(-t * 8);
+    const wave = Math.sin(2 * Math.PI * 880 * Math.pow(0.55, t / 0.32) * t);
+    data[i] = Math.max(-1, Math.min(1, wave * env)) * 0.5 * 32767;
+  }
+  const buffer = new ArrayBuffer(44 + data.length * 2);
+  const view = new DataView(buffer);
+  const write = (offset, text) => { for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i)); };
+  write(0, 'RIFF');
+  view.setUint32(4, 36 + data.length * 2, true);
+  write(8, 'WAVE');
+  write(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, 'data');
+  view.setUint32(40, data.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < data.length; i++, offset += 2) view.setInt16(offset, data[i], true);
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return 'data:audio/wav;base64,' + btoa(binary);
+}
+
+const pingAudio = typeof Audio !== 'undefined' ? new Audio(chimeWav()) : null;
+if (pingAudio) pingAudio.preload = 'auto';
 
 function chime() {
   const ctx = audioCtx();
@@ -839,33 +862,93 @@ function chime() {
 export function unlockSound() {
   try {
     const ctx = audioCtx();
-    pingWaiting = false;
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  } catch (_) {}
+  if (pingAudio) {
+    const volume = pingAudio.volume;
+    pingAudio.volume = 0;
+    pingAudio.play().then(() => {
+      pingAudio.pause();
+      pingAudio.currentTime = 0;
+      pingAudio.volume = volume || 0.7;
+    }).catch(() => { pingAudio.volume = volume || 0.7; });
+  }
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function tryWebChime() {
+  try {
+    const ctx = audioCtx();
+    if (ctx.state === 'running') chime();
+    else ctx.resume().then(() => { if (ctx.state === 'running') chime(); }).catch(() => {});
   } catch (_) {}
 }
 
 export function playPing(force) {
   if (!soundEnabled()) return;
   const now = Date.now();
-  if (!force && now - lastSound < 700) return;
-  try {
-    const ctx = audioCtx();
-    if (ctx.state === 'suspended') {
-      pingWaiting = true;
-      if (!playPing.resuming) {
-        playPing.resuming = true;
-        ctx.resume().then(() => {
-          playPing.resuming = false;
-          if (ctx.state === 'running') playPing(true);
-        }).catch(() => { playPing.resuming = false; });
+  if (!force && now - lastSound < 350) return;
+  lastSound = now;
+  if (pingAudio) {
+    try {
+      pingAudio.volume = 0.7;
+      pingAudio.currentTime = 0;
+      const attempt = pingAudio.play();
+      if (attempt && attempt.catch) {
+        attempt.catch(() => tryWebChime());
+        return;
       }
-      return;
-    }
-    if (now - lastSound < 700 && !force) return;
-    lastSound = Date.now();
-    pingWaiting = false;
-    chime();
+    } catch (_) {}
+  }
+  tryWebChime();
+}
+
+function flashTitle() {
+  if (!document.hidden) return;
+  const old = document.title;
+  document.title = 'New message · Nebula';
+  setTimeout(() => {
+    if (document.title === 'New message · Nebula') document.title = old;
+  }, 4000);
+}
+
+function deskNotice(title, body) {
+  if (!document.hidden) return;
+  flashTitle();
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    const note = new Notification(title || 'Nebula', { body: String(body || 'New message').slice(0, 140), silent: false });
+    note.onclick = () => {
+      window.focus();
+      note.close();
+    };
   } catch (_) {}
+}
+
+function noteArrival(id, title, body) {
+  const key = String(id || '');
+  if (!key || heardIds.has(key)) return;
+  heardIds.add(key);
+  if (heardIds.size > 500) heardIds.delete(heardIds.values().next().value);
+  playPing();
+  deskNotice(title, body);
+}
+
+function announceFresh(list, previousId) {
+  if (!previousId) return;
+  const start = (list || []).findIndex((msg) => msg.id === previousId);
+  if (start < 0) return;
+  for (const msg of list.slice(start + 1)) {
+    if (!msg || isMine(msg)) continue;
+    const who = (msg.author && (msg.author.displayName || msg.author.username)) || 'Someone';
+    const text = String(msg.content || '')
+      .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
+      .replace(/\[\[sticker:[^\]]+\]\]/g, 'Sticker')
+      .trim() || ((msg.files && msg.files.length) ? 'Sent a file' : 'New message');
+    noteArrival(msg.id, who, text);
+  }
 }
 
 export function mentionsMe(text) {
@@ -960,7 +1043,20 @@ async function pollActivity() {
     let dmUnread = 0;
     for (const row of Object.values(servers)) mentions += row.mentions || 0;
     for (const row of Object.values(dms)) dmUnread += row.unread || 0;
-    if (activityReady && mentions > mentionSnap) playPing();
+    if (data.heads) {
+      for (const [id, messageId] of Object.entries(data.heads)) {
+        if (!messageId || String(id).startsWith('dm:')) continue;
+        if (!activityReady || heardHeads[id] === undefined) {
+          heardHeads[id] = messageId;
+          continue;
+        }
+        if (heardHeads[id] === messageId) continue;
+        heardHeads[id] = messageId;
+        const note = (data.channels || {})[id];
+        if (!note || !note.unread) continue;
+        noteArrival(messageId, 'Nebula', note.mentions ? 'You were mentioned' : 'New message');
+      }
+    }
     activityReady = true;
     mentionSnap = mentions;
     dmSnap = dmUnread;
@@ -978,12 +1074,38 @@ function startClocks() {
     if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
   }, 1000);
   const watchInbox = () => {
-    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    if (!localStorage.getItem('dc_token')) return;
     pollActivity().then(() => loadDms());
   };
   setInterval(watchInbox, 1000);
   watchInbox();
+  watchAlerts();
   loadPacks();
+}
+
+let alertCursor = '';
+let alertMissing = false;
+
+async function watchAlerts() {
+  while (true) {
+    if (alertMissing || !localStorage.getItem('dc_token')) {
+      await sleep(4000);
+      continue;
+    }
+    try {
+      const data = await api('/api/alert?wait=1&cursor=' + encodeURIComponent(alertCursor));
+      const next = String(data.cursor || '');
+      const changed = !!alertCursor && next !== alertCursor;
+      alertCursor = next;
+      if (changed) {
+        await pollActivity();
+        await loadDms();
+      }
+    } catch (err) {
+      if (err && err.status === 404) alertMissing = true;
+      else await sleep(1500);
+    }
+  }
 }
 
 export async function saveMe(body) {

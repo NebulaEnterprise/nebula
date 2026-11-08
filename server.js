@@ -36,9 +36,16 @@ let users = load(USERS_FILE, {});
 let messages = load(MESSAGES_FILE, {});
 const pulseWaiters = new Set();
 let profileRev = 1;
+let alertRev = 1;
 function touchProfiles() {
   profileRev += 1;
   for (const waiter of [...pulseWaiters]) waiter.finish();
+}
+function touchAlerts() {
+  alertRev += 1;
+  for (const waiter of [...pulseWaiters]) {
+    if (waiter.alert) waiter.finish();
+  }
 }
 function wakePulse(roomId) {
   for (const waiter of pulseWaiters) {
@@ -1777,6 +1784,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
   wakePulse(found.channel.id);
+  touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
 
@@ -1929,6 +1937,32 @@ function pulseSnap(req) {
     },
   };
 }
+
+app.get('/api/alert', auth, (req, res) => {
+  const cursor = String(req.query.cursor || '');
+  const current = String(alertRev);
+  if (req.query.wait === '1' && cursor === current) {
+    let settled = false;
+    const waiter = { alert: true, finish };
+    function finish() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      pulseWaiters.delete(waiter);
+      if (!res.writableEnded) res.json({ ok: true, cursor: String(alertRev) });
+    }
+    const timer = setTimeout(finish, 25000);
+    pulseWaiters.add(waiter);
+    req.on('close', () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      pulseWaiters.delete(waiter);
+    });
+    return;
+  }
+  res.json({ ok: true, cursor: current });
+});
 
 app.get('/api/pulse', auth, (req, res) => {
   ensureGuilds();
@@ -2237,6 +2271,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   wakePulse(channelId);
+  touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
 
