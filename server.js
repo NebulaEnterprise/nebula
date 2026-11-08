@@ -1070,8 +1070,11 @@ function sendAsset(res, file, type) {
   res.sendFile(file);
 }
 
-const MEDIA_REPO = process.env.BANNER_REPO || 'userxxxxxxxxx/nebulaa-media';
-const OLD_MEDIA_HOST = 'https://raw.githubusercontent.com/uterine/nebulaa-media/';
+const MEDIA_REPO = process.env.BANNER_REPO || 'userxxxxxxxxx/nebula-media';
+const OLD_MEDIA_HOSTS = [
+  'https://raw.githubusercontent.com/uterine/nebulaa-media/',
+  'https://raw.githubusercontent.com/userxxxxxxxxx/nebulaa-media/',
+];
 const MEDIA_HOST = 'https://raw.githubusercontent.com/' + MEDIA_REPO + '/';
 
 function encryptWithKey(buf, key) {
@@ -1095,7 +1098,7 @@ function githubPut(filePath, body) {
       headers: {
         Authorization: 'Bearer ' + token,
         Accept: 'application/vnd.github+json',
-        'User-Agent': 'nebulaa',
+        'User-Agent': 'nebula',
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
         'X-GitHub-Api-Version': '2022-11-28',
@@ -1121,7 +1124,9 @@ function githubPut(filePath, body) {
 }
 
 function currentMediaUrl(value) {
-  return String(value || '').split(OLD_MEDIA_HOST).join(MEDIA_HOST);
+  let url = String(value || '');
+  for (const host of OLD_MEDIA_HOSTS) url = url.split(host).join(MEDIA_HOST);
+  return url;
 }
 
 function cleanMediaUrl(value) {
