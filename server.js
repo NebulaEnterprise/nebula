@@ -843,7 +843,7 @@ function publishedMedia(u, slot) {
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
   const url = String((u && u[urlKey]) || '');
-  if (/^https:\/\/pub-[a-z0-9]+\.r2\.dev\//i.test(url)) return url;
+  if (/^https:\/\/(?:pub-[a-z0-9]+\.r2\.dev|[a-z0-9]+\.r2\.cloudflarestorage\.com)\//i.test(url)) return url;
   const stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
   if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(stored)) return '/files/' + stored;
   if (url.startsWith('/files/') || url.startsWith('/uploads/')) return url;
@@ -854,9 +854,15 @@ function publishedMedia(u, slot) {
 function r2Config() {
   const accessKey = process.env.R2_ACCESS_KEY_ID || '';
   const secretKey = process.env.R2_SECRET_ACCESS_KEY || '';
-  const endpoint = String(process.env.R2_ENDPOINT || '').replace(/\/$/, '');
-  const bucket = process.env.R2_BUCKET || 'nebula-media';
-  const publicBase = String(process.env.R2_PUBLIC_URL || '').replace(/\/$/, '');
+  let endpoint = String(process.env.R2_ENDPOINT || 'https://128e913f1812bcd8b647d916b3c01211.r2.cloudflarestorage.com').replace(/\/$/, '');
+  let bucket = process.env.R2_BUCKET || 'nebula';
+  const bucketInPath = endpoint.match(/^(https:\/\/[^/]+)\/([^/]+)$/);
+  if (bucketInPath) {
+    endpoint = bucketInPath[1];
+    bucket = bucketInPath[2];
+  }
+  if (bucket === 'nebula-media') bucket = 'nebula';
+  const publicBase = String(process.env.R2_PUBLIC_URL || 'https://pub-319cb74e889b480d8902e6404eff14b3.r2.dev').replace(/\/$/, '');
   if (!accessKey || !secretKey || !endpoint || !publicBase) return null;
   return { accessKey, secretKey, endpoint, bucket, publicBase };
 }
