@@ -245,7 +245,7 @@ img { max-width: 100%; }
 .me-card:hover { background: rgba(255,255,255,0.06); }
 .me .who { flex: 1; min-width: 0; }
 .account-pop {
-  position: fixed; left: 76px; bottom: 72px; z-index: 50; width: 268px;
+  position: fixed; left: 76px; bottom: 72px; z-index: 50; width: 282px;
   max-height: calc(100vh - 88px);
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); border-radius: 8px;
@@ -279,13 +279,13 @@ img { max-width: 100%; }
 }
 .account-bubble button, .account-statuses button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 4px; color: #b5bac1; flex-shrink: 0; }
 .account-bubble button:hover { background: rgba(255,255,255,0.08); color: #fff; }
-.account-pop .pop-banner { height: 72px; min-height: 72px; max-height: 72px; }
-.account-pop .pop-body { padding: 0 12px 12px; }
-.account-pop .profile-hero { align-items: flex-start; text-align: left; margin-top: -32px; }
-.account-pop .profile-hero h3 { margin-top: 6px; font-size: 18px; text-align: left; }
+.account-pop .pop-banner { height: 60px; min-height: 60px; max-height: 60px; }
+.account-pop .pop-body { padding: 0 16px 16px; }
+.account-pop .profile-hero { align-items: flex-start; text-align: left; margin-top: -40px; }
+.account-pop .profile-hero h3 { margin: 8px 0 0; font-size: 20px; text-align: left; }
 .account-pop .profile-hero .handle { justify-content: flex-start; }
 .account-pop .pop-av {
-  width: 64px; height: 64px; border-radius: 16px; border-width: 3px; font-size: 22px;
+  width: 80px; height: 80px; border-radius: 18px; border-width: 4px; font-size: 26px;
 }
 .account-pop .profile-dot { width: 12px; height: 12px; border-width: 2px; right: 1px; bottom: 1px; }
 .account-pop .account-edit, .account-pop .account-row {
@@ -293,7 +293,7 @@ img { max-width: 100%; }
 }
 .account-pop .profile-face .bio-bubble {
   left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
-  margin: 0; max-width: 168px;
+  margin: 0; max-width: 156px;
   display: flex; align-items: center; gap: 2px;
   padding: 4px 5px 4px 8px; border-radius: 7px;
   background: #4e5058; box-shadow: none;
@@ -341,7 +341,7 @@ img { max-width: 100%; }
 }
 .account-statuses button:hover, .account-statuses button.on { background: var(--bg-hover); }
 .account-switch {
-  position: fixed; left: min(344px, calc(100vw - 276px)); bottom: 76px; z-index: 51;
+  position: fixed; left: min(366px, calc(100vw - 276px)); bottom: 76px; z-index: 51;
   width: 260px; padding: 8px; border-radius: 12px;
   background: #111214; border: 1px solid var(--line); box-shadow: var(--shadow);
 }
