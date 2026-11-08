@@ -17,6 +17,49 @@
   let klipy = $state(false);
   let busy = $state(false);
   let cat = $state('People');
+  let gifFav = $state(false);
+  let favs = $state([]);
+
+  function favStoreKey() {
+    return 'nebula-gif-favs:' + (ui.me?.id || 'local');
+  }
+
+  function readFavs() {
+    try {
+      const rows = JSON.parse(localStorage.getItem(favStoreKey()) || '[]');
+      return Array.isArray(rows) ? rows.filter((row) => row && row.url).slice(0, 80) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeFavs(rows) {
+    favs = rows.slice(0, 80);
+    try { localStorage.setItem(favStoreKey(), JSON.stringify(favs)); } catch (_) {}
+  }
+
+  function isFav(url) {
+    return favs.some((row) => row.url === url);
+  }
+
+  function toggleFav(gif, event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!gif?.url) return;
+    if (isFav(gif.url)) writeFavs(favs.filter((row) => row.url !== gif.url));
+    else writeFavs([{ id: gif.id || gif.url, url: gif.url, preview: gif.preview || gif.url, title: gif.title || '' }, ...favs]);
+  }
+
+  const shownFavs = $derived.by(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return favs;
+    return favs.filter((row) => String(row.title || '').toLowerCase().includes(q));
+  });
+
+  $effect(() => {
+    ui.me?.id;
+    favs = readFavs();
+  });
 
   const packs = $derived(ui.packs || []);
   const stickerPacks = $derived(packs.filter((pack) => (pack.stickers || []).length));
@@ -156,35 +199,68 @@
       {/each}
     </div>
   {:else}
-    <div class="picker-search">
-      <input bind:value={query} placeholder="Search GIFs" />
+    <div class="picker-search gif-search">
+      {#if gifFav}
+        <button type="button" class="gif-back" aria-label="Back" onclick={() => (gifFav = false)}>←</button>
+      {/if}
+      <input bind:value={query} placeholder={gifFav ? 'Search Favorites' : 'Search GIFs'} />
+      {#if !gifFav}
+        <button type="button" class="gif-fav-tab" onclick={() => (gifFav = true)}>★ Favorites</button>
+      {/if}
     </div>
     <div class="picker-grid gif-grid">
-      {#if busy && !gifs.length}<p class="hint">Searching…</p>{/if}
-      {#if gifError}<p class="hint">{gifError}</p>{/if}
-      {#if !busy && !gifError && !gifs.length}<p class="hint">No GIFs for that search.</p>{/if}
-      {#each gifs as gif (gif.url)}
-        <button type="button" title={gif.title || 'GIF'} onclick={() => sendGif(gif.url)}>
-          <img
-            src={gif.preview || gif.url}
-            alt=""
-            width="220"
-            height="120"
-            loading="lazy"
-            decoding="async"
-            referrerpolicy="no-referrer"
-            onerror={(e) => {
-              const img = e.currentTarget;
-              if (img.dataset.tried || !gif.url || img.getAttribute('src') === gif.url) return;
-              img.dataset.tried = '1';
-              img.src = gif.url;
-            }}
-          />
-        </button>
-      {/each}
+      {#if gifFav}
+        {#if !shownFavs.length}<p class="hint">No favorite GIFs yet. Tap the star on a GIF.</p>{/if}
+        {#each shownFavs as gif (gif.url)}
+          {@render gifTile(gif)}
+        {/each}
+      {:else}
+        {#if !query.trim()}
+          <button type="button" class="gif-fav-card" onclick={() => (gifFav = true)}>
+            <span class="gif-fav-mark">★</span>
+            <strong>Favorites</strong>
+            <span>{favs.length ? favs.length + ' saved' : 'Save GIFs here'}</span>
+          </button>
+        {/if}
+        {#if busy && !gifs.length}<p class="hint">Searching…</p>{/if}
+        {#if gifError}<p class="hint">{gifError}</p>{/if}
+        {#if !busy && !gifError && !gifs.length}<p class="hint">No GIFs for that search.</p>{/if}
+        {#each gifs as gif (gif.url)}
+          {@render gifTile(gif)}
+        {/each}
+      {/if}
     </div>
     {#if klipy}
       <a class="klipy-credit" href="https://klipy.com" target="_blank" rel="noreferrer">KLIPY</a>
     {/if}
   {/if}
 </div>
+
+{#snippet gifTile(gif)}
+  <div class="gif-tile">
+    <button type="button" class="gif-send" title={gif.title || 'GIF'} onclick={() => sendGif(gif.url)}>
+      <img
+        src={gif.preview || gif.url}
+        alt=""
+        width="220"
+        height="120"
+        loading="lazy"
+        decoding="async"
+        referrerpolicy="no-referrer"
+        onerror={(e) => {
+          const img = e.currentTarget;
+          if (img.dataset.tried || !gif.url || img.getAttribute('src') === gif.url) return;
+          img.dataset.tried = '1';
+          img.src = gif.url;
+        }}
+      />
+    </button>
+    <button
+      type="button"
+      class="gif-star"
+      class:on={isFav(gif.url)}
+      aria-label={isFav(gif.url) ? 'Remove favorite' : 'Favorite GIF'}
+      onclick={(e) => toggleFav(gif, e)}
+    >★</button>
+  </div>
+{/snippet}
