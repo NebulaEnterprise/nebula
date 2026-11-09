@@ -1,5 +1,5 @@
 <script>
-  import { ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -397,7 +397,7 @@
       </div>
       <div class="group">User settings</div>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
-      <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}><Palette size={16} /> Appearance</button>
+      <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
       <div class="group">Account</div>
@@ -406,7 +406,16 @@
     </aside>
     <div class="set-main" class:look-main={page === 'look'}>
       <div class="set-head">
-        {#if page === 'look'}
+        {#if page === 'look' && lookOpen === 'badges'}
+          <div class="look-intro">
+            <button type="button" class="look-back" onclick={() => (lookOpen = '')} aria-label="Back to Appearance"><ChevronLeft size={18} /></button>
+            <i class="look-mark"><Award size={18} /></i>
+            <div>
+              <h2>Badges</h2>
+              <p>Choose what shows on your profile and next to your name.</p>
+            </div>
+          </div>
+        {:else if page === 'look'}
           <div class="look-intro">
             <i class="look-mark"><Palette size={18} /></i>
             <div>
@@ -470,6 +479,52 @@
               <button type="button" class="btn" class:brand={!ui.me?.hideLastSeen} onclick={toggleLastSeen}>{ui.me?.hideLastSeen ? 'Hidden' : 'Shown'}</button>
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
+          {:else if page === 'look' && lookOpen === 'badges'}
+            <section class="look-sec">
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Show badges</strong>
+                  <em>Display badges on your profile.</em>
+                </div>
+                <button type="button" class="switch" class:on={shownCount > 0} aria-pressed={shownCount > 0} onclick={() => setAllBadges(shownCount === 0)}><i></i></button>
+              </div>
+              {#if ownedBadges(ui.me).length}
+                <div class="pick-row">
+                  {#each ownedBadges(ui.me) as id}
+                    <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
+                      {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                      <span>{badgeNames[id]}</span>
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <p class="hint">You do not have a badge yet.</p>
+              {/if}
+              <p class="look-kicker">Next to your name</p>
+              <div class="pick-row">
+                <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
+                {#each ownedBadges(ui.me) as id}
+                  <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
+                    {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                    <span>{badgeNames[id]}</span>
+                  </button>
+                {/each}
+              </div>
+              <p class="look-kicker">Server tag</p>
+              <div class="pick-row">
+                <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
+                {#each ui.me?.tagChoices || [] as choice}
+                  <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
+                    <TagPill tag={choice} />
+                    <span>{choice.name}</span>
+                  </button>
+                {/each}
+              </div>
+              {#if !(ui.me?.tagChoices || []).length}
+                <p class="hint">None of your servers have a tag yet.</p>
+              {/if}
+            </section>
+            <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {:else if page === 'look'}
             <section class="look-sec">
               <h3><Sparkles size={16} class="sec-ico" /> Theme</h3>
@@ -556,59 +611,13 @@
             </section>
             <section class="look-sec">
               <h3><Award size={16} class="sec-ico" /> Badges</h3>
-              <button type="button" class="bg-row" onclick={() => togglePanel('badges')}>
+              <button type="button" class="bg-row" onclick={() => (lookOpen = 'badges')}>
                 <span class="copy">
                   <strong>Badges</strong>
                   <em>{badgeLabel} · {showcaseLabel} · {roleLabel}</em>
                 </span>
-                <span class="chev-turn" class:open={lookOpen === 'badges'}><ChevronRight size={16} class="row-chev" /></span>
+                <ChevronRight size={16} class="row-chev" />
               </button>
-              {#if lookOpen === 'badges'}
-                <div class="look-panel">
-                  <div class="look-line">
-                    <div class="copy">
-                      <strong>Show badges</strong>
-                      <em>Display badges on your profile.</em>
-                    </div>
-                    <button type="button" class="switch" class:on={shownCount > 0} aria-pressed={shownCount > 0} onclick={() => setAllBadges(shownCount === 0)}><i></i></button>
-                  </div>
-                  {#if ownedBadges(ui.me).length}
-                    <div class="pick-row">
-                      {#each ownedBadges(ui.me) as id}
-                        <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
-                          {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                          <span>{badgeNames[id]}</span>
-                        </button>
-                      {/each}
-                    </div>
-                  {:else}
-                    <p class="hint">You do not have a badge yet.</p>
-                  {/if}
-                  <p class="look-kicker">Next to your name</p>
-                  <div class="pick-row">
-                    <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
-                    {#each ownedBadges(ui.me) as id}
-                      <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
-                        {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                        <span>{badgeNames[id]}</span>
-                      </button>
-                    {/each}
-                  </div>
-                  <p class="look-kicker">Server tag</p>
-                  <div class="pick-row">
-                    <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
-                    {#each ui.me?.tagChoices || [] as choice}
-                      <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
-                        <TagPill tag={choice} />
-                        <span>{choice.name}</span>
-                      </button>
-                    {/each}
-                  </div>
-                  {#if !(ui.me?.tagChoices || []).length}
-                    <p class="hint">None of your servers have a tag yet.</p>
-                  {/if}
-                </div>
-              {/if}
             </section>
             <section class="look-sec">
               <h3><Image size={16} class="sec-ico" /> Background</h3>
