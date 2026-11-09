@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Award, Type } from '@lucide/svelte';
+  import { ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -8,7 +8,6 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
-  import TagPill from './TagPill.svelte';
   import SongButton from './SongButton.svelte';
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
@@ -189,12 +188,6 @@
     songAutoplay: !!ui.me?.songAutoplay,
   });
 
-  const profileStyles = [
-    ['solid', 'Solid'],
-    ['gradient', 'Gradient'],
-    ['glow', 'Glow'],
-    ['rainbow', 'Rainbow'],
-  ];
   const fonts = [
     ['', 'Default', 'Outfit, sans-serif'],
     ['serif', 'Serif', 'Fraunces, Georgia, serif'],
@@ -322,9 +315,6 @@
   const aliasLabel = $derived(aliasNames.length ? (aliasNames.length === 1 ? '@' + aliasNames[0] : aliasNames.length + ' aliases') : 'Add');
   const bioLabel = $derived(shortBio(form.bio) || 'Add');
   const aboutLabel = $derived(String(aboutDraft || '').trim() ? 'Added' : 'Add');
-  const styleName = $derived(profileStyles.find((row) => row[0] === form.profileStyle)?.[1] || 'Gradient');
-  const fontName = $derived(fonts.find((row) => row[0] === form.nameFont)?.[1] || 'Default');
-  const effectName = $derived(effects.find((row) => row[0] === form.nameEffect)?.[1] || 'None');
   const shownCount = $derived(ownedBadges(ui.me).filter((id) => badgeOn(id)).length);
   const badgeLabel = $derived(ownedBadges(ui.me).length ? (shownCount ? shownCount + ' on' : 'Off') : 'None');
   const showcaseLabel = $derived(form.showcaseBadge ? badgeNames[form.showcaseBadge] : 'None');
@@ -338,10 +328,37 @@
     form.nameColors = next;
   }
 
+  const accentPresets = [
+    '#c026d3', '#ec4899', '#3b82f6', '#22d3ee', '#22c55e', '#eab308', '#f97316', '#ef4444',
+    '#d8b4fe', '#818cf8', '#67e8f9', '#86efac', '#2dd4bf', '#fbbf24', '#fb923c', '#fb7185',
+  ];
+
+  function sameHex(a, b) {
+    return String(a || '').toLowerCase() === String(b || '').toLowerCase();
+  }
+
+  let customColor = $state(!accentPresets.some((hex) => sameHex(hex, ui.me?.profileColors?.[0])));
+
   function setProfileColor(index, value) {
     const next = [...(form.profileColors || ['#7c3aed', '#c084fc'])];
     next[index] = value;
     form.profileColors = next;
+    if (index === 0) form.accentColor = value;
+  }
+
+  function pickAccent(hex) {
+    const next = [...(form.profileColors || ['#7c3aed', '#c084fc'])];
+    next[0] = hex;
+    form.profileColors = next;
+    form.accentColor = hex;
+  }
+
+  function setAllBadges(on) {
+    form.shownBadges = on ? [...ownedBadges(ui.me)] : [];
+  }
+
+  function togglePanel(id) {
+    lookOpen = lookOpen === id ? '' : id;
   }
 
   function addAlias() {
@@ -394,11 +411,21 @@
       <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
       <button class="danger set-logout" onclick={logout}>Log out</button>
     </aside>
-    <div class="set-main">
+    <div class="set-main" class:look-main={page === 'look'}>
       <div class="set-head">
-        <div>
-          <h2>{titles[page] || 'Settings'}</h2>
-        </div>
+        {#if page === 'look'}
+          <div class="look-intro">
+            <i class="look-mark"><Palette size={18} /></i>
+            <div>
+              <h2>Appearance</h2>
+              <p>Customize how your profile and interface look.</p>
+            </div>
+          </div>
+        {:else}
+          <div>
+            <h2>{titles[page] || 'Settings'}</h2>
+          </div>
+        {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
       {#if page === 'account'}
@@ -431,12 +458,8 @@
           <Security bind:open={securityOpen} />
         </section>
       {:else}
-      <div class="grid-2" class:folio={page === 'look'}>
-        <div class:folio-pane={page === 'look'}>
-          {#if page === 'look'}
-            <header class="folio-head"><span>Editor</span><button type="button" class="btn brand sm" onclick={save}>Save</button></header>
-          {/if}
-          <div class:folio-body={page === 'look'}>
+      <div class="grid-2" class:look-layout={page === 'look'}>
+        <div>
           {#if page === 'profile'}
             <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
@@ -455,40 +478,166 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
-            {#if !lookOpen}
-              <div class="look-home">
-              <section class="folio-card">
-                <header><i class="folio-ico"><User size={15} /></i><strong>Profile</strong><b class="folio-bar"></b></header>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'aliases')}><i class="folio-mini"><Tags size={15} /></i><span><strong>Aliases</strong><em>{aliasLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'bio')}><i class="folio-mini"><Smile size={15} /></i><span><strong>Bio</strong><em>{bioLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'about')}><i class="folio-mini"><User size={15} /></i><span><strong>About me</strong><em>{aboutLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-              </section>
-              <section class="folio-card">
-                <header><i class="folio-ico"><Image size={15} /></i><strong>Pictures</strong><b class="folio-bar"></b></header>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'avatar')}><i class="folio-mini"><Image size={15} /></i><span><strong>Avatar</strong><em>{form.avatarUrl ? 'Photo' : 'Color'}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'banner')}><i class="folio-mini"><Image size={15} /></i><span><strong>Banner</strong><em>{form.bannerUrl ? 'Set' : 'None'}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-              </section>
-              <section class="folio-card">
-                <header><i class="folio-ico"><Palette size={15} /></i><strong>Theme</strong><b class="folio-bar"></b></header>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'color')}><i class="folio-mini"><Circle size={15} /></i><span><strong>Profile color</strong><em>{styleName}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'name')}><i class="folio-mini"><Type size={15} /></i><span><strong>Display name</strong><em>{fontName} · {effectName}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-              </section>
-              <section class="folio-card">
-                <header><i class="folio-ico"><Music size={15} /></i><strong>Song</strong><b class="folio-bar"></b></header>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'song')}><i class="folio-mini"><Music size={15} /></i><span><strong>Profile song</strong><em>{songLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-              </section>
-              <section class="folio-card">
-                <header><i class="folio-ico"><Award size={15} /></i><strong>Badges</strong><b class="folio-bar"></b></header>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'badges')}><i class="folio-mini"><Award size={15} /></i><span><strong>On your profile</strong><em>{badgeLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'showcase')}><i class="folio-mini"><Award size={15} /></i><span><strong>Next to your name</strong><em>{showcaseLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-                <button type="button" class="folio-row" onclick={() => (lookOpen = 'role')}><i class="folio-mini"><Tags size={15} /></i><span><strong>Server tag</strong><em>{roleLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
-              </section>
+            <section class="look-sec">
+              <h3><Sparkles size={16} class="sec-ico" /> Theme</h3>
+              <div class="theme-grid">
+                <button type="button" class="theme-card" class:on={form.profileStyle === 'solid'} onclick={() => (form.profileStyle = 'solid')}>
+                  {#if form.profileStyle === 'solid'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Moon size={22} />
+                  Solid
+                </button>
+                <button type="button" class="theme-card" class:on={form.profileStyle === 'gradient'} onclick={() => (form.profileStyle = 'gradient')}>
+                  {#if form.profileStyle === 'gradient'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Sun size={22} />
+                  Gradient
+                </button>
+                <button type="button" class="theme-card" class:on={form.profileStyle === 'glow'} onclick={() => (form.profileStyle = 'glow')}>
+                  {#if form.profileStyle === 'glow'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Sparkles size={22} />
+                  Glow
+                </button>
+                <button type="button" class="theme-card" class:on={form.profileStyle === 'rainbow'} onclick={() => (form.profileStyle = 'rainbow')}>
+                  {#if form.profileStyle === 'rainbow'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Palette size={22} />
+                  Rainbow
+                </button>
               </div>
-            {:else}
-              <button type="button" class="crumb" onclick={() => (lookOpen = '')}><ChevronLeft size={16} /> Appearance</button>
+            </section>
+            <section class="look-sec">
+              <h3><Droplet size={16} class="sec-ico" /> Accent color</h3>
+              <div class="swatches">
+                {#each accentPresets as hex}
+                  <button type="button" class="swatch" class:on={sameHex(form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => pickAccent(hex)}></button>
+                {/each}
+              </div>
+              <button type="button" class="look-custom" onclick={() => (customColor = !customColor)}>{customColor ? 'Hide custom color' : 'Custom color'}</button>
+              {#if customColor}
+                <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+              {/if}
+            </section>
+            <section class="look-sec">
+              <h3><Monitor size={16} class="sec-ico" /> Display settings</h3>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Display name style</strong>
+                  <em>Choose how your name is displayed.</em>
+                </div>
+                <select class="look-select" bind:value={form.nameFont}>
+                  {#each fonts as [id, label]}<option value={id}>{label}</option>{/each}
+                </select>
+              </div>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Name effect</strong>
+                  <em>Color treatment on your display name.</em>
+                </div>
+                <select class="look-select" bind:value={form.nameEffect}>
+                  {#each effects as [id, label]}<option value={id}>{label}</option>{/each}
+                </select>
+              </div>
+              {#if form.nameEffect}
+                <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
+              {/if}
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Show badges</strong>
+                  <em>Display badges on your profile. {badgeLabel}.</em>
+                </div>
+                <button type="button" class="switch" class:on={shownCount > 0} aria-pressed={shownCount > 0} onclick={() => setAllBadges(shownCount === 0)}><i></i></button>
+              </div>
+              {#if ownedBadges(ui.me).length}
+                <div class="pick-row">
+                  {#each ownedBadges(ui.me) as id}
+                    <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
+                      {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                      <span>{badgeNames[id]}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Next to your name</strong>
+                  <em>The badge beside your name in chat.</em>
+                </div>
+                <select class="look-select" bind:value={form.showcaseBadge}>
+                  <option value="">None</option>
+                  {#each ownedBadges(ui.me) as id}<option value={id}>{badgeNames[id]}</option>{/each}
+                </select>
+              </div>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Server tag</strong>
+                  <em>{roleLabel === 'None' ? 'Shown beside your name in the member list.' : roleLabel}</em>
+                </div>
+                <select class="look-select" bind:value={form.showcaseServerId}>
+                  <option value="">None</option>
+                  {#each ui.me?.tagChoices || [] as choice}<option value={choice.serverId}>{choice.name}</option>{/each}
+                </select>
+              </div>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Play on open</strong>
+                  <em>Start your profile song when the profile opens.</em>
+                </div>
+                <button type="button" class="switch" class:on={form.songAutoplay} aria-pressed={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}><i></i></button>
+              </div>
+            </section>
+            <section class="look-sec">
+              <h3><Image size={16} class="sec-ico" /> Background</h3>
+              <button type="button" class="bg-row" onclick={() => togglePanel('banner')}>
+                <span class="bg-thumb" style="background:{form.accentColor || 'var(--brand)'}">
+                  {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
+                </span>
+                <span class="copy">
+                  <strong>{form.bannerUrl ? 'Profile banner' : 'Default background'}</strong>
+                  <em>{form.bannerUrl ? 'Your picture across the top of the profile.' : 'Uses your accent color until you set a banner.'}</em>
+                </span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'banner'}
+                <div class="look-panel">
+                  <div class="look-banner">
+                    {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
+                  </div>
+                  <div class="look-actions">
+                    <label class="btn brand sm look-btn">Change banner
+                      <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
+                    </label>
+                    {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
+                  </div>
+                </div>
+              {/if}
+            </section>
+            <section class="look-sec">
+              <h3><User size={16} class="sec-ico" /> Profile</h3>
+              <button type="button" class="bg-row" onclick={() => togglePanel('avatar')}>
+                <span class="bg-thumb avatar-thumb" style="background:{form.avatarColor}">
+                  {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                </span>
+                <span class="copy"><strong>Avatar</strong><em>{form.avatarUrl ? 'Photo' : 'Color'}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'avatar'}
+                <div class="look-panel">
+                  <div class="look-actions">
+                    <label class="btn brand sm look-btn">Change avatar
+                      <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
+                    </label>
+                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
+                  </div>
+                  {#if !form.avatarUrl}
+                    <p class="look-kicker">Fallback color</p>
+                    <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
+                  {/if}
+                </div>
+              {/if}
+              <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
+                <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
               {#if lookOpen === 'aliases'}
-                <section class="look-card look-editor">
-                  <h3>Aliases</h3>
+                <div class="look-panel">
                   <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
                   <div class="alias-edit">
                     {#each form.aliases as alias, i}
@@ -501,94 +650,32 @@
                   {#if form.aliases.length < 10}
                     <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
                   {/if}
-                </section>
-              {:else if lookOpen === 'bio'}
-                <section class="look-card look-editor">
-                  <h3>Bio</h3>
-                  <p class="hint">The short line in the bubble beside your picture.</p>
+                </div>
+              {/if}
+              <button type="button" class="bg-row" onclick={() => togglePanel('bio')}>
+                <span class="copy"><strong>Bio</strong><em>{bioLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'bio'}
+                <div class="look-panel">
                   <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="A short line"></textarea>
-                </section>
-              {:else if lookOpen === 'about'}
-                <section class="look-card look-editor">
-                  <h3>About me</h3>
-                  <p class="hint">Shown under your name on your profile.</p>
+                </div>
+              {/if}
+              <button type="button" class="bg-row" onclick={() => togglePanel('about')}>
+                <span class="copy"><strong>About me</strong><em>{aboutLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'about'}
+                <div class="look-panel">
                   <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Say a little about yourself"></textarea>
-                </section>
-              {:else if lookOpen === 'avatar'}
-                <section class="look-card look-editor">
-                  <h3>Avatar</h3>
-                  <p class="hint">PNG, JPG, GIF, or WebP. With no photo, the color shows instead.</p>
-                  <div class="look-row">
-                    <div class="look-av" style="background:{form.avatarColor}">
-                      {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
-                    </div>
-                    <div class="look-actions">
-                      <label class="btn brand sm look-btn">Change avatar
-                        <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
-                      </label>
-                      {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
-                    </div>
-                  </div>
-                  {#if !form.avatarUrl}
-                    <p class="look-kicker">Fallback color</p>
-                    <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
-                  {/if}
-                </section>
-              {:else if lookOpen === 'banner'}
-                <section class="look-card look-editor">
-                  <h3>Banner</h3>
-                  <p class="hint">A GIF, PNG, JPG, or WebP across the top of your profile.</p>
-                  <div class="look-banner">
-                    {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
-                  </div>
-                  <div class="look-actions">
-                    <label class="btn brand sm look-btn">Change banner
-                      <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
-                    </label>
-                    {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
-                  </div>
-                </section>
-              {:else if lookOpen === 'color'}
-                <section class="look-card look-editor">
-                  <h3>Profile color</h3>
-                  <p class="hint">The background of your profile card.</p>
-                  <div class="style-seg">
-                    {#each profileStyles as [id, label]}
-                      <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
-                    {/each}
-                  </div>
-                  <p class="look-kicker">Colors</p>
-                  <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
-                </section>
-              {:else if lookOpen === 'name'}
-                <section class="look-card look-editor">
-                  <h3>Display name</h3>
-                  <p class="hint">Font, effect, and colors used on your name.</p>
-                  <p class="look-kicker">Font</p>
-                  <div class="effect-picks">
-                    {#each fonts as [id, label, family]}
-                      <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
-                        <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
-                        <span>{label}</span>
-                      </button>
-                    {/each}
-                  </div>
-                  <p class="look-kicker">Effect</p>
-                  <div class="effect-picks">
-                    {#each effects as [id, label]}
-                      <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                        <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
-                        <span>{label}</span>
-                      </button>
-                    {/each}
-                  </div>
-                  <p class="look-kicker">Colors</p>
-                  <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
-                </section>
-              {:else if lookOpen === 'song'}
-                <section class="look-card look-editor">
-                  <h3>Profile song</h3>
-                  <p class="hint">The audio is saved on the server, then the profile plays that copy.</p>
+                </div>
+              {/if}
+              <button type="button" class="bg-row" onclick={() => togglePanel('song')}>
+                <span class="copy"><strong>Profile song</strong><em>{songLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'song'}
+                <div class="look-panel">
                   <div class="field">
                     <label>YouTube link</label>
                     <input bind:value={form.songUrl} maxlength="300" placeholder="https://www.youtube.com/watch?v=" />
@@ -602,75 +689,22 @@
                     <label>Start at</label>
                     <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
                   </div>
-                  <p class="hint">Where playback starts, like 1:30.</p>
-                  <div class="acct-row">
-                    <span>Autoplay</span>
-                    <strong>{form.songAutoplay ? 'On' : 'Off'}</strong>
-                    <button type="button" class="btn sm sec-btn" onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'Turn off' : 'Turn on'}</button>
-                  </div>
-                  <p class="hint">Starts the song when this profile is opened.</p>
-                </section>
-              {:else if lookOpen === 'badges'}
-                <section class="look-card look-editor">
-                  <h3>On your profile</h3>
-                  <p class="hint">Turn a badge on or off. Only the ones you leave on show on your profile card.</p>
-                  {#if ownedBadges(ui.me).length}
-                    <div class="pick-row">
-                      {#each ownedBadges(ui.me) as id}
-                        <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
-                          {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                          <span>{badgeNames[id]}</span>
-                        </button>
-                      {/each}
-                    </div>
-                  {:else}
-                    <p class="hint">You do not have a badge yet.</p>
-                  {/if}
-                </section>
-              {:else if lookOpen === 'showcase'}
-                <section class="look-card look-editor">
-                  <h3>Next to your name</h3>
-                  <p class="hint">This badge sits beside your name in the member list and in chat.</p>
-                  <div class="pick-row">
-                    <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
-                    {#each ownedBadges(ui.me) as id}
-                      <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
-                        {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                        <span>{badgeNames[id]}</span>
-                      </button>
-                    {/each}
-                  </div>
-                </section>
-              {:else if lookOpen === 'role'}
-                <section class="look-card look-editor">
-                  <h3>Server tag</h3>
-                  <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
-                  <div class="pick-row">
-                    <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
-                    {#each ui.me?.tagChoices || [] as choice}
-                      <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
-                        <TagPill tag={choice} />
-                        <span>{choice.name}</span>
-                      </button>
-                    {/each}
-                  </div>
-                  {#if !(ui.me?.tagChoices || []).length}
-                    <p class="hint">None of your servers have a tag yet.</p>
-                  {/if}
-                </section>
+                </div>
               {/if}
-            {/if}
+            </section>
+            <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {/if}
           {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
-          </div>
         </div>
-        <div class="preview-sticky" class:folio-pane={page === 'look'}>
-          {#if page === 'look'}<header class="folio-head"><span>Live Preview</span></header>{/if}
-          <div class:folio-stage={page === 'look'}>
-          {#if page !== 'look'}<p class="label">Preview</p>{/if}
+        <div class="preview-sticky" class:look-preview={page === 'look'}>
+          {#if page === 'look'}
+            <header class="preview-label"><Eye size={16} /> Preview</header>
+          {:else}
+            <p class="label">Preview</p>
+          {/if}
           <div class="preview-card profile-card skin-{form.profileStyle || 'gradient'}" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
             <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
@@ -729,7 +763,6 @@
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </div>
       </div>
