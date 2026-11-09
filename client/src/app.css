@@ -1087,7 +1087,10 @@ img { max-width: 100%; }
 }
 .bg-thumb.avatar-thumb { width: 48px; display: grid; place-items: center; color: #fff; font-weight: 750; }
 .look-panel { margin-top: 8px; padding: 12px; border-radius: 14px; background: #171821; border: 1px solid rgba(255,255,255,0.06); }
-.look-save { width: auto; min-width: 148px; margin-top: 8px; border-radius: 999px; padding: 0 18px; }
+.btn.brand.look-save {
+  width: auto; min-width: 0; margin-top: 18px; padding: 10px 22px;
+  border-radius: 999px; background: #7c5cff; font-weight: 700;
+}
 .look-preview {
   background: #171821; border: 1px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 14px;
   box-shadow: 0 16px 40px rgba(0,0,0,0.28);
