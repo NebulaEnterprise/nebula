@@ -967,7 +967,7 @@ return {
 };
 })();
 
-const PORT = 3850;
+const PORT = Number(process.env.PORT) || 3850;
 
 const DATA_DIR = path.join(__dirname, 'data');
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
@@ -1649,6 +1649,90 @@ function messageStamp(list) {
   }).join('|');
 }
 
+const AUTO_DELETE_MIN = 60 * 60 * 1000;
+const AUTO_DELETE_MAX = 366 * 24 * 60 * 60 * 1000;
+
+function cleanAutoDelete(value) {
+  const ms = Math.round(Number(value) || 0);
+  if (!ms) return 0;
+  if (!Number.isFinite(ms) || ms < AUTO_DELETE_MIN || ms > AUTO_DELETE_MAX) return null;
+  return ms;
+}
+
+function roomAutoDelete(roomId) {
+  const id = String(roomId || '');
+  if (id.startsWith('dm:')) {
+    const thread = dmThreads[id.slice(3)];
+    return Number(thread && thread.autoDeleteMs) || 0;
+  }
+  const found = findChannel(id, '');
+  return Number(found && found.channel && found.channel.autoDeleteMs) || 0;
+}
+
+function stampExpiry(msg, roomId) {
+  const ttl = roomAutoDelete(roomId);
+  if (ttl > 0) msg.expiresAt = Date.now() + ttl;
+  return msg;
+}
+
+function releaseMessageFiles(msg) {
+  const urls = [];
+  for (const file of (msg && msg.files) || []) {
+    if (file && file.url) urls.push(file.url);
+    if (file && file.poster) urls.push(file.poster);
+  }
+  if (!urls.length) return;
+  const still = new Set();
+  for (const list of Object.values(messages)) {
+    if (!Array.isArray(list)) continue;
+    for (const row of list) {
+      for (const file of (row && row.files) || []) {
+        if (file && file.url) still.add(file.url);
+        if (file && file.poster) still.add(file.poster);
+      }
+    }
+  }
+  for (const url of urls) {
+    if (still.has(url) || !/^\/uploads\/[A-Za-z0-9._-]+$/.test(url)) continue;
+    fs.unlink(path.join(UPLOAD_DIR, path.basename(url)), () => {});
+  }
+}
+
+function dropExpired(roomId) {
+  const list = messages[roomId];
+  if (!Array.isArray(list) || !list.length) return false;
+  const now = Date.now();
+  let expired = false;
+  for (const msg of list) {
+    const at = Number(msg && msg.expiresAt) || 0;
+    if (at && at <= now) { expired = true; break; }
+  }
+  if (!expired) return false;
+  const removed = [];
+  const kept = [];
+  for (const msg of list) {
+    const at = Number(msg && msg.expiresAt) || 0;
+    if (at && at <= now) removed.push(msg);
+    else kept.push(msg);
+  }
+  messages[roomId] = kept;
+  save(MESSAGES_FILE, messages);
+  for (const msg of removed) releaseMessageFiles(msg);
+  wakePulse(roomId);
+  return true;
+}
+
+function roomMessages(roomId) {
+  dropExpired(roomId);
+  const list = messages[roomId];
+  return Array.isArray(list) ? list : [];
+}
+
+function sweepExpired() {
+  for (const roomId of Object.keys(messages)) dropExpired(roomId);
+}
+setInterval(sweepExpired, 15000);
+
 function publicReactions(msg, viewerId) {
   return (msg && Array.isArray(msg.reactions) ? msg.reactions : [])
     .filter((row) => row && row.emoji && row.users && row.users.length)
@@ -1685,7 +1769,7 @@ function readReply(body, roomId) {
 
 function readReplies(body, roomId) {
   const raw = body && Array.isArray(body.replies) ? body.replies : (body && body.reply ? [body.reply] : []);
-  const list = messages[roomId] || [];
+  const list = roomMessages(roomId);
   const out = [];
   const seen = new Set();
   for (const item of raw) {
@@ -3433,7 +3517,7 @@ app.post('/api/activity', auth, (req, res) => {
     let mentions = 0;
     for (const channel of g.channels || []) {
       if (channel.type && channel.type !== 'text') continue;
-      const list = messages[channel.id] || [];
+      const list = roomMessages(channel.id);
       const cursor = String(seen[channel.id] || '');
       let start = list.length;
       if (cursor) {
@@ -3778,8 +3862,8 @@ app.get('/api/channels/:id/messages', auth, (req, res) => {
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) {
     return res.status(403).json({ error: 'You cannot view this channel' });
   }
-  const list = messages[found.channel.id] || [];
-  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)) });
+  const list = roomMessages(found.channel.id);
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), autoDeleteMs: roomAutoDelete(found.channel.id) });
 });
 
 app.post('/api/channels/:id/messages', auth, (req, res) => {
@@ -3831,6 +3915,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     reply: readReply(req.body, found.channel.id),
     createdAt: new Date().toISOString(),
   };
+  stampExpiry(msg, found.channel.id);
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
@@ -3951,7 +4036,8 @@ function pulseSnap(req) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
     const roomId = 'dm:' + key;
-    const raw = messages[roomId] || [];
+    const raw = roomMessages(roomId);
+    const ttl = roomAutoDelete(roomId);
     const list = raw.slice(-100).map((msg) => presentMessage(msg, req.user.id));
     const typers = listTypers(roomId, req.user.id);
     const last = list[list.length - 1];
@@ -3965,14 +4051,16 @@ function pulseSnap(req) {
         typing: typers.map((row) => row.id).sort().join(','),
         profiles: String(profileRev),
         polls: pollStamp(raw.slice(-100)),
-        edits: messageStamp(raw.slice(-100)),
+        edits: messageStamp(raw.slice(-100)) + '~' + ttl,
+        autoDeleteMs: ttl,
       },
     };
   }
   const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
   if (!found) return null;
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
-  const raw = messages[found.channel.id] || [];
+  const raw = roomMessages(found.channel.id);
+  const ttl = roomAutoDelete(found.channel.id);
   const list = raw.slice(-100).map((msg) => presentMessage(msg, req.user.id));
   const typers = listTypers('ch:' + found.guild.id + ':' + found.channel.id, req.user.id);
   const last = list[list.length - 1];
@@ -3987,7 +4075,8 @@ function pulseSnap(req) {
       members: memberStamp(found.guild),
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),
-      edits: messageStamp(raw.slice(-100)),
+      edits: messageStamp(raw.slice(-100)) + '~' + ttl,
+      autoDeleteMs: ttl,
     },
   };
 }
@@ -4283,7 +4372,7 @@ function dmInbox(userId, seen, seeded) {
   const counts = {};
   const heads = {};
   for (const other of others) {
-    const list = messages['dm:' + dmKey(userId, other)] || [];
+    const list = roomMessages('dm:' + dmKey(userId, other));
     const cursor = String((seen && seen['dm:' + other]) || '');
     let start = list.length;
     if (cursor) {
@@ -4332,7 +4421,7 @@ function sendDmList(req, res) {
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .map((t) => {
       const otherId = String(t.a) === String(req.user.id) ? t.b : t.a;
-      const room = messages['dm:' + t.id] || [];
+      const room = roomMessages('dm:' + t.id);
       const last = room[room.length - 1];
       const note = notes[String(otherId)];
       return {
@@ -4356,7 +4445,7 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
   const otherId = req.params.userId;
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   const key = dmKey(req.user.id, otherId);
-  const list = messages['dm:' + key] || [];
+  const list = roomMessages('dm:' + key);
   const all = req.query.all === '1' || req.query.all === 'true';
   const after = String(req.query.after || '');
   let slice = list;
@@ -4377,6 +4466,7 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
     mode,
     messages: slice.map((msg) => presentMessage(msg, req.user.id)),
     other: publicUser(users[otherId]),
+    autoDeleteMs: roomAutoDelete('dm:' + key),
   });
 });
 
@@ -4420,6 +4510,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     reply: readReply(req.body, channelId),
     createdAt: new Date().toISOString(),
   };
+  stampExpiry(msg, channelId);
   messages[channelId].push(msg);
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
   save(MESSAGES_FILE, messages);
@@ -4427,6 +4518,36 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   wakePulse(channelId);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
+});
+
+app.post('/api/auto-delete', auth, (req, res) => {
+  const ms = cleanAutoDelete(req.body && req.body.ms);
+  if (ms == null) return res.status(400).json({ error: 'Pick a time from 1 hour to 1 year' });
+  const userId = String(req.body && req.body.userId || '');
+  if (userId) {
+    if (!users[userId] || userId === req.user.id) return res.status(400).json({ error: 'Pick a conversation' });
+    const key = dmKey(req.user.id, userId);
+    const me = ensureFriendNode(req.user.id);
+    if (!me.friends.map(String).includes(userId) && !dmThreads[key] && !sharesServer(req.user.id, userId)) {
+      return res.status(403).json({ error: 'Add them as a friend first' });
+    }
+    if (!dmThreads[key]) {
+      const pair = [req.user.id, userId].sort();
+      dmThreads[key] = { id: key, a: pair[0], b: pair[1], updatedAt: Date.now() };
+    }
+    dmThreads[key].autoDeleteMs = ms;
+    save(DMS_FILE, dmThreads);
+    wakePulse('dm:' + key);
+    return res.json({ ok: true, ms, roomId: 'dm:' + key });
+  }
+  ensureGuilds();
+  const found = findChannel(String(req.body && req.body.channelId || ''), String(req.body && req.body.serverId || ''));
+  if (!found || found.channel.type === 'voice') return res.status(404).json({ error: 'Channel not found' });
+  if (!can(found.guild, req.user, PERM.MANAGE_CHANNELS)) return res.status(403).json({ error: 'You cannot change auto-delete for this channel' });
+  found.channel.autoDeleteMs = ms;
+  saveGuilds();
+  wakePulse(found.channel.id);
+  res.json({ ok: true, ms, roomId: found.channel.id });
 });
 
 app.get('/api/forward-targets', auth, (req, res) => {
@@ -4557,6 +4678,7 @@ app.post('/api/messages/:id/forward', auth, (req, res) => {
     mentions,
     createdAt: new Date().toISOString(),
   };
+  stampExpiry(msg, roomId);
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
   save(MESSAGES_FILE, messages);

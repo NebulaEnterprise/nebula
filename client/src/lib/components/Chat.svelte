@@ -1,16 +1,17 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff } from '@lucide/svelte';
+  import { Clock, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, autoDeleteLabel } from '../state.svelte.js';
   import { formatContent, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
+  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : (Number(channel?.autoDeleteMs) || 0));
   const quickUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
@@ -607,6 +608,10 @@
   <Hash size={18} />
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
+  <button type="button" class="vanish" class:on={timerMs > 0} title="Auto-delete messages" onclick={() => { ui.userPage = 'privacy'; ui.userSettings = true; }}>
+    <Clock size={14} />
+    {timerMs ? autoDeleteLabel(timerMs) : 'Auto-delete'}
+  </button>
   {#if ui.mode !== 'dm'}
     <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
       <MessageSquare size={18} />

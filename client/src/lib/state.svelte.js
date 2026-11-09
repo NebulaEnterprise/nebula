@@ -59,6 +59,7 @@ export const ui = $state({
   voiceRooms: {},
   addingAccount: false,
   authGate: false,
+  dmAutoDelete: 0,
   quickOpen: false,
   quickUser: null,
 });
@@ -553,11 +554,43 @@ export function closeQuick() {
   ui.quickOpen = false;
 }
 
+export function autoDeleteLabel(ms) {
+  const n = Number(ms) || 0;
+  if (!n) return 'Off';
+  const hour = 60 * 60 * 1000;
+  const day = 24 * hour;
+  if (n === day) return '24 hours';
+  if (n === 7 * day) return '7 days';
+  if (n === 30 * day) return '1 month';
+  const hours = Math.round(n / hour);
+  if (hours < 48) return hours === 1 ? '1 hour' : hours + ' hours';
+  const days = Math.round(n / day);
+  return days === 1 ? '1 day' : days + ' days';
+}
+
+export async function setAutoDelete(ms) {
+  const body = { ms };
+  if (ui.mode === 'dm' && ui.dmUser) body.userId = ui.dmUser.id;
+  else if (ui.mode === 'chat' && ui.channelId) {
+    body.channelId = ui.channelId;
+    body.serverId = ui.serverId;
+  } else {
+    toast('Open a channel or a direct message first');
+    return;
+  }
+  const data = await api('/api/auto-delete', { method: 'POST', body });
+  const next = Number(data.ms) || 0;
+  if (String(data.roomId || '').startsWith('dm:')) ui.dmAutoDelete = next;
+  else ui.channels = ui.channels.map((ch) => ch.id === data.roomId ? { ...ch, autoDeleteMs: next } : ch);
+  toast(next ? 'New messages disappear after ' + autoDeleteLabel(next) : 'Auto-delete is off');
+}
+
 export async function openDm(user) {
   const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
   ui.dmUser = user;
+  if (!same) ui.dmAutoDelete = 0;
   if (user && user.id && ui.activity.dms[user.id]) {
     const dms = { ...ui.activity.dms };
     delete dms[user.id];
@@ -1005,7 +1038,12 @@ export async function loadMessages(quiet, live) {
     const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
     const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
     const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
-    if (!list.length && hadReal) return 'same';
+    if (!list.length && hadReal && data.cursor) return 'same';
+    if (Number.isFinite(Number(data.autoDeleteMs))) {
+      const ms = Number(data.autoDeleteMs);
+      if (mode === 'dm') ui.dmAutoDelete = ms;
+      else if (channelId) ui.channels = ui.channels.map((ch) => ch.id === channelId ? { ...ch, autoDeleteMs: ms } : ch);
+    }
     if (newest && newest.id) markSeen(roomKey, newest.id);
     const known = new Set(list.map((msg) => msg && msg.id));
     const local = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && !known.has(msg.id) && (msg.roomKey === roomKey || !msg.roomKey));
