@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff, Search, Phone, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -13,7 +13,6 @@
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
-  const quickUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
     const map = new Map();
@@ -711,12 +710,6 @@
     {/if}
     <button class="btn icon" title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
     <input class="top-search" placeholder={ui.mode === 'dm' ? 'Search' : 'Search ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />
-    {#if ui.mode === 'chat'}
-      <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
-        <MessageSquare size={18} />
-        {#if quickUnread}<em class="pill-count">{quickUnread > 99 ? '99+' : quickUnread}</em>{/if}
-      </button>
-    {/if}
   </div>
 </div>
 {#if renaming && ui.mode === 'thread'}
