@@ -31,7 +31,7 @@
         <p class="auth-switch"><button type="button" onclick={() => run(() => cancelAdd())}>Back</button></p>
       {/if}
     {:else if ui.auth === 'register'}
-      <p class="sub">Create an account. We’ll email you a code.</p>
+      <p class="sub">Create an account. If this server can send email, you’ll get a code. If it can’t, the account opens right away.</p>
       <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>
       <div class="field"><label>Username</label><input bind:value={username} maxlength="32" autocomplete="username" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="new-password" /></div>
