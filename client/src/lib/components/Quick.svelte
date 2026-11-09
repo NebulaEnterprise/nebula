@@ -1,8 +1,10 @@
 <script>
   import { MessageSquare, X, ChevronLeft, ExternalLink } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
+  import Attachment from './Attachment.svelte';
   import { ui, openQuick, closeQuick, openDm, loadDms, toast } from '../state.svelte.js';
   import { api } from '../api.js';
+  import { formatContent } from '../format.js';
 
   let messages = $state([]);
   let person = $state(null);
@@ -30,6 +32,28 @@
   const unread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const hidden = $derived(ui.mode === 'dm' && ui.dmUser && ui.quickUser && String(ui.dmUser.id) === String(ui.quickUser.id));
   const rows = $derived((ui.dms || []).filter((dm) => dm.other));
+  const emoji = $derived.by(() => {
+    const map = new Map();
+    for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);
+    for (const pack of ui.packs || []) for (const row of pack.emoji || []) if (row?.name) map.set(row.name, row);
+    return [...map.values()];
+  });
+  const stickers = $derived.by(() => {
+    const map = new Map();
+    for (const row of ui.stickers || []) if (row?.name) map.set(row.name, row);
+    for (const pack of ui.packs || []) for (const row of pack.stickers || []) if (row?.name) map.set(row.name, row);
+    return [...map.values()];
+  });
+  const names = $derived.by(() => {
+    const list = [];
+    for (const person of [ui.me, who]) {
+      if (!person) continue;
+      if (person.username) list.push(person.username);
+      if (person.displayName) list.push(person.displayName);
+      for (const alias of person.aliases || []) if (alias) list.push(alias);
+    }
+    return list;
+  });
 
   function time(iso) {
     const d = new Date(iso);
@@ -39,14 +63,8 @@
     return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + clock;
   }
 
-  function body(msg) {
-    const text = String(msg?.content || '').trim();
-    if (text) return text;
-    if (msg?.poll?.question) return 'Poll: ' + msg.poll.question;
-    const count = Array.isArray(msg?.files) ? msg.files.length : 0;
-    if (count === 1) return 'Sent a file';
-    if (count > 1) return 'Sent ' + count + ' files';
-    return '';
+  function textOf(msg) {
+    return String(msg?.content || '').trim();
   }
 
   function onScroll(event) {
@@ -203,8 +221,17 @@
           {/if}
           {#each messages as msg (msg.id)}
             {@const mine = msg.author?.id === ui.me?.id}
+            {@const text = textOf(msg)}
             <div class="qbubble" class:mine class:theirs={!mine}>
-              <p>{body(msg)}</p>
+              {#if text}<div class="quick-text">{@html formatContent(text, emoji, stickers, names)}</div>{/if}
+              {#if msg.files?.length}
+                <div class="quick-files">
+                  {#each msg.files as file}
+                    <Attachment {file} />
+                  {/each}
+                </div>
+              {/if}
+              {#if !text && !msg.files?.length && msg.poll?.question}<p>{msg.poll.question}</p>{/if}
               <time>{time(msg.createdAt)}</time>
             </div>
           {/each}
