@@ -16,8 +16,24 @@ export const ui = $state({
   friends: [],
   incoming: [],
   outgoing: [],
+  blocked: [],
+  suggested: [],
   dms: [],
+  groups: [],
   dmUser: null,
+  group: null,
+  thread: null,
+  dock: '',
+  dockQuery: '',
+  threadDraft: null,
+  switcher: false,
+  showMembers: true,
+  closedChats: {},
+  muteTick: 0,
+  devTick: 0,
+  idMenu: null,
+  reportPopup: null,
+  staffReports: [],
   servers: [],
   serverId: 'nebula-official',
   serverMeta: null,
@@ -388,6 +404,8 @@ export async function loadFriends() {
     ui.friends = data.friends || [];
     ui.incoming = data.incoming || [];
     ui.outgoing = data.outgoing || [];
+    ui.blocked = data.blocked || [];
+    ui.suggested = data.suggested || [];
   } catch (_) {}
 }
 
@@ -428,8 +446,45 @@ function rememberDm(id, at) {
   try { localStorage.setItem('nebula-dm-at', JSON.stringify(map)); } catch (_) {}
 }
 
+function hydrateClosed() {
+  try { ui.closedChats = JSON.parse(localStorage.getItem(accountKey('nebula-closed')) || '{}') || {}; }
+  catch { ui.closedChats = {}; }
+}
+
+export function chatClosed(key, lastId) {
+  const stamp = (ui.closedChats || {})[key];
+  if (!stamp) return false;
+  return stamp === (lastId || 'none');
+}
+
+export function closeConversation(key, lastId) {
+  hydrateClosed();
+  const map = { ...ui.closedChats, [key]: lastId || 'none' };
+  ui.closedChats = map;
+  try { localStorage.setItem(accountKey('nebula-closed'), JSON.stringify(map)); } catch (_) {}
+  if (key.startsWith('dm:') && ui.dmUser && key === 'dm:' + ui.dmUser.id) showFriends();
+  if (key.startsWith('group:') && ui.group && key === 'group:' + ui.group.id) showFriends();
+}
+
+function revealChat(key) {
+  if (!key || !(ui.closedChats || {})[key]) return;
+  const map = { ...ui.closedChats };
+  delete map[key];
+  ui.closedChats = map;
+  try { localStorage.setItem(accountKey('nebula-closed'), JSON.stringify(map)); } catch (_) {}
+}
+
+export async function loadGroups() {
+  try {
+    const data = await api('/api/groups');
+    ui.groups = data.groups || [];
+  } catch (_) {}
+}
+
 export async function loadDms() {
   const serial = ++dmSerial;
+  hydrateClosed();
+  loadGroups();
   try {
     const seen = seenMap();
     const seeded = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
@@ -499,7 +554,7 @@ export async function loadDms() {
         unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
           const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
-          noteArrival(stamp || key, who, 'New direct message');
+          if (!roomMuted('dm:' + id)) noteArrival(stamp || key, who, 'New direct message');
           const dockBusy = ui.quickOpen && ui.quickUser && String(ui.quickUser.id) !== String(id);
           if (!dockBusy && !popped && row.other && ui.mode !== 'dm') popped = row.other;
         }
@@ -521,8 +576,11 @@ export async function loadDms() {
 export function showFriends(tab) {
   leaveChat();
   ui.mode = 'friends';
-  ui.friendsTab = tab || 'online';
+  ui.friendsTab = tab || ui.friendsTab || 'online';
   ui.dmUser = null;
+  ui.group = null;
+  ui.thread = null;
+  ui.dock = '';
   ui.menuOpen = false;
   applyTheme();
   loadFriends();
@@ -558,6 +616,9 @@ export async function openDm(user) {
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
   ui.dmUser = user;
+  ui.group = null;
+  ui.thread = null;
+  if (user && user.id) revealChat('dm:' + user.id);
   if (user && user.id && ui.activity.dms[user.id]) {
     const dms = { ...ui.activity.dms };
     delete dms[user.id];
@@ -579,6 +640,90 @@ export async function openDm(user) {
   await loadMessages();
 }
 
+export async function openGroup(group) {
+  if (!group || !group.id) return;
+  const prev = currentRoom();
+  const same = ui.mode === 'group' && ui.group && String(ui.group.id) === String(group.id);
+  ui.mode = 'group';
+  ui.group = group;
+  ui.dmUser = null;
+  ui.thread = null;
+  ui.dock = '';
+  revealChat('group:' + group.id);
+  ui.menuOpen = false;
+  ui.reply = null;
+  ui.editing = null;
+  applyTheme();
+  if (!same) {
+    stashRoom(prev);
+    showCached('group:' + group.id);
+  }
+  dropLive();
+  await loadMessages();
+}
+
+export async function openThread(thread) {
+  if (!thread || !thread.id) return;
+  const prev = currentRoom();
+  ui.mode = 'thread';
+  ui.thread = thread;
+  ui.dmUser = null;
+  ui.group = null;
+  ui.dock = '';
+  ui.reply = null;
+  ui.editing = null;
+  stashRoom(prev);
+  showCached('thread:' + thread.id);
+  dropLive();
+  await loadMessages();
+}
+
+export async function leaveThread() {
+  const prev = currentRoom();
+  stashRoom(prev);
+  ui.mode = 'chat';
+  ui.thread = null;
+  ui.dock = '';
+  showCached(ui.channelId ? 'ch:' + ui.channelId : '');
+  dropLive();
+  await loadMessages();
+}
+
+export async function pinMessage(id, on) {
+  const data = await api('/api/messages/' + encodeURIComponent(id) + '/pin', { method: 'POST', body: { on } });
+  if (data.message) ui.messages = ui.messages.map((msg) => msg.id === id ? data.message : msg);
+}
+
+export function roomMuted(key) {
+  ui.muteTick;
+  if (!key) return false;
+  const raw = localStorage.getItem(accountKey('nebula-mute-' + key));
+  if (!raw) return false;
+  if (raw === 'forever') return true;
+  const until = Number(raw);
+  if (!until || Date.now() > until) {
+    localStorage.removeItem(accountKey('nebula-mute-' + key));
+    return false;
+  }
+  return true;
+}
+
+export function muteRoom(key, ms) {
+  const store = accountKey('nebula-mute-' + key);
+  if (!ms) localStorage.removeItem(store);
+  else localStorage.setItem(store, ms === 'forever' ? 'forever' : String(Date.now() + ms));
+  ui.muteTick += 1;
+}
+
+export function channelNotify(channelId) {
+  return localStorage.getItem(accountKey('nebula-ch-notify-' + channelId)) || 'default';
+}
+
+export function setChannelNotify(channelId, level) {
+  localStorage.setItem(accountKey('nebula-ch-notify-' + channelId), level || 'default');
+  ui.muteTick += 1;
+}
+
 export async function openServer(id, opts = {}) {
   const voiceLeave = id && ui.voice && id !== ui.serverId;
   const prev = currentRoom();
@@ -591,6 +736,9 @@ export async function openServer(id, opts = {}) {
   if (id) ui.serverId = id;
   ui.mode = 'chat';
   ui.dmUser = null;
+  ui.group = null;
+  ui.thread = null;
+  ui.dock = '';
   ui.menuOpen = false;
   ui.picker = '';
   ui.reply = null;
@@ -638,6 +786,8 @@ const roomLogs = new Map();
 
 function currentRoom() {
   if (ui.mode === 'dm' && ui.dmUser && ui.dmUser.id) return 'dm:' + ui.dmUser.id;
+  if (ui.mode === 'group' && ui.group && ui.group.id) return 'group:' + ui.group.id;
+  if (ui.mode === 'thread' && ui.thread && ui.thread.id) return 'thread:' + ui.thread.id;
   if (ui.mode === 'chat' && ui.channelId) return 'ch:' + ui.channelId;
   return '';
 }
@@ -810,6 +960,16 @@ async function pullLive(query, signal) {
     const data = await api('/api/dms/' + id + '/messages', { signal });
     return { messages: data.messages || [], typers: [] };
   }
+  if (query.startsWith('groupId=')) {
+    const id = decodeURIComponent(query.slice('groupId='.length).split('&')[0]);
+    const data = await api('/api/groups/' + id + '/messages', { signal });
+    return { messages: data.messages || [], typers: [] };
+  }
+  if (query.startsWith('threadId=')) {
+    const id = decodeURIComponent(query.slice('threadId='.length).split('&')[0]);
+    const data = await api('/api/threads/' + id + '/messages', { signal });
+    return { messages: data.messages || [], typers: [] };
+  }
   const data = await api('/api/channels/' + ui.channelId + '/messages', { signal });
   return { messages: data.messages || [], typers: [] };
 }
@@ -818,7 +978,7 @@ async function watchChat() {
   if (watchStarted) return;
   watchStarted = true;
   while (true) {
-    const looking = !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm');
+    const looking = !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread');
     if (!looking) {
       await sleep(1500);
       continue;
@@ -970,6 +1130,10 @@ export async function loadMessages(quiet, live) {
       : '';
     if (ui.mode === 'dm' && ui.dmUser) {
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
+    } else if (ui.mode === 'group' && ui.group) {
+      data = await pullLive('groupId=' + encodeURIComponent(ui.group.id) + wait, signal);
+    } else if (ui.mode === 'thread' && ui.thread) {
+      data = await pullLive('threadId=' + encodeURIComponent(ui.thread.id) + wait, signal);
     } else if (!ui.channelId) {
       ui.messages = [];
       ui.typers = [];
@@ -1002,8 +1166,8 @@ export async function loadMessages(quiet, live) {
     if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
       ui.typers = ui.typers.filter((row) => row.id !== newest.author.id);
     }
-    const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
-    const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
+    const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
+    const logKey = currentRoom();
     const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
     if (!list.length && hadReal) return 'same';
     if (newest && newest.id) markSeen(roomKey, newest.id);
@@ -1057,7 +1221,7 @@ async function postMessage(payload, target) {
   const files = payload.files || [];
   const poll = payload.poll || null;
   if (!content && !files.length && !poll) return;
-  const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
+  const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' };
   const typingToken = stopTyping();
   const body = { content, typingToken };
   if (files.length) body.files = files;
@@ -1071,8 +1235,17 @@ async function postMessage(payload, target) {
   }
   const data = where.mode === 'dm' && where.dmUserId
     ? await api('/api/dms/' + where.dmUserId + '/messages', { method: 'POST', body })
-    : await api('/api/channels/' + where.channelId + '/messages', { method: 'POST', body });
-  const sameRoom = where.mode === ui.mode && (where.mode === 'dm' ? where.dmUserId === (ui.dmUser?.id || '') : where.channelId === ui.channelId);
+    : where.mode === 'group' && where.groupId
+      ? await api('/api/groups/' + where.groupId + '/messages', { method: 'POST', body })
+      : where.mode === 'thread' && where.threadId
+        ? await api('/api/threads/' + where.threadId + '/messages', { method: 'POST', body })
+        : await api('/api/channels/' + where.channelId + '/messages', { method: 'POST', body });
+  const sameRoom = where.mode === ui.mode && (
+    where.mode === 'dm' ? where.dmUserId === (ui.dmUser?.id || '')
+      : where.mode === 'group' ? where.groupId === (ui.group?.id || '')
+        : where.mode === 'thread' ? where.threadId === (ui.thread?.id || '')
+          : where.channelId === ui.channelId
+  );
   if (sameRoom && data.message) {
     lastSentId = data.message.id;
     const without = ui.messages.filter((msg) => msg.id !== data.message.id && msg.id !== payload.replaceId);
@@ -1107,7 +1280,7 @@ export async function sendMessage() {
   }
   if (!content) return;
   const replies = (Array.isArray(ui.reply) ? ui.reply : (ui.reply ? [ui.reply] : [])).filter((row) => row && row.id).slice(0, 5);
-  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  const roomKey = currentRoom() || ui.channelId;
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
   ui.composer = '';
   ui.reply = null;
@@ -1136,7 +1309,7 @@ export async function reactTo(messageId, emoji) {
 
 export async function removeMessage(messageId) {
   await api('/api/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
-  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  const roomKey = currentRoom() || ui.channelId;
   ui.messages = ui.messages.filter((msg) => msg.id !== messageId);
   if (roomHeard[roomKey] === messageId) {
     const last = ui.messages[ui.messages.length - 1];
@@ -1175,7 +1348,7 @@ export async function sendFiles(list) {
   const replies = (Array.isArray(ui.reply) ? ui.reply : (ui.reply ? [ui.reply] : [])).filter((row) => row && row.id).slice(0, 5);
   ui.composer = '';
   ui.reply = null;
-  const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
+  const roomKey = currentRoom() || ui.channelId;
   const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
   const locals = files.map((item) => ({
@@ -1325,6 +1498,8 @@ const SKIP_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab',
 
 function typingBody() {
   if (ui.mode === 'dm') return { dmUserId: ui.dmUser?.id };
+  if (ui.mode === 'group') return { groupId: ui.group?.id };
+  if (ui.mode === 'thread') return { threadId: ui.thread?.id };
   return { channelId: ui.channelId, serverId: ui.serverId };
 }
 
@@ -1601,6 +1776,12 @@ function announceFresh(list, roomKey) {
   const fresh = rows.slice(start + 1);
   for (const msg of fresh) {
     if (!msg || isMine(msg)) continue;
+    if (roomMuted(roomKey) || (ui.mode === 'chat' && serverMuted())) continue;
+    if (ui.mode === 'chat') {
+      const level = channelNotify(ui.channelId);
+      if (level === 'nothing') continue;
+      if (level === 'mentions' && !mentionsMessage(msg)) continue;
+    }
     const who = (msg.author && (msg.author.displayName || msg.author.username)) || 'Someone';
     const mentioned = mentionsMessage(msg);
     const text = String(msg.content || '')
@@ -1850,6 +2031,7 @@ async function watchAlerts() {
         await pollActivity();
         await loadDms();
       }
+      await noteReports(changed || !localStorage.getItem('nebula-report-seen:' + (ui.me && ui.me.id)));
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;
       else await sleep(1500);
@@ -1898,10 +2080,70 @@ export async function saveMe(body) {
 
 export function relation(id) {
   if (!id || !ui.me || id === ui.me.id) return 'self';
+  if ((ui.blocked || []).some((x) => x.id === id)) return 'blocked';
   if (ui.friends.some((x) => x.id === id)) return 'friends';
   if (ui.incoming.some((x) => x.id === id)) return 'incoming';
   if (ui.outgoing.some((x) => x.id === id)) return 'outgoing';
   return 'none';
+}
+
+export function developerMode() {
+  ui.devTick;
+  return localStorage.getItem('nebula-dev') === '1';
+}
+
+export function setDeveloperMode(on) {
+  localStorage.setItem('nebula-dev', on ? '1' : '0');
+  ui.devTick += 1;
+}
+
+export function openIdMenu(event, items) {
+  if (!developerMode() || !items || !items.length) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  ui.idMenu = {
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 40 - items.length * 36)),
+    items,
+  };
+  return true;
+}
+
+export async function copyText(value, label) {
+  try {
+    await navigator.clipboard.writeText(String(value ?? ''));
+    toast('Copied ' + (label || 'ID'));
+  } catch (_) {
+    toast('Could not copy');
+  }
+  ui.idMenu = null;
+}
+
+const REPORT_BASE = 'nebula-report-seen:';
+
+async function noteReports(allowPopup) {
+  if (!ui.me || !ui.me.canAdmin) return;
+  try {
+    const data = await api('/api/staff/reports');
+    ui.staffReports = data.reports || [];
+    const open = ui.staffReports.find((row) => row.status === 'open');
+    const key = REPORT_BASE + ui.me.id;
+    const seen = localStorage.getItem(key);
+    if (seen == null) {
+      localStorage.setItem(key, open ? open.id : '');
+      return;
+    }
+    if (allowPopup && open && open.id !== seen) ui.reportPopup = open;
+  } catch (_) {}
+}
+
+export async function staffReport(id, action) {
+  const data = await api('/api/staff/reports/' + encodeURIComponent(id), { method: 'POST', body: { action } });
+  if (ui.me) localStorage.setItem(REPORT_BASE + ui.me.id, id);
+  ui.reportPopup = action === 'view' ? data.report : null;
+  const list = await api('/api/staff/reports');
+  ui.staffReports = list.reports || [];
+  return data.report;
 }
 
 export async function friendAct(kind, body) {

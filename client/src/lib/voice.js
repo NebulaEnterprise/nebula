@@ -191,6 +191,52 @@ function watchMic() {
   }, 200);
 }
 
+export async function startCall() {
+  let channelId = '';
+  let name = 'Call';
+  if (ui.mode === 'dm' && ui.dmUser && ui.me) {
+    channelId = 'dm:' + [ui.me.id, ui.dmUser.id].sort().join(':');
+    name = ui.dmUser.displayName || ui.dmUser.username || 'Call';
+  } else if (ui.mode === 'group' && ui.group) {
+    channelId = 'group:' + ui.group.id;
+    name = ui.group.name || 'Group call';
+  } else {
+    return;
+  }
+  if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
+  await leaveVoice();
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true },
+      video: false,
+    });
+  } catch (_) {
+    toast('Allow the microphone to start the call');
+    return;
+  }
+  try {
+    await api('/api/voice/' + encodeURIComponent(channelId) + '/join', {
+      method: 'POST',
+      body: { serverId: 'call' },
+    });
+  } catch (err) {
+    stopLocal();
+    toast(err.message || 'Could not start the call');
+    return;
+  }
+  ui.voice = {
+    serverId: 'call',
+    channelId,
+    name,
+    muted: false,
+    deafened: false,
+    speakingSent: false,
+  };
+  watchMic();
+  try { await sync(); } catch (_) {}
+  poll = setInterval(() => { sync().catch(() => {}); }, 1000);
+}
+
 export async function joinVoice(channel) {
   if (!channel || channel.type !== 'voice') return;
   if (ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId) return;

@@ -1,5 +1,5 @@
 <script>
-  import { UserPlus, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
+  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -7,7 +7,7 @@
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
-  import { ui, relation, friendAct, openDm, toast } from '../state.svelte.js';
+  import { ui, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
@@ -20,6 +20,7 @@
   const rel = $derived(u ? relation(u.id) : 'none');
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');
+  let more = $state(false);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -62,8 +63,21 @@
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
-    {#if rel === 'none'}
-      <button class="pop-add" title="Add friend" onclick={() => act('request')}><UserPlus size={18} /></button>
+    {#if rel !== 'self'}
+      <div class="pop-actions">
+        <button class="pop-msg" title="Message" onclick={() => { ui.popout = null; openDm(u); }}><MessageSquare size={18} /></button>
+        <button class="pop-more" title="More" onclick={() => (more = !more)}><MoreHorizontal size={18} /></button>
+      </div>
+      {#if more}
+        <div class="pop-menu">
+          {#if rel === 'friends'}<button type="button" onclick={() => act('remove')}>Remove friend</button>{/if}
+          {#if rel === 'none'}<button type="button" onclick={() => act('request')}>Add friend</button>{/if}
+          {#if rel === 'blocked'}<button type="button" onclick={() => act('unblock')}>Unblock</button>{/if}
+          <button type="button" onclick={() => copyText(u.id, 'user ID')}>Copy user ID</button>
+          <button type="button" class="danger" onclick={() => { more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: u }; }}>Report</button>
+          {#if rel !== 'blocked'}<button type="button" class="danger" onclick={() => act('block')}>Block</button>{/if}
+        </div>
+      {/if}
     {/if}
     <div class="pop-body">
       <div class="profile-hero">
@@ -108,17 +122,16 @@
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{u.lastSeen ? lastSeenLabel(u.lastSeen) : (u.hideLastSeen ? 'Hidden' : '—')}</strong></div>
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
-      <div class="stack">
-        {#if rel === 'friends'}
-          <button class="btn brand" onclick={() => { ui.popout = null; openDm(u); }}>Message</button>
-          <button class="btn" onclick={() => act('remove')}>Remove friend</button>
-        {:else if rel === 'incoming'}
-          <button class="btn brand" onclick={() => act('accept')}>Accept request</button>
-          <button class="btn" onclick={() => act('decline')}>Ignore</button>
-        {:else if rel === 'outgoing'}
-          <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
-        {/if}
-      </div>
+      {#if rel === 'incoming' || rel === 'outgoing'}
+        <div class="stack">
+          {#if rel === 'incoming'}
+            <button class="btn brand" onclick={() => act('accept')}>Accept request</button>
+            <button class="btn" onclick={() => act('decline')}>Ignore</button>
+          {:else}
+            <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
+          {/if}
+        </div>
+      {/if}
       <div class="pop-meta">
         <div>
           <span>Member since</span>

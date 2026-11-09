@@ -1,12 +1,14 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff, Search, Phone, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText } from '../state.svelte.js';
+  import { startCall } from '../voice.js';
+  import Dock from './Dock.svelte';
   import { formatContent, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
@@ -107,16 +109,84 @@
     return hit && hit.url ? fileUrl(hit.url) : '';
   }
 
+  let bell = $state(false);
+  let threadMenu = $state(false);
+  let renaming = $state(false);
+  let threadName = $state('');
+
+  const muteKey = $derived(
+    ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id
+      : ui.mode === 'group' && ui.group ? 'group:' + ui.group.id
+        : ui.mode === 'thread' && ui.thread ? 'thread:' + ui.thread.id
+          : 'ch:' + (ui.channelId || '')
+  );
+  const muted = $derived(roomMuted(muteKey));
+  const statusLabel = $derived(
+    ui.dmUser?.status === 'dnd' ? 'Do Not Disturb'
+      : ui.dmUser?.status === 'idle' ? 'Idle'
+        : ui.dmUser?.status === 'online' ? 'Online'
+          : ui.dmUser?.status === 'invisible' ? 'Invisible'
+            : 'Offline'
+  );
+  const titleName = $derived(
+    ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message')
+      : ui.mode === 'group' ? (ui.group?.name || 'Group')
+        : ui.mode === 'thread' ? (ui.thread?.name || 'Thread')
+          : (channel?.name || 'channel')
+  );
+
   function openMenu(event, msg) {
+    event.preventDefault();
     event.stopPropagation();
+    const point = event.type === 'contextmenu';
     const rect = event.currentTarget.getBoundingClientRect();
+    const x = point ? event.clientX : rect.right - 232;
+    const y = point ? event.clientY : rect.bottom + 6;
     menu = {
       id: msg.id,
       mine: msg.author?.id === ui.me?.id,
-      x: Math.max(8, Math.min(rect.right - 232, window.innerWidth - 520)),
-      y: Math.min(rect.bottom + 6, window.innerHeight - 320),
+      x: Math.max(8, Math.min(x, window.innerWidth - 250)),
+      y: Math.max(8, Math.min(y, window.innerHeight - 320)),
       react: false,
     };
+  }
+
+  function toggleDock(name) {
+    ui.dock = ui.dock === name ? '' : name;
+  }
+
+  function togglePeople() {
+    if (ui.mode === 'chat' || ui.mode === 'thread') ui.showMembers = ui.showMembers === false;
+    else toggleDock(ui.mode === 'group' ? 'group' : 'profile');
+  }
+
+  async function onPin(msg) {
+    menu = null;
+    try { await pinMessage(msg.id, !msg.pinned); }
+    catch (err) { toast(err.message); }
+  }
+
+  function createThread(msg) {
+    menu = null;
+    const text = previewText(msg);
+    ui.threadDraft = { name: text.slice(0, 80), content: text };
+    ui.dock = 'threads';
+  }
+
+  async function threadAct(type, extra) {
+    if (!ui.thread) return;
+    threadMenu = false;
+    try {
+      const data = await api('/api/threads/' + ui.thread.id + '/action', { method: 'POST', body: { type, ...extra } });
+      if (data.deleted || type === 'close') {
+        await leaveThread();
+        return;
+      }
+      if (data.thread) ui.thread = { ...ui.thread, ...data.thread };
+      renaming = false;
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
   function previewText(msg) {
@@ -603,17 +673,80 @@
   }
 </script>
 
+<div class="chat-frame">
+<div class="chat-col">
 <div class="top">
-  <Hash size={18} />
-  <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
-  <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
-  {#if ui.mode !== 'dm'}
-    <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
-      <MessageSquare size={18} />
-      {#if quickUnread}<em class="pill-count">{quickUnread > 99 ? '99+' : quickUnread}</em>{/if}
-    </button>
+  {#if ui.mode === 'thread'}
+    <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
+  {:else if ui.mode !== 'dm' && ui.mode !== 'group'}
+    <Hash size={18} />
   {/if}
+  <h2>{titleName}</h2>
+  {#if ui.mode === 'dm'}
+    <span class="status-word {ui.dmUser?.status || 'offline'}">{statusLabel}</span>
+  {:else if ui.mode === 'group'}
+    <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
+  {:else if ui.mode !== 'thread'}
+    <span class="topic">{channel?.topic || ''}</span>
+  {:else}
+    <span class="topic"></span>
+  {/if}
+  {#if ui.mode === 'thread'}
+    <button class="btn sm" onclick={() => threadAct((ui.thread?.followers || []).includes(ui.me?.id) ? 'unfollow' : 'follow')}>
+      {(ui.thread?.followers || []).includes(ui.me?.id) ? 'Unfollow' : 'Follow'}
+    </button>
+    <button class="btn sm" onclick={() => { renaming = !renaming; threadName = ui.thread?.name || ''; }}>Edit</button>
+    <button class="btn icon" title="Thread options" onclick={() => (threadMenu = !threadMenu)}><MoreHorizontal size={16} /></button>
+  {/if}
+  <div class="top-tools">
+    <button class="btn icon" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /></button>
+    {#if ui.mode === 'dm' || ui.mode === 'group'}
+      <button class="btn icon" title="Start a call" onclick={startCall}><Phone size={18} /></button>
+    {/if}
+    <button class="btn icon" class:on={muted} title="Notifications" onclick={() => (bell = !bell)}><Bell size={18} /></button>
+    <button class="btn icon" class:on={ui.dock === 'pins'} title="Pinned messages" onclick={() => toggleDock('pins')}><Pin size={18} /></button>
+    <button class="btn icon" class:on={ui.dock === 'media'} title="Media" onclick={() => toggleDock('media')}><ImageIcon size={18} /></button>
+    {#if ui.mode === 'chat' || ui.mode === 'thread'}
+      <button class="btn icon" class:on={ui.dock === 'threads'} title="Threads" onclick={() => toggleDock('threads')}><MessagesSquare size={18} /></button>
+    {/if}
+    <button class="btn icon" title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
+    <input class="top-search" placeholder={ui.mode === 'dm' ? 'Search' : 'Search ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />
+    {#if ui.mode === 'chat'}
+      <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
+        <MessageSquare size={18} />
+        {#if quickUnread}<em class="pill-count">{quickUnread > 99 ? '99+' : quickUnread}</em>{/if}
+      </button>
+    {/if}
+  </div>
 </div>
+{#if renaming && ui.mode === 'thread'}
+  <form class="thread-rename" onsubmit={(e) => { e.preventDefault(); threadAct('rename', { name: threadName }); }}>
+    <input bind:value={threadName} maxlength="100" />
+    <button class="btn sm" type="submit">Save</button>
+  </form>
+{/if}
+{#if threadMenu}
+  <div class="thread-menu">
+    <button type="button" onclick={() => threadAct('close')}>Close</button>
+    <button type="button" class="danger" onclick={() => threadAct('delete')}>Delete</button>
+  </div>
+{/if}
+{#if bell}
+  <div class="bell-menu">
+    <strong>{ui.mode === 'chat' || ui.mode === 'thread' ? 'Notification settings' : 'Mute chat'}</strong>
+    {#if ui.mode === 'chat'}
+      {#each [['default', 'Use server default'], ['all', 'All messages'], ['mentions', 'Only @mentions'], ['nothing', 'Nothing']] as [id, label]}
+        <button type="button" class:on={channelNotify(ui.channelId) === id} onclick={() => { setChannelNotify(ui.channelId, id); bell = false; }}>{label}</button>
+      {/each}
+    {/if}
+    <button type="button" onclick={() => { muteRoom(muteKey, 15 * 60 * 1000); bell = false; }}>For 15 minutes</button>
+    <button type="button" onclick={() => { muteRoom(muteKey, 60 * 60 * 1000); bell = false; }}>For 1 hour</button>
+    <button type="button" onclick={() => { muteRoom(muteKey, 8 * 60 * 60 * 1000); bell = false; }}>For 8 hours</button>
+    <button type="button" onclick={() => { muteRoom(muteKey, 24 * 60 * 60 * 1000); bell = false; }}>For 24 hours</button>
+    <button type="button" onclick={() => { muteRoom(muteKey, 'forever'); bell = false; }}>Until I turn it back on</button>
+    {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
+  </div>
+{/if}
 <div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if ui.chatLoading && !ui.messages.length}
     <div class="skel-list" aria-hidden="true">
@@ -626,12 +759,12 @@
     </div>
   {:else if !ui.messages.length}
     <div class="welcome">
-      <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : '#' + (channel?.name || 'channel')}</h2>
-      <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : 'This is the start of the channel. Say hi.'}</p>
+      <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : ui.mode === 'group' ? (ui.group?.name || 'Group') : ui.mode === 'thread' ? (ui.thread?.name || 'Thread') : '#' + (channel?.name || 'channel')}</h2>
+      <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
   {#each ui.messages as msg (msg.id)}
-    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)}>
+    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -716,6 +849,14 @@
     {#if current}
       <button type="button" onclick={() => beginReply(current)}><Reply size={16} /> {replyTargets.some((row) => row.id === current.id) ? 'Remove Reply' : 'Reply'}</button>
       <button type="button" onclick={() => beginForward(current)}><Forward size={16} /> Forward</button>
+      <button type="button" onclick={() => onPin(current)}><Pin size={16} /> {current.pinned ? 'Unpin Message' : 'Pin Message'}</button>
+      {#if developerMode()}
+        <button type="button" onclick={() => copyText(current.id, 'message ID')}>Copy Message ID</button>
+        <button type="button" onclick={() => copyText(current.author?.id, 'user ID')}>Copy User ID</button>
+      {/if}
+      {#if ui.mode === 'chat'}
+        <button type="button" onclick={() => createThread(current)}><MessagesSquare size={16} /> Create Thread</button>
+      {/if}
     {/if}
     {#if current && menu.mine}
       <button type="button" class="danger" onclick={() => onDelete(current.id)}><Trash2 size={16} /> Delete Message</button>
@@ -809,7 +950,7 @@
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
-      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : 'Message #' + (channel?.name || 'channel')}
+      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message #' + (channel?.name || 'channel')}
     ></textarea>
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
@@ -913,4 +1054,7 @@
       </div>
     </div>
   {/if}
+</div>
+</div>
+{#if ui.dock}<Dock />{/if}
 </div>

@@ -1,6 +1,6 @@
 <script>
   import {
-    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check,
+    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check, Search, X,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
     Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight,
   } from '@lucide/svelte';
@@ -14,10 +14,13 @@
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, showAddFriend, openDm, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
+  const requestCount = $derived((ui.incoming || []).length);
+  const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
+  function countLabel(n) { return n > 99 ? '99+' : String(n); }
 
   function channelsIn(cat, type) {
     return ui.channels.filter((c) => c.type === type && (c.categoryId || '') === cat.id);
@@ -160,7 +163,7 @@
 <aside class="side">
   {#if ui.mode === 'chat'}
     <div class="side-head">
-      <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)}>
+      <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
         <span>{ui.serverMeta?.name || 'Server'}</span>
         {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
         <ChevronDown size={16} />
@@ -191,7 +194,7 @@
         {#if cat.id && !texts.length && !voices.length}
           <!-- empty category stays out of the sidebar -->
         {:else}
-          {#if cat.name}<div class="cat"><span>{cat.name}</span></div>{/if}
+          {#if cat.name}<div class="cat" oncontextmenu={(e) => openIdMenu(e, [{ label: 'Category ID', value: cat.id }])}><span>{cat.name}</span></div>{/if}
           {#if texts.length || !cat.id}
             <div class="cat">
               <span>{cat.name ? 'Text' : 'Text channels'}</span>
@@ -201,7 +204,7 @@
             </div>
             {#each texts as ch}
               {@const note = ui.activity.channels[ch.id]}
-              <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id}>
+              <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Channel ID', value: ch.id }])}>
                 <button class="channel-hit" onpointerenter={() => warmChannel(ch.id)} onclick={() => pickChannel(ch)}>
                   <Hash size={16} />
                   <span class="ch-name">{ch.name}</span>
@@ -230,7 +233,7 @@
               {/if}
             </div>
             {#each voices as ch}
-              <div class="channel" class:on={ui.voice?.channelId === ch.id}>
+              <div class="channel" class:on={ui.voice?.channelId === ch.id} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Channel ID', value: ch.id }])}>
                 <button class="channel-hit" onclick={() => onVoice(ch)}>
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
@@ -258,25 +261,48 @@
       {/each}
     </div>
   {:else}
-    <div class="side-head">Direct messages</div>
+    <div class="side-head">
+      <span>Direct messages</span>
+      {#if dmUnread}<em class="pill-count" title="Unread messages">{countLabel(dmUnread)}</em>{/if}
+    </div>
     <div class="scroll">
-      <button class="nav-item" class:on={ui.mode === 'friends'} onclick={() => showFriends(ui.friendsTab)}><Users size={16} /> Friends</button>
-      <button class="nav-item" class:on={ui.mode === 'add'} onclick={showAddFriend}><UserPlus size={16} /> Add friend</button>
-      <div class="cat"><span>Direct messages</span></div>
-      {#each ui.dms as dm (dm.id)}
-        {@const note = ui.activity.dms[dm.other?.id]}
-        <button class="dm-item" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)}>
-          <Avatar user={dm.other} size={28} />
-          <span class="dm-copy">
-            <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-            <span class="dm-preview">{dm.preview || ''}</span>
-          </span>
-          {#if note && ui.dmUser?.id !== dm.other?.id}
-            <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>
-          {/if}
-        </button>
+      <button class="nav-item" class:on={ui.mode === 'friends' && ui.friendsTab !== 'find'} onclick={() => showFriends('online')}>
+        <Users size={16} />
+        <span>Friends</span>
+        {#if requestCount}<em class="pill-count" title="Friend requests">{countLabel(requestCount)}</em>{/if}
+      </button>
+      <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}><Search size={16} /> Find people</button>
+      <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
+      <div class="cat"><span>Direct messages</span>{#if dmUnread}<em class="pill-count">{countLabel(dmUnread)}</em>{/if}</div>
+      {#each ui.groups || [] as group (group.id)}
+        {#if !chatClosed('group:' + group.id, group.lastId)}
+          <div class="dm-item" role="button" tabindex="0" class:on={ui.group?.id === group.id} onclick={() => openGroup(group)} onkeydown={(e) => { if (e.key === 'Enter') openGroup(group); }}>
+            <span class="group-mark">{(group.name || 'G').slice(0, 1)}</span>
+            <span class="dm-copy">
+              <span class="ch-name">{group.name}</span>
+              <span class="dm-preview">{group.memberCount || (group.members || []).length} members</span>
+            </span>
+            <button class="dm-x" title="Close" onclick={(e) => { e.stopPropagation(); closeConversation('group:' + group.id, group.lastId); }}><X size={14} /></button>
+          </div>
+        {/if}
       {/each}
-      {#if !ui.dms.length}<p class="hint" style="padding:8px">No conversations yet.</p>{/if}
+      {#each ui.dms as dm (dm.id)}
+        {#if dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)}
+          {@const note = ui.activity.dms[dm.other?.id]}
+          <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
+            <Avatar user={dm.other} size={28} />
+            <span class="dm-copy">
+              <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+              <span class="dm-preview">{dm.preview || ''}</span>
+            </span>
+            <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
+            {#if note && ui.dmUser?.id !== dm.other?.id}
+              <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>
+            {/if}
+          </div>
+        {/if}
+      {/each}
+      {#if !(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId))}<p class="hint" style="padding:8px">No conversations yet.</p>{/if}
     </div>
   {/if}
 

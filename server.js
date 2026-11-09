@@ -1073,6 +1073,10 @@ function wakeGuild(g) {
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
+const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
+const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
+let groups = load(GROUPS_FILE, {});
+let threads = load(THREADS_FILE, {});
 
 let strippedSecrets = false;
 for (const u of Object.values(users)) {
@@ -1091,10 +1095,23 @@ const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
 
 function ensureFriendNode(userId) {
-  if (!friendGraph[userId]) {
-    friendGraph[userId] = { friends: [], incoming: [], outgoing: [] };
+  const key = String(userId);
+  if (!friendGraph[key]) {
+    friendGraph[key] = { friends: [], incoming: [], outgoing: [], blocked: [] };
   }
-  return friendGraph[userId];
+  const node = friendGraph[key];
+  node.friends = Array.isArray(node.friends) ? node.friends.map(String) : [];
+  node.incoming = Array.isArray(node.incoming) ? node.incoming.map(String) : [];
+  node.outgoing = Array.isArray(node.outgoing) ? node.outgoing.map(String) : [];
+  node.blocked = Array.isArray(node.blocked) ? node.blocked.map(String) : [];
+  return node;
+}
+
+function isBlocked(a, b) {
+  if (!a || !b) return false;
+  const left = ensureFriendNode(a);
+  const right = ensureFriendNode(b);
+  return left.blocked.includes(String(b)) || right.blocked.includes(String(a));
 }
 
 function dmKey(a, b) {
@@ -1409,6 +1426,13 @@ function isOwner(g, user) {
   return (g.ownerIds || []).includes(user.id);
 }
 
+function isNebulaStaff(user) {
+  if (!user) return false;
+  const g = guilds && guilds.servers && guilds.servers[OFFICIAL_ID];
+  if (!g) return isOfficialOwner(user);
+  return isOwner(g, user) || staffRank(g, user) > 0;
+}
+
 function stripOfficialManage(g, user, bits) {
   if (g && g.id === OFFICIAL_ID && !isOfficialOwner(user) && powerRank(g, user) < 1) return bits & ~MANAGE_MASK;
   return bits;
@@ -1645,7 +1669,7 @@ function messageStamp(list) {
       .map((row) => row && row.id)
       .filter(Boolean)
       .join(',');
-    return [msg.id, msg.editedAt || '', reacts, replyIds, msg.forward && msg.forward.name || ''].join('~');
+    return [msg.id, msg.editedAt || '', reacts, replyIds, msg.forward && msg.forward.name || '', msg.pinned ? '1' : ''].join('~');
   }).join('|');
 }
 
@@ -1670,9 +1694,20 @@ function locateMessage(id) {
 
 function canSeeRoom(user, roomId) {
   if (!user || !roomId) return false;
-  if (String(roomId).startsWith('dm:')) {
-    const ids = String(roomId).slice(3).split(':');
+  const id = String(roomId);
+  if (id.startsWith('dm:')) {
+    const ids = id.slice(3).split(':');
     return ids.map(String).includes(String(user.id));
+  }
+  if (id.startsWith('group:')) {
+    const group = groups[id.slice(6)];
+    return !!(group && (group.memberIds || []).map(String).includes(String(user.id)));
+  }
+  if (id.startsWith('thread:')) {
+    const thread = threads[id.slice(7)];
+    if (!thread) return false;
+    const found = findChannel(thread.channelId, thread.serverId);
+    return !!(found && can(found.guild, user, PERM.VIEW, found.channel));
   }
   const found = findChannel(roomId, '');
   return !!(found && can(found.guild, user, PERM.VIEW, found.channel));
@@ -1874,6 +1909,7 @@ function publicUser(u) {
     songError: String(u.songError || '').slice(0, 140),
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
+    canAdmin: isNebulaStaff(u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     shownBadges: Array.isArray(u.shownBadges) ? u.shownBadges.filter((id) => id === 'early' || id === 'staff' || id === 'developer') : null,
     showcaseServerId: u.showcaseServerId || '',
@@ -3848,6 +3884,20 @@ function typingKeyFrom(req) {
     if (!users[dmUserId]) return null;
     return 'dm:' + [req.user.id, dmUserId].sort().join(':');
   }
+  const groupId = String((req.body && req.body.groupId) || req.query.groupId || '');
+  if (groupId) {
+    const group = groups[groupId];
+    if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) return null;
+    return 'group:' + groupId;
+  }
+  const threadId = String((req.body && req.body.threadId) || req.query.threadId || '');
+  if (threadId) {
+    const thread = threads[threadId];
+    if (!thread || thread.closed) return null;
+    const found = findChannel(thread.channelId, thread.serverId);
+    if (!found || !found.guild.members || !found.guild.members[req.user.id]) return null;
+    return 'thread:' + threadId;
+  }
   const channelId = String((req.body && req.body.channelId) || req.query.channelId || '');
   const serverId = String((req.body && req.body.serverId) || req.query.serverId || '');
   const found = findChannel(channelId, serverId);
@@ -3945,29 +3995,47 @@ app.get('/api/typing', auth, (req, res) => {
   res.json({ ok: true, typers: listTypers(key, req.user.id) });
 });
 
+function pulseBody(roomId, typeKey, userId, extra) {
+  const raw = messages[roomId] || [];
+  const list = raw.slice(-100).map((msg) => presentMessage(msg, userId));
+  const typers = listTypers(typeKey, userId);
+  const last = list[list.length - 1];
+  return {
+    roomId,
+    body: {
+      ok: true,
+      messages: list,
+      typers,
+      cursor: last ? last.id : '',
+      typing: typers.map((row) => row.id).sort().join(','),
+      profiles: String(profileRev),
+      polls: pollStamp(raw.slice(-100)),
+      edits: messageStamp(raw.slice(-100)),
+      ...(extra || {}),
+    },
+  };
+}
+
 function pulseSnap(req) {
   const dmUserId = String(req.query.dmUserId || '');
   if (dmUserId) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
-    const roomId = 'dm:' + key;
-    const raw = messages[roomId] || [];
-    const list = raw.slice(-100).map((msg) => presentMessage(msg, req.user.id));
-    const typers = listTypers(roomId, req.user.id);
-    const last = list[list.length - 1];
-    return {
-      roomId,
-      body: {
-        ok: true,
-        messages: list,
-        typers,
-        cursor: last ? last.id : '',
-        typing: typers.map((row) => row.id).sort().join(','),
-        profiles: String(profileRev),
-        polls: pollStamp(raw.slice(-100)),
-        edits: messageStamp(raw.slice(-100)),
-      },
-    };
+    return pulseBody('dm:' + key, 'dm:' + key, req.user.id);
+  }
+  const groupId = String(req.query.groupId || '');
+  if (groupId) {
+    const group = groups[groupId];
+    if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) return null;
+    return pulseBody('group:' + groupId, 'group:' + groupId, req.user.id);
+  }
+  const threadId = String(req.query.threadId || '');
+  if (threadId) {
+    const thread = threads[threadId];
+    if (!thread) return null;
+    const found = findChannel(thread.channelId, thread.serverId);
+    if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
+    return pulseBody('thread:' + threadId, 'thread:' + threadId, req.user.id);
   }
   const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
   if (!found) return null;
@@ -4058,19 +4126,33 @@ app.get('/api/pulse', auth, (req, res) => {
 
 app.get('/api/friends', auth, (req, res) => {
   const node = ensureFriendNode(req.user.id);
-  node.friends = Array.isArray(node.friends) ? node.friends : [];
-  node.incoming = Array.isArray(node.incoming) ? node.incoming : [];
-  node.outgoing = Array.isArray(node.outgoing) ? node.outgoing : [];
   const mapUser = (id) => {
     const u = users[id];
     if (!u) return null;
     return publicUser(u);
   };
+  const skip = new Set([
+    String(req.user.id),
+    ...node.friends,
+    ...node.incoming,
+    ...node.outgoing,
+    ...node.blocked,
+  ]);
+  const suggested = [];
+  for (const other of Object.values(users)) {
+    if (!other || skip.has(String(other.id))) continue;
+    if (isBlocked(req.user.id, other.id)) continue;
+    if (!sharesServer(req.user.id, other.id)) continue;
+    suggested.push(publicUser(other));
+    if (suggested.length >= 40) break;
+  }
   res.json({
     ok: true,
     friends: node.friends.map(mapUser).filter(Boolean),
     incoming: node.incoming.map(mapUser).filter(Boolean),
     outgoing: node.outgoing.map(mapUser).filter(Boolean),
+    blocked: node.blocked.map(mapUser).filter(Boolean),
+    suggested,
   });
 });
 
@@ -4088,6 +4170,7 @@ app.post('/api/friends/request', auth, (req, res) => {
   }
   if (!target) return res.status(404).json({ error: 'User not found' });
   if (target.id === req.user.id) return res.status(400).json({ error: 'Cannot friend yourself' });
+  if (isBlocked(req.user.id, target.id)) return res.status(400).json({ error: 'You cannot add this person' });
 
   const me = ensureFriendNode(req.user.id);
   const them = ensureFriendNode(target.id);
@@ -4172,6 +4255,32 @@ app.post('/api/friends/remove', auth, (req, res) => {
   me.incoming = me.incoming.filter((id) => id !== otherId);
   them.outgoing = them.outgoing.filter((id) => id !== req.user.id);
   them.incoming = them.incoming.filter((id) => id !== req.user.id);
+  save(FRIENDS_FILE, friendGraph);
+  res.json({ ok: true });
+});
+
+app.post('/api/friends/block', auth, (req, res) => {
+  const otherId = String(req.body?.userId || '');
+  if (!otherId || !users[otherId]) return res.status(404).json({ error: 'User not found' });
+  if (otherId === String(req.user.id)) return res.status(400).json({ error: 'Cannot block yourself' });
+  const me = ensureFriendNode(req.user.id);
+  const them = ensureFriendNode(otherId);
+  me.friends = me.friends.filter((id) => id !== otherId);
+  me.incoming = me.incoming.filter((id) => id !== otherId);
+  me.outgoing = me.outgoing.filter((id) => id !== otherId);
+  them.friends = them.friends.filter((id) => id !== String(req.user.id));
+  them.incoming = them.incoming.filter((id) => id !== String(req.user.id));
+  them.outgoing = them.outgoing.filter((id) => id !== String(req.user.id));
+  if (!me.blocked.includes(otherId)) me.blocked.push(otherId);
+  save(FRIENDS_FILE, friendGraph);
+  res.json({ ok: true });
+});
+
+app.post('/api/friends/unblock', auth, (req, res) => {
+  const otherId = String(req.body?.userId || '');
+  if (!otherId) return res.status(400).json({ error: 'userId required' });
+  const me = ensureFriendNode(req.user.id);
+  me.blocked = me.blocked.filter((id) => id !== otherId);
   save(FRIENDS_FILE, friendGraph);
   res.json({ ok: true });
 });
@@ -4384,6 +4493,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   const otherId = req.params.userId;
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   if (otherId === req.user.id) return res.status(400).json({ error: 'Cannot DM yourself' });
+  if (isBlocked(req.user.id, otherId)) return res.status(403).json({ error: 'You cannot message this person' });
 
   const extra = messageExtras(req.body);
   if (extra.error) return res.status(400).json({ error: extra.error });
@@ -4427,6 +4537,422 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   wakePulse(channelId);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
+});
+
+function appendRoomMessage(roomId, req) {
+  const extra = messageExtras(req.body);
+  if (extra.error) return { error: extra.error };
+  if (!messages[roomId]) messages[roomId] = [];
+  const msg = {
+    id: uuidv4(),
+    channelId: roomId,
+    authorId: req.user.id,
+    author: slimAuthor(req.user),
+    content: extra.content,
+    files: extra.files,
+    poll: extra.poll,
+    replies: readReplies(req.body, roomId),
+    reply: readReply(req.body, roomId),
+    createdAt: new Date().toISOString(),
+  };
+  messages[roomId].push(msg);
+  if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
+  save(MESSAGES_FILE, messages);
+  silenceTyping(roomId, req.user.id, req.body && req.body.typingToken);
+  wakePulse(roomId);
+  touchAlerts();
+  return { message: msg };
+}
+
+function publicGroup(group) {
+  const memberIds = (group.memberIds || []).map(String);
+  const members = memberIds.map((id) => publicUser(users[id])).filter(Boolean);
+  const room = messages['group:' + group.id] || [];
+  const last = room[room.length - 1];
+  return {
+    id: group.id,
+    name: group.name || 'Group',
+    iconUrl: group.iconUrl || '',
+    ownerId: group.ownerId,
+    memberCount: members.length,
+    members,
+    createdAt: group.createdAt,
+    updatedAt: group.updatedAt || Date.parse(group.createdAt) || 0,
+    lastId: last ? last.id : '',
+    preview: last ? dmPreview(last.content || '') : '',
+  };
+}
+
+function publicThread(thread) {
+  const room = messages['thread:' + thread.id] || [];
+  const last = room[room.length - 1];
+  return {
+    id: thread.id,
+    name: thread.name,
+    channelId: thread.channelId,
+    serverId: thread.serverId,
+    ownerId: thread.ownerId,
+    createdAt: thread.createdAt,
+    messageCount: room.length,
+    lastAt: last ? last.createdAt : thread.createdAt,
+    closed: !!thread.closed,
+    followers: (thread.followers || []).map(String),
+  };
+}
+
+function viewerRoom(req) {
+  const groupId = String(req.query.groupId || (req.body && req.body.groupId) || '');
+  if (groupId) {
+    const group = groups[groupId];
+    if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) {
+      return { error: 'Not in this group', status: 403 };
+    }
+    return { roomId: 'group:' + groupId };
+  }
+  const threadId = String(req.query.threadId || (req.body && req.body.threadId) || '');
+  if (threadId) {
+    const thread = threads[threadId];
+    if (!thread) return { error: 'Thread not found', status: 404 };
+    const found = findChannel(thread.channelId, thread.serverId);
+    if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) {
+      return { error: 'Cannot view this thread', status: 403 };
+    }
+    return { roomId: 'thread:' + threadId, thread, found };
+  }
+  const dmUserId = String(req.query.dmUserId || (req.body && req.body.dmUserId) || '');
+  if (dmUserId) {
+    if (!users[dmUserId]) return { error: 'User not found', status: 404 };
+    return { roomId: 'dm:' + dmKey(req.user.id, dmUserId) };
+  }
+  const channelId = String(req.query.channelId || '');
+  const serverId = String(req.query.serverId || '');
+  const found = findChannel(channelId, serverId);
+  if (!found) return { error: 'Chat not found', status: 404 };
+  if (!can(found.guild, req.user, PERM.VIEW, found.channel)) {
+    return { error: 'Cannot view this channel', status: 403 };
+  }
+  return { roomId: found.channel.id, found };
+}
+
+app.get('/api/users/search', auth, (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase().replace(/^#/, '');
+  if (!q) return res.json({ ok: true, users: [] });
+  const rows = [];
+  for (const user of Object.values(users)) {
+    if (!user || String(user.id) === String(req.user.id)) continue;
+    if (isBlocked(req.user.id, user.id)) continue;
+    const blob = ((user.username || '') + ' ' + (user.displayName || '') + ' ' + (user.uid || '')).toLowerCase();
+    if (!blob.includes(q)) continue;
+    rows.push(publicUser(user));
+    if (rows.length >= 20) break;
+  }
+  res.json({ ok: true, users: rows });
+});
+
+app.get('/api/groups', auth, (req, res) => {
+  const mine = Object.values(groups)
+    .filter((group) => group && (group.memberIds || []).map(String).includes(String(req.user.id)))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .map(publicGroup);
+  res.json({ ok: true, groups: mine });
+});
+
+app.post('/api/groups', auth, (req, res) => {
+  const ids = [...new Set((req.body?.memberIds || []).map(String).filter((id) => id && id !== String(req.user.id) && users[id]))];
+  if (ids.length < 1) return res.status(400).json({ error: 'Pick at least one friend' });
+  if (ids.length > 9) return res.status(400).json({ error: 'A group can have 10 people' });
+  const me = ensureFriendNode(req.user.id);
+  for (const id of ids) {
+    if (isBlocked(req.user.id, id)) return res.status(400).json({ error: 'You cannot add someone you blocked' });
+    if (!me.friends.includes(id)) return res.status(400).json({ error: 'You can only add friends' });
+  }
+  const name = String(req.body?.name || '').trim().slice(0, 80) || 'Group';
+  const iconUrl = String(req.body?.iconUrl || '').slice(0, 300);
+  const id = uuidv4();
+  const group = {
+    id,
+    name,
+    iconUrl,
+    ownerId: String(req.user.id),
+    memberIds: [String(req.user.id), ...ids],
+    createdAt: new Date().toISOString(),
+    updatedAt: Date.now(),
+  };
+  groups[id] = group;
+  save(GROUPS_FILE, groups);
+  const roomId = 'group:' + id;
+  messages[roomId] = [{
+    id: uuidv4(),
+    channelId: roomId,
+    authorId: req.user.id,
+    author: slimAuthor(req.user),
+    content: 'Welcome to the beginning of the ' + name + ' group.',
+    files: [],
+    createdAt: new Date().toISOString(),
+    system: true,
+  }];
+  save(MESSAGES_FILE, messages);
+  res.json({ ok: true, group: publicGroup(group) });
+});
+
+app.post('/api/groups/:id/messages', auth, (req, res) => {
+  const group = groups[req.params.id];
+  if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  const made = appendRoomMessage('group:' + group.id, req);
+  if (made.error) return res.status(400).json({ error: made.error });
+  group.updatedAt = Date.now();
+  save(GROUPS_FILE, groups);
+  res.json({ ok: true, message: presentMessage(made.message, req.user.id) });
+});
+
+app.get('/api/groups/:id/messages', auth, (req, res) => {
+  const group = groups[req.params.id];
+  if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  const list = messages['group:' + group.id] || [];
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), group: publicGroup(group) });
+});
+
+app.post('/api/groups/:id/members', auth, (req, res) => {
+  const group = groups[req.params.id];
+  if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  const userId = String(req.body?.userId || '');
+  if (!users[userId]) return res.status(404).json({ error: 'User not found' });
+  const me = ensureFriendNode(req.user.id);
+  if (!me.friends.includes(userId)) return res.status(400).json({ error: 'You can only add friends' });
+  if (isBlocked(req.user.id, userId)) return res.status(400).json({ error: 'You cannot add this person' });
+  if (!group.memberIds.map(String).includes(userId)) {
+    if (group.memberIds.length >= 10) return res.status(400).json({ error: 'This group is full' });
+    group.memberIds.push(userId);
+    group.updatedAt = Date.now();
+    save(GROUPS_FILE, groups);
+  }
+  res.json({ ok: true, group: publicGroup(group) });
+});
+
+app.post('/api/groups/:id/leave', auth, (req, res) => {
+  const group = groups[req.params.id];
+  if (!group) return res.status(404).json({ error: 'Group not found' });
+  group.memberIds = (group.memberIds || []).map(String).filter((id) => id !== String(req.user.id));
+  group.updatedAt = Date.now();
+  if (!group.memberIds.length) delete groups[group.id];
+  else if (String(group.ownerId) === String(req.user.id)) group.ownerId = group.memberIds[0];
+  save(GROUPS_FILE, groups);
+  res.json({ ok: true });
+});
+
+app.post('/api/groups/:id', auth, (req, res) => {
+  const group = groups[req.params.id];
+  if (!group || !(group.memberIds || []).map(String).includes(String(req.user.id))) {
+    return res.status(404).json({ error: 'Group not found' });
+  }
+  if (req.body && typeof req.body.name === 'string') {
+    const name = req.body.name.trim().slice(0, 80);
+    if (name) group.name = name;
+  }
+  if (req.body && typeof req.body.iconUrl === 'string') group.iconUrl = req.body.iconUrl.slice(0, 300);
+  group.updatedAt = Date.now();
+  save(GROUPS_FILE, groups);
+  res.json({ ok: true, group: publicGroup(group) });
+});
+
+app.get('/api/channels/:id/threads', auth, (req, res) => {
+  const found = findChannel(req.params.id, String(req.query.serverId || ''));
+  if (!found) return res.status(404).json({ error: 'Channel not found' });
+  if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return res.status(403).json({ error: 'Cannot view this channel' });
+  const list = Object.values(threads)
+    .filter((thread) => thread && thread.channelId === found.channel.id && !thread.closed)
+    .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0))
+    .map(publicThread);
+  res.json({ ok: true, threads: list });
+});
+
+app.post('/api/channels/:id/threads', auth, (req, res) => {
+  const found = findChannel(req.params.id, String(req.body?.serverId || ''));
+  if (!found) return res.status(404).json({ error: 'Channel not found' });
+  if (found.channel.type === 'voice') return res.status(400).json({ error: 'Threads belong in a text channel' });
+  if (!can(found.guild, req.user, PERM.SEND, found.channel)) return res.status(403).json({ error: 'You cannot post here' });
+  const name = String(req.body?.name || '').trim().slice(0, 100);
+  const content = String(req.body?.content || '').trim().slice(0, 2000);
+  if (!name) return res.status(400).json({ error: 'Give the thread a name' });
+  if (!content) return res.status(400).json({ error: 'Write the first message' });
+  const id = uuidv4();
+  const thread = {
+    id,
+    name,
+    channelId: found.channel.id,
+    serverId: found.guild.id,
+    ownerId: String(req.user.id),
+    createdAt: new Date().toISOString(),
+    closed: false,
+    followers: [String(req.user.id)],
+  };
+  threads[id] = thread;
+  save(THREADS_FILE, threads);
+  const made = appendRoomMessage('thread:' + id, { user: req.user, body: { content } });
+  if (made.error) return res.status(400).json({ error: made.error });
+  res.json({ ok: true, thread: publicThread(thread) });
+});
+
+app.get('/api/threads/:id/messages', auth, (req, res) => {
+  const thread = threads[req.params.id];
+  if (!thread) return res.status(404).json({ error: 'Thread not found' });
+  const found = findChannel(thread.channelId, thread.serverId);
+  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) {
+    return res.status(403).json({ error: 'Cannot view this thread' });
+  }
+  const list = messages['thread:' + thread.id] || [];
+  res.json({
+    ok: true,
+    messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)),
+    thread: publicThread(thread),
+    channelName: found.channel.name,
+  });
+});
+
+app.post('/api/threads/:id/messages', auth, (req, res) => {
+  const thread = threads[req.params.id];
+  if (!thread || thread.closed) return res.status(404).json({ error: 'Thread not found' });
+  const found = findChannel(thread.channelId, thread.serverId);
+  if (!found || !can(found.guild, req.user, PERM.SEND, found.channel)) {
+    return res.status(403).json({ error: 'You cannot post here' });
+  }
+  const made = appendRoomMessage('thread:' + thread.id, req);
+  if (made.error) return res.status(400).json({ error: made.error });
+  if (!(thread.followers || []).map(String).includes(String(req.user.id))) {
+    thread.followers = [...(thread.followers || []).map(String), String(req.user.id)];
+    save(THREADS_FILE, threads);
+  }
+  res.json({ ok: true, message: presentMessage(made.message, req.user.id) });
+});
+
+app.post('/api/threads/:id/action', auth, (req, res) => {
+  const thread = threads[req.params.id];
+  if (!thread) return res.status(404).json({ error: 'Thread not found' });
+  const found = findChannel(thread.channelId, thread.serverId);
+  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) {
+    return res.status(403).json({ error: 'Cannot view this thread' });
+  }
+  const type = String(req.body?.type || '');
+  const mine = String(thread.ownerId) === String(req.user.id);
+  const manage = can(found.guild, req.user, PERM.MANAGE_CHANNELS, found.channel);
+  if (type === 'follow') {
+    thread.followers = [...new Set([...(thread.followers || []).map(String), String(req.user.id)])];
+  } else if (type === 'unfollow') {
+    thread.followers = (thread.followers || []).map(String).filter((id) => id !== String(req.user.id));
+  } else if (type === 'rename') {
+    if (!mine && !manage) return res.status(403).json({ error: 'You cannot edit this thread' });
+    const name = String(req.body?.name || '').trim().slice(0, 100);
+    if (!name) return res.status(400).json({ error: 'Give the thread a name' });
+    thread.name = name;
+  } else if (type === 'close') {
+    if (!mine && !manage) return res.status(403).json({ error: 'You cannot close this thread' });
+    thread.closed = true;
+  } else if (type === 'delete') {
+    if (!mine && !manage) return res.status(403).json({ error: 'You cannot delete this thread' });
+    delete messages['thread:' + thread.id];
+    save(MESSAGES_FILE, messages);
+    delete threads[thread.id];
+    save(THREADS_FILE, threads);
+    return res.json({ ok: true, deleted: true });
+  } else {
+    return res.status(400).json({ error: 'Unknown action' });
+  }
+  save(THREADS_FILE, threads);
+  res.json({ ok: true, thread: publicThread(thread) });
+});
+
+app.post('/api/messages/:id/pin', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  const on = !(req.body && req.body.on === false);
+  found.msg.pinned = on;
+  found.msg.pinnedAt = on ? new Date().toISOString() : '';
+  save(MESSAGES_FILE, messages);
+  wakePulse(found.roomId);
+  res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
+});
+
+function searchHit(msg, query) {
+  const text = String(msg.content || '');
+  let rest = query;
+  const take = (token) => {
+    const match = rest.match(new RegExp('(?:^|\\s)' + token + ':(\\S+)', 'i'));
+    if (!match) return '';
+    rest = rest.replace(match[0], ' ');
+    return match[1];
+  };
+  const from = take('from');
+  const mentions = take('mentions');
+  const has = take('has');
+  const before = take('before');
+  const after = take('after');
+  const during = take('during');
+  const pinned = /(?:^|\s)pinned:true\b/i.test(rest);
+  if (pinned) rest = rest.replace(/(?:^|\s)pinned:true\b/ig, ' ');
+  rest = rest.trim().toLowerCase();
+  if (pinned && !msg.pinned) return false;
+  if (from) {
+    const who = ((msg.author && (msg.author.username || '')) + ' ' + ((msg.author && msg.author.displayName) || '')).toLowerCase();
+    if (!who.includes(from.toLowerCase())) return false;
+  }
+  if (mentions && !text.toLowerCase().includes('@' + mentions.toLowerCase())) return false;
+  if (has === 'link' && !/https?:\/\//i.test(text)) return false;
+  if (has === 'file' && !(msg.files || []).length) return false;
+  if (has === 'image' && !(msg.files || []).some((file) => /^image\//.test(file.type || '') || /\.(png|jpe?g|gif|webp)$/i.test(file.name || file.url || ''))) return false;
+  if (has === 'video' && !(msg.files || []).some((file) => /^video\//.test(file.type || '') || /\.(mp4|webm|mov)$/i.test(file.name || file.url || ''))) return false;
+  if (before && Date.parse(msg.createdAt) >= Date.parse(before)) return false;
+  if (after && Date.parse(msg.createdAt) <= Date.parse(after)) return false;
+  if (during) {
+    const day = String(msg.createdAt || '').slice(0, 10);
+    if (day !== during) return false;
+  }
+  if (rest && !text.toLowerCase().includes(rest)) return false;
+  return true;
+}
+
+app.get('/api/room/search', auth, (req, res) => {
+  const room = viewerRoom(req);
+  if (room.error) return res.status(room.status).json({ error: room.error });
+  const q = String(req.query.q || '').trim();
+  const list = (messages[room.roomId] || []).filter((msg) => msg && searchHit(msg, q)).slice(-50);
+  res.json({ ok: true, messages: list.map((msg) => presentMessage(msg, req.user.id)) });
+});
+
+app.get('/api/room/pins', auth, (req, res) => {
+  const room = viewerRoom(req);
+  if (room.error) return res.status(room.status).json({ error: room.error });
+  const list = (messages[room.roomId] || []).filter((msg) => msg && msg.pinned);
+  res.json({ ok: true, messages: list.map((msg) => presentMessage(msg, req.user.id)) });
+});
+
+app.get('/api/room/media', auth, (req, res) => {
+  const room = viewerRoom(req);
+  if (room.error) return res.status(room.status).json({ error: room.error });
+  const kind = String(req.query.kind || 'all');
+  const who = String(req.query.user || '').trim().toLowerCase();
+  const files = [];
+  for (const msg of messages[room.roomId] || []) {
+    if (!msg) continue;
+    const author = (msg.author && (msg.author.username || msg.author.displayName) || '').toLowerCase();
+    if (who && who !== 'anyone' && !author.includes(who)) continue;
+    for (const file of msg.files || []) {
+      const name = file.name || file.url || '';
+      const type = file.type || '';
+      const image = /^image\//.test(type) || /\.(png|jpe?g|gif|webp)$/i.test(name);
+      const video = /^video\//.test(type) || /\.(mp4|webm|mov)$/i.test(name);
+      if (kind === 'images' && !image) continue;
+      if (kind === 'videos' && !video) continue;
+      if (kind === 'files' && (image || video)) continue;
+      files.push({ ...file, author: msg.author, createdAt: msg.createdAt, messageId: msg.id });
+    }
+  }
+  res.json({ ok: true, files: files.slice(-80) });
 });
 
 app.get('/api/forward-targets', auth, (req, res) => {
@@ -4912,6 +5438,77 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   return res.status(400).json({ error: 'Unknown action' });
 });
 
+const REPORT_REASONS = ['harassment', 'hate', 'sexual', 'child', 'threats', 'self-harm', 'spam', 'illegal', 'other'];
+
+function presentReport(report) {
+  const target = users[report.targetId];
+  const reporter = users[report.by];
+  return {
+    id: report.id,
+    status: report.status || 'open',
+    reason: report.reason || '',
+    text: report.text || '',
+    at: report.at,
+    target: target
+      ? { id: target.id, uid: target.uid, username: target.username, displayName: target.displayName || target.username }
+      : { id: report.targetId, username: report.targetName || 'Unknown', displayName: report.targetName || 'Unknown' },
+    reporter: reporter
+      ? { id: reporter.id, username: reporter.username, displayName: reporter.displayName || reporter.username }
+      : { id: report.by, username: 'Someone' },
+  };
+}
+
+app.post('/api/reports', auth, (req, res) => {
+  ensureGuilds();
+  const g = guilds.servers[OFFICIAL_ID];
+  if (!g) return res.status(500).json({ error: 'Reports are unavailable' });
+  const target = users[String(req.body?.userId || '')];
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (String(target.id) === String(req.user.id)) return res.status(400).json({ error: 'You cannot report yourself' });
+  const reason = REPORT_REASONS.includes(req.body?.reason) ? req.body.reason : 'other';
+  if (!Array.isArray(g.reports)) g.reports = [];
+  g.reports.unshift({
+    id: uuidv4(),
+    status: 'open',
+    reason,
+    text: String(req.body?.text || '').slice(0, 500),
+    targetId: target.id,
+    targetName: target.username,
+    by: req.user.id,
+    at: new Date().toISOString(),
+  });
+  g.reports = g.reports.slice(0, 200);
+  saveGuilds();
+  touchAlerts();
+  res.json({ ok: true });
+});
+
+app.get('/api/staff/reports', auth, (req, res) => {
+  if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can see reports' });
+  ensureGuilds();
+  const g = guilds.servers[OFFICIAL_ID];
+  const list = ((g && g.reports) || []).map(presentReport);
+  res.json({ ok: true, reports: list });
+});
+
+app.post('/api/staff/reports/:id', auth, (req, res) => {
+  if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can see reports' });
+  ensureGuilds();
+  const g = guilds.servers[OFFICIAL_ID];
+  const report = ((g && g.reports) || []).find((row) => row.id === req.params.id);
+  if (!report) return res.status(404).json({ error: 'Report not found' });
+  const action = String(req.body?.action || '');
+  if (action === 'handle') report.status = 'handled';
+  else if (action === 'close') report.status = 'closed';
+  else if (action === 'view') {
+    if (report.status === 'open') report.status = 'viewed';
+  } else return res.status(400).json({ error: 'Unknown action' });
+  report.handledBy = req.user.id;
+  report.handledAt = new Date().toISOString();
+  saveGuilds();
+  res.json({ ok: true, report: presentReport(report) });
+});
+
 app.get('/api/online', (req, res) => {
   let online = 0;
   for (const user of Object.values(users)) {
@@ -4967,7 +5564,20 @@ app.get('/api/health', (req, res) => {
 
   function locate(req, res) {
     const serverId = String((req.body && req.body.serverId) || req.query.serverId || '');
-    const found = findChannel(String(req.params.channelId || ''), serverId);
+    const channelId = String(req.params.channelId || '');
+    if (serverId === 'call') {
+      const allowed = channelId.startsWith('dm:')
+        ? channelId.slice(3).split(':').map(String).includes(String(req.user.id))
+        : channelId.startsWith('group:')
+          ? !!((groups[channelId.slice(6)] || {}).memberIds || []).map(String).includes(String(req.user.id))
+          : false;
+      if (!allowed) {
+        res.status(403).json({ error: 'You cannot join this call' });
+        return null;
+      }
+      return { guild: { id: 'call', members: { [req.user.id]: {} } }, channel: { id: channelId, type: 'voice', name: 'Call' } };
+    }
+    const found = findChannel(channelId, serverId);
     if (!found || found.channel.type !== 'voice') {
       res.status(404).json({ error: 'Voice channel not found' });
       return null;

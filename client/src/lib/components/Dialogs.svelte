@@ -1,7 +1,7 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers } from '../state.svelte.js';
-  import { api } from '../api.js';
+  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup } from '../state.svelte.js';
+  import { api, uploadFile } from '../api.js';
   import { PERM, inviteLink, inviteSlug } from '../format.js';
   import { hasPerm } from '../state.svelte.js';
 
@@ -15,6 +15,39 @@
   let pingRoles = $state([]);
   let mine = $state(new Set());
   let busy = $state(false);
+  let picked = $state([]);
+  let groupStep = $state(1);
+  let groupQuery = $state('');
+  let iconUrl = $state('');
+
+  const friendChoices = $derived((ui.friends || []).filter((person) => {
+    const q = groupQuery.trim().toLowerCase();
+    if (!q) return true;
+    return ((person.username || '') + ' ' + (person.displayName || '')).toLowerCase().includes(q);
+  }));
+
+  function togglePick(id) {
+    if (picked.includes(id)) picked = picked.filter((row) => row !== id);
+    else if (picked.length < 9) picked = [...picked, id];
+  }
+
+  async function nextGroup() {
+    if (picked.length === 1) {
+      const friend = (ui.friends || []).find((row) => row.id === picked[0]);
+      close();
+      if (friend) await openDm(friend);
+      return;
+    }
+    groupStep = 2;
+  }
+
+  async function setGroupIcon(event) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    const uploaded = await uploadFile(file);
+    iconUrl = uploaded.url || '';
+  }
 
   const kind = $derived(ui.dialog?.kind);
   const channel = $derived(ui.dialog?.channel);
@@ -96,7 +129,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
@@ -112,12 +145,50 @@
         {:else if kind === 'pings'}Ping roles
         {:else if kind === 'edit-channel'}Edit #{channel?.name}
         {:else if kind === 'onboarding'}Before you chat
+        {:else if kind === 'group'}{groupStep === 1 ? 'Select friends' : 'Customize your group'}
+        {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
         {:else}Server{/if}
       </h3>
       <button class="btn icon" onclick={close}><X size={16} /></button>
     </div>
     <div class="body">
-      {#if kind === 'add-server'}
+      {#if kind === 'group'}
+        {#if groupStep === 1}
+          <p class="hint">Pick one to DM, or a few to make a group.</p>
+          <input class="search group-search" placeholder="Type the username of a friend" bind:value={groupQuery} />
+          <p class="hint">You can add {Math.max(0, 9 - picked.length)} more</p>
+          <div class="group-picks">
+            {#each friendChoices as friend (friend.id)}
+              <label class="pick-row">
+                <input type="checkbox" checked={picked.includes(friend.id)} onchange={() => togglePick(friend.id)} />
+                <span>{friend.displayName || friend.username}</span>
+                <em>@{friend.username}</em>
+              </label>
+            {:else}
+              <p class="hint">No friends match.</p>
+            {/each}
+          </div>
+          <div class="group-actions">
+            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn brand" type="button" disabled={!picked.length} onclick={nextGroup}>Next</button>
+          </div>
+        {:else}
+          <p class="hint">You can always change these later.</p>
+          <label class="group-icon">
+            {#if iconUrl}<img src={iconUrl} alt="" />{:else}<span>Icon</span>{/if}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onchange={setGroupIcon} />
+          </label>
+          <div class="field"><label>Group name</label><input bind:value={name} maxlength="80" placeholder="My group" /></div>
+          <div class="group-actions">
+            <button class="btn" type="button" onclick={() => (groupStep = 1)}>Back</button>
+            <button class="btn brand" type="button" disabled={busy} onclick={() => go(async () => {
+              const data = await api('/api/groups', { method: 'POST', body: { name: name.trim() || 'Group', memberIds: picked, iconUrl } });
+              close();
+              if (data.group) await openGroup(data.group);
+            })}>Create group</button>
+          </div>
+        {/if}
+      {:else if kind === 'add-server'}
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" placeholder="A name people will remember" /></div>
         <button class="btn brand" disabled={busy} onclick={() => go(async () => {
           const data = await api('/api/servers', { method: 'POST', body: { name } });
@@ -233,6 +304,22 @@
           {/each}
         </div>
 
+      {:else if kind === 'user-report'}
+        <p class="hint">Only Nebula staff see reports. They won't know who sent it.</p>
+        <div class="report-reasons">
+          {#each [['harassment', 'Harassment or bullying'], ['hate', 'Hate speech or slurs'], ['sexual', 'Sexual content'], ['child', 'Child safety (someone may be a minor at risk)'], ['threats', 'Threats or violence'], ['self-harm', 'Self-harm or suicide'], ['spam', 'Spam or scams'], ['illegal', 'Something illegal'], ['other', 'Something else']] as [id, label]}
+            <label class="check"><input type="radio" name="report-reason" value={id} bind:group={name} /> {label}</label>
+          {/each}
+        </div>
+        <div class="field"><label>Anything else? (optional)</label><textarea bind:value={extra} maxlength="500" rows="3" placeholder="Links, context, what happened..."></textarea></div>
+        <div class="group-actions">
+          <button class="btn" type="button" onclick={close}>Cancel</button>
+          <button class="btn brand" type="button" disabled={busy || !name} onclick={() => go(async () => {
+            await api('/api/reports', { method: 'POST', body: { userId: ui.dialog.user?.id, reason: name, text: extra } });
+            close();
+            toast('Report sent');
+          })}>Send report</button>
+        </div>
       {:else if kind === 'report'}
         <div class="field"><label>Their user id</label><input bind:value={name} placeholder="4" /></div>
         <div class="field"><label>What happened</label><input bind:value={extra} maxlength="400" /></div>

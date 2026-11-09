@@ -1,6 +1,6 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
-  import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag } from '@lucide/svelte';
+  import { ui, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -25,7 +25,10 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin' };
+  const reasonLabel = { harassment: 'Harassment or bullying', hate: 'Hate speech or slurs', sexual: 'Sexual content', child: 'Child safety', threats: 'Threats or violence', 'self-harm': 'Self-harm or suicide', spam: 'Spam or scams', illegal: 'Something illegal', other: 'Something else' };
+  let devOn = $state(developerMode());
+  let viewing = $state(null);
   let showEmail = $state(false);
   let accountDialog = $state('');
   let accountBusy = $state(false);
@@ -136,6 +139,9 @@
   $effect(() => {
     if (page !== 'account') securityOpen = false;
     if (page !== 'look') lookOpen = '';
+    if (page === 'admin' && ui.me?.canAdmin) {
+      api('/api/staff/reports').then((data) => { ui.staffReports = data.reports || []; }).catch(() => {});
+    }
   });
   $effect(() => {
     if (accountDialog !== 'username') return;
@@ -400,6 +406,11 @@
       <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
+      <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
+      {#if ui.me?.canAdmin}
+        <div class="group">Nebula staff</div>
+        <button class:on={page === 'admin'} onclick={() => (ui.userPage = 'admin')}><Flag size={16} /> Admin</button>
+      {/if}
       <div class="group">Account</div>
       <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
       <button class="danger set-logout" onclick={logout}>Log out</button>
@@ -479,6 +490,49 @@
               <button type="button" class="btn" class:brand={!ui.me?.hideLastSeen} onclick={toggleLastSeen}>{ui.me?.hideLastSeen ? 'Hidden' : 'Shown'}</button>
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
+          {:else if page === 'advanced'}
+            <div class="field">
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Developer Mode</strong>
+                  <em>Adds Copy Server, Channel, Category, Message and User ID to right-click menus, for building bots with the Nebula API.</em>
+                </div>
+                <button type="button" class="switch" class:on={devOn} aria-pressed={devOn} onclick={() => { devOn = !devOn; setDeveloperMode(devOn); }}><i></i></button>
+              </div>
+            </div>
+          {:else if page === 'admin'}
+            <div class="report-list">
+              {#each ui.staffReports as report (report.id)}
+                <article class="report-row">
+                  <div>
+                    <strong>@{report.target?.username || 'unknown'}</strong>
+                    <span>{reasonLabel[report.reason] || report.reason || 'Report'} · {report.status}</span>
+                    {#if report.text}<p>{report.text}</p>{/if}
+                  </div>
+                  <div class="report-acts">
+                    <button class="btn sm" onclick={() => viewing = report}>View</button>
+                    {#if report.status !== 'handled'}<button class="btn sm" onclick={() => staffReport(report.id, 'handle')}>Handle</button>{/if}
+                    {#if report.status !== 'closed'}<button class="btn sm" onclick={() => staffReport(report.id, 'close')}>Close</button>{/if}
+                  </div>
+                </article>
+              {:else}
+                <p class="hint">No reports yet.</p>
+              {/each}
+            </div>
+            {#if viewing}
+              <div class="report-view">
+                <strong>Report on @{viewing.target?.username}</strong>
+                <p>{reasonLabel[viewing.reason] || 'Report'}</p>
+                <p>{viewing.text || 'No extra details.'}</p>
+                <p class="hint">From @{viewing.reporter?.username || 'someone'} · {viewing.status}</p>
+                <div class="report-acts">
+                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'view')}>Mark viewed</button>
+                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'handle')}>Handle</button>
+                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'close')}>Close</button>
+                  <button class="btn sm" onclick={() => (viewing = null)}>Back</button>
+                </div>
+              </div>
+            {/if}
           {:else if page === 'look' && lookOpen === 'badges'}
             <section class="look-sec">
               <div class="look-line">
@@ -737,7 +791,7 @@
             </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {/if}
-          {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
+          {#if page !== 'look' && page !== 'notify' && page !== 'privacy' && page !== 'advanced' && page !== 'admin'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
