@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast } from '../state.svelte.js';
-  import { formatContent } from '../format.js';
+  import { formatContent, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -278,9 +278,14 @@
   function canMention(role) {
     if (!role || ui.mode !== 'chat') return false;
     if (ui.serverMeta?.owner) return true;
+    const mine = myRoleIds();
+    if (role.id === 'everyone' || role.id === 'here') {
+      if (ui.serverPerms & PERM.ADMIN) return true;
+      if (ui.me?.developer || ui.me?.staff) return true;
+      if (['og', 'admin', 'manager', 'moderator', 'developer', 'owner'].some((id) => mine.has(id))) return true;
+    }
     if (!Array.isArray(role.mentionBy)) return true;
     if (!role.mentionBy.length) return false;
-    const mine = myRoleIds();
     return role.mentionBy.some((id) => mine.has(id));
   }
 

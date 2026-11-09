@@ -3041,9 +3041,13 @@ function mentionPattern(name) {
 function canMentionRole(g, user, role) {
   if (!g || !user || !role) return false;
   if (isOwner(g, user)) return true;
+  const mine = new Set(memberRoles(g, user).map((r) => r.id));
+  if (role.id === 'everyone' || role.id === 'here') {
+    if (basePerms(g, user) & PERM.ADMIN) return true;
+    if (['og', 'admin', 'manager', 'moderator', 'developer', 'owner'].some((id) => mine.has(id))) return true;
+  }
   const list = Array.isArray(role.mentionBy) ? role.mentionBy : ['everyone'];
   if (!list.length) return false;
-  const mine = new Set(memberRoles(g, user).map((r) => r.id));
   return list.some((id) => mine.has(id));
 }
 
@@ -3075,11 +3079,25 @@ function parseMentions(g, user, content) {
 }
 
 function isHere(user) {
-  const status = user && user.status;
-  return status !== 'offline' && status !== 'dnd';
+  const status = effectiveStatus(user);
+  return status === 'online' || status === 'idle';
+}
+
+function broadcastMention(msg, viewer, g) {
+  if (!msg || !g) return false;
+  const author = users[msg.authorId];
+  if (!author) return false;
+  const text = String(msg.content || '');
+  const everyone = (g.roles || []).find((role) => role.id === 'everyone');
+  const here = (g.roles || []).find((role) => role.id === 'here');
+  const everyoneHit = mentionPattern('everyone') && mentionPattern('everyone').test(text) && canMentionRole(g, author, everyone);
+  if (everyoneHit) return true;
+  const hereHit = mentionPattern('here') && mentionPattern('here').test(text) && canMentionRole(g, author, here);
+  return !!(hereHit && isHere(viewer));
 }
 
 function messageMentions(msg, user, g) {
+  if (broadcastMention(msg, user, g)) return true;
   const mentions = msg && msg.mentions;
   if (!mentions || typeof mentions !== 'object') return mentionsUser(msg && msg.content, user);
   if (mentions.everyone) return true;

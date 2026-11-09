@@ -1566,7 +1566,10 @@ function announceFresh(list, roomKey) {
 
 function mentionsMessage(msg) {
   const mentions = msg && msg.mentions;
-  if (!mentions || typeof mentions !== 'object') return mentionsMe(msg && msg.content);
+  const text = String(msg && msg.content || '');
+  if (/(^|\s)@everyone(?![\w.])/i.test(text) && (!mentions || mentions.everyone)) return true;
+  if (/(^|\s)@here(?![\w.])/i.test(text) && (!mentions || mentions.here)) return true;
+  if (!mentions || typeof mentions !== 'object') return mentionsMe(text);
   if (mentions.everyone || mentions.here) return true;
   if ((mentions.users || []).some((id) => String(id) === String(ui.me && ui.me.id))) return true;
   const me = (ui.members || []).find((member) => member.id === (ui.me && ui.me.id));

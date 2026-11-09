@@ -17,16 +17,28 @@ export function formatContent(text, emoji, stickers, namesList) {
     return '\u0000GIF' + (gifs.length - 1) + '\u0000';
   });
   const mentions = [];
-  const names = ['everyone', 'here', ...(namesList || [])]
+  const names = [...(namesList || [])]
     .map((name) => String(name || '').trim())
     .filter((name) => name.length > 0 && name.length <= 32);
   const unique = [...new Set(names)].sort((a, b) => b.length - a.length);
-  if (unique.length) {
-    const pattern = unique.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    raw = raw.replace(new RegExp('(^|\\s)@(' + pattern + ')(?![\\w.])', 'gi'), (match, lead, name) => {
+  const take = (label) => {
+    if (!unique.some((name) => name.toLowerCase() === label)) return;
+    raw = raw.replace(new RegExp('(^|\\s)@(' + label + ')(?![\\w.])', 'gi'), (match, lead, name) => {
       mentions.push(name);
       return lead + '\u0000MEN' + (mentions.length - 1) + '\u0000';
     });
+  };
+  take('everyone');
+  take('here');
+  const rest = unique.filter((name) => name.toLowerCase() !== 'everyone' && name.toLowerCase() !== 'here');
+  if (rest.length) {
+    const pattern = rest.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    try {
+      raw = raw.replace(new RegExp('(^|\\s)@(' + pattern + ')(?![\\w.])', 'gi'), (match, lead, name) => {
+        mentions.push(name);
+        return lead + '\u0000MEN' + (mentions.length - 1) + '\u0000';
+      });
+    } catch (_) {}
   }
   let html = escapeHtml(raw);
   html = html.replace(/\u0000MEN(\d+)\u0000/g, (_, index) => {
