@@ -22,6 +22,7 @@
   const requestCount = $derived((ui.incoming || []).length);
   const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+  const inboxBadge = $derived(mentionCount + (ui.incoming || []).length);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   function countLabel(n) { return n > 99 ? '99+' : String(n); }
 
@@ -73,6 +74,7 @@
   function openAccount(event) {
     event.stopPropagation();
     accountOpen = !accountOpen;
+    if (accountOpen) ui.inboxOpen = false;
     statusOpen = false;
     accountsOpen = false;
     editingBio = false;
@@ -428,12 +430,14 @@
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
       </div>
     </button>
-    <button class="btn icon inbox-btn" title="Inbox" onclick={() => (ui.inboxOpen = !ui.inboxOpen)}>
-      <InboxIcon size={16} />
-      {#if mentionCount}<em class="pill-count">{countLabel(mentionCount)}</em>{/if}
-    </button>
+    <div class="me-tools">
+      <button class="btn icon inbox-btn" title="Inbox" onclick={(e) => { e.stopPropagation(); accountOpen = false; ui.inboxOpen = !ui.inboxOpen; }}>
+        <InboxIcon size={15} />
+        {#if inboxBadge}<em class="inbox-badge">{countLabel(inboxBadge)}</em>{/if}
+      </button>
+      <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={15} /></button>
+      <button class="btn icon" title="Log out" onclick={logout}><LogOut size={15} /></button>
+    </div>
     {#if ui.inboxOpen}<Inbox />{/if}
-    <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={16} /></button>
-    <button class="btn icon" title="Log out" onclick={logout}><LogOut size={16} /></button>
   </div>
 </aside>

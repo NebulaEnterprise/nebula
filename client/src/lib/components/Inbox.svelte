@@ -64,8 +64,8 @@
     {#if tab === 'you'}
       {#each ui.incoming as person (person.id)}
         <article class="inbox-row">
-          <Avatar user={person} size={36} />
-          <div>
+          <Avatar user={person} size={32} />
+          <div class="inbox-copy">
             <strong><Name user={person} /> sent you a friend request</strong>
             <span>Incoming request</span>
           </div>
@@ -85,8 +85,8 @@
       {/if}
       {#each ui.mentions as row (row.id)}
         <button type="button" class="inbox-row" onclick={() => openMention(row)}>
-          <Avatar user={row.author} size={36} dot={false} />
-          <div>
+          <Avatar user={row.author} size={32} dot={false} />
+          <div class="inbox-copy">
             <strong><Name user={row.author} /></strong>
             <span>{row.serverName} · #{row.channelName} · {ago(row.at)}</span>
             <p>{row.content || 'Mentioned you'}</p>
@@ -102,7 +102,7 @@
     {:else}
       {#each unreadRows as row (row.id)}
         <button type="button" class="inbox-row unread-row" onclick={() => openUnread(row)}>
-          <div>
+          <div class="inbox-copy">
             <strong>{row.serverName} · #{row.channelName}</strong>
           </div>
           {#if row.mentions}<em class="pill-count">@{count(row.mentions)}</em>{/if}
