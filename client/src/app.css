@@ -1023,7 +1023,7 @@ img { max-width: 100%; }
 }
 .pop {
   position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow: auto;
-  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  left: 0; right: 0; top: 0; bottom: 0; height: fit-content; margin: auto;
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); box-shadow: var(--shadow);
@@ -1175,8 +1175,8 @@ img { max-width: 100%; }
   to { opacity: 1; transform: none; }
 }
 @keyframes profile-in {
-  from { opacity: 0; transform: translate(-50%, -46%); }
-  to { opacity: 1; transform: translate(-50%, -50%); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 @keyframes drop-in {
   from { opacity: 0; transform: translateY(-6px); }

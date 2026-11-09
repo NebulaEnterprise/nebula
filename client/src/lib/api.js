@@ -207,9 +207,9 @@ export function bannerGif(url, size = 512) {
   if (raw.startsWith('blob:') || raw.startsWith('data:')) return raw;
   const picked = size === 32 || size === 128 || size === 512 ? size : 512;
   const clean = raw.split(/[?#]/)[0];
-  if (!/\/banners\/[^/]+\.gif$/i.test(clean)) return raw;
-  const base = clean.replace(/\.(?:32|128|512)\.gif$/i, '.gif').replace(/\.gif$/i, '');
-  return base + '.' + picked + '.gif';
+  if (!/\/banners\/.+\.gif$/i.test(clean)) return raw;
+  const base = clean.replace(/\.(?:s)?(?:32|128|512)\.gif$/i, '').replace(/\.gif$/i, '');
+  return base + '.s' + picked + '.gif';
 }
 
 export function warmMedia(urls) {
@@ -238,7 +238,7 @@ export function pinMedia(url, file) {
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
   if (isSongFile(url)) return Promise.resolve(fileUrl(url));
-  if (/\/banners\/[^/]+\.gif/i.test(String(url))) return Promise.resolve(fileUrl(bannerGif(url, 512)));
+  if (/\/banners\/.+\.gif/i.test(String(url))) return Promise.resolve(fileUrl(bannerGif(url, 512)));
   if (url.startsWith('data:') || url.startsWith('blob:')) return Promise.resolve(url);
   const full = fileUrl(url);
   if (!full.includes('/uploads/') && !full.includes('/files/')) return Promise.resolve(full);
