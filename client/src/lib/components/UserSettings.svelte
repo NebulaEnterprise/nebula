@@ -337,8 +337,6 @@
     return String(a || '').toLowerCase() === String(b || '').toLowerCase();
   }
 
-  let customColor = $state(!accentPresets.some((hex) => sameHex(hex, ui.me?.profileColors?.[0])));
-
   function setProfileColor(index, value) {
     const next = [...(form.profileColors || ['#7c3aed', '#c084fc'])];
     next[index] = value;
@@ -505,39 +503,43 @@
             </section>
             <section class="look-sec">
               <h3><Droplet size={16} class="sec-ico" /> Accent color</h3>
-              <div class="swatches">
-                {#each accentPresets as hex}
-                  <button type="button" class="swatch" class:on={sameHex(form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => pickAccent(hex)}></button>
-                {/each}
-              </div>
-              <button type="button" class="look-custom" onclick={() => (customColor = !customColor)}>{customColor ? 'Hide custom color' : 'Custom color'}</button>
-              {#if customColor}
+              <div class="accent-row">
+                <div class="swatches">
+                  {#each accentPresets as hex}
+                    <button type="button" class="swatch" class:on={sameHex(form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => pickAccent(hex)}></button>
+                  {/each}
+                </div>
                 <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
-              {/if}
+              </div>
             </section>
             <section class="look-sec">
               <h3><Monitor size={16} class="sec-ico" /> Display settings</h3>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Display name style</strong>
-                  <em>Choose how your name is displayed.</em>
+              <div class="look-block">
+                <strong>Display name style</strong>
+                <em>Choose how your name is displayed.</em>
+                <div class="choice-picks">
+                  {#each fonts as [id, label, family]}
+                    <button type="button" class="choice-btn" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
+                      <span style="font-family:{family}">{label}</span>
+                    </button>
+                  {/each}
                 </div>
-                <select class="look-select" bind:value={form.nameFont}>
-                  {#each fonts as [id, label]}<option value={id}>{label}</option>{/each}
-                </select>
               </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Name effect</strong>
-                  <em>Color treatment on your display name.</em>
+              <div class="look-block">
+                <strong>Name effect</strong>
+                <em>Color treatment on your display name.</em>
+                <div class="effect-side">
+                  <ColorBox colors={form.nameColors} slots={!form.nameEffect || form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
+                  <div class="choice-picks">
+                    {#each effects as [id, label]}
+                      <button type="button" class="choice-btn" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
+                        <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
+                        <span class="choice-label">{label}</span>
+                      </button>
+                    {/each}
+                  </div>
                 </div>
-                <select class="look-select" bind:value={form.nameEffect}>
-                  {#each effects as [id, label]}<option value={id}>{label}</option>{/each}
-                </select>
               </div>
-              {#if form.nameEffect}
-                <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
-              {/if}
               <div class="look-line">
                 <div class="copy">
                   <strong>Show badges</strong>
@@ -574,13 +576,6 @@
                   <option value="">None</option>
                   {#each ui.me?.tagChoices || [] as choice}<option value={choice.serverId}>{choice.name}</option>{/each}
                 </select>
-              </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Play on open</strong>
-                  <em>Start your profile song when the profile opens.</em>
-                </div>
-                <button type="button" class="switch" class:on={form.songAutoplay} aria-pressed={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}><i></i></button>
               </div>
             </section>
             <section class="look-sec">
@@ -688,6 +683,13 @@
                   <div class="field">
                     <label>Start at</label>
                     <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
+                  </div>
+                  <div class="look-line">
+                    <div class="copy">
+                      <strong>Play on open</strong>
+                      <em>Start your profile song when the profile opens.</em>
+                    </div>
+                    <button type="button" class="switch" class:on={form.songAutoplay} aria-pressed={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}><i></i></button>
                   </div>
                 </div>
               {/if}
