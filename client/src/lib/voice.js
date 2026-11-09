@@ -7,12 +7,32 @@ const ICE = [
 ];
 
 let stream = null;
+let screenStream = null;
+export let localScreen = null;
+export let remoteScreen = null;
 let poll = null;
 let peers = new Map();
 let iceQueue = new Map();
 let levelTimer = null;
 let audioCtx = null;
 let speaking = false;
+
+function bumpScreen() {
+  if (!ui.voice) return;
+  ui.voice.sharing = !!screenStream;
+  ui.voice.screenTick = Date.now();
+}
+
+function dropScreenTracks() {
+  const current = screenStream;
+  screenStream = null;
+  localScreen = null;
+  if (!current) return;
+  current.getTracks().forEach((track) => {
+    track.onended = null;
+    track.stop();
+  });
+}
 
 function channelName() {
   const ch = ui.channels.find((item) => item.id === ui.voice?.channelId);
@@ -39,6 +59,8 @@ function stopLocal() {
   audioCtx = null;
   if (stream) stream.getTracks().forEach((track) => track.stop());
   stream = null;
+  dropScreenTracks();
+  remoteScreen = null;
 }
 
 function closePeer(id) {
@@ -69,11 +91,21 @@ function ensurePeer(id) {
   if (peer) return peer;
   const pc = new RTCPeerConnection({ iceServers: ICE });
   if (stream) stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+  if (screenStream) screenStream.getTracks().forEach((track) => pc.addTrack(track, screenStream));
   pc.onicecandidate = (event) => {
     if (!event.candidate || !ui.voice) return;
     sendSignal(id, 'ice', event.candidate.toJSON()).catch(() => {});
   };
   pc.ontrack = (event) => {
+    if (event.track && event.track.kind === 'video') {
+      remoteScreen = event.streams[0] || new MediaStream([event.track]);
+      event.track.onended = () => {
+        remoteScreen = null;
+        bumpScreen();
+      };
+      bumpScreen();
+      return;
+    }
     const audio = new Audio();
     audio.autoplay = true;
     audio.srcObject = event.streams[0];
@@ -144,6 +176,19 @@ async function offerTo(id) {
   }
 }
 
+async function renegotiate(id) {
+  const peer = peers.get(id);
+  if (!peer || peer.pc.signalingState !== 'stable') return;
+  peer.offered = true;
+  try {
+    const offer = await peer.pc.createOffer();
+    await peer.pc.setLocalDescription(offer);
+    await sendSignal(id, 'offer', peer.pc.localDescription);
+  } catch (_) {
+    peer.offered = false;
+  }
+}
+
 async function sync() {
   const voice = ui.voice;
   if (!voice) return;
@@ -200,7 +245,7 @@ async function dropOutgoing(missed) {
   } catch (_) {}
 }
 
-async function connectCall(channelId, name) {
+async function connectCall(channelId, name, person) {
   if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -227,9 +272,12 @@ async function connectCall(channelId, name) {
     serverId: 'call',
     channelId,
     name,
+    person: person || null,
     muted: false,
     deafened: false,
     speakingSent: false,
+    sharing: false,
+    screenTick: 0,
   };
   watchMic();
   try { await sync(); } catch (_) {}
@@ -259,7 +307,7 @@ export async function startCall(user) {
       return;
     }
   }
-  await connectCall(channelId, name);
+  await connectCall(channelId, name, person && person.id ? person : null);
 }
 
 export async function answerCall() {
@@ -273,7 +321,7 @@ export async function answerCall() {
   }
   ui.incomingCall = null;
   await leaveVoice();
-  await connectCall(call.channelId, call.from?.displayName || call.from?.username || 'Call');
+  await connectCall(call.channelId, call.from?.displayName || call.from?.username || 'Call', call.from || null);
 }
 
 export async function declineCall() {
@@ -340,6 +388,47 @@ export async function leaveVoice() {
   } catch (_) {}
   const data = await refreshVoiceRooms().catch(() => null);
   if (!data) publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => member.id !== ui.me?.id));
+}
+
+let sharingBusy = false;
+
+export async function toggleShare() {
+  if (!ui.voice || sharingBusy) return;
+  sharingBusy = true;
+  try {
+  if (screenStream) {
+    const video = screenStream.getVideoTracks();
+    dropScreenTracks();
+    for (const [id, peer] of peers) {
+      for (const sender of [...peer.pc.getSenders()]) {
+        if (sender.track && video.includes(sender.track)) {
+          try { peer.pc.removeTrack(sender); } catch (_) {}
+        }
+      }
+      await renegotiate(id);
+    }
+    bumpScreen();
+    return;
+  }
+  let next = null;
+  try {
+    next = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  } catch (_) {
+    toast('Allow screen sharing to show your screen');
+    return;
+  }
+  screenStream = next;
+  localScreen = next;
+  const track = next.getVideoTracks()[0];
+  if (track) track.onended = () => { toggleShare().catch(() => {}); };
+  for (const [id, peer] of peers) {
+    if (track) peer.pc.addTrack(track, next);
+    await renegotiate(id);
+  }
+  bumpScreen();
+  } finally {
+    sharingBusy = false;
+  }
 }
 
 export async function toggleMute() {

@@ -7,6 +7,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import Attachment from './Attachment.svelte';
+  import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
   import { api, uploadFile, fileUrl } from '../api.js';
@@ -183,11 +184,13 @@
   const addable = $derived((ui.friends || []).filter((person) => !(ui.group?.members || []).some((member) => member.id === person.id)));
 </script>
 
-<aside class="dock">
+<aside class="dock" class:profile-dock={ui.dock === 'profile' && !!ui.dmUser}>
+  {#if ui.dock !== 'profile'}
   <div class="dock-h">
     <strong>{title}</strong>
     <button class="btn icon" title="Close" onclick={() => (ui.dock = '')}><X size={16} /></button>
   </div>
+  {/if}
   <div class="dock-body">
     {#if ui.dock === 'pins'}
       {#if pins.length}
@@ -297,37 +300,50 @@
       <button class="btn danger dock-go" onclick={leaveGroup}>Leave group</button>
     {:else if ui.dmUser}
       {@const person = ui.dmUser}
-      <div class="dock-profile">
-        <div class="pop-banner" style="background:{person.bannerColor || person.accentColor || 'var(--brand)'}">
+      {@const shades = Array.isArray(person.profileColors) && person.profileColors.length >= 2 ? person.profileColors : ['#7c3aed', '#c084fc']}
+      {@const skin = ['solid', 'glow', 'rainbow'].includes(person.profileStyle) ? person.profileStyle : 'gradient'}
+      <div class="dock-profile profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
+        <div class="pop-banner" style="background:{person.bannerColor || person.accentColor || shades[0]}">
           {#if person.bannerUrl}<Photo url={person.bannerUrl} fill />{/if}
+          <button class="dock-close" title="Close" onclick={() => (ui.dock = '')}><X size={16} /></button>
         </div>
-        <div class="profile-hero">
-          <Avatar user={person} size={72} />
-          <h3><Name user={person} /></h3>
-          <p class="handle">
-            <span>@{person.username}</span>
-            {#if visibleBadges(person).includes('early')}<MoonBadge />{/if}
-            {#if visibleBadges(person).includes('staff')}<StaffBadge rank={person.staff} />{/if}
-            {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
-          </p>
-          {#if shortBio(person.bio)}<p class="profile-status">{shortBio(person.bio)}</p>{/if}
-          {#if person.aboutMe}<p class="profile-status">{person.aboutMe}</p>{/if}
-        </div>
-        <section class="profile-panel">
-          <div class="profile-row"><span><User size={14} /> Display name</span><strong>{person.displayName || person.username}</strong></div>
-          <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{person.username}</strong></div>
-          {#if (person.aliases || []).length}
-            <div class="profile-row"><span><Tags size={14} /> Aliases</span><strong>@{person.aliases.join(', @')}</strong></div>
-          {/if}
-          <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns || '—'}</strong></div>
-        </section>
-        <section class="profile-panel">
-          <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{person.lastSeen ? seenLabel(person.lastSeen) : (person.hideLastSeen ? 'Hidden' : '—')}</strong></div>
-          <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[person.status] || statusColor.offline}"></i>{statusName[person.status] || 'Offline'}</strong></div>
-        </section>
-        <div class="pop-meta">
-          <div><span>Member since</span><strong>{joinedLabel(person.createdAt)}</strong></div>
-          <div><span>User id</span><strong>{person.uid != null ? '#' + person.uid : '—'}</strong></div>
+        <div class="pop-body">
+          <div class="profile-hero">
+            <div class="profile-face">
+              <div class="song-av">
+                <div class="pop-av profile-av" style="background:{person.avatarColor || shades[0]}">
+                  {#if person.avatarUrl}<Photo url={person.avatarUrl} />{:else}{(person.displayName || person.username || '?').charAt(0).toUpperCase()}{/if}
+                </div>
+                <SongButton file={person.songFile} start={person.songStart} />
+              </div>
+              <i class="profile-dot" style="background:{statusColor[person.status] || statusColor.offline}"></i>
+              {#if shortBio(person.bio)}<div class="bio-bubble"><span>{shortBio(person.bio)}</span></div>{/if}
+            </div>
+            <h3><Name user={person} /></h3>
+            <p class="handle">
+              <span>@{person.username}</span>
+              {#if visibleBadges(person).includes('early')}<MoonBadge />{/if}
+              {#if visibleBadges(person).includes('staff')}<StaffBadge rank={person.staff} />{/if}
+              {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
+            </p>
+            {#if person.aboutMe}<p class="profile-status">{person.aboutMe}</p>{/if}
+          </div>
+          <section class="profile-panel">
+            <div class="profile-row"><span><User size={14} /> Display name</span><strong>{person.displayName || person.username}</strong></div>
+            <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{person.username}</strong></div>
+            {#if (person.aliases || []).length}
+              <div class="profile-row alias-row"><span><Tags size={14} /> Aliases</span><strong class="alias-names">@{person.aliases.join(', @')}</strong></div>
+            {/if}
+            <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns || '—'}</strong></div>
+          </section>
+          <section class="profile-panel">
+            <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{person.lastSeen ? seenLabel(person.lastSeen) : (person.hideLastSeen ? 'Hidden' : '—')}</strong></div>
+            <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[person.status] || statusColor.offline}"></i>{statusName[person.status] || 'Offline'}</strong></div>
+          </section>
+          <div class="pop-meta">
+            <div><span>Member since</span><strong>{joinedLabel(person.createdAt)}</strong></div>
+            <div><span>User id</span><strong>{person.uid != null ? '#' + person.uid : '—'}</strong></div>
+          </div>
         </div>
       </div>
     {/if}

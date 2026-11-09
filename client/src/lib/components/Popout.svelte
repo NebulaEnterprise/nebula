@@ -45,7 +45,7 @@
     const id = u?.id;
     const file = u?.songFile || '';
     const start = u?.songStart || 0;
-    if (!id || !u?.songAutoplay || !hasSong(file)) return;
+    if (!id || !u?.songAutoplay || !hasSong(file) || ui.mode === 'dm') return;
     playSongAfterPaint(file, start);
     return () => releaseSong(file, start);
   });

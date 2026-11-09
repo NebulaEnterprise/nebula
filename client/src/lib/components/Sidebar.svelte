@@ -2,7 +2,7 @@
   import {
     ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check, Search, X, Inbox as InboxIcon, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight,
+    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight, Monitor,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -14,7 +14,7 @@
   import Inbox from './Inbox.svelte';
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
-  import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
+  import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
@@ -333,6 +333,9 @@
         </button>
         <button class="voice-tool" title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
           {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
+        </button>
+        <button class="voice-tool" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
+          <Monitor size={18} />
         </button>
       </div>
       <button class="leave-call" onclick={leaveVoice}><PhoneOff size={16} /> Leave call</button>

@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText } from '../state.svelte.js';
-  import { startCall } from '../voice.js';
+  import { startCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
@@ -684,6 +684,19 @@
     return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   }
 
+  const callWho = $derived(ui.voice?.person || (ui.mode === 'dm' ? ui.dmUser : null));
+
+  function attach(node, stream) {
+    node.srcObject = stream || null;
+    if (stream) node.play().catch(() => {});
+    return {
+      update(next) {
+        node.srcObject = next || null;
+        if (next) node.play().catch(() => {});
+      },
+    };
+  }
+
   function time(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
@@ -766,6 +779,37 @@
     {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
   </div>
 {/if}
+{#if ui.voice?.serverId === 'call'}
+  <div class="call-stage">
+    <div class="call-view">
+      {#key ui.voice.screenTick}
+        {#if remoteScreen}
+          <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
+        {:else}
+          <div class="call-person">
+            <Avatar user={callWho} size={96} />
+            <strong>{callWho?.displayName || callWho?.username || ui.voice.name || 'Call'}</strong>
+          </div>
+        {/if}
+        {#if localScreen}
+          <video class="call-pip" autoplay playsinline muted use:attach={localScreen}></video>
+        {/if}
+      {/key}
+    </div>
+    <div class="call-controls">
+      <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
+        {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
+      </button>
+      <button type="button" class:on={ui.voice.deafened} title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
+        {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
+      </button>
+      <button type="button" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
+        <Monitor size={18} />
+      </button>
+      <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
+    </div>
+  </div>
+{/if}
 <div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if ui.chatLoading && !ui.messages.length}
     <div class="skel-list" aria-hidden="true">
@@ -786,6 +830,13 @@
     {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
       <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
     {/if}
+    {#if msg.kind === 'call'}
+      <div class="call-note">
+        <Phone size={16} />
+        <span><Name user={liveAuthor(msg.author)} /> started a call.</span>
+        <time>{time(msg.createdAt)}</time>
+      </div>
+    {:else}
     <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
@@ -854,6 +905,7 @@
         {/if}
       </div>
     </article>
+    {/if}
   {/each}
 </div>
 {#if menu}

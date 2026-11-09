@@ -2029,6 +2029,11 @@ function startPresence() {
   pingSeen();
   setInterval(() => {
     if (!ui.me || (ui.me.statusChoice || 'online') !== 'online') return;
+    if (!document.hidden) {
+      applyPresence('online', Date.now());
+      pingSeen();
+      return;
+    }
     const idle = Date.now() - lastLocalActivity >= 10 * 60 * 1000;
     applyPresence(idle ? 'idle' : 'online', ui.me.lastSeen);
   }, 15000);

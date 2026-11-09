@@ -2949,12 +2949,11 @@ function auth(req, res, next) {
     save(USERS_FILE, users);
   }
   const now = Date.now();
-  if (now - (Number(found.session.lastSeen) || 0) > 60000) {
-    found.session.lastSeen = now;
+  const seenAt = Number(found.user.lastSeen) || 0;
+  if (now - seenAt > 15000) {
     found.user.lastSeen = now;
-    save(USERS_FILE, users);
-  } else {
     found.session.lastSeen = now;
+    save(USERS_FILE, users);
   }
   next();
 }
@@ -3594,10 +3593,30 @@ app.post('/api/calls', auth, (req, res) => {
   for (const row of callLog) {
     if (row.status === 'ringing' && String(row.from) === String(req.user.id)) finishCall(row, true);
   }
-  const channelId = 'dm:' + [String(req.user.id), String(other.id)].sort().join(':');
+  const key = dmKey(req.user.id, other.id);
+  const channelId = 'dm:' + key;
   const row = { id: uuidv4(), channelId, from: String(req.user.id), to: String(other.id), status: 'ringing', at: Date.now() };
   callLog.push(row);
   saveCalls();
+  if (!dmThreads[key]) {
+    dmThreads[key] = { id: key, a: key.split(':')[0], b: key.split(':')[1], updatedAt: Date.now() };
+  } else {
+    dmThreads[key].updatedAt = Date.now();
+  }
+  save(DMS_FILE, dmThreads);
+  if (!messages[channelId]) messages[channelId] = [];
+  messages[channelId].push({
+    id: uuidv4(),
+    channelId,
+    authorId: req.user.id,
+    author: slimAuthor(req.user),
+    content: '',
+    kind: 'call',
+    files: [],
+    createdAt: new Date().toISOString(),
+  });
+  save(MESSAGES_FILE, messages);
+  wakePulse(channelId);
   res.json({ ok: true, call: callView(row) });
 });
 

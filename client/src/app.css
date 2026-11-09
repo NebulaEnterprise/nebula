@@ -577,11 +577,51 @@ img { max-width: 100%; }
 .call-alert button { padding: 6px 12px; border-radius: 8px; font-weight: 750; }
 .call-alert .accept { background: #3ecf8e; color: #062217; }
 .call-alert .decline { background: #f23f43; color: #fff; }
-.dock-profile { display: flex; flex-direction: column; gap: 8px; }
-.dock-profile .pop-banner { height: 88px; border-radius: 12px; overflow: hidden; position: relative; }
-.dock-profile .profile-hero { margin-top: -28px; align-items: flex-start; text-align: left; }
-.dock-profile .profile-hero h3 { margin: 8px 0 0; font-size: 18px; }
-.dock-profile .handle, .dock-profile .profile-status { margin: 2px 0 0; }
+.call-note {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 16px; color: #3ecf8e; font-size: 14px; font-weight: 650;
+}
+.call-note time { color: var(--faint); font-weight: 500; font-size: 12px; }
+.call-stage {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 18px; min-height: 280px; padding: 28px 16px 18px; flex-shrink: 0;
+  background: #0c0d11;
+}
+.call-view { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; }
+.call-person { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.call-person strong { font-size: 18px; }
+.call-video {
+  width: min(760px, 100%); max-height: 360px; border-radius: 12px; background: #000; object-fit: contain;
+}
+.call-pip {
+  position: absolute; right: 18px; bottom: 0; width: 180px; max-height: 120px;
+  border-radius: 10px; background: #000; object-fit: cover; border: 2px solid #000;
+}
+.call-controls {
+  display: flex; align-items: center; gap: 8px;
+  background: #1a1b20; padding: 8px; border-radius: 16px;
+}
+.call-controls button {
+  width: 42px; height: 42px; border-radius: 12px; background: #2b2d31; color: #fff;
+  display: grid; place-items: center;
+}
+.call-controls button.on, .call-controls .hang { background: #da373c; }
+.call-controls .hang { width: 52px; }
+.voice-tool.on { color: #fff; background: #da373c; }
+.dock.profile-dock { background: transparent; }
+.dock.profile-dock .dock-body { flex: 1; min-height: 0; padding: 0; gap: 0; }
+.dock-profile.profile-card {
+  border: 0; border-radius: 0; box-shadow: none; flex: 1; min-height: 100%;
+}
+.dock-profile .pop-banner {
+  width: 100%; height: 140px; min-height: 140px; max-height: 140px; border-radius: 0;
+}
+.dock-close {
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: rgba(0, 0, 0, 0.55); color: #fff;
+}
 .msg-content { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
 .msg-content .emoji { width: 22px; height: 22px; vertical-align: middle; }
 .msg-content .sticker { width: 148px; display: block; border-radius: 12px; }
@@ -1290,7 +1330,7 @@ img { max-width: 100%; }
 .pop-body { padding: 0 14px 14px; }
 .pop-av {
   position: relative; z-index: 1;
-  width: 92px; height: 92px; border-radius: 22px; margin-top: 0; border: 4px solid #140d1f;
+  width: 92px; height: 92px; border-radius: 22px; margin-top: 0; border: 4px solid #000;
   display: grid; place-items: center; font-size: 32px; font-weight: 700; background: #7c6af7; overflow: hidden;
   flex-shrink: 0;
 }
