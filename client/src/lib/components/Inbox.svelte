@@ -28,7 +28,7 @@
   });
 
   function ago(iso) {
-    const then = Date.parse(iso || '');
+    const then = typeof iso === 'number' ? iso : Date.parse(iso || '');
     if (!then) return '';
     const diff = Date.now() - then;
     if (diff < 60000) return 'just now';
@@ -55,13 +55,22 @@
     <button class="btn icon" title="Close" onclick={() => (ui.inboxOpen = false)}><X size={16} /></button>
   </div>
   <div class="inbox-tabs">
-    <button type="button" class:on={tab === 'you'} onclick={() => (tab = 'you')}>For you {#if ui.incoming.length}<em>{count(ui.incoming.length)}</em>{/if}</button>
+    <button type="button" class:on={tab === 'you'} onclick={() => (tab = 'you')}>For you {#if ui.incoming.length || (ui.missedCalls || []).length}<em>{count(ui.incoming.length + (ui.missedCalls || []).length)}</em>{/if}</button>
     <button type="button" class:on={tab === 'mentions'} onclick={() => (tab = 'mentions')}>Mentions {#if mentionCount}<em>{count(mentionCount)}</em>{/if}</button>
     <button type="button" class:on={tab === 'unreads'} onclick={() => (tab = 'unreads')}>Unreads {#if unreadCount}<em>{count(unreadCount)}</em>{/if}</button>
   </div>
   <button type="button" class="inbox-read" onclick={markAllRead}><Check size={14} /> Mark all read</button>
   <div class="inbox-body">
     {#if tab === 'you'}
+      {#each ui.missedCalls || [] as call (call.id)}
+        <article class="inbox-row">
+          <Avatar user={call.from} size={32} />
+          <div class="inbox-copy">
+            <strong>Missed call from <Name user={call.from} /></strong>
+            <span>{ago(call.at)}</span>
+          </div>
+        </article>
+      {/each}
       {#each ui.incoming as person (person.id)}
         <article class="inbox-row">
           <Avatar user={person} size={32} />
@@ -72,13 +81,14 @@
           <button class="btn icon" title="Accept" onclick={() => friendAct('accept', { userId: person.id })}><Check size={14} /></button>
           <button class="btn icon" title="Ignore" onclick={() => friendAct('decline', { userId: person.id })}><X size={14} /></button>
         </article>
-      {:else}
+      {/each}
+      {#if !(ui.missedCalls || []).length && !ui.incoming.length}
         <div class="empty-note">
           <strong>You're all caught up</strong>
-          <p>Friend requests and other updates show up here.</p>
+          <p>Friend requests and missed calls show up here.</p>
           <button class="btn brand empty-act" type="button" onclick={() => { ui.inboxOpen = false; showFriends('find'); }}>Find friends</button>
         </div>
-      {/each}
+      {/if}
     {:else if tab === 'mentions'}
       {#if mentionCount}
         <p class="inbox-total">{count(mentionCount)} mention{mentionCount === 1 ? '' : 's'}</p>

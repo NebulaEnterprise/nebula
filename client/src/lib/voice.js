@@ -191,26 +191,24 @@ function watchMic() {
   }, 200);
 }
 
-export async function startCall() {
-  let channelId = '';
-  let name = 'Call';
-  if (ui.mode === 'dm' && ui.dmUser && ui.me) {
-    channelId = 'dm:' + [ui.me.id, ui.dmUser.id].sort().join(':');
-    name = ui.dmUser.displayName || ui.dmUser.username || 'Call';
-  } else if (ui.mode === 'group' && ui.group) {
-    channelId = 'group:' + ui.group.id;
-    name = ui.group.name || 'Group call';
-  } else {
-    return;
-  }
+async function dropOutgoing(missed) {
+  const call = ui.outgoingCall;
+  ui.outgoingCall = null;
+  if (!call) return;
+  try {
+    await api('/api/calls/' + encodeURIComponent(call.id) + '/cancel', { method: 'POST', body: { drop: !missed } });
+  } catch (_) {}
+}
+
+async function connectCall(channelId, name) {
   if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
-  await leaveVoice();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true },
       video: false,
     });
   } catch (_) {
+    await dropOutgoing(false);
     toast('Allow the microphone to start the call');
     return;
   }
@@ -221,6 +219,7 @@ export async function startCall() {
     });
   } catch (err) {
     stopLocal();
+    await dropOutgoing(false);
     toast(err.message || 'Could not start the call');
     return;
   }
@@ -235,6 +234,55 @@ export async function startCall() {
   watchMic();
   try { await sync(); } catch (_) {}
   poll = setInterval(() => { sync().catch(() => {}); }, 1000);
+}
+
+export async function startCall(user) {
+  const person = user && user.id ? user : (ui.mode === 'dm' ? ui.dmUser : null);
+  let channelId = '';
+  let name = 'Call';
+  if (person && ui.me && String(person.id) !== String(ui.me.id)) {
+    channelId = 'dm:' + [ui.me.id, person.id].sort().join(':');
+    name = person.displayName || person.username || 'Call';
+  } else if (ui.mode === 'group' && ui.group) {
+    channelId = 'group:' + ui.group.id;
+    name = ui.group.name || 'Group call';
+  } else {
+    return;
+  }
+  await leaveVoice();
+  if (person && ui.me) {
+    try {
+      const data = await api('/api/calls', { method: 'POST', body: { userId: person.id } });
+      ui.outgoingCall = data.call;
+    } catch (err) {
+      toast(err.message || 'Could not start the call');
+      return;
+    }
+  }
+  await connectCall(channelId, name);
+}
+
+export async function answerCall() {
+  const call = ui.incomingCall;
+  if (!call) return;
+  try {
+    await api('/api/calls/' + encodeURIComponent(call.id) + '/answer', { method: 'POST', body: {} });
+  } catch (err) {
+    toast(err.message || 'Could not answer');
+    return;
+  }
+  ui.incomingCall = null;
+  await leaveVoice();
+  await connectCall(call.channelId, call.from?.displayName || call.from?.username || 'Call');
+}
+
+export async function declineCall() {
+  const call = ui.incomingCall;
+  ui.incomingCall = null;
+  if (!call) return;
+  try {
+    await api('/api/calls/' + encodeURIComponent(call.id) + '/decline', { method: 'POST', body: {} });
+  } catch (_) {}
 }
 
 export async function joinVoice(channel) {
@@ -282,6 +330,7 @@ export async function leaveVoice() {
   stopLocal();
   speaking = false;
   ui.voice = null;
+  await dropOutgoing(true);
   if (!voice) return;
   try {
     await api('/api/voice/' + voice.channelId + '/leave', {

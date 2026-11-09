@@ -1,9 +1,14 @@
 <script>
-  import { X, Pin, Image as ImageIcon, Search, UserPlus } from '@lucide/svelte';
+  import { X, Pin, Image as ImageIcon, Search, UserPlus, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
+  import Photo from './Photo.svelte';
+  import MoonBadge from './MoonBadge.svelte';
+  import StaffBadge from './StaffBadge.svelte';
+  import DevBadge from './DevBadge.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, openThread, pinMessage, friendAct, toast, showFriends } from '../state.svelte.js';
+  import { shortBio, visibleBadges } from '../format.js';
+  import { ui, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
   import { api, uploadFile, fileUrl } from '../api.js';
 
   let pins = $state([]);
@@ -64,6 +69,37 @@
       toast(err.message);
     }
   }
+
+  const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
+  const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
+
+  function seenLabel(value) {
+    const t = Number(value);
+    if (!t) return '';
+    const d = new Date(t);
+    if (Number.isNaN(d.getTime())) return '';
+    const clock = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return 'Today at ' + clock;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + clock;
+  }
+
+  function joinedLabel(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  $effect(() => {
+    const id = ui.mode === 'dm' ? ui.dmUser?.id : '';
+    if (!id) return;
+    let stop = false;
+    loadProfile(id).then((fresh) => {
+      if (stop || !fresh || !ui.dmUser || String(ui.dmUser.id) !== String(fresh.id)) return;
+      ui.dmUser = { ...ui.dmUser, ...fresh };
+    }).catch(() => {});
+    return () => { stop = true; };
+  });
 
   $effect(() => {
     ui.dock;
@@ -260,12 +296,39 @@
       {/each}
       <button class="btn danger dock-go" onclick={leaveGroup}>Leave group</button>
     {:else if ui.dmUser}
-      <div class="profile-card">
-        <div class="profile-banner" style="background:{ui.dmUser.bannerColor || ui.dmUser.accentColor || '#7c5cff'} center/cover no-repeat;{ui.dmUser.bannerUrl ? `background-image:url(${fileUrl(ui.dmUser.bannerUrl)})` : ''}"></div>
-        <Avatar user={ui.dmUser} size={72} />
-        <strong>{ui.dmUser.displayName || ui.dmUser.username}</strong>
-        <span>@{ui.dmUser.username}</span>
-        {#if ui.dmUser.aboutMe}<p>{ui.dmUser.aboutMe}</p>{/if}
+      {@const person = ui.dmUser}
+      <div class="dock-profile">
+        <div class="pop-banner" style="background:{person.bannerColor || person.accentColor || 'var(--brand)'}">
+          {#if person.bannerUrl}<Photo url={person.bannerUrl} fill />{/if}
+        </div>
+        <div class="profile-hero">
+          <Avatar user={person} size={72} />
+          <h3><Name user={person} /></h3>
+          <p class="handle">
+            <span>@{person.username}</span>
+            {#if visibleBadges(person).includes('early')}<MoonBadge />{/if}
+            {#if visibleBadges(person).includes('staff')}<StaffBadge rank={person.staff} />{/if}
+            {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
+          </p>
+          {#if shortBio(person.bio)}<p class="profile-status">{shortBio(person.bio)}</p>{/if}
+          {#if person.aboutMe}<p class="profile-status">{person.aboutMe}</p>{/if}
+        </div>
+        <section class="profile-panel">
+          <div class="profile-row"><span><User size={14} /> Display name</span><strong>{person.displayName || person.username}</strong></div>
+          <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{person.username}</strong></div>
+          {#if (person.aliases || []).length}
+            <div class="profile-row"><span><Tags size={14} /> Aliases</span><strong>@{person.aliases.join(', @')}</strong></div>
+          {/if}
+          <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns || '—'}</strong></div>
+        </section>
+        <section class="profile-panel">
+          <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{person.lastSeen ? seenLabel(person.lastSeen) : (person.hideLastSeen ? 'Hidden' : '—')}</strong></div>
+          <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[person.status] || statusColor.offline}"></i>{statusName[person.status] || 'Offline'}</strong></div>
+        </section>
+        <div class="pop-meta">
+          <div><span>Member since</span><strong>{joinedLabel(person.createdAt)}</strong></div>
+          <div><span>User id</span><strong>{person.uid != null ? '#' + person.uid : '—'}</strong></div>
+        </div>
       </div>
     {/if}
   </div>

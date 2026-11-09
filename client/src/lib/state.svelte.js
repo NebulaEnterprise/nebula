@@ -76,6 +76,9 @@ export const ui = $state({
   typers: [],
   voice: null,
   voiceRooms: {},
+  incomingCall: null,
+  outgoingCall: null,
+  missedCalls: [],
   addingAccount: false,
   authGate: false,
   quickOpen: false,
@@ -619,6 +622,11 @@ export async function openDm(user) {
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
   ui.dmUser = user;
+  if (user && user.id) {
+    loadProfile(user.id).then((fresh) => {
+      if (fresh && ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
+    }).catch(() => {});
+  }
   ui.group = null;
   ui.thread = null;
   if (user && user.id) revealChat('dm:' + user.id);
@@ -919,6 +927,8 @@ export function markAllRead() {
   saveSeen(map);
   ui.activity = { servers: {}, channels: {}, dms: {} };
   ui.mentions = [];
+  ui.missedCalls = [];
+  api('/api/calls/read', { method: 'POST', body: {} }).catch(() => {});
   pollActivity();
   loadDms();
 }
@@ -1910,6 +1920,9 @@ async function pollActivity() {
       method: 'POST',
       body: { seen: seenMap(), seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1' },
     });
+    const calls = data.calls || {};
+    ui.incomingCall = (calls.incoming || [])[0] || null;
+    ui.missedCalls = calls.missed || [];
     const firstChannels = localStorage.getItem(accountKey('nebula-channel-baseline')) !== '1';
     if (firstChannels && data.heads) {
       const map = seenMap();
@@ -2177,6 +2190,12 @@ export async function friendAct(kind, body) {
   await loadDms();
 }
 
+export async function loadProfile(id) {
+  if (!id) return null;
+  const data = await api('/api/users/' + encodeURIComponent(id));
+  return data.user || null;
+}
+
 export async function openPopout(user, x, y) {
   const inServer = ui.mode === 'chat' && !!ui.serverId;
   const known = inServer ? ui.members.find((m) => m.id === user.id) : null;
@@ -2186,6 +2205,12 @@ export async function openPopout(user, x, y) {
   ui.popout = { user: seed, x, y };
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
+  loadProfile(user.id).then((fresh) => {
+    if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
+    ui.popout = { user: { ...ui.popout.user, ...fresh, roles: ui.popout.user.roles || [] }, x, y };
+    warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
+    if (ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
+  }).catch(() => {});
   if (!inServer) return;
   try {
     const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));

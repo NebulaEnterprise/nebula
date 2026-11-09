@@ -1,10 +1,11 @@
 <script>
-  import { MessageSquare, X, ChevronLeft, ExternalLink } from '@lucide/svelte';
+  import { MessageSquare, X, ChevronLeft, ExternalLink, Phone } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, openQuick, closeQuick, openDm, loadDms, toast } from '../state.svelte.js';
   import { api } from '../api.js';
   import { formatContent } from '../format.js';
+  import { startCall } from '../voice.js';
 
   let messages = $state([]);
   let person = $state(null);
@@ -17,6 +18,8 @@
   let dragging = $state(false);
   let serial = 0;
   let pos = $state(readPlace());
+  let quickTyping = $state(false);
+  let typeToken = 0;
 
   function readPlace() {
     try {
@@ -150,6 +153,27 @@
   });
 
   $effect(() => {
+    const id = ui.quickOpen && ui.quickUser?.id;
+    if (!id) {
+      quickTyping = false;
+      return;
+    }
+    let stop = false;
+    const look = async () => {
+      try {
+        const data = await api('/api/typing?dmUserId=' + encodeURIComponent(id));
+        if (!stop) quickTyping = (data.typers || []).some((row) => String(row.id) === String(id));
+      } catch (_) {}
+    };
+    look();
+    const timer = setInterval(look, 400);
+    return () => {
+      stop = true;
+      clearInterval(timer);
+    };
+  });
+
+  $effect(() => {
     messages.length;
     messages[messages.length - 1]?.id;
     if (!follow || !log) return;
@@ -182,6 +206,19 @@
     }
   }
 
+  $effect(() => {
+    const id = ui.quickOpen && ui.quickUser?.id;
+    if (!id || !draft.trim()) return;
+    const token = ++typeToken;
+    const ping = () => api('/api/typing', { method: 'POST', body: { dmUserId: id, token } }).catch(() => {});
+    ping();
+    const timer = setInterval(ping, 180);
+    return () => {
+      clearInterval(timer);
+      api('/api/typing', { method: 'POST', body: { dmUserId: id, token, stop: true } }).catch(() => {});
+    };
+  });
+
   async function openFull() {
     const user = ui.quickUser;
     if (!user) return;
@@ -203,7 +240,8 @@
         {#if ui.quickUser}
           <button class="icon" title="All messages" onclick={() => (ui.quickUser = null)}><ChevronLeft size={16} /></button>
           <Avatar user={who} size={28} />
-          <strong>{who.displayName || who.username}</strong>
+          <strong>{quickTyping ? 'typing' : (who.displayName || who.username)}</strong>
+          <button class="icon" title="Call" onclick={() => startCall(who)}><Phone size={15} /></button>
           <button class="icon" title="Open conversation" onclick={openFull}><ExternalLink size={15} /></button>
         {:else}
           <MessageSquare size={16} />

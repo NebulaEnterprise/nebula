@@ -665,10 +665,33 @@
     pinBottom();
   });
 
+  function dayStart(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  }
+
+  function dayKey(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+  }
+
+  function dayLabel(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const diff = dayStart(new Date()) - dayStart(d);
+    if (diff === 0) return 'Today';
+    if (diff === 86400000) return 'Yesterday';
+    return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
   function time(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const clock = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const diff = dayStart(new Date()) - dayStart(d);
+    if (diff === 0) return clock;
+    if (diff === 86400000) return 'Yesterday at ' + clock;
+    return d.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' }) + ', ' + clock;
   }
 </script>
 
@@ -759,7 +782,10 @@
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
-  {#each ui.messages as msg (msg.id)}
+  {#each ui.messages as msg, index (msg.id)}
+    {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
+      <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
+    {/if}
     <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">

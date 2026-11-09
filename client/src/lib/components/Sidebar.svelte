@@ -22,7 +22,7 @@
   const requestCount = $derived((ui.incoming || []).length);
   const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
-  const inboxBadge = $derived(mentionCount + (ui.incoming || []).length);
+  const inboxBadge = $derived(mentionCount + (ui.incoming || []).length + (ui.missedCalls || []).length);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   function countLabel(n) { return n > 99 ? '99+' : String(n); }
 

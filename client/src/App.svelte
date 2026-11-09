@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { ui, boot, askSiteAccess, copyText, staffReport } from './lib/state.svelte.js';
+  import { answerCall, declineCall } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
@@ -77,6 +78,13 @@
     {/if}
   </div>
   <Quick />
+  {#if ui.incomingCall}
+    <div class="call-alert" role="dialog">
+      <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'} is calling</strong>
+      <button type="button" class="accept" onclick={answerCall}>Accept</button>
+      <button type="button" class="decline" onclick={declineCall}>Decline</button>
+    </div>
+  {/if}
   {#if ui.switcher}<Switcher />{/if}
   {#if ui.popout}<Popout />{/if}
   {#if ui.userSettings}<UserSettings />{/if}

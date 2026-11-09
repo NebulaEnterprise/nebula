@@ -1074,6 +1074,7 @@ let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
 const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
+const CALLS_FILE = path.join(DATA_DIR, 'calls.json');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
 let groups = load(GROUPS_FILE, {});
 let threads = load(THREADS_FILE, {});
@@ -3455,6 +3456,64 @@ app.get('/api/media', auth, (req, res) => {
   res.json({ ok: true, packs });
 });
 
+let callLog = load(CALLS_FILE, []);
+
+function callPerson(id) {
+  const u = users[id];
+  if (!u) return { id, username: 'Someone', displayName: 'Someone' };
+  return {
+    id: u.id,
+    username: u.username,
+    displayName: u.displayName || u.username,
+    avatarUrl: publishedMedia(u, 'avatar'),
+    avatarColor: u.avatarColor || '#7c5cff',
+  };
+}
+
+function callView(row) {
+  return {
+    id: row.id,
+    channelId: row.channelId,
+    from: callPerson(row.from),
+    to: callPerson(row.to),
+    status: row.status,
+    at: row.at,
+  };
+}
+
+function saveCalls() {
+  save(CALLS_FILE, callLog.slice(-200));
+}
+
+function expireCalls() {
+  const now = Date.now();
+  let changed = false;
+  for (const row of callLog) {
+    if (row.status === 'ringing' && now - row.at > 45000) {
+      row.status = 'missed';
+      row.endedAt = now;
+      changed = true;
+    }
+  }
+  if (changed) saveCalls();
+}
+
+function callsFor(userId) {
+  expireCalls();
+  const id = String(userId);
+  return {
+    incoming: callLog.filter((row) => row.status === 'ringing' && String(row.to) === id).slice(-1).map(callView),
+    missed: callLog.filter((row) => row.status === 'missed' && String(row.to) === id && !row.dismissed).slice(-20).reverse().map(callView),
+  };
+}
+
+function finishCall(row, missed) {
+  if (!row || row.status === 'ended' || row.status === 'missed' || row.status === 'declined') return;
+  row.status = row.status === 'ringing' && missed ? 'missed' : 'ended';
+  row.endedAt = Date.now();
+  saveCalls();
+}
+
 app.post('/api/activity', auth, (req, res) => {
   ensureGuilds();
   const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
@@ -3523,7 +3582,62 @@ app.post('/api/activity', auth, (req, res) => {
     }
   }
   inbox.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
-  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers, inbox: inbox.slice(0, 30) });
+  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers, inbox: inbox.slice(0, 30), calls: callsFor(req.user.id) });
+});
+
+app.post('/api/calls', auth, (req, res) => {
+  const other = users[String(req.body && req.body.userId || '')];
+  if (!other) return res.status(404).json({ error: 'User not found' });
+  if (String(other.id) === String(req.user.id)) return res.status(400).json({ error: 'You cannot call yourself' });
+  if (isBlocked(req.user.id, other.id)) return res.status(403).json({ error: 'You cannot call this person' });
+  expireCalls();
+  for (const row of callLog) {
+    if (row.status === 'ringing' && String(row.from) === String(req.user.id)) finishCall(row, true);
+  }
+  const channelId = 'dm:' + [String(req.user.id), String(other.id)].sort().join(':');
+  const row = { id: uuidv4(), channelId, from: String(req.user.id), to: String(other.id), status: 'ringing', at: Date.now() };
+  callLog.push(row);
+  saveCalls();
+  res.json({ ok: true, call: callView(row) });
+});
+
+app.post('/api/calls/:id/answer', auth, (req, res) => {
+  const row = callLog.find((item) => item.id === req.params.id);
+  if (!row || String(row.to) !== String(req.user.id)) return res.status(404).json({ error: 'Call not found' });
+  if (row.status !== 'ringing') return res.status(409).json({ error: 'That call already ended' });
+  row.status = 'active';
+  saveCalls();
+  res.json({ ok: true, call: callView(row) });
+});
+
+app.post('/api/calls/:id/decline', auth, (req, res) => {
+  const row = callLog.find((item) => item.id === req.params.id);
+  if (!row || String(row.to) !== String(req.user.id)) return res.status(404).json({ error: 'Call not found' });
+  if (row.status === 'ringing') {
+    row.status = 'declined';
+    row.endedAt = Date.now();
+    saveCalls();
+  }
+  res.json({ ok: true });
+});
+
+app.post('/api/calls/:id/cancel', auth, (req, res) => {
+  const row = callLog.find((item) => item.id === req.params.id);
+  if (!row || String(row.from) !== String(req.user.id)) return res.status(404).json({ error: 'Call not found' });
+  finishCall(row, !(req.body && req.body.drop));
+  res.json({ ok: true });
+});
+
+app.post('/api/calls/read', auth, (req, res) => {
+  let changed = false;
+  for (const row of callLog) {
+    if (String(row.to) === String(req.user.id) && row.status === 'missed' && !row.dismissed) {
+      row.dismissed = true;
+      changed = true;
+    }
+  }
+  if (changed) saveCalls();
+  res.json({ ok: true });
 });
 
 const gifCache = new Map();
@@ -4671,6 +4785,18 @@ app.get('/api/users/search', auth, (req, res) => {
     if (rows.length >= 20) break;
   }
   res.json({ ok: true, users: rows });
+});
+
+app.get('/api/users/:id', auth, (req, res) => {
+  const user = users[req.params.id];
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const pub = publicUser(user);
+  delete pub.email;
+  delete pub.mfa;
+  delete pub.passkeyCount;
+  delete pub.sessionCount;
+  delete pub.canAdmin;
+  res.json({ ok: true, user: pub });
 });
 
 app.get('/api/groups', auth, (req, res) => {

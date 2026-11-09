@@ -564,6 +564,24 @@ img { max-width: 100%; }
 .msg-id { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .msg-head strong { min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-head time { color: var(--faint); font-size: 12px; flex-shrink: 0; }
+.day-line {
+  display: flex; align-items: center; gap: 12px; margin: 18px 16px 8px;
+  color: var(--faint); font-size: 12px; font-weight: 700;
+}
+.day-line::before, .day-line::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.call-alert {
+  position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 80;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: #1e1f22; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+}
+.call-alert button { padding: 6px 12px; border-radius: 8px; font-weight: 750; }
+.call-alert .accept { background: #3ecf8e; color: #062217; }
+.call-alert .decline { background: #f23f43; color: #fff; }
+.dock-profile { display: flex; flex-direction: column; gap: 8px; }
+.dock-profile .pop-banner { height: 88px; border-radius: 12px; overflow: hidden; position: relative; }
+.dock-profile .profile-hero { margin-top: -28px; align-items: flex-start; text-align: left; }
+.dock-profile .profile-hero h3 { margin: 8px 0 0; font-size: 18px; }
+.dock-profile .handle, .dock-profile .profile-status { margin: 2px 0 0; }
 .msg-content { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
 .msg-content .emoji { width: 22px; height: 22px; vertical-align: middle; }
 .msg-content .sticker { width: 148px; display: block; border-radius: 12px; }
