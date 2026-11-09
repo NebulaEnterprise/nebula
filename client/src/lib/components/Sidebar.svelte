@@ -11,7 +11,6 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
-  import Inbox from './Inbox.svelte';
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
@@ -438,6 +437,5 @@
       <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={15} /></button>
       <button class="btn icon" title="Log out" onclick={logout}><LogOut size={15} /></button>
     </div>
-    {#if ui.inboxOpen}<Inbox />{/if}
   </div>
 </aside>

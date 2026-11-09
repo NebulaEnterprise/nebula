@@ -1,12 +1,16 @@
 <script>
-  import { Inbox, X, Check } from '@lucide/svelte';
+  import { Inbox, X, Check, ChevronDown } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import { ui, markAllRead, openMention, openServer, pickChannel, friendAct, showFriends } from '../state.svelte.js';
 
   let tab = $state('you');
-
+  let dragging = $state(false);
+  let drag = $state(0);
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+  const badge = $derived(mentionCount + (ui.incoming || []).length);
+  const panel = $derived(Math.max(0, Math.min(480, (ui.inboxOpen ? 420 : 0) + drag)));
+
   const unreadCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0) + Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
 
   const unreadRows = $derived.by(() => {
@@ -41,6 +45,29 @@
     return n > 99 ? '99+' : String(n);
   }
 
+  function pointerDown(event) {
+    if (event.button != null && event.button !== 0) return;
+    dragging = true;
+    drag = 0;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.currentTarget.dataset.y = String(event.clientY);
+  }
+
+  function pointerMove(event) {
+    if (!dragging) return;
+    drag = event.clientY - Number(event.currentTarget.dataset.y || event.clientY);
+  }
+
+  function pointerUp(event) {
+    if (!dragging) return;
+    const moved = event.clientY - Number(event.currentTarget.dataset.y || event.clientY);
+    dragging = false;
+    drag = 0;
+    if (moved > 48) ui.inboxOpen = true;
+    else if (moved < -48) ui.inboxOpen = false;
+    else if (Math.abs(moved) < 8) ui.inboxOpen = !ui.inboxOpen;
+  }
+
   async function openUnread(row) {
     ui.inboxOpen = false;
     if (row.serverId && row.serverId !== ui.serverId) await openServer(row.serverId);
@@ -49,7 +76,8 @@
   }
 </script>
 
-<div class="inbox-pop" onclick={(e) => e.stopPropagation()}>
+<div class="inbox-shelf inbox-pop" class:open={ui.inboxOpen || panel > 8} class:dragging style="--panel:{panel}px">
+  <div class="inbox-panel">
   <div class="inbox-h">
     <strong><Inbox size={16} /> Inbox</strong>
     <button class="btn icon" title="Close" onclick={() => (ui.inboxOpen = false)}><X size={16} /></button>
@@ -116,4 +144,20 @@
       {/each}
     {/if}
   </div>
+  </div>
+  <button
+    type="button"
+    class="inbox-bar"
+    aria-expanded={ui.inboxOpen}
+    title={ui.inboxOpen ? 'Slide up to close inbox' : 'Slide down to open inbox'}
+    onpointerdown={pointerDown}
+    onpointermove={pointerMove}
+    onpointerup={pointerUp}
+    onpointercancel={pointerUp}
+  >
+    <i></i>
+    <span>Inbox</span>
+    {#if badge}<em>{count(badge)}</em>{/if}
+    <ChevronDown size={14} />
+  </button>
 </div>
