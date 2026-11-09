@@ -1,6 +1,7 @@
 <script>
-  import { X, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
+  import { X, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
+  import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
   import Photo from './Photo.svelte';
@@ -22,7 +23,78 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account' };
+  let showEmail = $state(false);
+  let accountDialog = $state('');
+  let accountBusy = $state(false);
+  let showPw = $state(false);
+  let draftUser = $state('');
+  let draftEmail = $state('');
+  let emailPassword = $state('');
+  let currentPassword = $state('');
+  let nextPassword = $state('');
+  let confirmPassword = $state('');
+
+  function maskEmail(email) {
+    const [name, host] = String(email || '').split('@');
+    if (!host) return 'Add an email';
+    return `${'•'.repeat(Math.min(8, Math.max(4, name.length)))}@${host}`;
+  }
+
+  function openAccount(kind) {
+    accountDialog = kind;
+    draftUser = ui.me?.username || '';
+    draftEmail = ui.me?.email || '';
+    emailPassword = '';
+    currentPassword = '';
+    nextPassword = '';
+    confirmPassword = '';
+    showPw = false;
+  }
+
+  async function saveUsername() {
+    const username = draftUser.trim();
+    if (!username) return toast('Username required');
+    accountBusy = true;
+    try {
+      await saveMe({ username });
+      form.username = ui.me?.username || username;
+      accountDialog = '';
+      toast('Username updated');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      accountBusy = false;
+    }
+  }
+
+  async function saveEmail() {
+    accountBusy = true;
+    try {
+      const data = await api('/api/me/email', { method: 'POST', body: { email: draftEmail, password: emailPassword } });
+      ui.me = { ...ui.me, ...data.user };
+      accountDialog = '';
+      showEmail = true;
+      toast('Email updated');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      accountBusy = false;
+    }
+  }
+
+  async function savePassword() {
+    accountBusy = true;
+    try {
+      await api('/api/me/password', { method: 'POST', body: { current: currentPassword, next: nextPassword, confirm: confirmPassword } });
+      accountDialog = '';
+      toast('Password updated');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      accountBusy = false;
+    }
+  }
 
   async function toggleLastSeen() {
     const hideLastSeen = !ui.me?.hideLastSeen;
@@ -237,19 +309,54 @@
 <div class="overlay" role="presentation" onclick={() => (ui.userSettings = false)}>
   <div class="settings" role="dialog" onclick={(e) => e.stopPropagation()}>
     <aside class="set-nav">
+      <div class="set-user">
+        <Avatar user={ui.me} size={36} />
+        <div>
+          <strong>{ui.me?.displayName || ui.me?.username}</strong>
+          <span>@{ui.me?.username}</span>
+        </div>
+      </div>
       <div class="group">User settings</div>
-      <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}>Profile</button>
-      <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}>Appearance</button>
-      <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}>Notifications</button>
-      <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}>Privacy</button>
+      <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
+      <button class:on={page === 'look'} onclick={() => (ui.userPage = 'look')}><Palette size={16} /> Appearance</button>
+      <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
+      <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
       <div class="group">Account</div>
-      <button class="danger" onclick={logout}>Log out</button>
+      <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
+      <button class="danger set-logout" onclick={logout}>Log out</button>
     </aside>
     <div class="set-main">
-      <div class="row" style="border:0;padding-top:0">
-        <h2>{titles[page] || 'Settings'}</h2>
+      <div class="set-head">
+        <div>
+          <h2>{titles[page] || 'Settings'}</h2>
+        </div>
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
+      {#if page === 'account'}
+        <section class="acct-section">
+          <h3>Account Info</h3>
+          <div class="acct-row">
+            <span>Username</span>
+            <strong>{ui.me?.username}</strong>
+            <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
+          </div>
+          <div class="acct-row">
+            <span>Email</span>
+            <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
+            <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
+            <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
+          </div>
+        </section>
+        <div class="acct-rule"></div>
+        <section class="acct-section">
+          <h3>Password & Security</h3>
+          <div class="acct-row">
+            <span>Password</span>
+            <strong>••••••••</strong>
+            <button type="button" class="btn sm" onclick={() => openAccount('password')}>Edit</button>
+          </div>
+        </section>
+      {:else}
       <div class="grid-2">
         <div>
           {#if page === 'profile'}
@@ -492,6 +599,54 @@
           <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
         {/if}
       </div>
+      {/if}
     </div>
   </div>
+  {#if accountDialog}
+    <div class="poll-overlay" role="presentation" onclick={() => (accountDialog = '')}>
+      <div class="poll-sheet acct-dialog" role="dialog" onclick={(e) => e.stopPropagation()}>
+        <div class="row">
+          <h3>{accountDialog === 'username' ? 'Update your username' : accountDialog === 'email' ? 'Update your email' : 'Update your password'}</h3>
+          <button type="button" class="btn icon" onclick={() => (accountDialog = '')}><X size={16} /></button>
+        </div>
+        {#if accountDialog === 'username'}
+          <p class="hint">This is the name people use to find you.</p>
+          <div class="field"><label>Username</label><input bind:value={draftUser} maxlength="32" /></div>
+          <div class="modify-actions">
+            <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
+            <button type="button" class="btn brand" disabled={accountBusy} onclick={saveUsername}>Done</button>
+          </div>
+        {:else if accountDialog === 'email'}
+          <p class="hint">Enter your password to confirm this change.</p>
+          <div class="field"><label>Email</label><input bind:value={draftEmail} maxlength="120" /></div>
+          <div class="field"><label>Password</label><input type={showPw ? 'text' : 'password'} bind:value={emailPassword} /></div>
+          <div class="modify-actions">
+            <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
+            <button type="button" class="btn brand" disabled={accountBusy} onclick={saveEmail}>Done</button>
+          </div>
+        {:else}
+          <p class="hint">Enter your current password and a new password.</p>
+          <div class="field">
+            <label>Current password</label>
+            <input type={showPw ? 'text' : 'password'} bind:value={currentPassword} />
+          </div>
+          <div class="field">
+            <label>New password</label>
+            <input type={showPw ? 'text' : 'password'} bind:value={nextPassword} />
+          </div>
+          <div class="field">
+            <label>Confirm new password</label>
+            <input type={showPw ? 'text' : 'password'} bind:value={confirmPassword} />
+          </div>
+          <button type="button" class="btn ghost sm" onclick={() => (showPw = !showPw)}>
+            {#if showPw}<EyeOff size={14} /> Hide{:else}<Eye size={14} /> Show{/if}
+          </button>
+          <div class="modify-actions">
+            <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
+            <button type="button" class="btn brand" disabled={accountBusy} onclick={savePassword}>Done</button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>

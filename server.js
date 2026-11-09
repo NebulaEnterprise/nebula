@@ -2159,6 +2159,35 @@ app.patch('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: publicUser(req.user) });
 });
 
+app.post('/api/me/password', auth, (req, res) => {
+  const current = String(req.body?.current || '');
+  const next = String(req.body?.next || '');
+  const confirm = String(req.body?.confirm || '');
+  if (req.user.passwordHash !== hashPassword(current)) {
+    return res.status(400).json({ error: 'Current password is wrong' });
+  }
+  if (next.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  if (next !== confirm) return res.status(400).json({ error: 'Passwords do not match' });
+  req.user.passwordHash = hashPassword(next);
+  save(USERS_FILE, users);
+  res.json({ ok: true });
+});
+
+app.post('/api/me/email', auth, (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (req.user.passwordHash !== hashPassword(password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  if (!email.includes('@') || email.length > 120) return res.status(400).json({ error: 'Invalid email' });
+  if (Object.values(users).some((u) => u.id !== req.user.id && u.email === email)) {
+    return res.status(409).json({ error: 'Email already registered' });
+  }
+  req.user.email = email;
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
 app.get('/api/members', auth, (req, res) => {
   ensureGuilds();
   if (!req.query.serverId) {
