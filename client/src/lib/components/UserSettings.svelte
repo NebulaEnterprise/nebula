@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Award, Type } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -431,8 +431,12 @@
           <Security bind:open={securityOpen} />
         </section>
       {:else}
-      <div class="grid-2" class:look-grid={page === 'look'}>
-        <div>
+      <div class="grid-2" class:folio={page === 'look'}>
+        <div class:folio-pane={page === 'look'}>
+          {#if page === 'look'}
+            <header class="folio-head"><span>Editor</span><button type="button" class="btn brand sm" onclick={save}>Save</button></header>
+          {/if}
+          <div class:folio-body={page === 'look'}>
           {#if page === 'profile'}
             <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
@@ -453,43 +457,32 @@
           {:else if page === 'look'}
             {#if !lookOpen}
               <div class="look-home">
-              <section class="acct-section">
-                <h3>Profile</h3>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'aliases')}><span>Aliases</span><strong>{aliasLabel}</strong></button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'bio')}><span>Bio</span><strong>{bioLabel}</strong></button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'about')}><span>About me</span><strong>{aboutLabel}</strong></button>
+              <section class="folio-card">
+                <header><i class="folio-ico"><User size={15} /></i><strong>Profile</strong><b class="folio-bar"></b></header>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'aliases')}><i class="folio-mini"><Tags size={15} /></i><span><strong>Aliases</strong><em>{aliasLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'bio')}><i class="folio-mini"><Smile size={15} /></i><span><strong>Bio</strong><em>{bioLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'about')}><i class="folio-mini"><User size={15} /></i><span><strong>About me</strong><em>{aboutLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
               </section>
-              <div class="acct-rule"></div>
-              <section class="acct-section">
-                <h3>Pictures</h3>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'avatar')}><span>Avatar</span><strong>{form.avatarUrl ? 'Photo' : 'Color'}</strong></button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'banner')}><span>Banner</span><strong>{form.bannerUrl ? 'Set' : 'None'}</strong></button>
+              <section class="folio-card">
+                <header><i class="folio-ico"><Image size={15} /></i><strong>Pictures</strong><b class="folio-bar"></b></header>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'avatar')}><i class="folio-mini"><Image size={15} /></i><span><strong>Avatar</strong><em>{form.avatarUrl ? 'Photo' : 'Color'}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'banner')}><i class="folio-mini"><Image size={15} /></i><span><strong>Banner</strong><em>{form.bannerUrl ? 'Set' : 'None'}</em></span><ChevronRight size={16} class="folio-chev" /></button>
               </section>
-              <div class="acct-rule"></div>
-              <section class="acct-section">
-                <h3>Theme</h3>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'color')}>
-                  <span>Profile color</span>
-                  <strong><i class="look-dot" style="background:{form.profileColors[0]}"></i>{styleName}</strong>
-                </button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'name')}>
-                  <span>Display name</span>
-                  <strong>{fontName} · {effectName}</strong>
-                </button>
+              <section class="folio-card">
+                <header><i class="folio-ico"><Palette size={15} /></i><strong>Theme</strong><b class="folio-bar"></b></header>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'color')}><i class="folio-mini"><Circle size={15} /></i><span><strong>Profile color</strong><em>{styleName}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'name')}><i class="folio-mini"><Type size={15} /></i><span><strong>Display name</strong><em>{fontName} · {effectName}</em></span><ChevronRight size={16} class="folio-chev" /></button>
               </section>
-              <div class="acct-rule"></div>
-              <section class="acct-section">
-                <h3>Song</h3>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'song')}><span>Profile song</span><strong>{songLabel}</strong></button>
+              <section class="folio-card">
+                <header><i class="folio-ico"><Music size={15} /></i><strong>Song</strong><b class="folio-bar"></b></header>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'song')}><i class="folio-mini"><Music size={15} /></i><span><strong>Profile song</strong><em>{songLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
               </section>
-              <div class="acct-rule"></div>
-              <section class="acct-section">
-                <h3>Badges</h3>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'badges')}><span>On your profile</span><strong>{badgeLabel}</strong></button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'showcase')}><span>Next to your name</span><strong>{showcaseLabel}</strong></button>
-                <button type="button" class="acct-link" onclick={() => (lookOpen = 'role')}><span>Server tag</span><strong>{roleLabel}</strong></button>
+              <section class="folio-card">
+                <header><i class="folio-ico"><Award size={15} /></i><strong>Badges</strong><b class="folio-bar"></b></header>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'badges')}><i class="folio-mini"><Award size={15} /></i><span><strong>On your profile</strong><em>{badgeLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'showcase')}><i class="folio-mini"><Award size={15} /></i><span><strong>Next to your name</strong><em>{showcaseLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
+                <button type="button" class="folio-row" onclick={() => (lookOpen = 'role')}><i class="folio-mini"><Tags size={15} /></i><span><strong>Server tag</strong><em>{roleLabel}</em></span><ChevronRight size={16} class="folio-chev" /></button>
               </section>
-              <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
               </div>
             {:else}
               <button type="button" class="crumb" onclick={() => (lookOpen = '')}><ChevronLeft size={16} /> Appearance</button>
@@ -666,16 +659,18 @@
                   {/if}
                 </section>
               {/if}
-              <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
             {/if}
           {/if}
           {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
+          </div>
         </div>
-        <div class="preview-sticky">
-          <p class="label">Preview</p>
+        <div class="preview-sticky" class:folio-pane={page === 'look'}>
+          {#if page === 'look'}<header class="folio-head"><span>Live Preview</span></header>{/if}
+          <div class:folio-stage={page === 'look'}>
+          {#if page !== 'look'}<p class="label">Preview</p>{/if}
           <div class="preview-card profile-card skin-{form.profileStyle || 'gradient'}" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
             <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
               {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
@@ -734,6 +729,7 @@
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>

@@ -1004,6 +1004,55 @@ img { max-width: 100%; }
 .btn.brand.sec-btn, .save-look { width: auto; min-width: 132px; }
 .save-look { margin-top: 18px; }
 .look-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); gap: 28px; }
+.folio { grid-template-columns: minmax(0, 1.05fr) minmax(280px, 400px); gap: 16px; align-items: start; }
+.folio-pane {
+  background: #14151b; border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
+  overflow: hidden; min-width: 0;
+}
+.folio-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: 48px; padding: 0 14px; background: #1d1e26;
+  border-bottom: 1px solid rgba(255,255,255,0.06); font-weight: 700;
+}
+.folio-head .btn { width: auto; height: 30px; padding: 0 14px; border-radius: 8px; }
+.folio-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.folio-stage { padding: 16px; background: #101117; }
+.folio-card {
+  border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;
+  background: #17181f; padding: 12px;
+}
+.folio-card > header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.folio-card > header strong { font-size: 15px; }
+.folio-ico, .folio-mini {
+  display: grid; place-items: center; flex-shrink: 0; color: #fff;
+}
+.folio-ico { width: 28px; height: 28px; border-radius: 8px; background: #6d4dff; }
+.folio-bar {
+  margin-left: auto; width: 84px; height: 4px; border-radius: 999px; background: #2c2d36; position: relative;
+}
+.folio-bar::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 58%;
+  border-radius: inherit; background: #8b6cff;
+}
+.folio-row {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  margin-top: 8px; padding: 10px; border-radius: 12px; text-align: left; color: #fff;
+  background: #1e1f28; border: 1px solid rgba(255,255,255,0.05);
+}
+.folio-row:hover { background: #262833; }
+.folio-mini { width: 34px; height: 34px; border-radius: 10px; background: #3a2a6b; color: #d6ccff; }
+.folio-row > span { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.folio-row strong { font-size: 14px; font-weight: 700; }
+.folio-row em {
+  font-style: normal; color: var(--faint); font-size: 12px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.folio-chev { color: #8b8d98; flex-shrink: 0; }
+.folio-body .look-editor {
+  border: 1px solid rgba(255,255,255,0.08); border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px; background: #17181f; padding: 16px;
+}
+.folio-body .crumb { margin: 0; }
 .preview-sticky { position: sticky; top: 0; align-self: start; }
 .look-card { padding: 18px 0 8px; margin: 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .look-editor { border-bottom: 0; padding-top: 6px; }
@@ -1388,7 +1437,7 @@ img { max-width: 100%; }
   .quick-dock { left: 12px; right: 12px; width: auto; height: min(70vh, 540px); }
   .side { width: 228px; }
   .account-pop { left: 44px; width: min(252px, calc(100vw - 60px)); }
-  .grid-2, .look-grid { grid-template-columns: 1fr; }
+  .grid-2, .look-grid, .folio { grid-template-columns: 1fr; }
   .preview-sticky { position: static; }
   .effect-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings { flex-direction: column; }
