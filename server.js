@@ -826,7 +826,11 @@ function unpackImages() {
 function publishedMedia(u, slot) {
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
-  const stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
+  let stored = String((u && u[pathKey]) || '').replace(/^\/+/, '');
+  if (slot === 'banner') {
+    const original = stored.replace(/\.(?:s)?(?:32|128|512)\.gif$/i, '.gif');
+    if (original !== stored && fs.existsSync(path.join(FILES_DIR, original))) stored = original;
+  }
   if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(stored)) return '/files/' + stored;
   const url = String((u && u[urlKey]) || '');
   if (url.startsWith('/files/') || url.startsWith('/uploads/')) return url;
@@ -841,13 +845,7 @@ function saveProfileFile(user, slot, buf, ext) {
   const name = 'r2-' + Date.now().toString(36) + '-' + crypto.randomBytes(4).toString('hex') + ext;
   const full = path.join(folder, name);
   fs.writeFileSync(full, buf);
-  let storedName = name;
-  if (slot === 'banner' && ext === '.gif') {
-    try { writeBannerSizes(full); } catch (_) {}
-    const sized = name.replace(/\.gif$/i, '.512.gif');
-    if (fs.existsSync(path.join(folder, sized))) storedName = sized;
-  }
-  const rel = bucket + '/' + user.id + '/' + storedName;
+  const rel = bucket + '/' + user.id + '/' + name;
   const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
   const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
   user[pathKey] = rel;
@@ -2002,15 +2000,15 @@ function allowMedia(req, res, next) {
 
 app.use('/files', allowMedia, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
-  const match = req.path.match(/^\/files\/banners\/([A-Za-z0-9_-]+)\/(.+)\.(32|128|512)\.gif$/);
-  if (!match) return next();
-  const dir = path.join(FILES_DIR, 'banners', match[1]);
-  const sized = path.join(dir, match[2] + '.' + match[3] + '.gif');
-  const original = path.join(dir, match[2] + '.gif');
-  if (!fs.existsSync(sized) && fs.existsSync(original)) {
-    try { writeBannerSizes(original); } catch (_) {}
-  }
-  const file = fs.existsSync(sized) ? sized : (fs.existsSync(original) ? original : '');
+  const pathname = decodeURIComponent(String(req.path || '').split('?')[0]);
+  const parts = pathname.split('/');
+  const base = parts[parts.length - 1] || '';
+  const sized = base.match(/^(.+?)\.(?:s)?(?:32|128|512)\.gif$/i);
+  if (parts[1] !== 'banners' || !sized || !/^[A-Za-z0-9_-]+$/.test(parts[2] || '')) return next();
+  const dir = path.join(FILES_DIR, 'banners', parts[2]);
+  const original = path.join(dir, sized[1] + '.gif');
+  const requested = path.join(dir, base);
+  const file = fs.existsSync(original) ? original : (fs.existsSync(requested) ? requested : '');
   if (!file) return next();
   res.type('image/gif');
   res.sendFile(file);
