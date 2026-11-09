@@ -1661,12 +1661,9 @@ function cleanAutoDelete(value) {
 
 function roomAutoDelete(roomId) {
   const id = String(roomId || '');
-  if (id.startsWith('dm:')) {
-    const thread = dmThreads[id.slice(3)];
-    return Number(thread && thread.autoDeleteMs) || 0;
-  }
-  const found = findChannel(id, '');
-  return Number(found && found.channel && found.channel.autoDeleteMs) || 0;
+  if (!id.startsWith('dm:')) return 0;
+  const thread = dmThreads[id.slice(3)];
+  return Number(thread && thread.autoDeleteMs) || 0;
 }
 
 function stampExpiry(msg, roomId) {
@@ -1699,6 +1696,7 @@ function releaseMessageFiles(msg) {
 }
 
 function dropExpired(roomId) {
+  if (!String(roomId || '').startsWith('dm:')) return false;
   const list = messages[roomId];
   if (!Array.isArray(list) || !list.length) return false;
   const now = Date.now();
@@ -3863,7 +3861,7 @@ app.get('/api/channels/:id/messages', auth, (req, res) => {
     return res.status(403).json({ error: 'You cannot view this channel' });
   }
   const list = roomMessages(found.channel.id);
-  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), autoDeleteMs: roomAutoDelete(found.channel.id) });
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)) });
 });
 
 app.post('/api/channels/:id/messages', auth, (req, res) => {
@@ -3915,7 +3913,6 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     reply: readReply(req.body, found.channel.id),
     createdAt: new Date().toISOString(),
   };
-  stampExpiry(msg, found.channel.id);
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
@@ -4540,14 +4537,7 @@ app.post('/api/auto-delete', auth, (req, res) => {
     wakePulse('dm:' + key);
     return res.json({ ok: true, ms, roomId: 'dm:' + key });
   }
-  ensureGuilds();
-  const found = findChannel(String(req.body && req.body.channelId || ''), String(req.body && req.body.serverId || ''));
-  if (!found || found.channel.type === 'voice') return res.status(404).json({ error: 'Channel not found' });
-  if (!can(found.guild, req.user, PERM.MANAGE_CHANNELS)) return res.status(403).json({ error: 'You cannot change auto-delete for this channel' });
-  found.channel.autoDeleteMs = ms;
-  saveGuilds();
-  wakePulse(found.channel.id);
-  res.json({ ok: true, ms, roomId: found.channel.id });
+  return res.status(400).json({ error: 'Auto-delete is only for direct messages' });
 });
 
 app.get('/api/forward-targets', auth, (req, res) => {

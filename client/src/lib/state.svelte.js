@@ -569,20 +569,13 @@ export function autoDeleteLabel(ms) {
 }
 
 export async function setAutoDelete(ms) {
-  const body = { ms };
-  if (ui.mode === 'dm' && ui.dmUser) body.userId = ui.dmUser.id;
-  else if (ui.mode === 'chat' && ui.channelId) {
-    body.channelId = ui.channelId;
-    body.serverId = ui.serverId;
-  } else {
-    toast('Open a channel or a direct message first');
+  if (!(ui.mode === 'dm' && ui.dmUser)) {
+    toast('Open a direct message first');
     return;
   }
-  const data = await api('/api/auto-delete', { method: 'POST', body });
-  const next = Number(data.ms) || 0;
-  if (String(data.roomId || '').startsWith('dm:')) ui.dmAutoDelete = next;
-  else ui.channels = ui.channels.map((ch) => ch.id === data.roomId ? { ...ch, autoDeleteMs: next } : ch);
-  toast(next ? 'New messages disappear after ' + autoDeleteLabel(next) : 'Auto-delete is off');
+  const data = await api('/api/auto-delete', { method: 'POST', body: { ms, userId: ui.dmUser.id } });
+  ui.dmAutoDelete = Number(data.ms) || 0;
+  toast(ui.dmAutoDelete ? 'New messages disappear after ' + autoDeleteLabel(ui.dmAutoDelete) : 'Auto-delete is off');
 }
 
 export async function openDm(user) {
@@ -1039,11 +1032,7 @@ export async function loadMessages(quiet, live) {
     const logKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : (ui.channelId ? 'ch:' + ui.channelId : '');
     const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
     if (!list.length && hadReal && data.cursor) return 'same';
-    if (Number.isFinite(Number(data.autoDeleteMs))) {
-      const ms = Number(data.autoDeleteMs);
-      if (mode === 'dm') ui.dmAutoDelete = ms;
-      else if (channelId) ui.channels = ui.channels.map((ch) => ch.id === channelId ? { ...ch, autoDeleteMs: ms } : ch);
-    }
+    if (mode === 'dm' && Number.isFinite(Number(data.autoDeleteMs))) ui.dmAutoDelete = Number(data.autoDeleteMs);
     if (newest && newest.id) markSeen(roomKey, newest.id);
     const known = new Set(list.map((msg) => msg && msg.id));
     const local = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && !known.has(msg.id) && (msg.roomKey === roomKey || !msg.roomKey));

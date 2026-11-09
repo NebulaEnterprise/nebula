@@ -1,7 +1,6 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
-  import { ui, saveMe, logout, toast, playPing, hasPerm, setAutoDelete, autoDeleteLabel } from '../state.svelte.js';
-  import { PERM } from '../format.js';
+  import { ui, saveMe, logout, toast, playPing, setAutoDelete, autoDeleteLabel } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -137,14 +136,9 @@
   let seenTimer = -1;
   let timerBusy = $state(false);
 
-  const timerChannel = $derived(ui.channels.find((ch) => ch.id === ui.channelId));
-  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : (Number(timerChannel?.autoDeleteMs) || 0));
-  const timerRoom = $derived.by(() => {
-    if (ui.mode === 'dm' && ui.dmUser) return ui.dmUser.displayName || ui.dmUser.username || 'this direct message';
-    if (ui.mode === 'chat' && timerChannel && timerChannel.type !== 'voice') return '#' + timerChannel.name;
-    return '';
-  });
-  const canSetTimer = $derived(!!timerRoom && (ui.mode === 'dm' || hasPerm(PERM.MANAGE_CHANNELS)));
+  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : 0);
+  const timerRoom = $derived(ui.mode === 'dm' && ui.dmUser ? (ui.dmUser.displayName || ui.dmUser.username || 'this direct message') : '');
+  const canSetTimer = $derived(!!timerRoom);
 
   function syncTimer(ms) {
     if (!ms || timerPresets.some(([value]) => value === ms)) {
@@ -555,7 +549,7 @@
             <div class="field">
               <label>Auto-delete messages</label>
               {#if timerRoom}
-                <p class="hint">In {timerRoom}, each new message starts its own countdown when it is sent. When the time runs out, that message is deleted for everyone. Messages already in the chat stay until someone deletes them.</p>
+                <p class="hint">In your direct message with {timerRoom}, each new message starts its own countdown when it is sent. When the time runs out, that message is deleted for both of you. Messages already in the chat stay until someone deletes them. Channel messages are not included.</p>
                 <div class="auto-row">
                   {#each timerPresets as [ms, label]}
                     <button type="button" class="choice-btn" class:on={!customOn && timerMs === ms} disabled={!canSetTimer || timerBusy} onclick={() => chooseTimer(ms)}>{label}</button>
@@ -570,9 +564,9 @@
                     <button type="button" class="btn brand" disabled={timerBusy} onclick={applyCustomTimer}>Set</button>
                   </div>
                 {/if}
-                <p class="hint">{canSetTimer ? 'Right now: ' + autoDeleteLabel(timerMs) + '.' : 'Right now: ' + autoDeleteLabel(timerMs) + '. A channel manager can change this.'}</p>
+                <p class="hint">Right now: {autoDeleteLabel(timerMs)}.</p>
               {:else}
-                <p class="hint">Open a text channel or a direct message, then choose how long new messages stay.</p>
+                <p class="hint">Open a direct message, then choose how long new messages stay. Messages in channels stay until someone deletes them.</p>
               {/if}
             </div>
           {:else if page === 'look' && lookOpen === 'badges'}

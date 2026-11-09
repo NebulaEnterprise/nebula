@@ -11,7 +11,7 @@
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
-  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : (Number(channel?.autoDeleteMs) || 0));
+  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : 0);
   const quickUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
@@ -608,10 +608,12 @@
   <Hash size={18} />
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
-  <button type="button" class="vanish" class:on={timerMs > 0} title="Auto-delete messages" onclick={() => { ui.userPage = 'privacy'; ui.userSettings = true; }}>
-    <Clock size={14} />
-    {timerMs ? autoDeleteLabel(timerMs) : 'Auto-delete'}
-  </button>
+  {#if ui.mode === 'dm'}
+    <button type="button" class="vanish" class:on={timerMs > 0} title="Auto-delete messages" onclick={() => { ui.userPage = 'privacy'; ui.userSettings = true; }}>
+      <Clock size={14} />
+      {timerMs ? autoDeleteLabel(timerMs) : 'Auto-delete'}
+    </button>
+  {/if}
   {#if ui.mode !== 'dm'}
     <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
       <MessageSquare size={18} />
