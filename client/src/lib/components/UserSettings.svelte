@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, X, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
+  import { ChevronLeft, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -30,6 +30,8 @@
   let accountBusy = $state(false);
   let showPw = $state(false);
   let draftUser = $state('');
+  let nameStatus = $state('');
+  let nameClean = $state('');
   let draftEmail = $state('');
   let emailPassword = $state('');
   let currentPassword = $state('');
@@ -44,9 +46,25 @@
     return `${'•'.repeat(Math.min(8, Math.max(4, name.length)))}@${host}`;
   }
 
+  function cleanName(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 32);
+  }
+
+  const nameMessage = $derived(
+    nameStatus === 'available' ? (nameClean && nameClean !== draftUser.trim().toLowerCase() ? `That username is available as ${nameClean}.` : 'That username is available.')
+    : nameStatus === 'taken' ? 'That username is taken.'
+    : nameStatus === 'yours' ? 'This is your current username.'
+    : nameStatus === 'checking' ? 'Checking that username…'
+    : nameStatus === 'invalid' ? 'Use letters, numbers, dots, or underscores.'
+    : ''
+  );
+  const nameReady = $derived(nameStatus === 'available' || nameStatus === 'yours');
+
   function openAccount(kind) {
     accountDialog = kind;
     draftUser = ui.me?.username || '';
+    nameClean = cleanName(draftUser);
+    nameStatus = nameClean ? 'yours' : 'invalid';
     draftEmail = ui.me?.email || '';
     emailPassword = '';
     currentPassword = '';
@@ -56,8 +74,10 @@
   }
 
   async function saveUsername() {
-    const username = draftUser.trim();
+    const username = cleanName(draftUser);
     if (!username) return toast('Username required');
+    if (nameStatus === 'taken') return toast('That username is taken');
+    if (nameStatus === 'checking') return;
     accountBusy = true;
     try {
       await saveMe({ username });
@@ -113,6 +133,36 @@
   $effect(() => {
     if (page !== 'account') securityOpen = false;
     if (page !== 'look') lookOpen = '';
+  });
+  $effect(() => {
+    if (accountDialog !== 'username') return;
+    const typed = draftUser;
+    const clean = cleanName(typed);
+    nameClean = clean;
+    if (!clean) {
+      nameStatus = 'invalid';
+      return;
+    }
+    if (clean === (ui.me?.username || '')) {
+      nameStatus = 'yours';
+      return;
+    }
+    nameStatus = 'checking';
+    let cancel = false;
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api('/api/username-available?name=' + encodeURIComponent(clean));
+        if (cancel) return;
+        nameClean = data.username || clean;
+        nameStatus = data.reason || (data.available ? 'available' : 'taken');
+      } catch {
+        if (!cancel) nameStatus = 'invalid';
+      }
+    }, 280);
+    return () => {
+      cancel = true;
+      clearTimeout(timer);
+    };
   });
   let form = $state({
     username: ui.me?.username || '',
@@ -699,10 +749,21 @@
         </div>
         {#if accountDialog === 'username'}
           <p class="hint">This is the name people use to find you.</p>
-          <div class="field"><label>Username</label><input bind:value={draftUser} maxlength="32" /></div>
+          <div class="field name-check" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid'}>
+            <label>Username</label>
+            <div class="name-field">
+              <input bind:value={draftUser} maxlength="32" autocomplete="off" spellcheck="false" />
+              {#if nameStatus === 'available' || nameStatus === 'yours'}
+                <span class="name-mark ok" aria-label="Available"><Check size={14} strokeWidth={3} /></span>
+              {:else if nameStatus === 'taken' || nameStatus === 'invalid'}
+                <span class="name-mark bad" aria-label="Unavailable"><X size={14} strokeWidth={3} /></span>
+              {/if}
+            </div>
+            {#if nameMessage}<p class="name-status" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid'}>{nameMessage}</p>{/if}
+          </div>
           <div class="modify-actions">
             <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
-            <button type="button" class="btn brand" disabled={accountBusy} onclick={saveUsername}>Done</button>
+            <button type="button" class="btn brand" disabled={accountBusy || !nameReady} onclick={saveUsername}>Done</button>
           </div>
         {:else if accountDialog === 'email'}
           <p class="hint">Enter your password to confirm this change.</p>

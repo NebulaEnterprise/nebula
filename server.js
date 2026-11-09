@@ -3098,6 +3098,14 @@ app.post('/api/seen', auth, (req, res) => {
   res.json({ ok: true, lastSeen: Number(req.user.lastSeen) || now, status: effectiveStatus(req.user) });
 });
 
+app.get('/api/username-available', auth, (req, res) => {
+  const clean = normalizeUsername(req.query.name);
+  if (!clean) return res.json({ ok: true, username: '', available: false, reason: 'invalid' });
+  if (clean === req.user.username) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
+  const taken = Object.values(users).some((u) => u && u.id !== req.user.id && u.username === clean);
+  res.json({ ok: true, username: clean, available: !taken, reason: taken ? 'taken' : 'available' });
+});
+
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, aliases, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,

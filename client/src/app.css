@@ -957,6 +957,21 @@ img { max-width: 100%; }
 .acct-rule { height: 1px; background: var(--line); margin: 18px 0; }
 .acct-dialog { width: min(440px, 100%); }
 .acct-dialog .btn.brand { width: auto; }
+.name-check { position: relative; }
+.name-field { position: relative; }
+.name-check input { padding-right: 44px; }
+.name-check.ok input { border-color: #23a559; }
+.name-check.bad input { border-color: #f23f43; }
+.name-mark {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; pointer-events: none;
+}
+.name-mark.ok { background: #23a559; }
+.name-mark.bad { background: #f23f43; }
+.name-status { margin: 2px 0 0; font-size: 13px; font-weight: 650; }
+.name-status.ok { color: #23a559; }
+.name-status.bad { color: #f23f43; }
 .acct-link {
   width: 100%; display: flex; align-items: center; gap: 10px;
   padding: 12px 2px; color: var(--text); font-weight: 600; text-align: left;
