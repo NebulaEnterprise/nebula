@@ -1039,8 +1039,14 @@ img { max-width: 100%; }
 }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; flex: 1; min-width: 180px; }
 .swatch { width: 28px; height: 28px; border-radius: 50%; border: 0; padding: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16); }
-.swatch.on { box-shadow: 0 0 0 2px #14151b, 0 0 0 4px #fff; }
-.accent-row, .effect-side { display: flex; align-items: flex-start; gap: 16px; }
+.swatch.on { transform: scale(1.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16); }
+.accent-row, .effect-side { display: flex; align-items: center; gap: 16px; }
+.accent-wheel { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.accent-wheel .picker { margin: 0; }
+.accent-wheel .wheel { --wheel: 128px; }
+.accent-wheel .sv { border-radius: 50%; }
+.accent-wheel .picker-side { display: none; }
+.look-sec { border-top: 0; }
 .look-block { padding: 8px 0 4px; }
 .look-block > strong { display: block; font-size: 14px; }
 .look-block > em { display: block; margin: 2px 0 10px; color: var(--faint); font-style: normal; font-size: 13px; font-weight: 500; }

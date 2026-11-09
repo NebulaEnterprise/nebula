@@ -4,6 +4,7 @@
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
+  import ColorWheel from './ColorWheel.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
@@ -38,6 +39,7 @@
   let confirmPassword = $state('');
   let securityOpen = $state(false);
   let lookOpen = $state('');
+  let accentSlot = $state(0);
 
   function maskEmail(email) {
     const [name, host] = String(email || '').split('@');
@@ -344,13 +346,6 @@
     if (index === 0) form.accentColor = value;
   }
 
-  function pickAccent(hex) {
-    const next = [...(form.profileColors || ['#7c3aed', '#c084fc'])];
-    next[0] = hex;
-    form.profileColors = next;
-    form.accentColor = hex;
-  }
-
   function setAllBadges(on) {
     form.shownBadges = on ? [...ownedBadges(ui.me)] : [];
   }
@@ -506,10 +501,19 @@
               <div class="accent-row">
                 <div class="swatches">
                   {#each accentPresets as hex}
-                    <button type="button" class="swatch" class:on={sameHex(form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => pickAccent(hex)}></button>
+                    <button type="button" class="swatch" class:on={sameHex(form.profileColors[accentSlot] || form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => setProfileColor(accentSlot, hex)}></button>
                   {/each}
                 </div>
-                <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+                <div class="accent-wheel">
+                  <ColorWheel value={form.profileColors[accentSlot] || '#7c6af7'} onpick={(c) => setProfileColor(accentSlot, c)} />
+                  {#if form.profileStyle !== 'solid'}
+                    <div class="colorbox-swatches">
+                      {#each [0, 1] as i}
+                        <button type="button" class="colorbox-swatch" class:on={accentSlot === i} style="background:{form.profileColors[i] || '#7c6af7'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (accentSlot = i)}></button>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
               </div>
             </section>
             <section class="look-sec">
