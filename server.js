@@ -619,6 +619,9 @@ function readFiles(body) {
     const file = { url, name, kind: image ? 'image' : video ? 'video' : 'file' };
     const poster = String(row && row.poster || '');
     if (/^\/uploads\/[A-Za-z0-9._-]+$/.test(poster)) file.poster = poster;
+    if (row && row.spoiler) file.spoiler = true;
+    const alt = String(row && row.alt || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    if (alt) file.alt = alt;
     files.push(file);
   }
   return files;

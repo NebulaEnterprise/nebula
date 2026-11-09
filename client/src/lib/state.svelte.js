@@ -1112,8 +1112,16 @@ export function dismissLocal(id) {
 }
 
 export async function sendFiles(list) {
-  const files = [...(list || [])].slice(0, 10);
-  if (!files.length) return;
+  const files = [...(list || [])].slice(0, 10).map((item) => {
+    if (typeof File !== 'undefined' && item instanceof File) return { file: item, name: item.name || 'file', alt: '', spoiler: false };
+    return {
+      file: item.file,
+      name: String(item.name || item.file?.name || 'file').slice(0, 80),
+      alt: String(item.alt || '').slice(0, 300),
+      spoiler: !!item.spoiler,
+    };
+  }).filter((item) => item.file);
+  if (!files.length) return false;
   ui.attachOpen = false;
   const content = ui.composer.trim();
   const replies = (Array.isArray(ui.reply) ? ui.reply : (ui.reply ? [ui.reply] : [])).filter((row) => row && row.id).slice(0, 5);
@@ -1122,7 +1130,14 @@ export async function sendFiles(list) {
   const roomKey = ui.mode === 'dm' && ui.dmUser ? 'dm:' + ui.dmUser.id : ui.channelId;
   const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
-  const locals = files.map((file) => ({ url: URL.createObjectURL(file), name: file.name || 'file', kind: fileKind(file), progress: 1 }));
+  const locals = files.map((item) => ({
+    url: URL.createObjectURL(item.file),
+    name: item.name,
+    alt: item.alt,
+    spoiler: item.spoiler,
+    kind: fileKind(item.file),
+    progress: 1,
+  }));
   ui.messages = [...ui.messages, {
     id: tempId,
     pending: true,
@@ -1140,17 +1155,18 @@ export async function sendFiles(list) {
       patchLocal(tempId, (msg) => ({ files: msg.files.map((row, at) => at === index ? { ...row, progress: Math.max(1, n) } : row) }));
     };
     for (let i = 0; i < files.length; i++) {
-      const head = new Uint8Array(await files[i].slice(0, 6).arrayBuffer());
-      const gif = /image\/gif/i.test(files[i].type || '') || /\.gif$/i.test(files[i].name || '') || (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46);
+      const blob = files[i].file;
+      const head = new Uint8Array(await blob.slice(0, 6).arrayBuffer());
+      const gif = /image\/gif/i.test(blob.type || '') || /\.gif$/i.test(files[i].name || '') || (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46);
       if (gif) {
-        const data = await uploadFile(files[i], (n) => report(i, n), files[i].name || 'animation.gif');
+        const data = await uploadFile(blob, (n) => report(i, n), files[i].name || 'animation.gif');
         if (!data.url) throw new Error('The file did not upload');
-        pinMedia(data.url, files[i]);
-        saved.push({ url: data.url, name: files[i].name || 'animation.gif' });
+        pinMedia(data.url, blob);
+        saved.push({ url: data.url, name: files[i].name || 'animation.gif', alt: files[i].alt, spoiler: files[i].spoiler });
         report(i, 100);
         continue;
       }
-      const packed = await packUpload(files[i]);
+      const packed = await packUpload(blob);
       let poster = '';
       if (packed.poster) {
         const preview = await uploadFile(packed.poster, (n) => report(i, Math.round(n * 0.2)), packed.posterName);
@@ -1160,15 +1176,17 @@ export async function sendFiles(list) {
       const data = await uploadFile(packed.body, (n) => report(i, poster ? 20 + Math.round(n * 0.8) : n), packed.name);
       if (!data.url) throw new Error('The file did not upload');
       pinMedia(data.url, packed.body);
-      const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file' };
+      const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file', alt: files[i].alt, spoiler: files[i].spoiler };
       if (poster) row.poster = poster;
       saved.push(row);
       report(i, 100);
     }
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
+    return true;
   } catch (err) {
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');
+    return false;
   }
 }
 

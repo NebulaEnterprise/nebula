@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare, Eye, EyeOff } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -389,7 +389,7 @@
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      sendMessage();
+      submitComposer();
       return;
     }
     noteKeyDown(event);
@@ -399,6 +399,115 @@
     ui.composer;
     queueMicrotask(fitComposer);
   });
+  let drafts = $state([]);
+  let sendingFiles = false;
+  let editAt = $state(-1);
+  let editName = $state('');
+  let editAlt = $state('');
+  let editSpoiler = $state(false);
+  let draftRoom = '';
+
+  $effect(() => {
+    const key = ui.mode === 'dm' ? 'dm:' + (ui.dmUser?.id || '') : 'ch:' + (ui.channelId || '');
+    if (draftRoom && draftRoom !== key) {
+      for (const row of drafts) if (row.preview) URL.revokeObjectURL(row.preview);
+      drafts = [];
+      editAt = -1;
+    }
+    draftRoom = key;
+  });
+
+  function pastedName(file) {
+    const type = file.type || '';
+    if (type === 'image/jpeg') return 'image.jpg';
+    if (type === 'image/gif') return 'image.gif';
+    if (type === 'image/webp') return 'image.webp';
+    if (type.startsWith('video/')) return 'video.mp4';
+    if (type.startsWith('image/')) return 'image.png';
+    return file.name || 'file';
+  }
+
+  function stageFiles(list) {
+    if (ui.editing) {
+      toast('Finish editing before attaching a file');
+      return;
+    }
+    const next = [];
+    for (const file of list) {
+      if (!file) continue;
+      if (drafts.length + next.length >= 10) break;
+      const named = file.name && file.name !== 'image.png' ? file : new File([file], pastedName(file), { type: file.type });
+      next.push({
+        id: Math.random().toString(36).slice(2),
+        file: named,
+        name: named.name || pastedName(file),
+        alt: '',
+        spoiler: false,
+        preview: URL.createObjectURL(named),
+        image: /^image\//.test(named.type || '') || /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(named.name || ''),
+      });
+    }
+    if (drafts.length >= 10) toast('You can attach up to 10 files');
+    if (!next.length) return;
+    drafts = [...drafts, ...next];
+    ui.attachOpen = false;
+  }
+
+  function removeDraft(id) {
+    const row = drafts.find((item) => item.id === id);
+    if (row?.preview) URL.revokeObjectURL(row.preview);
+    drafts = drafts.filter((item) => item.id !== id);
+    if (editAt >= drafts.length) editAt = -1;
+  }
+
+  function toggleSpoiler(id) {
+    drafts = drafts.map((item) => item.id === id ? { ...item, spoiler: !item.spoiler } : item);
+  }
+
+  function openEdit(index) {
+    const row = drafts[index];
+    if (!row) return;
+    editAt = index;
+    editName = row.name;
+    editAlt = row.alt;
+    editSpoiler = row.spoiler;
+  }
+
+  function saveEdit() {
+    if (editAt < 0 || !drafts[editAt]) return;
+    const current = drafts[editAt];
+    const name = editName.trim().slice(0, 80) || current.name;
+    drafts = drafts.map((row, index) => index === editAt ? { ...row, name, alt: editAlt.trim().slice(0, 300), spoiler: editSpoiler } : row);
+    editAt = -1;
+  }
+
+  async function submitComposer() {
+    if (locked) return;
+    if (ui.editing || !drafts.length) {
+      sendMessage();
+      return;
+    }
+    if (sendingFiles) return;
+    sendingFiles = true;
+    const payload = drafts.map((row) => ({ file: row.file, name: row.name, alt: row.alt, spoiler: row.spoiler }));
+    for (const row of drafts) if (row.preview) URL.revokeObjectURL(row.preview);
+    drafts = [];
+    editAt = -1;
+    try { await sendFiles(payload); }
+    finally { sendingFiles = false; }
+  }
+
+  function onPaste(event) {
+    const items = [...(event.clipboardData?.items || [])];
+    const files = items
+      .filter((item) => item.kind === 'file' && /^(image|video)\//.test(item.type || ''))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (!files.length) return;
+    event.preventDefault();
+    stageFiles(files);
+  }
+
   let pollOpen = $state(false);
   let pollQuestion = $state('');
   let pollAnswers = $state(['', '']);
@@ -413,7 +522,7 @@
   function onFiles(event) {
     const list = [...(event.target.files || [])];
     event.target.value = '';
-    if (list.length) sendFiles(list);
+    if (list.length) stageFiles(list);
   }
 
   function openPoll() {
@@ -649,7 +758,30 @@
       {/each}
     </div>
   {/if}
-  <form class="composer" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+  {#if drafts.length}
+    <div class="staged">
+      {#each drafts as row, index (row.id)}
+        <div class="staged-card">
+          <div class="staged-tools">
+            <button type="button" title={row.spoiler ? 'Remove spoiler' : 'Mark as spoiler'} onclick={() => toggleSpoiler(row.id)}>
+              {#if row.spoiler}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+            </button>
+            <button type="button" title="Modify attachment" onclick={() => openEdit(index)}><Pencil size={14} /></button>
+            <button type="button" class="danger" title="Remove attachment" onclick={() => removeDraft(row.id)}><Trash2 size={14} /></button>
+          </div>
+          {#if row.spoiler}
+            <div class="staged-cover"><span>SPOILER</span></div>
+          {:else if row.image}
+            <img src={row.preview} alt={row.alt || row.name} />
+          {:else}
+            <div class="staged-cover"><span>FILE</span></div>
+          {/if}
+          <em>{row.name}</em>
+        </div>
+      {/each}
+    </div>
+  {/if}
+  <form class="composer" onsubmit={(e) => { e.preventDefault(); submitComposer(); }}>
     <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
       <Plus size={20} />
     </button>
@@ -666,6 +798,7 @@
       bind:value={ui.composer}
       rows="1"
       onkeydown={onComposerKey}
+      onpaste={onPaste}
       onkeyup={noteKeyUp}
       oninput={syncMention}
       onblur={noteTypingBlur}
@@ -678,6 +811,37 @@
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
     <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple onchange={onFiles} />
   </form>
+  {#if editAt >= 0 && drafts[editAt]}
+    <div class="poll-overlay" role="presentation" onclick={() => (editAt = -1)}>
+      <div class="poll-sheet modify-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
+        <div class="row">
+          <h3>Modify Attachment</h3>
+          <button type="button" class="btn icon" onclick={() => (editAt = -1)}>✕</button>
+        </div>
+        {#if drafts[editAt].image && !editSpoiler}
+          <img class="modify-preview" src={drafts[editAt].preview} alt={editAlt || editName} />
+        {:else}
+          <div class="staged-cover modify-cover"><span>{editSpoiler ? 'SPOILER' : 'FILE'}</span></div>
+        {/if}
+        <div class="field">
+          <label for="file-name">Filename</label>
+          <input id="file-name" bind:value={editName} maxlength="80" />
+        </div>
+        <div class="field">
+          <label for="file-alt">Description (Alt Text)</label>
+          <textarea id="file-alt" bind:value={editAlt} maxlength="300" rows="3" placeholder="Add a description"></textarea>
+        </div>
+        <label class="spoiler-check">
+          <input type="checkbox" bind:checked={editSpoiler} />
+          Mark as spoiler
+        </label>
+        <div class="modify-actions">
+          <button type="button" class="btn" onclick={() => (editAt = -1)}>Cancel</button>
+          <button type="button" class="btn brand" onclick={saveEdit}>Save</button>
+        </div>
+      </div>
+    </div>
+  {/if}
   {#if forward}
     <div class="poll-overlay" role="presentation" onclick={() => (forward = null)}>
       <div class="poll-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>

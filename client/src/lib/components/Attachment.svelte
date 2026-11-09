@@ -5,12 +5,15 @@
   let src = $state('');
   let poster = $state('');
   let open = $state(false);
+  let revealed = $state(false);
 
   const name = $derived(file?.name || 'File');
   const video = $derived(file?.kind === 'video' || /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|$)/i.test(file?.url || file?.name || ''));
   const image = $derived(!video && (file?.kind === 'image' || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(file?.url || file?.name || '')));
   const gif = $derived(/\.gif(\?|$)/i.test(file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
   const progress = $derived(Math.max(0, Math.min(100, Number(file?.progress) || 0)));
+  const spoiler = $derived(!!file?.spoiler && !revealed);
+  const label = $derived(file?.alt || name);
 
   function direct(url) {
     if (!url) return '';
@@ -47,11 +50,16 @@
   }
 </script>
 
-<div class="file-card">
-  {#if video}
+<div class="file-card" class:is-spoiler={spoiler}>
+  {#if spoiler}
+    <button type="button" class="spoiler-cover" title="Spoiler" onclick={() => (revealed = true)}>
+      {#if src}<img src={src} alt="" />{/if}
+      <span>SPOILER</span>
+    </button>
+  {:else if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
   {:else if image}
-    {#if src}<button type="button" class="file-open" class:gif-crop={gif} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={name} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
+    {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
   {:else}
     <a class="file-chip" href={src || fileUrl(file?.url)} target="_blank" rel="noreferrer">{name}</a>
   {/if}
