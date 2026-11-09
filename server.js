@@ -2329,11 +2329,18 @@ app.post('/api/auth/request-code', async (req, res) => {
     return res.status(409).json({ error: 'Username taken' });
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
-  codes[cleanEmail] = {
-    code,
+  const entry = {
     username: cleanUser,
     passwordHash: hashPassword(password),
+  };
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    return res.json(createAccount(cleanEmail, entry, req));
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  codes[cleanEmail] = {
+    ...entry,
+    code,
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
   save(CODES_FILE, codes);
@@ -2342,31 +2349,18 @@ app.post('/api/auth/request-code', async (req, res) => {
     await sendVerificationCode(cleanEmail, code);
     res.json({ ok: true, message: 'Verification code sent' });
   } catch (err) {
+    delete codes[cleanEmail];
+    save(CODES_FILE, codes);
     const msg = (err && err.message) || '';
     res.status(500).json({ error: msg.includes('not configured') ? msg : 'Failed to send email' });
   }
 });
 
-app.post('/api/auth/verify', (req, res) => {
-  const { email, code } = req.body || {};
-  const cleanEmail = String(email || '').trim().toLowerCase();
-  const entry = codes[cleanEmail];
-  if (!entry) return res.status(400).json({ error: 'No pending verification' });
-  if (Date.now() > entry.expiresAt) {
-    delete codes[cleanEmail];
-    save(CODES_FILE, codes);
-    return res.status(400).json({ error: 'Code expired' });
-  }
-  if (String(code).trim() !== entry.code) {
-    return res.status(400).json({ error: 'Invalid code' });
-  }
-
+function createAccount(cleanEmail, entry, req) {
   const id = uuidv4();
   const uid = nextUid();
-  const isFirst = Object.keys(users).length === 0;
   const badges = [];
   if (isEarlySupporterWindow()) badges.push('early');
-
   users[id] = {
     id, uid,
     username: entry.username,
@@ -2395,8 +2389,23 @@ app.post('/api/auth/verify', (req, res) => {
   ensureFriendNode(id);
   save(FRIENDS_FILE, friendGraph);
   ensureGuilds();
+  return { ok: true, token: session.token, user: publicUser(users[id]), server: SERVER_NAME };
+}
 
-  res.json({ ok: true, token: session.token, user: publicUser(users[id]), server: SERVER_NAME });
+app.post('/api/auth/verify', (req, res) => {
+  const { email, code } = req.body || {};
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const entry = codes[cleanEmail];
+  if (!entry) return res.status(400).json({ error: 'No pending verification' });
+  if (Date.now() > entry.expiresAt) {
+    delete codes[cleanEmail];
+    save(CODES_FILE, codes);
+    return res.status(400).json({ error: 'Code expired' });
+  }
+  if (String(code).trim() !== entry.code) {
+    return res.status(400).json({ error: 'Invalid code' });
+  }
+  res.json(createAccount(cleanEmail, entry, req));
 });
 
 app.post('/api/auth/login', (req, res) => {

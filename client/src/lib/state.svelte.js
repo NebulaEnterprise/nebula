@@ -233,7 +233,11 @@ export async function loginWithPasskey() {
 
 export async function requestCode(email, username, password) {
   ui.authError = '';
-  await api('/api/auth/request-code', { method: 'POST', body: { email, username, password } });
+  const data = await api('/api/auth/request-code', { method: 'POST', body: { email, username, password } });
+  if (data.token) {
+    await finishLogin(data);
+    return;
+  }
   ui.pending = { email, username, password };
   ui.auth = 'verify';
   ui.authOk = 'Code sent to ' + email;
