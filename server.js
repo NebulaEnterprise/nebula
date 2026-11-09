@@ -9,6 +9,7 @@ const { execFile, spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
+const security = require('./security');
 
 const PORT = 3850;
 
@@ -919,6 +920,9 @@ function publicUser(u) {
     tagChoices: tagChoices(u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
+    mfa: !!(u.totp && u.totp.enabled),
+    passkeyCount: Array.isArray(u.passkeys) ? u.passkeys.length : 0,
+    sessionCount: security.sessionCount(u),
   };
 }
 
@@ -1397,7 +1401,6 @@ app.post('/api/auth/verify', (req, res) => {
 
   const id = uuidv4();
   const uid = nextUid();
-  const token = makeToken();
   const isFirst = Object.keys(users).length === 0;
   const badges = [];
   if (isEarlySupporterWindow()) badges.push('early');
@@ -1420,17 +1423,18 @@ app.post('/api/auth/verify', (req, res) => {
     serverTag: '',
     server: SERVER_NAME,
     badges: [...new Set(badges)],
-    token,
+    token: '',
     createdAt: new Date().toISOString(),
   };
   delete codes[cleanEmail];
+  const session = security.openSession(users[id], req);
   save(USERS_FILE, users);
   save(CODES_FILE, codes);
   ensureFriendNode(id);
   save(FRIENDS_FILE, friendGraph);
   ensureGuilds();
 
-  res.json({ ok: true, token, user: publicUser(users[id]), server: SERVER_NAME });
+  res.json({ ok: true, token: session.token, user: publicUser(users[id]), server: SERVER_NAME });
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -1440,11 +1444,58 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || user.passwordHash !== hashPassword(password || '')) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  user.token = makeToken();
-  user.status = 'online';
-  user.lastSeen = Date.now();
+  if (user.totp && user.totp.enabled) {
+    const ticket = security.mfaTicket(user.id);
+    return res.json({
+      ok: true,
+      mfa: true,
+      ticket,
+      methods: ['totp', ...((user.passkeys || []).length ? ['passkey'] : [])],
+    });
+  }
+  const session = security.openSession(user, req);
   save(USERS_FILE, users);
-  res.json({ ok: true, token: user.token, user: publicUser(user) });
+  res.json({ ok: true, token: session.token, user: publicUser(user) });
+});
+
+app.post('/api/auth/mfa', (req, res) => {
+  const ticket = req.body && req.body.ticket;
+  const row = security.takeMfa(ticket);
+  const user = row && users[row.userId];
+  if (!user || !security.checkTotp(user, req.body && req.body.code)) {
+    return res.status(400).json({ error: row ? 'That code is wrong' : 'That code expired. Log in again.' });
+  }
+  security.dropChallenge(ticket);
+  const session = security.openSession(user, req);
+  save(USERS_FILE, users);
+  res.json({ ok: true, token: session.token, user: publicUser(user) });
+});
+
+app.post('/api/auth/passkey/options', (req, res) => {
+  let user = null;
+  if (req.body && req.body.ticket) {
+    const userId = security.mfaUserId(req.body.ticket);
+    user = users[userId] || null;
+    if (!user) return res.status(400).json({ error: 'That sign-in expired. Log in again.' });
+  }
+  res.json({ ok: true, ...security.loginOptions(req, user) });
+});
+
+app.post('/api/auth/passkey/verify', (req, res) => {
+  try {
+    const user = security.loginPasskey(users, req.body || {});
+    const session = security.openSession(user, req);
+    save(USERS_FILE, users);
+    res.json({ ok: true, token: session.token, user: publicUser(user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || 'Passkey was rejected' });
+  }
+});
+
+app.post('/api/auth/logout', auth, (req, res) => {
+  if (req.session) security.removeSession(req.user, req.session.id);
+  save(USERS_FILE, users);
+  res.json({ ok: true });
 });
 
 const POW2 = [16, 32, 64, 128, 256, 512, 1024, 2048, 4096];
@@ -1880,9 +1931,23 @@ function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  const user = Object.values(users).find((u) => u.token === token);
-  if (!user) return res.status(401).json({ error: 'Invalid session' });
-  req.user = user;
+  const found = security.findSession(users, token);
+  if (!found) return res.status(401).json({ error: 'Invalid session' });
+  req.user = found.user;
+  req.session = found.session;
+  if (found.session.label === 'Saved session' && !found.session.ua) {
+    found.session.label = security.deviceLabel(req.headers['user-agent']);
+    found.session.ua = String(req.headers['user-agent'] || '').slice(0, 180);
+    save(USERS_FILE, users);
+  }
+  const now = Date.now();
+  if (now - (Number(found.session.lastSeen) || 0) > 60000) {
+    found.session.lastSeen = now;
+    found.user.lastSeen = now;
+    save(USERS_FILE, users);
+  } else {
+    found.session.lastSeen = now;
+  }
   next();
 }
 
@@ -2186,6 +2251,87 @@ app.post('/api/me/email', auth, (req, res) => {
   req.user.email = email;
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.get('/api/me/security', auth, (req, res) => {
+  res.json({ ok: true, ...security.summary(req.user, req.session && req.session.id) });
+});
+
+app.delete('/api/me/sessions/:id', auth, (req, res) => {
+  const removed = security.removeSession(req.user, req.params.id);
+  if (!removed) return res.status(404).json({ error: 'That device is not logged in' });
+  save(USERS_FILE, users);
+  res.json({
+    ok: true,
+    current: removed.id === (req.session && req.session.id),
+    user: publicUser(req.user),
+    ...security.summary(req.user, req.session && req.session.id),
+  });
+});
+
+function passwordMatches(user, password) {
+  return user.passwordHash === hashPassword(password || '');
+}
+
+app.post('/api/me/mfa/setup', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  try {
+    const data = security.beginTotp(req.user);
+    save(USERS_FILE, users);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/mfa/enable', auth, (req, res) => {
+  try {
+    security.confirmTotp(req.user, req.body && req.body.code);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/mfa/disable', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  try {
+    security.disableTotp(req.user, req.body && req.body.code);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/passkeys/options', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  res.json({ ok: true, ...security.registrationOptions(req.user, req) });
+});
+
+app.post('/api/me/passkeys', auth, (req, res) => {
+  try {
+    security.registerPasskey(req.user, req.body || {}, req);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user), ...security.summary(req.user, req.session && req.session.id) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || 'Could not save that passkey' });
+  }
+});
+
+app.delete('/api/me/passkeys/:id', auth, (req, res) => {
+  if (!security.removePasskey(req.user, req.params.id)) {
+    return res.status(404).json({ error: 'Passkey not found' });
+  }
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user), ...security.summary(req.user, req.session && req.session.id) });
 });
 
 app.get('/api/members', auth, (req, res) => {

@@ -13,6 +13,7 @@
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
+  import Security from './Security.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
@@ -34,6 +35,8 @@
   let currentPassword = $state('');
   let nextPassword = $state('');
   let confirmPassword = $state('');
+  let securityOpen = $state(false);
+  let colorOpen = $state('');
 
   function maskEmail(email) {
     const [name, host] = String(email || '').split('@');
@@ -107,6 +110,9 @@
     }
   }
   const page = $derived(ui.userPage || 'profile');
+  $effect(() => {
+    if (page !== 'account') securityOpen = false;
+  });
   let form = $state({
     username: ui.me?.username || '',
     aliases: Array.isArray(ui.me?.aliases) ? [...ui.me.aliases] : [],
@@ -333,31 +339,36 @@
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
       {#if page === 'account'}
+        {#if !securityOpen}
+          <section class="acct-section">
+            <h3>Account Info</h3>
+            <div class="acct-row">
+              <span>Username</span>
+              <strong>{ui.me?.username}</strong>
+              <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
+            </div>
+            <div class="acct-row">
+              <span>Email</span>
+              <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
+              <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
+              <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
+            </div>
+          </section>
+          <div class="acct-rule"></div>
+        {/if}
         <section class="acct-section">
-          <h3>Account Info</h3>
-          <div class="acct-row">
-            <span>Username</span>
-            <strong>{ui.me?.username}</strong>
-            <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
-          </div>
-          <div class="acct-row">
-            <span>Email</span>
-            <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
-            <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
-            <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
-          </div>
-        </section>
-        <div class="acct-rule"></div>
-        <section class="acct-section">
-          <h3>Password & Security</h3>
-          <div class="acct-row">
-            <span>Password</span>
-            <strong>••••••••</strong>
-            <button type="button" class="btn sm" onclick={() => openAccount('password')}>Edit</button>
-          </div>
+          {#if !securityOpen}
+            <h3>Password & Security</h3>
+            <div class="acct-row">
+              <span>Password</span>
+              <strong>••••••••</strong>
+              <button type="button" class="btn sm" onclick={() => openAccount('password')}>Edit</button>
+            </div>
+          {/if}
+          <Security bind:open={securityOpen} />
         </section>
       {:else}
-      <div class="grid-2">
+      <div class="grid-2" class:look-grid={page === 'look'}>
         <div>
           {#if page === 'profile'}
             <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
@@ -377,8 +388,8 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
-            <div class="field">
-              <label>Aliases</label>
+            <section class="look-card">
+              <h3>Aliases</h3>
               <p class="hint">Shown on your profile, like a bio. You can add 10. These are not usernames.</p>
               <div class="alias-edit">
                 {#each form.aliases as alias, i}
@@ -391,53 +402,84 @@
               {#if form.aliases.length < 10}
                 <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
               {/if}
-            </div>
-            <section class="look-block">
+            </section>
+            <section class="look-card">
+              <h3>Avatar</h3>
+              <p class="hint">PNG, JPG, GIF, or WebP.</p>
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">
                   {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                 </div>
-                <div>
-                  <strong>Profile picture</strong>
-                  <p>PNG, JPG, GIF, or WebP.</p>
-                  <div class="look-actions">
-                    <label class="btn brand sm look-btn">Upload picture
-                      <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
-                    </label>
-                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
-                  </div>
+                <div class="look-actions">
+                  <label class="btn brand sm look-btn">Change avatar
+                    <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
+                  </label>
+                  {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
+                  {#if !form.avatarUrl}
+                    <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'avatar' ? '' : 'avatar')}>Avatar color</button>
+                  {/if}
                 </div>
               </div>
-              {#if !form.avatarUrl}
-                <p class="label">Avatar color</p>
+              {#if !form.avatarUrl && colorOpen === 'avatar'}
                 <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
               {/if}
             </section>
-            <section class="look-block">
-              <strong>Banner</strong>
-              <p>A GIF, PNG, JPG, or WebP across the top of your profile.</p>
+            <section class="look-card">
+              <h3>Banner</h3>
+              <p class="hint">A GIF, PNG, JPG, or WebP across the top of your profile.</p>
               <div class="look-banner">
-                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
+                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
               </div>
               <div class="look-actions">
-                <label class="btn brand sm look-btn">Upload banner
+                <label class="btn brand sm look-btn">Change banner
                   <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
                 </label>
                 {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
               </div>
             </section>
-            <section class="look-block">
-              <strong>Profile color</strong>
-              <p>Solid, gradient, glow, or rainbow.</p>
+            <section class="look-card">
+              <h3>Profile color</h3>
+              <p class="hint">Solid, gradient, glow, or rainbow.</p>
               <div class="style-seg">
                 {#each profileStyles as [id, label]}
                   <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
                 {/each}
               </div>
-              <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+              <div class="look-actions">
+                <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'profile' ? '' : 'profile')}>{colorOpen === 'profile' ? 'Hide colors' : 'Edit colors'}</button>
+              </div>
+              {#if colorOpen === 'profile'}
+                <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+              {/if}
             </section>
-            <div class="field">
-              <label>Profile song</label>
+            <section class="look-card">
+              <h3>Display name style</h3>
+              <p class="hint">Font and effect used on your name.</p>
+              <div class="effect-picks">
+                {#each fonts as [id, label, family]}
+                  <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
+                    <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
+                    <span>{label}</span>
+                  </button>
+                {/each}
+              </div>
+              <div class="effect-picks">
+                {#each effects as [id, label]}
+                  <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
+                    <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
+                    <span>{label}</span>
+                  </button>
+                {/each}
+              </div>
+              <div class="look-actions">
+                <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'name' ? '' : 'name')}>{colorOpen === 'name' ? 'Hide colors' : 'Edit colors'}</button>
+              </div>
+              {#if colorOpen === 'name'}
+                <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
+              {/if}
+            </section>
+            <section class="look-card">
+              <h3>Profile song</h3>
               <input bind:value={form.songUrl} maxlength="300" placeholder="YouTube link" />
               {#if ui.me?.songError}
                 <p class="hint" style="color:var(--danger)">{ui.me.songError}</p>
@@ -446,27 +488,23 @@
               {:else}
                 <p class="hint">The audio is saved on the server, then the profile plays that copy.</p>
               {/if}
-            </div>
-            <div class="field">
               <label>Start at</label>
               <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
               <p class="hint">Where playback starts, like 1:30.</p>
-            </div>
-            <div class="field">
               <label>Autoplay</label>
-              <button type="button" class="btn" class:brand={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'On' : 'Off'}</button>
+              <button type="button" class="btn sec-btn" class:brand={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'On' : 'Off'}</button>
               <p class="hint">Starts the song when this profile is opened.</p>
-            </div>
-            <div class="field">
-              <label>Bio</label>
+            </section>
+            <section class="look-card">
+              <h3>Bio</h3>
               <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="Shows in the bubble beside your picture"></textarea>
-            </div>
-            <div class="field">
-              <label>About me</label>
+            </section>
+            <section class="look-card">
+              <h3>About me</h3>
               <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Shows under your name"></textarea>
-            </div>
-            <button class="btn brand" style="width:auto" onclick={async () => { try { await saveMe({ aboutMe: aboutDraft }); } catch (err) { toast(err.message); } }}>Save about me</button>
-            <p class="label">Badge</p>
+            </section>
+            <section class="look-card">
+              <h3>Badges</h3>
             {#if ownedBadges(ui.me).length}
               <div class="pick-row">
                 {#each ownedBadges(ui.me) as id}
@@ -502,15 +540,15 @@
               {/each}
             </div>
             <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
-            <div style="height:16px"></div>
-            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
+            </section>
+            <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
           {/if}
           {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
             <div style="height:16px"></div>
             <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
           {/if}
         </div>
-        <div>
+        <div class="preview-sticky">
           <p class="label">Preview</p>
           <div class="preview-card profile-card skin-{form.profileStyle || 'gradient'}" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
             <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
@@ -572,32 +610,6 @@
             </div>
           </div>
         </div>
-        {#if page === 'look'}
-          <div>
-            <p class="label">Name font</p>
-            <div class="effect-picks">
-              {#each fonts as [id, label, family]}
-                <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
-                  <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
-                  <span>{label}</span>
-                </button>
-              {/each}
-            </div>
-            <div style="height:16px"></div>
-            <p class="label">Name effect</p>
-            <div class="effect-picks">
-              {#each effects as [id, label]}
-                <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                  <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
-                  <span>{label}</span>
-                </button>
-              {/each}
-            </div>
-            <div style="height:16px"></div>
-            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
-          </div>
-          <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
-        {/if}
       </div>
       {/if}
     </div>

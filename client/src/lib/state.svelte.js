@@ -1,4 +1,5 @@
 import { api, pinMedia, warmMedia, uploadFile } from './api.js';
+import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -6,6 +7,7 @@ export const ui = $state({
   booting: true,
   me: null,
   auth: 'login',
+  mfa: null,
   authError: '',
   authOk: '',
   pending: null,
@@ -118,6 +120,7 @@ function forgetToken(token) {
 
 export function logout() {
   const id = ui.me?.id;
+  api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
   import('./voice.js').then((mod) => mod.leaveVoice());
   if (id) writeAccounts(savedAccounts().filter((row) => row.id !== id));
   localStorage.removeItem('dc_token');
@@ -127,6 +130,7 @@ export function logout() {
   ui.dialog = null;
   ui.popout = null;
   ui.addingAccount = false;
+  ui.mfa = null;
   ui.auth = 'login';
   if (pollTimer) clearInterval(pollTimer);
 }
@@ -184,15 +188,46 @@ async function enterApp() {
   startPresence();
 }
 
-export async function login(email, password) {
-  ui.authError = '';
-  const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+async function finishLogin(data) {
   rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
   ui.me = data.user;
   ui.addingAccount = false;
+  ui.mfa = null;
+  ui.auth = 'login';
   ui.booting = false;
   await enterApp();
+}
+
+export async function login(email, password) {
+  ui.authError = '';
+  const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+  if (data.mfa) {
+    ui.mfa = { ticket: data.ticket, methods: data.methods || ['totp'], email };
+    ui.auth = 'mfa';
+    return;
+  }
+  await finishLogin(data);
+}
+
+export async function submitMfa(code) {
+  ui.authError = '';
+  const data = await api('/api/auth/mfa', { method: 'POST', body: { ticket: ui.mfa?.ticket, code } });
+  await finishLogin(data);
+}
+
+export async function loginWithPasskey() {
+  ui.authError = '';
+  const start = await api('/api/auth/passkey/options', {
+    method: 'POST',
+    body: ui.mfa?.ticket ? { ticket: ui.mfa.ticket } : {},
+  });
+  const credential = await getPasskey(start.publicKey);
+  const data = await api('/api/auth/passkey/verify', {
+    method: 'POST',
+    body: { challengeId: start.challengeId, credential },
+  });
+  await finishLogin(data);
 }
 
 export async function requestCode(email, username, password) {
