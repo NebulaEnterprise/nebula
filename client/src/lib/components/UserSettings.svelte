@@ -255,21 +255,6 @@
           {#if page === 'profile'}
             <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
-            <div class="field">
-              <label>Aliases</label>
-              <p class="hint">Shown on your profile, like a bio. You can add 10. These are not usernames.</p>
-              <div class="alias-edit">
-                {#each form.aliases as alias, i}
-                  <div class="alias-line">
-                    <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
-                    <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
-                  </div>
-                {/each}
-              </div>
-              {#if form.aliases.length < 10}
-                <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
-              {/if}
-            </div>
             <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
             <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
           {:else if page === 'notify'}
@@ -285,6 +270,21 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
+            <div class="field">
+              <label>Aliases</label>
+              <p class="hint">Shown on your profile, like a bio. You can add 10. These are not usernames.</p>
+              <div class="alias-edit">
+                {#each form.aliases as alias, i}
+                  <div class="alias-line">
+                    <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
+                    <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
+                  </div>
+                {/each}
+              </div>
+              {#if form.aliases.length < 10}
+                <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
+              {/if}
+            </div>
             <section class="look-block">
               <div class="look-row">
                 <div class="look-av" style="background:{form.avatarColor}">
