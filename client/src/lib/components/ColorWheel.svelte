@@ -112,7 +112,7 @@
   }
 </script>
 
-<div class="picker">
+<div class="hue-picker">
   <div class="wheel" bind:this={wheelEl}>
     <button type="button" class="ring" aria-label="Hue" onpointerdown={(e) => start(e, 'hue')}></button>
     <button
