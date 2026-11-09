@@ -302,8 +302,7 @@
       if (!person || person.id === ui.me?.id) continue;
       const username = String(person.username || '').toLowerCase();
       const display = String(person.nick || person.displayName || '').toLowerCase();
-      const aliases = (person.aliases || []).map((name) => String(name).toLowerCase());
-      if (!q || username.includes(q) || display.includes(q) || aliases.some((name) => name.includes(q))) rows.push(person);
+      if (!q || username.includes(q) || display.includes(q)) rows.push(person);
     }
     if (ui.mode === 'chat') {
       for (const role of ui.roles || []) {

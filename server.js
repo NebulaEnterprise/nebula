@@ -1278,29 +1278,15 @@ function normalizeUsername(name) {
     .slice(0, 32);
 }
 
-function nameTaken(name, exceptId) {
-  const clean = normalizeUsername(name);
-  if (!clean) return false;
-  return Object.values(users).some((u) => {
-    if (!u || u.id === exceptId) return false;
-    if (u.username === clean) return true;
-    return Array.isArray(u.aliases) && u.aliases.includes(clean);
-  });
-}
-
-function cleanAliases(list, exceptId, username) {
-  const own = normalizeUsername(username);
+function cleanAliases(list) {
   const out = [];
   const seen = new Set();
   for (const item of Array.isArray(list) ? list : []) {
-    const clean = normalizeUsername(item);
-    if (!clean || clean === own || seen.has(clean)) continue;
-    if (nameTaken(clean, exceptId)) {
-      const error = new Error(clean + ' is already taken');
-      error.status = 409;
-      throw error;
-    }
-    seen.add(clean);
+    const clean = String(item || '').trim().replace(/^@+/, '').replace(/\s+/g, ' ').slice(0, 32);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push(clean);
     if (out.length >= 10) break;
   }
@@ -1370,7 +1356,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   if (Object.values(users).some((u) => u.email === cleanEmail)) {
     return res.status(409).json({ error: 'Email already registered' });
   }
-  if (nameTaken(cleanUser)) {
+  if (Object.values(users).some((u) => u.username === cleanUser)) {
     return res.status(409).json({ error: 'Username taken' });
   }
 
@@ -2093,18 +2079,12 @@ app.patch('/api/me', auth, (req, res) => {
     const clean = normalizeUsername(username);
     if (clean.length < 1) return res.status(400).json({ error: 'Username required' });
     if (clean !== req.user.username) {
-      if (nameTaken(clean, req.user.id)) return res.status(409).json({ error: 'Username taken' });
+      const taken = Object.values(users).some((u) => u.id !== req.user.id && u.username === clean);
+      if (taken) return res.status(409).json({ error: 'Username taken' });
       req.user.username = clean;
-      if (Array.isArray(req.user.aliases)) req.user.aliases = req.user.aliases.filter((item) => item !== clean);
     }
   }
-  if (aliases !== undefined) {
-    try {
-      req.user.aliases = cleanAliases(aliases, req.user.id, req.user.username);
-    } catch (err) {
-      return res.status(err.status || 400).json({ error: err.message || 'Could not save those aliases' });
-    }
-  }
+  if (aliases !== undefined) req.user.aliases = cleanAliases(aliases);
 
   if (displayName !== undefined) req.user.displayName = String(displayName).slice(0, 32);
   if (bio !== undefined) req.user.bio = String(bio).replace(/\s+/g, ' ').trim().slice(0, 29);
@@ -2945,7 +2925,7 @@ app.post('/api/friends/request', auth, (req, res) => {
   } else if (username) {
     const clean = normalizeUsername(username);
     if (!clean) return res.status(400).json({ error: 'Invalid username' });
-    target = Object.values(users).find((u) => u.username === clean || (Array.isArray(u.aliases) && u.aliases.includes(clean)));
+    target = Object.values(users).find((u) => u.username === clean);
   } else {
     return res.status(400).json({ error: 'Provide username or uid' });
   }
@@ -3082,7 +3062,7 @@ function parseMentions(g, user, content) {
     const member = users[id];
     if (!member) continue;
     const nick = g.members[id] && g.members[id].nick;
-    const names = [member.username, member.displayName, nick, ...(Array.isArray(member.aliases) ? member.aliases : [])].filter((name) => name && String(name).trim());
+    const names = [member.username, member.displayName, nick].filter((name) => name && String(name).trim());
     if (names.some((name) => {
       const pattern = mentionPattern(name);
       return pattern && pattern.test(text);

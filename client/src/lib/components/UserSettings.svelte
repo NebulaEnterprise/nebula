@@ -257,7 +257,7 @@
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
             <div class="field">
               <label>Aliases</label>
-              <p class="hint">Extra names this account owns. You can keep 10, such as apple or snow.</p>
+              <p class="hint">Shown on your profile, like a bio. You can add 10. These are not usernames.</p>
               <div class="alias-edit">
                 {#each form.aliases as alias, i}
                   <div class="alias-line">
