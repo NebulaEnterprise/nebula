@@ -1,5 +1,5 @@
 <script>
-  import { X, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
+  import { ChevronLeft, X, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -36,7 +36,7 @@
   let nextPassword = $state('');
   let confirmPassword = $state('');
   let securityOpen = $state(false);
-  let colorOpen = $state('');
+  let lookOpen = $state('');
 
   function maskEmail(email) {
     const [name, host] = String(email || '').split('@');
@@ -112,6 +112,7 @@
   const page = $derived(ui.userPage || 'profile');
   $effect(() => {
     if (page !== 'account') securityOpen = false;
+    if (page !== 'look') lookOpen = '';
   });
   let form = $state({
     username: ui.me?.username || '',
@@ -267,6 +268,18 @@
   }
 
   const showcaseChoice = $derived((ui.me?.tagChoices || []).find((choice) => choice.serverId === form.showcaseServerId) || null);
+  const aliasNames = $derived(form.aliases.map((name) => String(name || '').trim()).filter(Boolean));
+  const aliasLabel = $derived(aliasNames.length ? (aliasNames.length === 1 ? '@' + aliasNames[0] : aliasNames.length + ' aliases') : 'Add');
+  const bioLabel = $derived(shortBio(form.bio) || 'Add');
+  const aboutLabel = $derived(String(aboutDraft || '').trim() ? 'Added' : 'Add');
+  const styleName = $derived(profileStyles.find((row) => row[0] === form.profileStyle)?.[1] || 'Gradient');
+  const fontName = $derived(fonts.find((row) => row[0] === form.nameFont)?.[1] || 'Default');
+  const effectName = $derived(effects.find((row) => row[0] === form.nameEffect)?.[1] || 'None');
+  const shownCount = $derived(ownedBadges(ui.me).filter((id) => badgeOn(id)).length);
+  const badgeLabel = $derived(ownedBadges(ui.me).length ? (shownCount ? shownCount + ' on' : 'Off') : 'None');
+  const showcaseLabel = $derived(form.showcaseBadge ? badgeNames[form.showcaseBadge] : 'None');
+  const roleLabel = $derived(showcaseChoice?.name || 'None');
+  const songLabel = $derived(String(form.songUrl || '').trim() ? (form.songAutoplay ? 'Plays on open' : 'Saved') : 'Add');
   const previewRoles = $derived(ui.mode === 'chat' ? (ui.members.find((m) => m.id === ui.me?.id)?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)) : []);
 
   function setNameColor(index, value) {
@@ -388,160 +401,223 @@
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
             </div>
           {:else if page === 'look'}
-            <section class="look-card">
-              <h3>Aliases</h3>
-              <p class="hint">Shown on your profile, like a bio. You can add 10. These are not usernames.</p>
-              <div class="alias-edit">
-                {#each form.aliases as alias, i}
-                  <div class="alias-line">
-                    <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
-                    <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
-                  </div>
-                {/each}
+            {#if !lookOpen}
+              <div class="look-home">
+              <section class="acct-section">
+                <h3>Profile</h3>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'aliases')}><span>Aliases</span><strong>{aliasLabel}</strong></button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'bio')}><span>Bio</span><strong>{bioLabel}</strong></button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'about')}><span>About me</span><strong>{aboutLabel}</strong></button>
+              </section>
+              <div class="acct-rule"></div>
+              <section class="acct-section">
+                <h3>Pictures</h3>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'avatar')}><span>Avatar</span><strong>{form.avatarUrl ? 'Photo' : 'Color'}</strong></button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'banner')}><span>Banner</span><strong>{form.bannerUrl ? 'Set' : 'None'}</strong></button>
+              </section>
+              <div class="acct-rule"></div>
+              <section class="acct-section">
+                <h3>Theme</h3>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'color')}>
+                  <span>Profile color</span>
+                  <strong><i class="look-dot" style="background:{form.profileColors[0]}"></i>{styleName}</strong>
+                </button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'name')}>
+                  <span>Display name</span>
+                  <strong>{fontName} · {effectName}</strong>
+                </button>
+              </section>
+              <div class="acct-rule"></div>
+              <section class="acct-section">
+                <h3>Song</h3>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'song')}><span>Profile song</span><strong>{songLabel}</strong></button>
+              </section>
+              <div class="acct-rule"></div>
+              <section class="acct-section">
+                <h3>Badges</h3>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'badges')}><span>On your profile</span><strong>{badgeLabel}</strong></button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'showcase')}><span>Next to your name</span><strong>{showcaseLabel}</strong></button>
+                <button type="button" class="acct-link" onclick={() => (lookOpen = 'role')}><span>Server tag</span><strong>{roleLabel}</strong></button>
+              </section>
+              <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
               </div>
-              {#if form.aliases.length < 10}
-                <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
-              {/if}
-            </section>
-            <section class="look-card">
-              <h3>Avatar</h3>
-              <p class="hint">PNG, JPG, GIF, or WebP.</p>
-              <div class="look-row">
-                <div class="look-av" style="background:{form.avatarColor}">
-                  {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
-                </div>
-                <div class="look-actions">
-                  <label class="btn brand sm look-btn">Change avatar
-                    <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
-                  </label>
-                  {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
-                  {#if !form.avatarUrl}
-                    <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'avatar' ? '' : 'avatar')}>Avatar color</button>
-                  {/if}
-                </div>
-              </div>
-              {#if !form.avatarUrl && colorOpen === 'avatar'}
-                <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
-              {/if}
-            </section>
-            <section class="look-card">
-              <h3>Banner</h3>
-              <p class="hint">A GIF, PNG, JPG, or WebP across the top of your profile.</p>
-              <div class="look-banner">
-                {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
-              </div>
-              <div class="look-actions">
-                <label class="btn brand sm look-btn">Change banner
-                  <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
-                </label>
-                {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
-              </div>
-            </section>
-            <section class="look-card">
-              <h3>Profile color</h3>
-              <p class="hint">Solid, gradient, glow, or rainbow.</p>
-              <div class="style-seg">
-                {#each profileStyles as [id, label]}
-                  <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
-                {/each}
-              </div>
-              <div class="look-actions">
-                <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'profile' ? '' : 'profile')}>{colorOpen === 'profile' ? 'Hide colors' : 'Edit colors'}</button>
-              </div>
-              {#if colorOpen === 'profile'}
-                <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
-              {/if}
-            </section>
-            <section class="look-card">
-              <h3>Display name style</h3>
-              <p class="hint">Font and effect used on your name.</p>
-              <div class="effect-picks">
-                {#each fonts as [id, label, family]}
-                  <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
-                    <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
-                    <span>{label}</span>
-                  </button>
-                {/each}
-              </div>
-              <div class="effect-picks">
-                {#each effects as [id, label]}
-                  <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                    <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
-                    <span>{label}</span>
-                  </button>
-                {/each}
-              </div>
-              <div class="look-actions">
-                <button type="button" class="btn sm" onclick={() => (colorOpen = colorOpen === 'name' ? '' : 'name')}>{colorOpen === 'name' ? 'Hide colors' : 'Edit colors'}</button>
-              </div>
-              {#if colorOpen === 'name'}
-                <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
-              {/if}
-            </section>
-            <section class="look-card">
-              <h3>Profile song</h3>
-              <input bind:value={form.songUrl} maxlength="300" placeholder="YouTube link" />
-              {#if ui.me?.songError}
-                <p class="hint" style="color:var(--danger)">{ui.me.songError}</p>
-              {:else if ui.me?.songUrl && !ui.me?.songFile}
-                <p class="hint">Saving the song onto the server…</p>
-              {:else}
-                <p class="hint">The audio is saved on the server, then the profile plays that copy.</p>
-              {/if}
-              <label>Start at</label>
-              <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
-              <p class="hint">Where playback starts, like 1:30.</p>
-              <label>Autoplay</label>
-              <button type="button" class="btn sec-btn" class:brand={form.songAutoplay} onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'On' : 'Off'}</button>
-              <p class="hint">Starts the song when this profile is opened.</p>
-            </section>
-            <section class="look-card">
-              <h3>Bio</h3>
-              <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="Shows in the bubble beside your picture"></textarea>
-            </section>
-            <section class="look-card">
-              <h3>About me</h3>
-              <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Shows under your name"></textarea>
-            </section>
-            <section class="look-card">
-              <h3>Badges</h3>
-            {#if ownedBadges(ui.me).length}
-              <div class="pick-row">
-                {#each ownedBadges(ui.me) as id}
-                  <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
-                    {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                    <span>{badgeNames[id]}</span>
-                  </button>
-                {/each}
-              </div>
-              <p class="hint">Turn a badge on or off. Only the ones you leave on show on your profile.</p>
             {:else}
-              <p class="hint">You do not have a badge yet.</p>
+              <button type="button" class="crumb" onclick={() => (lookOpen = '')}><ChevronLeft size={16} /> Appearance</button>
+              {#if lookOpen === 'aliases'}
+                <section class="look-card look-editor">
+                  <h3>Aliases</h3>
+                  <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
+                  <div class="alias-edit">
+                    {#each form.aliases as alias, i}
+                      <div class="alias-line">
+                        <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
+                        <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
+                      </div>
+                    {/each}
+                  </div>
+                  {#if form.aliases.length < 10}
+                    <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
+                  {/if}
+                </section>
+              {:else if lookOpen === 'bio'}
+                <section class="look-card look-editor">
+                  <h3>Bio</h3>
+                  <p class="hint">The short line in the bubble beside your picture.</p>
+                  <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="A short line"></textarea>
+                </section>
+              {:else if lookOpen === 'about'}
+                <section class="look-card look-editor">
+                  <h3>About me</h3>
+                  <p class="hint">Shown under your name on your profile.</p>
+                  <textarea bind:value={aboutDraft} maxlength="190" rows="4" placeholder="Say a little about yourself"></textarea>
+                </section>
+              {:else if lookOpen === 'avatar'}
+                <section class="look-card look-editor">
+                  <h3>Avatar</h3>
+                  <p class="hint">PNG, JPG, GIF, or WebP. With no photo, the color shows instead.</p>
+                  <div class="look-row">
+                    <div class="look-av" style="background:{form.avatarColor}">
+                      {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
+                    </div>
+                    <div class="look-actions">
+                      <label class="btn brand sm look-btn">Change avatar
+                        <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
+                      </label>
+                      {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
+                    </div>
+                  </div>
+                  {#if !form.avatarUrl}
+                    <p class="look-kicker">Fallback color</p>
+                    <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
+                  {/if}
+                </section>
+              {:else if lookOpen === 'banner'}
+                <section class="look-card look-editor">
+                  <h3>Banner</h3>
+                  <p class="hint">A GIF, PNG, JPG, or WebP across the top of your profile.</p>
+                  <div class="look-banner">
+                    {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
+                  </div>
+                  <div class="look-actions">
+                    <label class="btn brand sm look-btn">Change banner
+                      <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
+                    </label>
+                    {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
+                  </div>
+                </section>
+              {:else if lookOpen === 'color'}
+                <section class="look-card look-editor">
+                  <h3>Profile color</h3>
+                  <p class="hint">The background of your profile card.</p>
+                  <div class="style-seg">
+                    {#each profileStyles as [id, label]}
+                      <button type="button" class:on={form.profileStyle === id} onclick={() => (form.profileStyle = id)}>{label}</button>
+                    {/each}
+                  </div>
+                  <p class="look-kicker">Colors</p>
+                  <ColorBox colors={form.profileColors} slots={form.profileStyle === 'solid' ? 1 : 2} onpick={setProfileColor} />
+                </section>
+              {:else if lookOpen === 'name'}
+                <section class="look-card look-editor">
+                  <h3>Display name</h3>
+                  <p class="hint">Font, effect, and colors used on your name.</p>
+                  <p class="look-kicker">Font</p>
+                  <div class="effect-picks">
+                    {#each fonts as [id, label, family]}
+                      <button type="button" class="effect-pick" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
+                        <strong style="font-family:{family}">{form.displayName || form.username || 'Name'}</strong>
+                        <span>{label}</span>
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="look-kicker">Effect</p>
+                  <div class="effect-picks">
+                    {#each effects as [id, label]}
+                      <button type="button" class="effect-pick" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
+                        <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
+                        <span>{label}</span>
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="look-kicker">Colors</p>
+                  <ColorBox colors={form.nameColors} slots={form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
+                </section>
+              {:else if lookOpen === 'song'}
+                <section class="look-card look-editor">
+                  <h3>Profile song</h3>
+                  <p class="hint">The audio is saved on the server, then the profile plays that copy.</p>
+                  <div class="field">
+                    <label>YouTube link</label>
+                    <input bind:value={form.songUrl} maxlength="300" placeholder="https://www.youtube.com/watch?v=" />
+                  </div>
+                  {#if ui.me?.songError}
+                    <p class="hint" style="color:var(--danger)">{ui.me.songError}</p>
+                  {:else if ui.me?.songUrl && !ui.me?.songFile}
+                    <p class="hint">Saving the song onto the server…</p>
+                  {/if}
+                  <div class="field">
+                    <label>Start at</label>
+                    <input bind:value={form.songStart} maxlength="8" placeholder="0:00" />
+                  </div>
+                  <p class="hint">Where playback starts, like 1:30.</p>
+                  <div class="acct-row">
+                    <span>Autoplay</span>
+                    <strong>{form.songAutoplay ? 'On' : 'Off'}</strong>
+                    <button type="button" class="btn sm sec-btn" onclick={() => (form.songAutoplay = !form.songAutoplay)}>{form.songAutoplay ? 'Turn off' : 'Turn on'}</button>
+                  </div>
+                  <p class="hint">Starts the song when this profile is opened.</p>
+                </section>
+              {:else if lookOpen === 'badges'}
+                <section class="look-card look-editor">
+                  <h3>On your profile</h3>
+                  <p class="hint">Turn a badge on or off. Only the ones you leave on show on your profile card.</p>
+                  {#if ownedBadges(ui.me).length}
+                    <div class="pick-row">
+                      {#each ownedBadges(ui.me) as id}
+                        <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
+                          {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                          <span>{badgeNames[id]}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {:else}
+                    <p class="hint">You do not have a badge yet.</p>
+                  {/if}
+                </section>
+              {:else if lookOpen === 'showcase'}
+                <section class="look-card look-editor">
+                  <h3>Next to your name</h3>
+                  <p class="hint">This badge sits beside your name in the member list and in chat.</p>
+                  <div class="pick-row">
+                    <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
+                    {#each ownedBadges(ui.me) as id}
+                      <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
+                        {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                        <span>{badgeNames[id]}</span>
+                      </button>
+                    {/each}
+                  </div>
+                </section>
+              {:else if lookOpen === 'role'}
+                <section class="look-card look-editor">
+                  <h3>Server tag</h3>
+                  <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
+                  <div class="pick-row">
+                    <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
+                    {#each ui.me?.tagChoices || [] as choice}
+                      <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
+                        <TagPill tag={choice} />
+                        <span>{choice.name}</span>
+                      </button>
+                    {/each}
+                  </div>
+                  {#if !(ui.me?.tagChoices || []).length}
+                    <p class="hint">None of your servers have a tag yet.</p>
+                  {/if}
+                </section>
+              {/if}
+              <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
             {/if}
-            <p class="label">Showcase badge</p>
-            <div class="pick-row">
-              <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
-              {#each ownedBadges(ui.me) as id}
-                <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
-                  {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                  <span>{badgeNames[id]}</span>
-                </button>
-              {/each}
-            </div>
-            <p class="hint">This badge sits right next to your name in the member list and in chat.</p>
-            <p class="label">Showcase role</p>
-            <div class="pick-row">
-              <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
-              {#each ui.me?.tagChoices || [] as choice}
-                <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
-                  <TagPill tag={choice} />
-                  <span>{choice.name}</span>
-                </button>
-              {/each}
-            </div>
-            <p class="hint">The tag you pick shows next to your name in the member list and in chat.</p>
-            </section>
-            <button class="btn brand sec-btn save-look" onclick={save}>Save changes</button>
           {/if}
           {#if page !== 'look' && page !== 'notify' && page !== 'privacy'}
             <div style="height:16px"></div>

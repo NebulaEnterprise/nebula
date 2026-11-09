@@ -623,12 +623,14 @@ img { max-width: 100%; }
 }
 .rgb::-webkit-color-swatch-wrapper { padding: 2px; }
 .rgb::-webkit-color-swatch { border: 0; border-radius: 4px; }
-.effect-picks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.effect-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
 .effect-pick {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
-  padding: 8px 10px; border-radius: 10px; background: #101117; border: 1px solid var(--line); min-width: 92px;
+  min-width: 0; width: 100%;
+  padding: 10px 12px; border-radius: 12px; background: #101117; border: 1px solid var(--line);
 }
-.effect-pick.on { border-color: var(--brand); }
+.effect-pick strong, .effect-pick .name-fx { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.effect-pick.on { border-color: #fff; background: #2a2c38; }
 .effect-pick > span:not(.name-fx) { color: var(--faint); font-size: 11px; font-weight: 600; }
 @keyframes name-shift { to { background-position: 200% center; } }
 @keyframes name-glitch {
@@ -841,7 +843,7 @@ img { max-width: 100%; }
   min-height: 44px; padding: 8px 12px; border-radius: 8px;
   background: #1e1f22; border: 2px solid transparent; color: #fff; font-weight: 650;
 }
-.pick-card.on { border-color: #f23f43; }
+.pick-card.on { border-color: #fff; background: #2a2c38; }
 .tag-icons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .tag-icons button {
   min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px;
@@ -961,7 +963,11 @@ img { max-width: 100%; }
   border-top: 1px solid rgba(255,255,255,0.05);
 }
 .acct-link span { flex: 1; }
-.acct-link strong { color: var(--muted); font-weight: 600; }
+.acct-link strong { color: var(--muted); font-weight: 600; max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.look-home .acct-section h3 { margin: 8px 0 0; }
+.look-home .acct-link { padding: 8px 2px; }
+.look-home .acct-rule { margin: 8px 0; }
+.look-home .save-look { margin-top: 14px; }
 .acct-link:hover { color: #fff; }
 .crumb {
   display: inline-flex; align-items: center; gap: 4px; color: var(--muted);
@@ -985,6 +991,9 @@ img { max-width: 100%; }
 .look-grid { grid-template-columns: minmax(0, 1fr) minmax(240px, 320px); gap: 28px; }
 .preview-sticky { position: sticky; top: 0; align-self: start; }
 .look-card { padding: 18px 0 8px; margin: 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.look-editor { border-bottom: 0; padding-top: 6px; }
+.look-kicker { margin: 16px 0 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.look-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .look-card h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
 .look-card > label { display: block; margin: 14px 0 6px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .look-card .look-actions { margin-top: 12px; }
@@ -1370,6 +1379,7 @@ img { max-width: 100%; }
   .account-pop { left: 44px; width: min(252px, calc(100vw - 60px)); }
   .grid-2, .look-grid { grid-template-columns: 1fr; }
   .preview-sticky { position: static; }
+  .effect-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .settings { flex-direction: column; }
   .set-nav { width: 100%; display: flex; flex-direction: row; gap: 4px; overflow: auto; padding: 10px; }
   .set-user, .set-nav .group { display: none; }
