@@ -26,11 +26,12 @@
     localStorage.setItem('nebula-home-theme', theme);
   }
 
-  function openLogin() {
-    ui.auth = 'login';
+  function openAuth(mode) {
+    ui.auth = mode;
     ui.authError = '';
     ui.authOk = '';
     ui.mfa = null;
+    ui.pending = null;
     ui.authGate = true;
   }
 
@@ -88,7 +89,8 @@
           <Moon size={16} />
         {/if}
       </button>
-      <button class="login" type="button" onclick={openLogin}>Login <ArrowRight size={15} /></button>
+      <button class="signup" type="button" onclick={() => openAuth('register')}>Sign up</button>
+      <button class="login" type="button" onclick={() => openAuth('login')}>Login <ArrowRight size={15} /></button>
     </div>
   </header>
 
@@ -98,8 +100,8 @@
       <h1>Connect beyond<br /><em>the stars.</em></h1>
       <p class="lead">Nebula is a fast, secure, and beautiful platform to chat, share, and build with your community.</p>
       <div class="actions">
-        <span class="cta">Download Now</span>
-        <span class="ghost">&lt;/&gt; Explore Developers</span>
+        <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
+        <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
       </div>
       <p class="live">
         <span class="faces" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -171,8 +173,11 @@
   <section class="join">
     <p class="eyebrow">Get Started Today</p>
     <h2>Join Nebula</h2>
-    <p>Log in and talk with the people who are online right now.</p>
-    <button type="button" onclick={openLogin}>Login <ArrowRight size={16} /></button>
+    <p>Create an account or log in and talk with the people who are online right now.</p>
+    <div class="actions">
+      <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
+      <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
+    </div>
   </section>
 </div>
 
@@ -267,7 +272,22 @@
     background: rgba(12, 8, 24, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.1);
   }
-  .login, .join button {
+  .signup, .login, .cta, .ghost {
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+  }
+  .signup {
+    display: inline-flex;
+    align-items: center;
+    padding: 9px 16px;
+    border-radius: 999px;
+    color: inherit;
+    font-weight: 700;
+    background: rgba(12, 8, 24, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+  .login {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -278,7 +298,7 @@
     font-weight: 700;
     box-shadow: 0 8px 24px rgba(124, 58, 237, 0.45);
   }
-  .login:hover, .join button:hover { background: #6d28d9; }
+  .login:hover, .cta:hover { background: #6d28d9; }
   .hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(280px, 520px);
@@ -328,6 +348,7 @@
     line-height: 1.55;
   }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .join .actions { justify-content: center; }
   .cta, .ghost {
     display: inline-flex;
     align-items: center;
@@ -460,8 +481,7 @@
     font-weight: 700;
   }
   .join h2 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.04em; }
-  .join button { margin-top: 18px; border: 0; cursor: pointer; font: inherit; }
-  .home.light .nav, .home.light .theme, .home.light .pill, .home.light .ghost, .home.light .features article, .home.light .join {
+  .home.light .nav, .home.light .theme, .home.light .pill, .home.light .signup, .home.light .ghost, .home.light .features article, .home.light .join {
     background: rgba(255, 255, 255, 0.82);
     border-color: rgba(90, 40, 160, 0.12);
     box-shadow: 0 12px 32px rgba(80, 40, 140, 0.08);
