@@ -1530,23 +1530,26 @@ img { max-width: 100%; }
 }
 .chat-frame { display: flex; flex: 1; min-width: 0; min-height: 0; }
 .chat-col { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; position: relative; }
-.top-tools { margin-left: auto; display: flex; align-items: center; gap: 12px; min-width: 0; }
-.top-tools .btn.icon {
-  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px;
-  background: transparent; color: #949ba4;
+.top-tools { margin-left: auto; display: flex; align-items: center; gap: 16px; min-width: 0; }
+.bar-tool {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0;
+  width: 28px; height: 28px; padding: 0; margin: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; color: #b9bbbe;
 }
-.top-tools .btn.icon:hover,
-.top-tools .btn.icon:active { background: transparent; color: #fff; transform: none; }
-.top-tools .btn.icon.on { background: transparent; color: var(--brand); }
-.top-tools .switcher-btn { width: auto; gap: 6px; padding: 0 2px; }
-.top-tools .switcher-btn kbd { font: inherit; font-size: 12px; font-weight: 650; color: #6d717a; }
+.bar-tool:hover, .bar-tool:active, .bar-tool:focus { background: none; box-shadow: none; color: #fff; transform: none; }
+.bar-tool.on { background: none; color: var(--brand-2); }
+.bar-tool.switcher-btn { width: auto; gap: 8px; }
+.bar-tool kbd {
+  font: inherit; font-size: 11px; font-weight: 650; color: #94979e;
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 2px 5px;
+}
 .top-search {
-  display: flex; align-items: center; gap: 6px; width: 180px; max-width: 28vw;
-  margin-left: 4px; background: transparent; border: 0; color: #6d717a;
+  display: flex; align-items: center; gap: 8px; width: 210px; max-width: 32vw; height: 32px;
+  margin-left: 6px; padding: 0 12px; background: #111214; border: 0; border-radius: 8px; color: #94979e;
 }
 .top-search input {
   width: 100%; min-width: 0; background: transparent; border: 0; outline: none;
-  color: var(--text); padding: 6px 0;
+  color: var(--text); padding: 0; font-size: 14px;
 }
 .top-search input::placeholder { color: #6d717a; }
 .status-word { font-size: 13px; font-weight: 650; color: var(--muted); }

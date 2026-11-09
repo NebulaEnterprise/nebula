@@ -698,17 +698,17 @@
     <button class="btn icon" title="Thread options" onclick={() => (threadMenu = !threadMenu)}><MoreHorizontal size={16} /></button>
   {/if}
   <div class="top-tools">
-    <button class="btn icon switcher-btn" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /><kbd>Ctrl K</kbd></button>
+    <button type="button" class="bar-tool switcher-btn" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /><kbd>Ctrl K</kbd></button>
     {#if ui.mode === 'dm' || ui.mode === 'group'}
-      <button class="btn icon" title="Start a call" onclick={startCall}><Phone size={18} /></button>
+      <button type="button" class="bar-tool" title="Start a call" onclick={startCall}><Phone size={18} /></button>
     {/if}
-    <button class="btn icon" class:on={muted} title="Notifications" onclick={() => (bell = !bell)}><Bell size={18} /></button>
-    <button class="btn icon" class:on={ui.dock === 'pins'} title="Pinned messages" onclick={() => toggleDock('pins')}><Pin size={18} /></button>
-    <button class="btn icon" class:on={ui.dock === 'media'} title="Media" onclick={() => toggleDock('media')}><ImageIcon size={18} /></button>
+    <button type="button" class="bar-tool" class:on={muted} title="Notifications" onclick={() => (bell = !bell)}><Bell size={18} /></button>
+    <button type="button" class="bar-tool" class:on={ui.dock === 'pins'} title="Pinned messages" onclick={() => toggleDock('pins')}><Pin size={18} /></button>
+    <button type="button" class="bar-tool" class:on={ui.dock === 'media'} title="Media" onclick={() => toggleDock('media')}><ImageIcon size={18} /></button>
     {#if ui.mode === 'chat' || ui.mode === 'thread'}
-      <button class="btn icon" class:on={ui.dock === 'threads'} title="Threads" onclick={() => toggleDock('threads')}><MessagesSquare size={18} /></button>
+      <button type="button" class="bar-tool" class:on={ui.dock === 'threads'} title="Threads" onclick={() => toggleDock('threads')}><MessagesSquare size={18} /></button>
     {/if}
-    <button class="btn icon" class:on={(ui.mode === 'chat' || ui.mode === 'thread') ? ui.showMembers !== false : ui.dock === (ui.mode === 'group' ? 'group' : 'profile')} title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
+    <button type="button" class="bar-tool" class:on={(ui.mode === 'chat' || ui.mode === 'thread') ? ui.showMembers !== false : ui.dock === (ui.mode === 'group' ? 'group' : 'profile')} title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
     <label class="top-search">
       <Search size={15} />
       <input placeholder={ui.mode === 'dm' ? 'Search' : 'Search ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />
