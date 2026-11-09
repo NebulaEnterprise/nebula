@@ -58,6 +58,9 @@ export const ui = $state({
   attachOpen: false,
   packs: [],
   activity: { servers: {}, channels: {}, dms: {} },
+  mentions: [],
+  heads: {},
+  inboxOpen: false,
   popout: null,
   userSettings: false,
   userPage: 'profile',
@@ -906,6 +909,26 @@ function warmRoom(key, path) {
       warmSeen.delete(key);
     }
   });
+}
+
+export function markAllRead() {
+  const map = seenMap();
+  for (const [id, messageId] of Object.entries(ui.heads || {})) {
+    if (messageId) map[id] = messageId;
+  }
+  saveSeen(map);
+  ui.activity = { servers: {}, channels: {}, dms: {} };
+  ui.mentions = [];
+  pollActivity();
+  loadDms();
+}
+
+export async function openMention(row) {
+  if (!row) return;
+  ui.inboxOpen = false;
+  if (row.serverId && row.serverId !== ui.serverId) await openServer(row.serverId);
+  const channel = (ui.channels || []).find((item) => item.id === row.channelId) || { id: row.channelId, type: 'text', name: row.channelName || 'channel' };
+  pickChannel(channel);
 }
 
 export function pickChannel(ch) {
@@ -1938,6 +1961,8 @@ async function pollActivity() {
     activityReady = true;
     mentionSnap = mentions;
     dmSnap = dmUnread;
+    ui.mentions = Array.isArray(data.inbox) ? data.inbox : [];
+    ui.heads = data.heads || {};
     if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels)) {
       ui.activity = { ...ui.activity, servers, channels };
     }

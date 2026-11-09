@@ -2,7 +2,7 @@
   import { MessageSquare, Check, X, Ban } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, showFriends, showAddFriend, openDm, friendAct, toast } from '../state.svelte.js';
+  import { ui, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
   import { api } from '../api.js';
   let q = $state('');
   let name = $state('');
@@ -119,23 +119,29 @@
     {#if !list.length}<p class="hint">No suggestions yet. People you share a server with show up here.</p>{/if}
   {:else if ui.friendsTab === 'pending'}
     <div class="cat">Incoming — {ui.incoming.length}</div>
-    {#each ui.incoming as u}
-      <div class="friend">
+    {#each ui.incoming as u (u.id)}
+      <div class="friend friend-hit" role="button" tabindex="0" onclick={() => openPopout(u)} onkeydown={(e) => { if (e.key === 'Enter') openPopout(u); }}>
         <Avatar user={u} size={36} />
         <div class="meta"><strong><Name user={u} /></strong><span>Incoming request</span></div>
-        <button class="btn icon" title="Accept" onclick={() => friendAct('accept', { userId: u.id })}><Check size={16} /></button>
-        <button class="btn icon" title="Ignore" onclick={() => friendAct('decline', { userId: u.id })}><X size={16} /></button>
+        <button class="btn icon" title="Accept" onclick={(e) => { e.stopPropagation(); friendAct('accept', { userId: u.id }); }}><Check size={16} /></button>
+        <button class="btn icon" title="Ignore" onclick={(e) => { e.stopPropagation(); friendAct('decline', { userId: u.id }); }}><X size={16} /></button>
       </div>
     {/each}
     <div class="cat">Outgoing — {ui.outgoing.length}</div>
-    {#each ui.outgoing as u}
-      <div class="friend">
+    {#each ui.outgoing as u (u.id)}
+      <div class="friend friend-hit" role="button" tabindex="0" onclick={() => openPopout(u)} onkeydown={(e) => { if (e.key === 'Enter') openPopout(u); }}>
         <Avatar user={u} size={36} />
         <div class="meta"><strong><Name user={u} /></strong><span>Request sent</span></div>
-        <button class="btn sm" onclick={() => friendAct('cancel', { userId: u.id })}>Cancel</button>
+        <button class="btn sm" onclick={(e) => { e.stopPropagation(); friendAct('cancel', { userId: u.id }); }}>Cancel</button>
       </div>
     {/each}
-    {#if !ui.incoming.length && !ui.outgoing.length}<p class="hint">No pending requests.</p>{/if}
+    {#if !ui.incoming.length && !ui.outgoing.length}
+      <div class="empty-note">
+        <strong>No pending requests</strong>
+        <p>Friend requests you send or get show up here.</p>
+        <button class="btn brand empty-act" type="button" onclick={showAddFriend}>Add friend</button>
+      </div>
+    {/if}
   {:else}
     <div class="cat">{ui.friendsTab === 'online' ? 'Online' : 'All friends'} — {list.length}</div>
     {#each list as u}
@@ -149,6 +155,17 @@
         <button class="btn icon" title="Block" onclick={() => friendAct('block', { userId: u.id })}><Ban size={16} /></button>
       </div>
     {/each}
-    {#if !list.length}<p class="hint">Nobody here yet. Add a friend to start.</p>{/if}
+    {#if !list.length}
+      <div class="empty-note">
+        {#if ui.friendsTab === 'online' && ui.friends.length}
+          <strong>Nobody's online right now</strong>
+          <p>Your friends are taking a break. Say hi and they'll see it later.</p>
+        {:else}
+          <strong>No friends yet</strong>
+          <p>Add a friend, then say hi.</p>
+        {/if}
+        <button class="btn brand empty-act" type="button" onclick={showAddFriend}>Add friend</button>
+      </div>
+    {/if}
   {/if}
 </div>

@@ -1598,6 +1598,36 @@ img { max-width: 100%; }
 .report-row p, .report-view p { margin: 4px 0; color: var(--muted); }
 .report-view { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
 .id-menu { position: fixed; z-index: 60; width: 210px; }
+.empty-note { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 16px; color: var(--muted); }
+.empty-note strong { color: var(--text); font-size: 16px; }
+.empty-note p { margin: 0; max-width: 280px; }
+.empty-mark { width: 64px; height: 64px; border-radius: 18px; display: grid; place-items: center; background: #f97316; color: #fff; margin-bottom: 6px; }
+.empty-act { width: auto; min-width: 120px; margin-top: 8px; background: #f97316; }
+.dm-empty { padding-top: 18px; }
+.friend-hit { cursor: pointer; }
+.inbox-btn { position: relative; }
+.inbox-btn .pill-count { position: absolute; top: -4px; right: -6px; }
+.inbox-pop {
+  position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 40; width: min(420px, calc(100vw - 96px));
+  max-height: min(560px, calc(100vh - 120px)); display: flex; flex-direction: column;
+  background: #1e1f22; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+}
+.inbox-h, .inbox-tabs, .inbox-read { display: flex; align-items: center; gap: 8px; }
+.inbox-h { justify-content: space-between; padding: 12px 12px 4px; }
+.inbox-h strong { display: inline-flex; align-items: center; gap: 8px; }
+.inbox-tabs { padding: 8px 12px; gap: 4px; }
+.inbox-tabs button { padding: 6px 10px; border-radius: 8px; color: var(--muted); font-weight: 650; display: inline-flex; align-items: center; gap: 6px; }
+.inbox-tabs button.on { background: var(--bg-hover); color: var(--text); }
+.inbox-tabs em, .quiet-count { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: #f23f43; color: #fff; font-style: normal; font-size: 11px; font-weight: 800; }
+.quiet-count { background: #4e5058; }
+.inbox-read { margin: 0 12px 8px; color: var(--muted); font-weight: 650; }
+.inbox-body { overflow: auto; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 6px; }
+.inbox-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; text-align: left; background: #2b2d31; }
+.inbox-row div { flex: 1; min-width: 0; }
+.inbox-row strong, .inbox-row span, .inbox-row p { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row span, .inbox-row p, .inbox-total { color: var(--muted); font-size: 12px; margin: 0; }
+.inbox-dot { width: 8px; height: 8px; border-radius: 50%; background: #f23f43; flex-shrink: 0; }
+.side { overflow: visible; }
 
 @media (max-width: 900px) {
   .members { display: none; }

@@ -1,6 +1,6 @@
 <script>
   import {
-    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check, Search, X,
+    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check, Search, X, Inbox as InboxIcon, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
     Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight,
   } from '@lucide/svelte';
@@ -11,6 +11,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
+  import Inbox from './Inbox.svelte';
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen } from '../voice.js';
@@ -20,6 +21,8 @@
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
   const requestCount = $derived((ui.incoming || []).length);
   const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
+  const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+  const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   function countLabel(n) { return n > 99 ? '99+' : String(n); }
 
   function channelsIn(cat, type) {
@@ -302,7 +305,14 @@
           </div>
         {/if}
       {/each}
-      {#if !(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId))}<p class="hint" style="padding:8px">No conversations yet.</p>{/if}
+      {#if noChats}
+        <div class="empty-note dm-empty">
+          <span class="empty-mark"><MessageSquare size={22} /></span>
+          <strong>No DMs yet</strong>
+          <p>{ui.friends.length ? 'Start a chat from Friends.' : 'Add a friend, then say hi.'}</p>
+          <button class="btn brand empty-act" type="button" onclick={() => showFriends(ui.friends.length ? 'online' : 'find')}>{ui.friends.length ? 'Friends' : 'Find friends'}</button>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -418,6 +428,11 @@
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
       </div>
     </button>
+    <button class="btn icon inbox-btn" title="Inbox" onclick={() => (ui.inboxOpen = !ui.inboxOpen)}>
+      <InboxIcon size={16} />
+      {#if mentionCount}<em class="pill-count">{countLabel(mentionCount)}</em>{/if}
+    </button>
+    {#if ui.inboxOpen}<Inbox />{/if}
     <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={16} /></button>
     <button class="btn icon" title="Log out" onclick={logout}><LogOut size={16} /></button>
   </div>

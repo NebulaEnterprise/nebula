@@ -39,6 +39,7 @@
       if (!inside('.picker') && !inside('.picker-toggle') && !inside('.react-picker')) ui.picker = '';
       if (!inside('.attach-menu') && !inside('.attach-toggle')) ui.attachOpen = false;
       if (!inside('.id-menu')) ui.idMenu = null;
+      if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
     window.addEventListener('keydown', onKey);

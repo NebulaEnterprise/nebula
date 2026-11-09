@@ -3499,7 +3499,31 @@ app.post('/api/activity', auth, (req, res) => {
   }
   const dmNotes = dmInbox(req.user.id, seen, seeded);
   Object.assign(heads, dmNotes.heads);
-  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers });
+  const inbox = [];
+  for (const g of Object.values(guilds.servers)) {
+    if (!g || !g.members || !g.members[req.user.id]) continue;
+    for (const channel of g.channels || []) {
+      if (channel.type && channel.type !== 'text') continue;
+      const list = messages[channel.id] || [];
+      for (let i = Math.max(0, list.length - 80); i < list.length; i++) {
+        const msg = list[i];
+        if (!msg || msg.authorId === req.user.id || !messageMentions(msg, req.user, g)) continue;
+        const author = users[msg.authorId];
+        inbox.push({
+          id: msg.id,
+          at: msg.createdAt,
+          content: dmPreview(msg.content || ''),
+          channelId: channel.id,
+          channelName: channel.name,
+          serverId: g.id,
+          serverName: g.name,
+          author: author ? { id: author.id, username: author.username, displayName: author.displayName || author.username, avatarUrl: author.avatarUrl || '', avatarColor: author.avatarColor || '#7c5cff' } : { id: msg.authorId, username: 'Someone', displayName: 'Someone' },
+        });
+      }
+    }
+  }
+  inbox.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
+  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers, inbox: inbox.slice(0, 30) });
 });
 
 const gifCache = new Map();
