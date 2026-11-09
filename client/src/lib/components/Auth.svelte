@@ -1,10 +1,11 @@
 <script>
-  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount } from '../state.svelte.js';
+  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   let email = $state('');
   let username = $state('');
   let password = $state('');
   let code = $state('');
+  let mfaCode = $state('');
   let busy = $state(false);
 
   async function run(fn) {
@@ -26,6 +27,7 @@
       <div class="field"><label>Email or username</label><input bind:value={email} autocomplete="username" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>Log in</button>
+      <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Sign in with a passkey</button>
       <p class="auth-switch">New here? <button type="button" onclick={() => (ui.auth = 'register')}>Create an account</button></p>
       {#if ui.addingAccount}
         <p class="auth-switch"><button type="button" onclick={() => run(() => cancelAdd())}>Back</button></p>
@@ -37,6 +39,14 @@
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="new-password" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => requestCode(email, username, password))}>Continue</button>
       <p class="auth-switch">Already have one? <button type="button" onclick={() => (ui.auth = 'login')}>Log in</button></p>
+    {:else if ui.auth === 'mfa'}
+      <p class="sub">Authenticator is on for this account. Enter the 6-digit code from the app.</p>
+      <div class="field"><label>Code</label><input class="code" bind:value={mfaCode} maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></div>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => submitMfa(mfaCode.trim()))}>Confirm</button>
+      {#if (ui.mfa?.methods || []).includes('passkey')}
+        <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Use a passkey instead</button>
+      {/if}
+      <p class="auth-switch"><button type="button" onclick={() => { ui.auth = 'login'; ui.mfa = null; }}>Back</button></p>
     {:else}
       <p class="sub">Enter the 6-digit code sent to {ui.pending?.email}.</p>
       <div class="field"><label>Code</label><input class="code" bind:value={code} maxlength="6" inputmode="numeric" /></div>

@@ -9,6 +9,963 @@ const { execFile, spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
+const security = (() => {
+const qrApi = (() => {
+const EXP = new Uint8Array(512);
+const LOG = new Uint8Array(256);
+(() => {
+  let x = 1;
+  for (let i = 0; i < 255; i++) {
+    EXP[i] = x;
+    LOG[x] = i;
+    x <<= 1;
+    if (x & 0x100) x ^= 0x11d;
+  }
+  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+})();
+
+function mul(a, b) {
+  if (!a || !b) return 0;
+  return EXP[LOG[a] + LOG[b]];
+}
+
+// Version 1–10, error correction M.
+// [ec per block, group1 blocks, group1 data, group2 blocks, group2 data]
+const TABLE = [
+  null,
+  [10, 1, 16, 0, 0],
+  [16, 1, 28, 0, 0],
+  [26, 1, 44, 0, 0],
+  [18, 2, 32, 0, 0],
+  [24, 2, 43, 0, 0],
+  [16, 4, 27, 0, 0],
+  [18, 4, 31, 0, 0],
+  [22, 2, 38, 2, 39],
+  [22, 3, 36, 2, 37],
+  [26, 4, 43, 1, 44],
+];
+
+const ALIGN = [
+  [],
+  [],
+  [6, 18],
+  [6, 22],
+  [6, 26],
+  [6, 30],
+  [6, 34],
+  [6, 22, 38],
+  [6, 24, 42],
+  [6, 26, 46],
+  [6, 28, 50],
+];
+
+function rsGenerator(ecLen) {
+  let poly = [1];
+  for (let i = 0; i < ecLen; i++) {
+    const next = new Array(poly.length + 1).fill(0);
+    for (let j = 0; j < poly.length; j++) {
+      next[j] ^= mul(poly[j], EXP[i]);
+      next[j + 1] ^= poly[j];
+    }
+    poly = next;
+  }
+  return poly.reverse();
+}
+
+function rsRemainder(data, ecLen) {
+  const gen = rsGenerator(ecLen);
+  const msg = new Uint8Array(data.length + ecLen);
+  msg.set(data);
+  for (let i = 0; i < data.length; i++) {
+    const factor = msg[i];
+    if (!factor) continue;
+    for (let j = 0; j < gen.length; j++) msg[i + j] ^= mul(gen[j], factor);
+  }
+  return msg.slice(data.length);
+}
+
+function dataBytes(version, bytes) {
+  const [ec, b1, d1, b2, d2] = TABLE[version];
+  const capacity = b1 * d1 + b2 * d2;
+  const ccBits = version <= 9 ? 8 : 16;
+  const out = [];
+  let acc = 0;
+  let bits = 0;
+  function put(value, width) {
+    acc = (acc << width) | (value & ((1 << width) - 1));
+    bits += width;
+    while (bits >= 8) {
+      bits -= 8;
+      out.push((acc >> bits) & 255);
+    }
+  }
+  put(0b0100, 4);
+  put(bytes.length, ccBits);
+  for (const byte of bytes) put(byte, 8);
+  const totalBits = capacity * 8;
+  const used = 4 + ccBits + bytes.length * 8;
+  put(0, Math.min(4, totalBits - used));
+  if (bits) put(0, 8 - bits);
+  const pads = [0xec, 0x11];
+  let p = 0;
+  while (out.length < capacity) out.push(pads[p++ % 2]);
+  return out.slice(0, capacity);
+}
+
+function interleave(version, codewords) {
+  const [ec, b1, d1, b2, d2] = TABLE[version];
+  const blocks = [];
+  let offset = 0;
+  for (let i = 0; i < b1; i++) {
+    const data = codewords.slice(offset, offset + d1);
+    offset += d1;
+    blocks.push({ data, ec: rsRemainder(data, ec) });
+  }
+  for (let i = 0; i < b2; i++) {
+    const data = codewords.slice(offset, offset + d2);
+    offset += d2;
+    blocks.push({ data, ec: rsRemainder(data, ec) });
+  }
+  const out = [];
+  const maxData = Math.max(d1, d2 || 0);
+  for (let i = 0; i < maxData; i++) {
+    for (const block of blocks) if (i < block.data.length) out.push(block.data[i]);
+  }
+  for (let i = 0; i < ec; i++) {
+    for (const block of blocks) out.push(block.ec[i]);
+  }
+  return out;
+}
+
+function formatBits(mask) {
+  const data = mask;
+  let rem = data << 10;
+  for (let i = 14; i >= 10; i--) {
+    if ((rem >> i) & 1) rem ^= 0b10100110111 << (i - 10);
+  }
+  return ((data << 10) | rem) ^ 0b101010000010010;
+}
+
+function versionBits(version) {
+  let rem = version << 12;
+  for (let i = 17; i >= 12; i--) {
+    if ((rem >> i) & 1) rem ^= 0b1111100100101 << (i - 12);
+  }
+  return (version << 12) | rem;
+}
+
+function paint(version, codewords) {
+  const size = 21 + (version - 1) * 4;
+  const dark = Array.from({ length: size }, () => Array(size).fill(false));
+  const hold = Array.from({ length: size }, () => Array(size).fill(false));
+  function set(y, x, on, reserved) {
+    if (y < 0 || x < 0 || y >= size || x >= size) return;
+    dark[y][x] = !!on;
+    if (reserved) hold[y][x] = true;
+  }
+  function finder(x, y) {
+    for (let dy = -1; dy <= 7; dy++) {
+      for (let dx = -1; dx <= 7; dx++) {
+        const yy = y + dy;
+        const xx = x + dx;
+        if (yy < 0 || xx < 0 || yy >= size || xx >= size) continue;
+        const inside = dy >= 0 && dy <= 6 && dx >= 0 && dx <= 6;
+        const border = dy === 0 || dy === 6 || dx === 0 || dx === 6;
+        const core = dy >= 2 && dy <= 4 && dx >= 2 && dx <= 4;
+        set(yy, xx, inside && (border || core), true);
+      }
+    }
+  }
+  finder(0, 0);
+  finder(size - 7, 0);
+  finder(0, size - 7);
+  for (let i = 0; i < size; i++) {
+    if (!hold[6][i]) set(6, i, i % 2 === 0, true);
+    if (!hold[i][6]) set(i, 6, i % 2 === 0, true);
+  }
+  const spots = ALIGN[version] || [];
+  for (const y of spots) {
+    for (const x of spots) {
+      if ((x < 9 && y < 9) || (x > size - 10 && y < 9) || (x < 9 && y > size - 10)) continue;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          set(y + dy, x + dx, Math.max(Math.abs(dy), Math.abs(dx)) !== 1, true);
+        }
+      }
+    }
+  }
+  set(size - 8, 8, true, true);
+  for (let i = 0; i < 9; i++) {
+    hold[8][i] = true;
+    hold[i][8] = true;
+  }
+  for (let i = 0; i < 8; i++) {
+    hold[8][size - 1 - i] = true;
+    hold[size - 1 - i][8] = true;
+  }
+  if (version >= 7) {
+    const bits = versionBits(version);
+    let i = 0;
+    for (let y = 0; y < 6; y++) {
+      for (let x = 0; x < 3; x++) {
+        const on = ((bits >> i) & 1) === 1;
+        set(y, size - 11 + x, on, true);
+        set(size - 11 + x, y, on, true);
+        i++;
+      }
+    }
+  }
+
+  const bits = [];
+  for (const byte of codewords) {
+    for (let i = 7; i >= 0; i--) bits.push((byte >> i) & 1);
+  }
+  let cursor = 0;
+  let upward = true;
+  for (let x = size - 1; x > 0; x -= 2) {
+    if (x === 6) x -= 1;
+    for (let i = 0; i < size; i++) {
+      const y = upward ? size - 1 - i : i;
+      for (const xx of [x, x - 1]) {
+        if (hold[y][xx]) continue;
+        dark[y][xx] = cursor < bits.length ? bits[cursor++] === 1 : false;
+      }
+    }
+    upward = !upward;
+  }
+  return { dark, hold, size };
+}
+
+function maskOf(mask, y, x) {
+  if (mask === 0) return (y + x) % 2 === 0;
+  if (mask === 1) return y % 2 === 0;
+  if (mask === 2) return x % 3 === 0;
+  if (mask === 3) return (y + x) % 3 === 0;
+  if (mask === 4) return (Math.floor(y / 2) + Math.floor(x / 3)) % 2 === 0;
+  if (mask === 5) return ((y * x) % 2 + (y * x) % 3) === 0;
+  if (mask === 6) return (((y * x) % 2) + ((y * x) % 3)) % 2 === 0;
+  return (((y + x) % 2) + ((y * x) % 3)) % 2 === 0;
+}
+
+function drawFormat(modules, size, mask) {
+  const bits = formatBits(mask);
+  for (let i = 0; i < 15; i++) {
+    const on = ((bits >>> i) & 1) === 1;
+    if (i < 6) modules[i][8] = on;
+    else if (i < 8) modules[i + 1][8] = on;
+    else modules[size - 15 + i][8] = on;
+    if (i < 8) modules[8][size - i - 1] = on;
+    else if (i < 9) modules[8][7] = on;
+    else modules[8][15 - i - 1] = on;
+  }
+  modules[size - 8][8] = true;
+}
+
+function penalty(modules) {
+  const n = modules.length;
+  let score = 0;
+  for (let y = 0; y < n; y++) {
+    let run = 1;
+    for (let x = 1; x < n; x++) {
+      if (modules[y][x] === modules[y][x - 1]) run += 1;
+      else {
+        if (run >= 5) score += 3 + run - 5;
+        run = 1;
+      }
+    }
+    if (run >= 5) score += 3 + run - 5;
+  }
+  for (let x = 0; x < n; x++) {
+    let run = 1;
+    for (let y = 1; y < n; y++) {
+      if (modules[y][x] === modules[y - 1][x]) run += 1;
+      else {
+        if (run >= 5) score += 3 + run - 5;
+        run = 1;
+      }
+    }
+    if (run >= 5) score += 3 + run - 5;
+  }
+  for (let y = 0; y < n - 1; y++) {
+    for (let x = 0; x < n - 1; x++) {
+      const v = modules[y][x];
+      if (v === modules[y][x + 1] && v === modules[y + 1][x] && v === modules[y + 1][x + 1]) score += 3;
+    }
+  }
+  const pattern = [1, 0, 1, 1, 1, 0, 1];
+  function finderScore(row) {
+    let add = 0;
+    for (let i = 0; i <= row.length - 7; i++) {
+      let ok = true;
+      for (let k = 0; k < 7; k++) if (row[i + k] !== !!pattern[k]) ok = false;
+      if (!ok) continue;
+      const left = i >= 4 && row.slice(i - 4, i).every((v) => !v);
+      const right = i + 11 <= row.length && row.slice(i + 7, i + 11).every((v) => !v);
+      if (left || right) add += 40;
+    }
+    return add;
+  }
+  for (let y = 0; y < n; y++) score += finderScore(modules[y]);
+  for (let x = 0; x < n; x++) score += finderScore(modules.map((row) => row[x]));
+  let darks = 0;
+  for (const row of modules) for (const cell of row) if (cell) darks += 1;
+  score += 10 * Math.floor(Math.abs(darks / (n * n) * 100 - 50) / 5);
+  return score;
+}
+
+function chooseVersion(length) {
+  for (let version = 1; version <= 10; version++) {
+    const [ec, b1, d1, b2, d2] = TABLE[version];
+    const capacity = b1 * d1 + b2 * d2;
+    const ccBits = version <= 9 ? 8 : 16;
+    if (4 + ccBits + length * 8 <= capacity * 8) return version;
+  }
+  return 0;
+}
+
+function qrMatrix(text) {
+  const bytes = Buffer.from(String(text), 'utf8');
+  const version = chooseVersion(bytes.length);
+  if (!version) throw new Error('That code is too long to draw');
+  const packed = interleave(version, dataBytes(version, bytes));
+  const base = paint(version, packed);
+  let best = null;
+  let bestScore = Infinity;
+  for (let mask = 0; mask < 8; mask++) {
+    const modules = base.dark.map((row) => row.slice());
+    for (let y = 0; y < base.size; y++) {
+      for (let x = 0; x < base.size; x++) {
+        if (!base.hold[y][x] && maskOf(mask, y, x)) modules[y][x] = !modules[y][x];
+      }
+    }
+    drawFormat(modules, base.size, mask);
+    const score = penalty(modules);
+    if (score < bestScore) {
+      bestScore = score;
+      best = modules;
+    }
+  }
+  return best;
+}
+
+function qrSvg(text) {
+  const matrix = qrMatrix(text);
+  const n = matrix.length;
+  const quiet = 4;
+  const span = n + quiet * 2;
+  let body = '';
+  for (let y = 0; y < n; y++) {
+    let x = 0;
+    while (x < n) {
+      if (!matrix[y][x]) {
+        x += 1;
+        continue;
+      }
+      let w = 1;
+      while (x + w < n && matrix[y][x + w]) w += 1;
+      body += `<rect x="${x + quiet}" y="${y + quiet}" width="${w}" height="1"/>`;
+      x += w;
+    }
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${span} ${span}" shape-rendering="crispEdges"><rect width="${span}" height="${span}" fill="#fff"/><g fill="#111">${body}</g></svg>`;
+}
+
+return { qrMatrix, qrSvg };
+})();
+const { qrSvg } = qrApi;
+
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const challenges = new Map();
+const challengeFile = path.join(__dirname, 'data', 'challenges.json');
+function loadChallenges() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(challengeFile, 'utf8'));
+    const now = Date.now();
+    for (const [id, row] of Object.entries(raw || {})) {
+      if (row && row.exp > now) challenges.set(id, row);
+    }
+  } catch (_) {}
+}
+function storeChallenges() {
+  const obj = {};
+  const now = Date.now();
+  for (const [id, row] of challenges) {
+    if (row && row.exp > now) obj[id] = row;
+  }
+  try {
+    fs.mkdirSync(path.dirname(challengeFile), { recursive: true });
+    fs.writeFileSync(challengeFile, JSON.stringify(obj));
+  } catch (_) {}
+}
+loadChallenges();
+
+function b64url(value) {
+  return Buffer.from(value).toString('base64url');
+}
+
+function fromB64url(value) {
+  return Buffer.from(String(value || ''), 'base64url');
+}
+
+function base32Encode(buf) {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(text) {
+  const clean = String(text || '').toUpperCase().replace(/=+$/g, '').replace(/\s+/g, '');
+  let bits = 0;
+  let value = 0;
+  const out = [];
+  for (const ch of clean) {
+    const idx = B32.indexOf(ch);
+    if (idx < 0) continue;
+    value = (value << 5) | idx;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(out);
+}
+
+function hotp(secret, counter) {
+  const key = Buffer.isBuffer(secret) ? secret : base32Decode(secret);
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64BE(BigInt(counter));
+  const hmac = crypto.createHmac('sha1', key).update(buf).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const bin = ((hmac[offset] & 0x7f) << 24) | (hmac[offset + 1] << 16) | (hmac[offset + 2] << 8) | hmac[offset + 3];
+  return String(bin % 1000000).padStart(6, '0');
+}
+
+function matchTotp(secret, code, lastCounter = 0) {
+  const clean = String(code || '').replace(/\s+/g, '');
+  if (!/^\d{6}$/.test(clean)) return 0;
+  const now = Math.floor(Date.now() / 30000);
+  for (let offset = -1; offset <= 1; offset++) {
+    const counter = now + offset;
+    if (counter <= lastCounter) continue;
+    if (hotp(secret, counter) === clean) return counter;
+  }
+  return 0;
+}
+
+function deviceLabel(ua) {
+  const s = String(ua || '');
+  if (!s) return 'Unknown device';
+  let os = 'Unknown';
+  if (/Windows/i.test(s)) os = 'Windows';
+  else if (/Android/i.test(s)) os = 'Android';
+  else if (/iPhone/i.test(s)) os = 'iPhone';
+  else if (/iPad/i.test(s)) os = 'iPad';
+  else if (/Mac OS|Macintosh/i.test(s)) os = 'Mac';
+  else if (/CrOS/i.test(s)) os = 'ChromeOS';
+  else if (/Linux/i.test(s)) os = 'Linux';
+  let browser = 'Browser';
+  if (/Edg\//.test(s)) browser = 'Edge';
+  else if (/OPR\/|Opera/.test(s)) browser = 'Opera';
+  else if (/Chrome\//.test(s)) browser = 'Chrome';
+  else if (/Firefox\//.test(s)) browser = 'Firefox';
+  else if (/Safari\//.test(s)) browser = 'Safari';
+  return os + ' · ' + browser;
+}
+
+function ensureSessions(user) {
+  if (!user) return [];
+  if (!Array.isArray(user.sessions)) user.sessions = [];
+  if (user.token && !user.sessions.some((row) => row.token === user.token)) {
+    user.sessions.unshift({
+      id: 'legacy-' + String(user.id || '').slice(0, 8),
+      token: user.token,
+      createdAt: user.createdAt || new Date().toISOString(),
+      lastSeen: Number(user.lastSeen) || Date.now(),
+      label: 'Saved session',
+      ua: '',
+    });
+  }
+  return user.sessions;
+}
+
+function sessionCount(user) {
+  const list = Array.isArray(user && user.sessions) ? user.sessions : [];
+  const extra = user && user.token && !list.some((row) => row.token === user.token) ? 1 : 0;
+  return list.length + extra;
+}
+
+function openSession(user, req) {
+  ensureSessions(user);
+  const token = crypto.randomBytes(32).toString('hex');
+  const session = {
+    id: crypto.randomBytes(8).toString('hex'),
+    token,
+    createdAt: new Date().toISOString(),
+    lastSeen: Date.now(),
+    label: deviceLabel(req && req.headers && req.headers['user-agent']),
+    ua: String((req && req.headers && req.headers['user-agent']) || '').slice(0, 180),
+  };
+  user.sessions.push(session);
+  if (user.sessions.length > 24) user.sessions.splice(0, user.sessions.length - 24);
+  user.token = token;
+  user.status = 'online';
+  user.lastSeen = Date.now();
+  return session;
+}
+
+function findSession(users, token) {
+  if (!token) return null;
+  for (const user of Object.values(users || {})) {
+    ensureSessions(user);
+    const session = user.sessions.find((row) => row.token === token);
+    if (session) return { user, session };
+  }
+  for (const user of Object.values(users || {})) {
+    if (!user || user.token !== token) continue;
+    ensureSessions(user);
+    const session = user.sessions.find((row) => row.token === token);
+    if (session) return { user, session };
+  }
+  return null;
+}
+
+function removeSession(user, id) {
+  ensureSessions(user);
+  const index = user.sessions.findIndex((row) => row.id === id);
+  if (index < 0) return null;
+  const [removed] = user.sessions.splice(index, 1);
+  if (user.token === removed.token) user.token = (user.sessions[user.sessions.length - 1] || {}).token || '';
+  return removed;
+}
+
+function summary(user, currentId) {
+  ensureSessions(user);
+  const sessions = user.sessions.map((row) => ({
+    id: row.id,
+    label: row.label || 'Unknown device',
+    createdAt: row.createdAt,
+    lastSeen: Number(row.lastSeen) || null,
+    current: row.id === currentId,
+  }));
+  const passkeys = (Array.isArray(user.passkeys) ? user.passkeys : []).map((row) => ({
+    id: row.id,
+    name: row.name || 'Passkey',
+    createdAt: row.createdAt,
+    lastUsed: Number(row.lastUsed) || null,
+  }));
+  return {
+    mfa: !!(user.totp && user.totp.enabled),
+    passkeyCount: passkeys.length,
+    sessionCount: sessions.length,
+    sessions,
+    passkeys,
+  };
+}
+
+function httpError(message, status = 400) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+
+function groupSecret(secret) {
+  return String(secret || '').replace(/(.{4})/g, '$1 ').trim();
+}
+
+function otpauthUrl(user, secret) {
+  const label = encodeURIComponent('Nebula:' + (user.username || 'account'));
+  const issuer = encodeURIComponent('Nebula');
+  return `otpauth://totp/${label}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
+}
+
+function beginTotp(user) {
+  if (user.totp && user.totp.enabled) throw httpError('Authenticator is already on');
+  const secret = base32Encode(crypto.randomBytes(20));
+  user.totp = { secret, enabled: false, lastCounter: 0 };
+  const url = otpauthUrl(user, secret);
+  return { secret: groupSecret(secret), otpauth: url, qr: qrSvg(url) };
+}
+
+function confirmTotp(user, code) {
+  if (!user.totp || !user.totp.secret) throw httpError('Start authenticator setup first');
+  const counter = matchTotp(user.totp.secret, code, user.totp.lastCounter || 0);
+  if (!counter) throw httpError('That code is wrong');
+  user.totp.enabled = true;
+  user.totp.lastCounter = counter;
+  return true;
+}
+
+function disableTotp(user, code) {
+  if (!user.totp || !user.totp.enabled) throw httpError('Authenticator is already off');
+  const counter = matchTotp(user.totp.secret, code, user.totp.lastCounter || 0);
+  if (!counter) throw httpError('That code is wrong');
+  user.totp = null;
+  return true;
+}
+
+function checkTotp(user, code) {
+  if (!user.totp || !user.totp.enabled) return false;
+  const counter = matchTotp(user.totp.secret, code, user.totp.lastCounter || 0);
+  if (!counter) return false;
+  user.totp.lastCounter = counter;
+  return true;
+}
+
+function putChallenge(kind, data) {
+  const id = crypto.randomBytes(16).toString('hex');
+  challenges.set(id, { kind, ...data, tries: 0, exp: Date.now() + 5 * 60 * 1000 });
+  storeChallenges();
+  return id;
+}
+
+function readChallenge(id, kind) {
+  const row = challenges.get(String(id || ''));
+  if (!row || row.kind !== kind || row.exp < Date.now()) {
+    challenges.delete(String(id || ''));
+    return null;
+  }
+  return row;
+}
+
+function dropChallenge(id) {
+  challenges.delete(String(id || ''));
+  storeChallenges();
+}
+
+function mfaTicket(userId) {
+  return putChallenge('mfa', { userId });
+}
+
+function mfaUserId(ticket) {
+  const row = readChallenge(ticket, 'mfa');
+  return row ? row.userId : '';
+}
+
+function takeMfa(ticket) {
+  const row = readChallenge(ticket, 'mfa');
+  if (!row) return null;
+  row.tries += 1;
+  if (row.tries > 6) {
+    dropChallenge(ticket);
+    return null;
+  }
+  storeChallenges();
+  return row;
+}
+
+function originOf(req) {
+  const origin = String((req && req.headers && req.headers.origin) || '').trim();
+  if (/^https?:\/\/[a-z0-9.-]+(?::\d+)?$/i.test(origin)) return origin;
+  const host = String((req && req.headers && req.headers.host) || 'localhost').split(',')[0].trim();
+  const proto = /^localhost|127\.0\.0\.1/.test(host) ? 'http' : 'https';
+  return proto + '://' + host;
+}
+
+function cborDecode(buf, offset = 0) {
+  const major = buf[offset] >> 5;
+  const info = buf[offset] & 31;
+  let pos = offset + 1;
+  let length = info;
+  if (info === 24) {
+    length = buf[pos];
+    pos += 1;
+  } else if (info === 25) {
+    length = buf.readUInt16BE(pos);
+    pos += 2;
+  } else if (info === 26) {
+    length = buf.readUInt32BE(pos);
+    pos += 4;
+  } else if (info === 27) {
+    length = Number(buf.readBigUInt64BE(pos));
+    pos += 8;
+  } else if (info > 27) {
+    throw httpError('Passkey data is not supported');
+  }
+  if (major === 0) return { value: length, pos };
+  if (major === 1) return { value: -1 - length, pos };
+  if (major === 2) return { value: Buffer.from(buf.subarray(pos, pos + length)), pos: pos + length };
+  if (major === 3) return { value: buf.toString('utf8', pos, pos + length), pos: pos + length };
+  if (major === 4) {
+    const list = [];
+    for (let i = 0; i < length; i++) {
+      const item = cborDecode(buf, pos);
+      list.push(item.value);
+      pos = item.pos;
+    }
+    return { value: list, pos };
+  }
+  if (major === 5) {
+    const map = new Map();
+    for (let i = 0; i < length; i++) {
+      const key = cborDecode(buf, pos);
+      pos = key.pos;
+      const val = cborDecode(buf, pos);
+      pos = val.pos;
+      map.set(key.value, val.value);
+    }
+    return { value: map, pos };
+  }
+  if (major === 6) return cborDecode(buf, pos);
+  if (major === 7) {
+    if (info === 20) return { value: false, pos };
+    if (info === 21) return { value: true, pos };
+    if (info === 22) return { value: null, pos };
+    return { value: null, pos };
+  }
+  throw httpError('Passkey data is not supported');
+}
+
+function coseKey(map) {
+  const kty = Number(map.get(1));
+  const alg = Number(map.get(3));
+  if (kty === 2) {
+    const x = Buffer.from(map.get(-2));
+    const y = Buffer.from(map.get(-3));
+    if (x.length !== 32 || y.length !== 32) throw httpError('Unsupported passkey');
+    const spki = Buffer.concat([
+      Buffer.from('3059301306072a8648ce3d020106082a8648ce3d030107034200', 'hex'),
+      Buffer.from([0x04]),
+      x,
+      y,
+    ]);
+    return { alg: 'es256', key: crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' }), spki };
+  }
+  if (kty === 3 || alg === -257) {
+    const n = Buffer.from(map.get(-1));
+    const e = Buffer.from(map.get(-2));
+    const spki = rsaSpki(n, e);
+    return { alg: 'rs256', key: crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' }), spki };
+  }
+  throw httpError('Unsupported passkey');
+}
+
+function derLen(len) {
+  if (len < 128) return Buffer.from([len]);
+  if (len < 256) return Buffer.from([0x81, len]);
+  return Buffer.from([0x82, (len >> 8) & 255, len & 255]);
+}
+
+function derInt(buf) {
+  let body = Buffer.from(buf);
+  if (body[0] & 0x80) body = Buffer.concat([Buffer.from([0x00]), body]);
+  return Buffer.concat([Buffer.from([0x02]), derLen(body.length), body]);
+}
+
+function rsaSpki(n, e) {
+  const seq = Buffer.concat([derInt(n), derInt(e)]);
+  const bit = Buffer.concat([Buffer.from([0x03]), derLen(seq.length + 1), Buffer.from([0x00]), seq]);
+  const alg = Buffer.from('300d06092a864886f70d0101010500', 'hex');
+  return Buffer.concat([Buffer.from([0x30]), derLen(alg.length + bit.length), alg, bit]);
+}
+
+function clientDataOk(buf, type, challenge, origin) {
+  let json;
+  try { json = JSON.parse(Buffer.from(buf).toString('utf8')); } catch { throw httpError('Passkey response is invalid'); }
+  if (json.type !== type) throw httpError('Passkey response is invalid');
+  if (String(json.origin || '') !== origin) throw httpError('Passkey site does not match');
+  const got = String(json.challenge || '').replace(/=+$/g, '');
+  const expected = String(challenge || '').replace(/=+$/g, '');
+  if (got !== expected) throw httpError('Passkey challenge expired');
+  return json;
+}
+
+function parseAuthData(buf) {
+  if (!buf || buf.length < 37) throw httpError('Passkey data is incomplete');
+  const rpIdHash = buf.subarray(0, 32);
+  const flags = buf[32];
+  const signCount = buf.readUInt32BE(33);
+  let pos = 37;
+  let credentialId = null;
+  let publicKey = null;
+  if (flags & 0x40) {
+    if (buf.length < pos + 18) throw httpError('Passkey data is incomplete');
+    pos += 16;
+    const credLen = buf.readUInt16BE(pos);
+    pos += 2;
+    credentialId = Buffer.from(buf.subarray(pos, pos + credLen));
+    pos += credLen;
+    const decoded = cborDecode(buf, pos);
+    publicKey = decoded.value;
+    pos = decoded.pos;
+  }
+  return { rpIdHash, flags, signCount, credentialId, publicKey, pos };
+}
+
+function verifySig(alg, key, authData, clientData, signature) {
+  const hash = crypto.createHash('sha256').update(clientData).digest();
+  const signed = Buffer.concat([authData, hash]);
+  if (alg === 'es256') {
+    if (signature.length === 64) {
+      return crypto.verify('sha256', signed, { key, dsaEncoding: 'ieee-p1363' }, signature);
+    }
+    return crypto.verify('sha256', signed, key, signature);
+  }
+  return crypto.verify('sha256', signed, key, signature);
+}
+
+function registrationOptions(user, req) {
+  const origin = originOf(req);
+  const rpId = new URL(origin).hostname;
+  const challenge = crypto.randomBytes(32);
+  const id = putChallenge('register', { userId: user.id, origin, rpId, challenge: b64url(challenge) });
+  return {
+    challengeId: id,
+    publicKey: {
+      challenge: b64url(challenge),
+      rp: { name: 'Nebula', id: rpId },
+      user: {
+        id: b64url(Buffer.from(user.id)),
+        name: user.email || user.username,
+        displayName: user.displayName || user.username,
+      },
+      pubKeyCredParams: [
+        { type: 'public-key', alg: -7 },
+        { type: 'public-key', alg: -257 },
+      ],
+      authenticatorSelection: { residentKey: 'preferred', userVerification: 'preferred' },
+      timeout: 60000,
+      attestation: 'none',
+    },
+  };
+}
+
+function registerPasskey(user, body, req) {
+  const row = readChallenge(body && body.challengeId, 'register');
+  if (!row || row.userId !== user.id) throw httpError('Passkey setup expired. Try again.');
+  const credential = body.credential || {};
+  const clientData = fromB64url(credential.clientDataJSON);
+  const attestation = fromB64url(credential.attestationObject);
+  clientDataOk(clientData, 'webauthn.create', row.challenge, row.origin);
+  const decoded = cborDecode(attestation);
+  const authData = Buffer.from(decoded.value.get('authData'));
+  const parsed = parseAuthData(authData);
+  const expected = crypto.createHash('sha256').update(row.rpId).digest();
+  if (!parsed.rpIdHash.equals(expected)) throw httpError('Passkey site does not match');
+  if ((parsed.flags & 0x01) === 0 || (parsed.flags & 0x40) === 0) throw httpError('Passkey was not verified');
+  const cose = coseKey(parsed.publicKey);
+  const id = b64url(parsed.credentialId);
+  if (!Array.isArray(user.passkeys)) user.passkeys = [];
+  if (user.passkeys.some((item) => item.id === id)) throw httpError('That passkey is already saved');
+  if (user.passkeys.length >= 8) throw httpError('You can save 8 passkeys');
+  user.passkeys.push({
+    id,
+    publicKey: b64url(cose.spki),
+    alg: cose.alg,
+    signCount: parsed.signCount,
+    name: deviceLabel(req && req.headers && req.headers['user-agent']),
+    createdAt: new Date().toISOString(),
+    lastUsed: Date.now(),
+  });
+  dropChallenge(body.challengeId);
+  return user.passkeys[user.passkeys.length - 1];
+}
+
+function removePasskey(user, id) {
+  if (!Array.isArray(user.passkeys)) return false;
+  const before = user.passkeys.length;
+  user.passkeys = user.passkeys.filter((item) => item.id !== id);
+  return user.passkeys.length !== before;
+}
+
+function loginOptions(req, user) {
+  const origin = originOf(req);
+  const rpId = new URL(origin).hostname;
+  const challenge = crypto.randomBytes(32);
+  const id = putChallenge('login', {
+    userId: user ? user.id : '',
+    origin,
+    rpId,
+    challenge: b64url(challenge),
+  });
+  const publicKey = {
+    challenge: b64url(challenge),
+    timeout: 60000,
+    rpId,
+    userVerification: 'preferred',
+  };
+  if (user && Array.isArray(user.passkeys) && user.passkeys.length) {
+    publicKey.allowCredentials = user.passkeys.map((item) => ({
+      type: 'public-key',
+      id: item.id,
+    }));
+  }
+  return { challengeId: id, publicKey };
+}
+
+function loginPasskey(users, body) {
+  const row = readChallenge(body && body.challengeId, 'login');
+  if (!row) throw httpError('Passkey sign-in expired. Try again.');
+  const credential = body.credential || {};
+  const id = String(credential.id || '');
+  let owner = null;
+  let passkey = null;
+  const pool = row.userId
+    ? [users[row.userId]].filter(Boolean)
+    : Object.values(users);
+  for (const user of pool) {
+    const found = (user.passkeys || []).find((item) => item.id === id);
+    if (found) {
+      owner = user;
+      passkey = found;
+      break;
+    }
+  }
+  if (!owner || !passkey) throw httpError('No passkey matches this account');
+  const clientData = fromB64url(credential.clientDataJSON);
+  const authData = fromB64url(credential.authenticatorData);
+  const signature = fromB64url(credential.signature);
+  clientDataOk(clientData, 'webauthn.get', row.challenge, row.origin);
+  const parsed = parseAuthData(authData);
+  const expected = crypto.createHash('sha256').update(row.rpId).digest();
+  if (!parsed.rpIdHash.equals(expected)) throw httpError('Passkey site does not match');
+  if ((parsed.flags & 0x01) === 0) throw httpError('Passkey was not verified');
+  const key = crypto.createPublicKey({ key: fromB64url(passkey.publicKey), format: 'der', type: 'spki' });
+  if (!verifySig(passkey.alg, key, authData, clientData, signature)) throw httpError('Passkey was rejected');
+  if (passkey.signCount && parsed.signCount && parsed.signCount <= passkey.signCount) {
+    throw httpError('Passkey was rejected');
+  }
+  passkey.signCount = parsed.signCount;
+  passkey.lastUsed = Date.now();
+  dropChallenge(body.challengeId);
+  return owner;
+}
+
+return {
+  hotp,
+  matchTotp,
+  deviceLabel,
+  ensureSessions,
+  sessionCount,
+  openSession,
+  findSession,
+  removeSession,
+  summary,
+  beginTotp,
+  confirmTotp,
+  disableTotp,
+  checkTotp,
+  mfaTicket,
+  mfaUserId,
+  takeMfa,
+  dropChallenge,
+  registrationOptions,
+  registerPasskey,
+  removePasskey,
+  loginOptions,
+  loginPasskey,
+};
+})();
 
 const PORT = 3850;
 
@@ -925,6 +1882,9 @@ function publicUser(u) {
     tagChoices: tagChoices(u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
+    mfa: !!(u.totp && u.totp.enabled),
+    passkeyCount: Array.isArray(u.passkeys) ? u.passkeys.length : 0,
+    sessionCount: security.sessionCount(u),
   };
 }
 
@@ -1423,15 +2383,13 @@ function createAccount(cleanEmail, entry, req) {
     createdAt: new Date().toISOString(),
   };
   delete codes[cleanEmail];
-  users[id].token = makeToken();
-  users[id].status = 'online';
-  users[id].lastSeen = Date.now();
+  const session = security.openSession(users[id], req);
   saveNow(USERS_FILE, users);
   save(CODES_FILE, codes);
   ensureFriendNode(id);
   save(FRIENDS_FILE, friendGraph);
   ensureGuilds();
-  return { ok: true, token: users[id].token, user: publicUser(users[id]), server: SERVER_NAME };
+  return { ok: true, token: session.token, user: publicUser(users[id]), server: SERVER_NAME };
 }
 
 app.post('/api/auth/verify', (req, res) => {
@@ -1457,15 +2415,56 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || user.passwordHash !== hashPassword(password || '')) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
-  user.token = makeToken();
-  user.status = 'online';
-  user.lastSeen = Date.now();
+  if (user.totp && user.totp.enabled) {
+    const ticket = security.mfaTicket(user.id);
+    return res.json({
+      ok: true,
+      mfa: true,
+      ticket,
+      methods: ['totp', ...((user.passkeys || []).length ? ['passkey'] : [])],
+    });
+  }
+  const session = security.openSession(user, req);
   saveNow(USERS_FILE, users);
-  res.json({ ok: true, token: user.token, user: publicUser(user) });
+  res.json({ ok: true, token: session.token, user: publicUser(user) });
+});
+
+app.post('/api/auth/mfa', (req, res) => {
+  const ticket = req.body && req.body.ticket;
+  const row = security.takeMfa(ticket);
+  const user = row && users[row.userId];
+  if (!user || !security.checkTotp(user, req.body && req.body.code)) {
+    return res.status(400).json({ error: row ? 'That code is wrong' : 'That code expired. Log in again.' });
+  }
+  security.dropChallenge(ticket);
+  const session = security.openSession(user, req);
+  saveNow(USERS_FILE, users);
+  res.json({ ok: true, token: session.token, user: publicUser(user) });
+});
+
+app.post('/api/auth/passkey/options', (req, res) => {
+  let user = null;
+  if (req.body && req.body.ticket) {
+    const userId = security.mfaUserId(req.body.ticket);
+    user = users[userId] || null;
+    if (!user) return res.status(400).json({ error: 'That sign-in expired. Log in again.' });
+  }
+  res.json({ ok: true, ...security.loginOptions(req, user) });
+});
+
+app.post('/api/auth/passkey/verify', (req, res) => {
+  try {
+    const user = security.loginPasskey(users, req.body || {});
+    const session = security.openSession(user, req);
+    saveNow(USERS_FILE, users);
+    res.json({ ok: true, token: session.token, user: publicUser(user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || 'Passkey was rejected' });
+  }
 });
 
 app.post('/api/auth/logout', auth, (req, res) => {
-  req.user.token = '';
+  if (req.session) security.removeSession(req.user, req.session.id);
   save(USERS_FILE, users);
   res.json({ ok: true });
 });
@@ -1903,9 +2902,23 @@ function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  const user = Object.values(users).find((u) => u && u.token === token);
-  if (!user) return res.status(401).json({ error: 'Invalid session' });
-  req.user = user;
+  const found = security.findSession(users, token);
+  if (!found) return res.status(401).json({ error: 'Invalid session' });
+  req.user = found.user;
+  req.session = found.session;
+  if (found.session.label === 'Saved session' && !found.session.ua) {
+    found.session.label = security.deviceLabel(req.headers['user-agent']);
+    found.session.ua = String(req.headers['user-agent'] || '').slice(0, 180);
+    save(USERS_FILE, users);
+  }
+  const now = Date.now();
+  if (now - (Number(found.session.lastSeen) || 0) > 60000) {
+    found.session.lastSeen = now;
+    found.user.lastSeen = now;
+    save(USERS_FILE, users);
+  } else {
+    found.session.lastSeen = now;
+  }
   next();
 }
 
@@ -2209,6 +3222,87 @@ app.post('/api/me/email', auth, (req, res) => {
   req.user.email = email;
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.get('/api/me/security', auth, (req, res) => {
+  res.json({ ok: true, ...security.summary(req.user, req.session && req.session.id) });
+});
+
+app.delete('/api/me/sessions/:id', auth, (req, res) => {
+  const removed = security.removeSession(req.user, req.params.id);
+  if (!removed) return res.status(404).json({ error: 'That device is not logged in' });
+  save(USERS_FILE, users);
+  res.json({
+    ok: true,
+    current: removed.id === (req.session && req.session.id),
+    user: publicUser(req.user),
+    ...security.summary(req.user, req.session && req.session.id),
+  });
+});
+
+function passwordMatches(user, password) {
+  return user.passwordHash === hashPassword(password || '');
+}
+
+app.post('/api/me/mfa/setup', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  try {
+    const data = security.beginTotp(req.user);
+    save(USERS_FILE, users);
+    res.json({ ok: true, ...data });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/mfa/enable', auth, (req, res) => {
+  try {
+    security.confirmTotp(req.user, req.body && req.body.code);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/mfa/disable', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  try {
+    security.disableTotp(req.user, req.body && req.body.code);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+app.post('/api/me/passkeys/options', auth, (req, res) => {
+  if (!passwordMatches(req.user, req.body && req.body.password)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  res.json({ ok: true, ...security.registrationOptions(req.user, req) });
+});
+
+app.post('/api/me/passkeys', auth, (req, res) => {
+  try {
+    security.registerPasskey(req.user, req.body || {}, req);
+    save(USERS_FILE, users);
+    res.json({ ok: true, user: publicUser(req.user), ...security.summary(req.user, req.session && req.session.id) });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message || 'Could not save that passkey' });
+  }
+});
+
+app.delete('/api/me/passkeys/:id', auth, (req, res) => {
+  if (!security.removePasskey(req.user, req.params.id)) {
+    return res.status(404).json({ error: 'Passkey not found' });
+  }
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user), ...security.summary(req.user, req.session && req.session.id) });
 });
 
 app.get('/api/members', auth, (req, res) => {

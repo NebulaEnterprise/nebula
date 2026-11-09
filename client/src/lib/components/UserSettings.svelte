@@ -13,6 +13,7 @@
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
+  import Security from './Security.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
@@ -34,6 +35,7 @@
   let currentPassword = $state('');
   let nextPassword = $state('');
   let confirmPassword = $state('');
+  let securityOpen = $state(false);
   let lookOpen = $state('');
 
   function maskEmail(email) {
@@ -109,6 +111,7 @@
   }
   const page = $derived(ui.userPage || 'profile');
   $effect(() => {
+    if (page !== 'account') securityOpen = false;
     if (page !== 'look') lookOpen = '';
   });
   let form = $state({
@@ -349,28 +352,33 @@
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
       {#if page === 'account'}
+        {#if !securityOpen}
+          <section class="acct-section">
+            <h3>Account Info</h3>
+            <div class="acct-row">
+              <span>Username</span>
+              <strong>{ui.me?.username}</strong>
+              <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
+            </div>
+            <div class="acct-row">
+              <span>Email</span>
+              <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
+              <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
+              <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
+            </div>
+          </section>
+          <div class="acct-rule"></div>
+        {/if}
         <section class="acct-section">
-          <h3>Account Info</h3>
-          <div class="acct-row">
-            <span>Username</span>
-            <strong>{ui.me?.username}</strong>
-            <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
-          </div>
-          <div class="acct-row">
-            <span>Email</span>
-            <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
-            <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
-            <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
-          </div>
-        </section>
-        <div class="acct-rule"></div>
-        <section class="acct-section">
-          <h3>Password</h3>
-          <div class="acct-row">
-            <span>Password</span>
-            <strong>••••••••</strong>
-            <button type="button" class="btn sm" onclick={() => openAccount('password')}>Edit</button>
-          </div>
+          {#if !securityOpen}
+            <h3>Password & Security</h3>
+            <div class="acct-row">
+              <span>Password</span>
+              <strong>••••••••</strong>
+              <button type="button" class="btn sm" onclick={() => openAccount('password')}>Edit</button>
+            </div>
+          {/if}
+          <Security bind:open={securityOpen} />
         </section>
       {:else}
       <div class="grid-2" class:look-grid={page === 'look'}>
