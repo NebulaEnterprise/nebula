@@ -40,6 +40,7 @@
   let securityOpen = $state(false);
   let lookOpen = $state('');
   let accentSlot = $state(0);
+  let nameSlot = $state(0);
 
   function maskEmail(email) {
     const [name, host] = String(email || '').split('@');
@@ -533,7 +534,16 @@
                 <strong>Name effect</strong>
                 <em>Color treatment on your display name.</em>
                 <div class="effect-side">
-                  <ColorBox colors={form.nameColors} slots={!form.nameEffect || form.nameEffect === 'plain' ? 1 : 2} onpick={setNameColor} />
+                  <div class="accent-wheel">
+                    <ColorWheel value={form.nameColors[form.nameEffect && form.nameEffect !== 'plain' ? nameSlot : 0] || '#5ce1ff'} onpick={(c) => setNameColor(form.nameEffect && form.nameEffect !== 'plain' ? nameSlot : 0, c)} />
+                    {#if form.nameEffect && form.nameEffect !== 'plain'}
+                      <div class="colorbox-swatches">
+                        {#each [0, 1] as i}
+                          <button type="button" class="colorbox-swatch" class:on={nameSlot === i} style="background:{form.nameColors[i] || '#5ce1ff'}" aria-label={i === 0 ? 'First color' : 'Second color'} onclick={() => (nameSlot = i)}></button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
                   <div class="choice-picks">
                     {#each effects as [id, label]}
                       <button type="button" class="choice-btn" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
