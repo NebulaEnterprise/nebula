@@ -58,6 +58,7 @@ export const ui = $state({
   voice: null,
   voiceRooms: {},
   addingAccount: false,
+  authGate: false,
   quickOpen: false,
   quickUser: null,
 });
@@ -136,6 +137,7 @@ export function logout() {
   ui.dialog = null;
   ui.popout = null;
   ui.addingAccount = false;
+  ui.authGate = false;
   ui.mfa = null;
   ui.auth = 'login';
   if (pollTimer) clearInterval(pollTimer);

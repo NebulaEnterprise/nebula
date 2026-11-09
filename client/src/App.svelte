@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ui, boot, askSiteAccess } from './lib/state.svelte.js';
   import Auth from './lib/components/Auth.svelte';
+  import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import Chat from './lib/components/Chat.svelte';
@@ -46,7 +47,11 @@
 {#if ui.booting}
   <div class="boot">Opening Nebula…</div>
 {:else if !ui.me}
-  <Auth />
+  {#if ui.addingAccount || ui.authGate}
+    <Auth />
+  {:else}
+    <Home />
+  {/if}
 {:else}
   <div class="shell">
     <Rail />

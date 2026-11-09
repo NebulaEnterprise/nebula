@@ -4912,6 +4912,15 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   return res.status(400).json({ error: 'Unknown action' });
 });
 
+app.get('/api/online', (req, res) => {
+  let online = 0;
+  for (const user of Object.values(users)) {
+    if (user && effectiveStatus(user) === 'online') online += 1;
+  }
+  res.set('Cache-Control', 'no-store');
+  res.json({ online });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, users: Object.keys(users).length, service: 'nebula' });
 });

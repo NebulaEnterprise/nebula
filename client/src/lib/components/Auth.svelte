@@ -31,6 +31,8 @@
       <p class="auth-switch">New here? <button type="button" onclick={() => (ui.auth = 'register')}>Create an account</button></p>
       {#if ui.addingAccount}
         <p class="auth-switch"><button type="button" onclick={() => run(() => cancelAdd())}>Back</button></p>
+      {:else}
+        <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
       {/if}
     {:else if ui.auth === 'register'}
       <p class="sub">Create an account. If this server can send email, you’ll get a code. If it can’t, the account opens right away.</p>
@@ -39,6 +41,9 @@
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="new-password" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => requestCode(email, username, password))}>Continue</button>
       <p class="auth-switch">Already have one? <button type="button" onclick={() => (ui.auth = 'login')}>Log in</button></p>
+      {#if !ui.addingAccount}
+        <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
+      {/if}
     {:else if ui.auth === 'mfa'}
       <p class="sub">Authenticator is on for this account. Enter the 6-digit code from the app.</p>
       <div class="field"><label>Code</label><input class="code" bind:value={mfaCode} maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></div>
@@ -47,11 +52,17 @@
         <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Use a passkey instead</button>
       {/if}
       <p class="auth-switch"><button type="button" onclick={() => { ui.auth = 'login'; ui.mfa = null; }}>Back</button></p>
+      {#if !ui.addingAccount}
+        <p class="auth-switch"><button type="button" onclick={() => { ui.authGate = false; ui.mfa = null; }}>Back to home</button></p>
+      {/if}
     {:else}
       <p class="sub">Enter the 6-digit code sent to {ui.pending?.email}.</p>
       <div class="field"><label>Code</label><input class="code" bind:value={code} maxlength="6" inputmode="numeric" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => verify(code.trim()))}>Verify</button>
       <p class="auth-switch"><button type="button" onclick={() => (ui.auth = 'register')}>Back</button></p>
+      {#if !ui.addingAccount}
+        <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
+      {/if}
     {/if}
     <p class="note" class:err={!!ui.authError} class:ok={!!ui.authOk && !ui.authError}>{ui.authError || ui.authOk}</p>
   </form>
