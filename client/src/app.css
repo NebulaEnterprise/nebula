@@ -1112,10 +1112,9 @@ img { max-width: 100%; }
 .alias-line { display: flex; gap: 8px; align-items: center; }
 .alias-line input { flex: 1; min-width: 0; }
 .alias-row { align-items: flex-start; }
-.alias-pills { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 220px; }
-.alias-pills em {
-  font-style: normal; font-size: 12px; font-weight: 650;
-  padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.18);
+.profile-row .alias-names {
+  display: block; max-width: 220px; text-align: right; font-weight: 650;
+  line-height: 1.45; white-space: normal;
 }
 .bio-bubble {
   position: absolute; left: 82px; top: 94px; z-index: 2;

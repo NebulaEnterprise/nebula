@@ -99,7 +99,7 @@
         {#if (u.aliases || []).length}
           <div class="profile-row alias-row">
             <span>Aliases</span>
-            <strong class="alias-pills">{#each u.aliases as name}<em>{name}</em>{/each}</strong>
+            <strong class="alias-names">@{u.aliases.join(', @')}</strong>
           </div>
         {/if}
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>

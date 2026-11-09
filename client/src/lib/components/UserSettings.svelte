@@ -443,7 +443,7 @@
                 {#if form.aliases.some((name) => String(name || '').trim())}
                   <div class="profile-row alias-row">
                     <span>Aliases</span>
-                    <strong class="alias-pills">{#each form.aliases.filter((name) => String(name || '').trim()) as name}<em>{name}</em>{/each}</strong>
+                    <strong class="alias-names">@{form.aliases.filter((name) => String(name || '').trim()).join(', @')}</strong>
                   </div>
                 {/if}
                 <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
