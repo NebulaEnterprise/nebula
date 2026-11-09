@@ -128,6 +128,7 @@ export function logout() {
   ui.me = null;
   ui.members = [];
   ui.messages = [];
+  ui.activity = { servers: {}, channels: {}, dms: {} };
   ui.userSettings = false;
   ui.serverSettings = false;
   ui.dialog = null;
@@ -200,6 +201,7 @@ async function finishLogin(data) {
   ui.addingAccount = false;
   ui.auth = 'login';
   ui.booting = false;
+  ui.activity = { servers: {}, channels: {}, dms: {} };
   await enterApp();
 }
 
@@ -399,7 +401,7 @@ export async function loadDms() {
   const serial = ++dmSerial;
   try {
     const seen = seenMap();
-    const seeded = localStorage.getItem('nebula-dm-baseline') === '1';
+    const seeded = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     let data;
     try {
       data = await api('/api/dms', { method: 'POST', body: { seen, seeded } });
@@ -411,7 +413,7 @@ export async function loadDms() {
     if (!sameDms(ui.dms, next)) ui.dms = next;
     for (const row of next.slice(0, 12)) warmDm(row.other && row.other.id);
     const map = seenMap();
-    const ready = localStorage.getItem('nebula-dm-baseline') === '1';
+    const ready = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     if (!ready) {
       for (const row of next) {
         const id = row.other && row.other.id;
@@ -422,10 +424,9 @@ export async function loadDms() {
         }
         rememberDm(id, row.updatedAt || Date.now());
       }
-      try {
-        localStorage.setItem('nebula-seen', JSON.stringify(map));
-        localStorage.setItem('nebula-dm-baseline', '1');
-      } catch (_) {}
+      saveSeen(map);
+      try { localStorage.setItem(accountKey('nebula-dm-baseline'), '1'); } catch (_) {}
+      ui.activity = { ...ui.activity, dms: {} };
       inboxReady = true;
       return;
     }
@@ -474,9 +475,7 @@ export async function loadDms() {
       }
       heardDm[id] = stamp;
     }
-    if (changed) {
-      try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
-    }
+    if (changed) saveSeen(map);
     if (popped) delete unread[popped.id];
     if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
     if (popped) openQuick(popped);
@@ -1605,9 +1604,18 @@ export function mentionsMe(text) {
   });
 }
 
+function accountKey(name) {
+  const id = ui.me && ui.me.id;
+  return id ? name + ':' + id : name;
+}
+
 function seenMap() {
-  try { return JSON.parse(localStorage.getItem('nebula-seen') || '{}'); }
+  try { return JSON.parse(localStorage.getItem(accountKey('nebula-seen')) || '{}'); }
   catch { return {}; }
+}
+
+function saveSeen(map) {
+  try { localStorage.setItem(accountKey('nebula-seen'), JSON.stringify(map)); } catch (_) {}
 }
 
 function forgetActivity(id) {
@@ -1639,7 +1647,7 @@ export function markSeen(id, messageId) {
   const map = seenMap();
   if (map[id] !== messageId) {
     map[id] = messageId;
-    try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
+    saveSeen(map);
   }
   forgetActivity(id);
 }
@@ -1665,20 +1673,19 @@ async function pollActivity() {
   try {
     const data = await api('/api/activity', {
       method: 'POST',
-      body: { seen: seenMap(), seeded: localStorage.getItem('nebula-dm-baseline') === '1' },
+      body: { seen: seenMap(), seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1' },
     });
-    if (localStorage.getItem('nebula-channel-baseline') !== '1' && data.heads) {
+    const firstChannels = localStorage.getItem(accountKey('nebula-channel-baseline')) !== '1';
+    if (firstChannels && data.heads) {
       const map = seenMap();
-      let dirty = false;
       for (const [id, messageId] of Object.entries(data.heads)) {
         if (String(id).startsWith('dm:') || map[id] || !messageId) continue;
         map[id] = messageId;
-        dirty = true;
       }
-      if (dirty) {
-        try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
-      }
-      try { localStorage.setItem('nebula-channel-baseline', '1'); } catch (_) {}
+      saveSeen(map);
+      try { localStorage.setItem(accountKey('nebula-channel-baseline'), '1'); } catch (_) {}
+      ui.activity = { ...ui.activity, servers: {}, channels: {} };
+      return;
     }
     if (serial !== activitySerial) return;
     const servers = { ...(data.servers || {}) };

@@ -1300,10 +1300,6 @@ img { max-width: 100%; }
   background: none; text-shadow: 0 0 8px var(--fx2, #ffe7a3); animation: none;
 }
 .name-fx.sparkle i { animation: name-spark 1.5s ease-in-out infinite; }
-.badge {
-  display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 8px;
-  font-size: 12px; font-weight: 700; color: white;
-}
 
 .quick-toggle { position: relative; margin-left: auto; flex-shrink: 0; }
 .quick-toggle .pill-count { position: absolute; top: -4px; right: -4px; }

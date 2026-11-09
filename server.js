@@ -2336,7 +2336,7 @@ app.post('/api/activity', auth, (req, res) => {
       let start = list.length;
       if (cursor) {
         const idx = list.findIndex((msg) => msg.id === cursor);
-        start = idx === -1 ? Math.max(0, list.length - 40) : idx + 1;
+        start = idx === -1 ? list.length : idx + 1;
       }
       let channelUnread = 0;
       let channelMentions = 0;
@@ -3186,7 +3186,7 @@ function dmInbox(userId, seen, seeded) {
     let start = list.length;
     if (cursor) {
       const idx = list.findIndex((msg) => msg && msg.id === cursor);
-      start = idx === -1 ? 0 : idx + 1;
+      start = idx === -1 ? list.length : idx + 1;
     } else if (seeded) {
       start = 0;
     }
