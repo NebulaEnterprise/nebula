@@ -1,6 +1,6 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
-  import { ui, saveMe, logout, toast, playPing, setAutoDelete, autoDeleteLabel } from '../state.svelte.js';
+  import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -120,73 +120,6 @@
     } finally {
       accountBusy = false;
     }
-  }
-
-  const HOUR = 60 * 60 * 1000;
-  const DAY = 24 * HOUR;
-  const timerPresets = [
-    [0, 'Off'],
-    [DAY, '24 hours'],
-    [7 * DAY, '7 days'],
-    [30 * DAY, '1 month'],
-  ];
-  let customOn = $state(false);
-  let customCount = $state('2');
-  let customUnit = $state('days');
-  let seenTimer = -1;
-  let timerBusy = $state(false);
-
-  const timerMs = $derived(ui.mode === 'dm' ? (Number(ui.dmAutoDelete) || 0) : 0);
-  const timerRoom = $derived(ui.mode === 'dm' && ui.dmUser ? (ui.dmUser.displayName || ui.dmUser.username || 'this direct message') : '');
-  const canSetTimer = $derived(!!timerRoom);
-
-  function syncTimer(ms) {
-    if (!ms || timerPresets.some(([value]) => value === ms)) {
-      customOn = false;
-      return;
-    }
-    customOn = true;
-    if (ms % DAY === 0) {
-      customUnit = 'days';
-      customCount = String(ms / DAY);
-    } else {
-      customUnit = 'hours';
-      customCount = String(Math.max(1, Math.round(ms / HOUR)));
-    }
-  }
-
-  $effect(() => {
-    if (page !== 'privacy') return;
-    const ms = timerMs;
-    if (ms === seenTimer) return;
-    seenTimer = ms;
-    syncTimer(ms);
-  });
-
-  async function chooseTimer(ms, keepCustom) {
-    if (!canSetTimer || timerBusy) return;
-    if (!keepCustom) customOn = false;
-    timerBusy = true;
-    try { await setAutoDelete(ms); }
-    catch (err) { toast(err.message); }
-    finally { timerBusy = false; }
-  }
-
-  async function applyCustomTimer() {
-    const count = Math.round(Number(customCount));
-    if (!count || count < 1) {
-      toast('Enter a time');
-      return;
-    }
-    if (customUnit === 'hours' && count > 48) {
-      toast('Use 1 to 48 hours, or switch to days');
-      return;
-    }
-    if (customUnit === 'days' && count > 365) {
-      toast('Use 1 to 365 days');
-      return;
-    }
-    await chooseTimer((customUnit === 'hours' ? HOUR : DAY) * count, true);
   }
 
   async function toggleLastSeen() {
@@ -545,29 +478,6 @@
               <label>Last seen</label>
               <button type="button" class="btn" class:brand={!ui.me?.hideLastSeen} onclick={toggleLastSeen}>{ui.me?.hideLastSeen ? 'Hidden' : 'Shown'}</button>
               <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
-            </div>
-            <div class="field">
-              <label>Auto-delete messages</label>
-              {#if timerRoom}
-                <p class="hint">In your direct message with {timerRoom}, each new message starts its own countdown when it is sent. When the time runs out, that message is deleted for both of you. Messages already in the chat stay until someone deletes them. Channel messages are not included.</p>
-                <div class="auto-row">
-                  {#each timerPresets as [ms, label]}
-                    <button type="button" class="choice-btn" class:on={!customOn && timerMs === ms} disabled={!canSetTimer || timerBusy} onclick={() => chooseTimer(ms)}>{label}</button>
-                  {/each}
-                  <button type="button" class="choice-btn" class:on={customOn} disabled={!canSetTimer || timerBusy} onclick={() => (customOn = true)}>Custom time</button>
-                </div>
-                {#if customOn && canSetTimer}
-                  <div class="auto-custom">
-                    <input type="number" min="1" max={customUnit === 'hours' ? 48 : 365} bind:value={customCount} />
-                    <button type="button" class="choice-btn" class:on={customUnit === 'hours'} onclick={() => (customUnit = 'hours')}>Hours</button>
-                    <button type="button" class="choice-btn" class:on={customUnit === 'days'} onclick={() => (customUnit = 'days')}>Days</button>
-                    <button type="button" class="btn brand" disabled={timerBusy} onclick={applyCustomTimer}>Set</button>
-                  </div>
-                {/if}
-                <p class="hint">Right now: {autoDeleteLabel(timerMs)}.</p>
-              {:else}
-                <p class="hint">Open a direct message, then choose how long new messages stay. Messages in channels stay until someone deletes them.</p>
-              {/if}
             </div>
           {:else if page === 'look' && lookOpen === 'badges'}
             <section class="look-sec">
