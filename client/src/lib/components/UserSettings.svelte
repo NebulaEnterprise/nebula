@@ -1,5 +1,5 @@
 <script>
-  import { ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor } from '@lucide/svelte';
+  import { ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -9,6 +9,7 @@
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
+  import TagPill from './TagPill.svelte';
   import SongButton from './SongButton.svelte';
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
@@ -323,8 +324,6 @@
   const showcaseLabel = $derived(form.showcaseBadge ? badgeNames[form.showcaseBadge] : 'None');
   const roleLabel = $derived(showcaseChoice?.name || 'None');
   const songLabel = $derived(String(form.songUrl || '').trim() ? (form.songAutoplay ? 'Plays on open' : 'Saved') : 'Add');
-  const previewRoles = $derived(ui.mode === 'chat' ? (ui.members.find((m) => m.id === ui.me?.id)?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)) : []);
-
   function setNameColor(index, value) {
     const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
     next[index] = value;
@@ -554,43 +553,62 @@
                   </div>
                 </div>
               </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Show badges</strong>
-                  <em>Display badges on your profile. {badgeLabel}.</em>
-                </div>
-                <button type="button" class="switch" class:on={shownCount > 0} aria-pressed={shownCount > 0} onclick={() => setAllBadges(shownCount === 0)}><i></i></button>
-              </div>
-              {#if ownedBadges(ui.me).length}
-                <div class="pick-row">
-                  {#each ownedBadges(ui.me) as id}
-                    <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
-                      {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
-                      <span>{badgeNames[id]}</span>
-                    </button>
-                  {/each}
+            </section>
+            <section class="look-sec">
+              <h3><Award size={16} class="sec-ico" /> Badges</h3>
+              <button type="button" class="bg-row" onclick={() => togglePanel('badges')}>
+                <span class="copy">
+                  <strong>Badges</strong>
+                  <em>{badgeLabel} · {showcaseLabel} · {roleLabel}</em>
+                </span>
+                <span class="chev-turn" class:open={lookOpen === 'badges'}><ChevronRight size={16} class="row-chev" /></span>
+              </button>
+              {#if lookOpen === 'badges'}
+                <div class="look-panel">
+                  <div class="look-line">
+                    <div class="copy">
+                      <strong>Show badges</strong>
+                      <em>Display badges on your profile.</em>
+                    </div>
+                    <button type="button" class="switch" class:on={shownCount > 0} aria-pressed={shownCount > 0} onclick={() => setAllBadges(shownCount === 0)}><i></i></button>
+                  </div>
+                  {#if ownedBadges(ui.me).length}
+                    <div class="pick-row">
+                      {#each ownedBadges(ui.me) as id}
+                        <button type="button" class="pick-card" class:on={badgeOn(id)} onclick={() => toggleBadge(id)}>
+                          {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                          <span>{badgeNames[id]}</span>
+                        </button>
+                      {/each}
+                    </div>
+                  {:else}
+                    <p class="hint">You do not have a badge yet.</p>
+                  {/if}
+                  <p class="look-kicker">Next to your name</p>
+                  <div class="pick-row">
+                    <button type="button" class="pick-card" class:on={!form.showcaseBadge} onclick={() => (form.showcaseBadge = '')}>None</button>
+                    {#each ownedBadges(ui.me) as id}
+                      <button type="button" class="pick-card" class:on={form.showcaseBadge === id} onclick={() => (form.showcaseBadge = id)}>
+                        {#if id === 'early'}<MoonBadge />{:else if id === 'staff'}<StaffBadge rank={ui.me?.staff || ''} />{:else}<DevBadge on={true} />{/if}
+                        <span>{badgeNames[id]}</span>
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="look-kicker">Server tag</p>
+                  <div class="pick-row">
+                    <button type="button" class="pick-card" class:on={!form.showcaseServerId} onclick={() => (form.showcaseServerId = '')}>None</button>
+                    {#each ui.me?.tagChoices || [] as choice}
+                      <button type="button" class="pick-card" class:on={form.showcaseServerId === choice.serverId} onclick={() => (form.showcaseServerId = choice.serverId)}>
+                        <TagPill tag={choice} />
+                        <span>{choice.name}</span>
+                      </button>
+                    {/each}
+                  </div>
+                  {#if !(ui.me?.tagChoices || []).length}
+                    <p class="hint">None of your servers have a tag yet.</p>
+                  {/if}
                 </div>
               {/if}
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Next to your name</strong>
-                  <em>The badge beside your name in chat.</em>
-                </div>
-                <select class="look-select" bind:value={form.showcaseBadge}>
-                  <option value="">None</option>
-                  {#each ownedBadges(ui.me) as id}<option value={id}>{badgeNames[id]}</option>{/each}
-                </select>
-              </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Server tag</strong>
-                  <em>{roleLabel === 'None' ? 'Shown beside your name in the member list.' : roleLabel}</em>
-                </div>
-                <select class="look-select" bind:value={form.showcaseServerId}>
-                  <option value="">None</option>
-                  {#each ui.me?.tagChoices || [] as choice}<option value={choice.serverId}>{choice.name}</option>{/each}
-                </select>
-              </div>
             </section>
             <section class="look-sec">
               <h3><Image size={16} class="sec-ico" /> Background</h3>
@@ -746,13 +764,6 @@
                 </p>
                 {#if aboutDraft}<p class="profile-status">{aboutDraft}</p>{/if}
               </div>
-              {#if previewRoles.length}
-                <div class="pop-role-list profile-roles">
-                  {#each previewRoles as r}
-                    <em class="pop-role"><i style="background:{r.color || '#99aab5'}"></i>{r.name}</em>
-                  {/each}
-                </div>
-              {/if}
               <section class="profile-panel">
                 <div class="profile-row"><span><User size={14} /> Display name</span><strong>{form.displayName || form.username}</strong></div>
                 <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{form.username}</strong></div>
