@@ -1,4 +1,4 @@
-import { api, pinMedia, warmMedia, uploadFile } from './api.js';
+import { api, pinMedia, warmMedia, uploadFile, setUnauthorizedHandler } from './api.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
@@ -116,13 +116,18 @@ function forgetToken(token) {
   writeAccounts(savedAccounts().filter((row) => row.token !== token));
 }
 
+let loggingOut = false;
 export function logout() {
+  if (loggingOut) return;
+  loggingOut = true;
   const id = ui.me?.id;
   api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
   import('./voice.js').then((mod) => mod.leaveVoice());
   if (id) writeAccounts(savedAccounts().filter((row) => row.id !== id));
   localStorage.removeItem('dc_token');
   ui.me = null;
+  ui.members = [];
+  ui.messages = [];
   ui.userSettings = false;
   ui.serverSettings = false;
   ui.dialog = null;
@@ -130,7 +135,9 @@ export function logout() {
   ui.addingAccount = false;
   ui.auth = 'login';
   if (pollTimer) clearInterval(pollTimer);
+  loggingOut = false;
 }
+setUnauthorizedHandler(logout);
 
 function applyTheme() {
   const root = document.documentElement;

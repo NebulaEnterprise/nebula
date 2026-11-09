@@ -7,6 +7,11 @@ const TUNNEL_HEADERS = {
   'bypass-tunnel-reminder': 'true',
 };
 
+let onUnauthorized = () => {};
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = typeof fn === 'function' ? fn : () => {};
+}
+
 export function getApiBase() {
   const params = new URLSearchParams(window.location.search);
   const fromQuery = params.get('backend');
@@ -44,9 +49,12 @@ export async function api(path, opts = {}) {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
     const current = localStorage.getItem('dc_token') || '';
-    if (token && current === token) localStorage.removeItem('dc_token');
-    const serverError = data && data.error;
     const signingIn = String(path || '').startsWith('/api/auth/');
+    if (token && current === token) {
+      localStorage.removeItem('dc_token');
+      if (!signingIn) onUnauthorized();
+    }
+    const serverError = data && data.error;
     if (signingIn && serverError) throw new Error(serverError);
     throw new Error('Session expired');
   }
