@@ -522,7 +522,7 @@
               <div class="look-block">
                 <strong>Display name style</strong>
                 <em>Choose how your name is displayed.</em>
-                <div class="choice-picks">
+                <div class="choice-picks font-picks">
                   {#each fonts as [id, label, family]}
                     <button type="button" class="choice-btn" class:on={form.nameFont === id} onclick={() => (form.nameFont = id)}>
                       <span style="font-family:{family}">{label}</span>
