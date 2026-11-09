@@ -43,7 +43,11 @@ export async function api(path, opts = {}) {
   const res = await fetch(url, { ...opts, headers, body, cache: 'no-store' });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) {
-    localStorage.removeItem('dc_token');
+    const current = localStorage.getItem('dc_token') || '';
+    if (token && current === token) localStorage.removeItem('dc_token');
+    const serverError = data && data.error;
+    const signingIn = String(path || '').startsWith('/api/auth/');
+    if (signingIn && serverError) throw new Error(serverError);
     throw new Error('Session expired');
   }
   if (res.status === 413) throw new Error('That image is too large for the connection. Try a shorter GIF.');
@@ -307,7 +311,8 @@ export function uploadFile(file, onProgress, name, path) {
       let data = {};
       try { data = JSON.parse(xhr.responseText || '{}'); } catch (_) {}
       if (xhr.status === 401) {
-        localStorage.removeItem('dc_token');
+        const current = localStorage.getItem('dc_token') || '';
+        if (token && current === token) localStorage.removeItem('dc_token');
         reject(new Error('Session expired'));
         return;
       }

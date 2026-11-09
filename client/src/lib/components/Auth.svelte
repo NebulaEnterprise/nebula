@@ -24,7 +24,7 @@
     <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
       <p class="sub">Log in and pick up where you left off.</p>
-      <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>
+      <div class="field"><label>Email or username</label><input bind:value={email} autocomplete="username" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>Log in</button>
       <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Sign in with a passkey</button>
@@ -40,7 +40,7 @@
       <button class="btn brand" disabled={busy} onclick={() => run(() => requestCode(email, username, password))}>Continue</button>
       <p class="auth-switch">Already have one? <button type="button" onclick={() => (ui.auth = 'login')}>Log in</button></p>
     {:else if ui.auth === 'mfa'}
-      <p class="sub">Enter the 6-digit code from your authenticator app.</p>
+      <p class="sub">Authenticator is on for this account. Enter the 6-digit code from the app.</p>
       <div class="field"><label>Code</label><input class="code" bind:value={mfaCode} maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => submitMfa(mfaCode.trim()))}>Confirm</button>
       {#if (ui.mfa?.methods || []).includes('passkey')}

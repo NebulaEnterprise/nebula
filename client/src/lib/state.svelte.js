@@ -189,6 +189,7 @@ async function enterApp() {
 }
 
 async function finishLogin(data) {
+  if (!data || !data.token) throw new Error('Sign-in did not finish. Try again.');
   rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
   ui.me = data.user;

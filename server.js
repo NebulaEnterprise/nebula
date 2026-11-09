@@ -376,6 +376,28 @@ const { qrSvg } = qrApi;
 
 const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 const challenges = new Map();
+const challengeFile = path.join(__dirname, 'data', 'challenges.json');
+function loadChallenges() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(challengeFile, 'utf8'));
+    const now = Date.now();
+    for (const [id, row] of Object.entries(raw || {})) {
+      if (row && row.exp > now) challenges.set(id, row);
+    }
+  } catch (_) {}
+}
+function storeChallenges() {
+  const obj = {};
+  const now = Date.now();
+  for (const [id, row] of challenges) {
+    if (row && row.exp > now) obj[id] = row;
+  }
+  try {
+    fs.mkdirSync(path.dirname(challengeFile), { recursive: true });
+    fs.writeFileSync(challengeFile, JSON.stringify(obj));
+  } catch (_) {}
+}
+loadChallenges();
 
 function b64url(value) {
   return Buffer.from(value).toString('base64url');
@@ -509,6 +531,12 @@ function findSession(users, token) {
     const session = user.sessions.find((row) => row.token === token);
     if (session) return { user, session };
   }
+  for (const user of Object.values(users || {})) {
+    if (!user || user.token !== token) continue;
+    ensureSessions(user);
+    const session = user.sessions.find((row) => row.token === token);
+    if (session) return { user, session };
+  }
   return null;
 }
 
@@ -597,6 +625,7 @@ function checkTotp(user, code) {
 function putChallenge(kind, data) {
   const id = crypto.randomBytes(16).toString('hex');
   challenges.set(id, { kind, ...data, tries: 0, exp: Date.now() + 5 * 60 * 1000 });
+  storeChallenges();
   return id;
 }
 
@@ -611,6 +640,7 @@ function readChallenge(id, kind) {
 
 function dropChallenge(id) {
   challenges.delete(String(id || ''));
+  storeChallenges();
 }
 
 function mfaTicket(userId) {
@@ -630,6 +660,7 @@ function takeMfa(ticket) {
     dropChallenge(ticket);
     return null;
   }
+  storeChallenges();
   return row;
 }
 
@@ -964,6 +995,12 @@ function save(file, data) {
   if (saveSoon) return;
   saveSoon = true;
   setImmediate(flushSaves);
+}
+function saveNow(file, data) {
+  dirtyFiles.set(file, data);
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, file);
 }
 async function flushSaves() {
   const batch = [...dirtyFiles.entries()];
@@ -2353,7 +2390,7 @@ app.post('/api/auth/verify', (req, res) => {
   };
   delete codes[cleanEmail];
   const session = security.openSession(users[id], req);
-  save(USERS_FILE, users);
+  saveNow(USERS_FILE, users);
   save(CODES_FILE, codes);
   ensureFriendNode(id);
   save(FRIENDS_FILE, friendGraph);
@@ -2363,11 +2400,11 @@ app.post('/api/auth/verify', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body || {};
-  const cleanEmail = String(email || '').trim().toLowerCase();
-  const user = Object.values(users).find((u) => u.email === cleanEmail);
+  const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
+  const password = req.body && req.body.password;
+  const user = Object.values(users).find((u) => u.email === raw || u.username === raw);
   if (!user || user.passwordHash !== hashPassword(password || '')) {
-    return res.status(401).json({ error: 'Invalid email or password' });
+    return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
   if (user.totp && user.totp.enabled) {
     const ticket = security.mfaTicket(user.id);
@@ -2379,7 +2416,7 @@ app.post('/api/auth/login', (req, res) => {
     });
   }
   const session = security.openSession(user, req);
-  save(USERS_FILE, users);
+  saveNow(USERS_FILE, users);
   res.json({ ok: true, token: session.token, user: publicUser(user) });
 });
 
@@ -2392,7 +2429,7 @@ app.post('/api/auth/mfa', (req, res) => {
   }
   security.dropChallenge(ticket);
   const session = security.openSession(user, req);
-  save(USERS_FILE, users);
+  saveNow(USERS_FILE, users);
   res.json({ ok: true, token: session.token, user: publicUser(user) });
 });
 
@@ -2410,7 +2447,7 @@ app.post('/api/auth/passkey/verify', (req, res) => {
   try {
     const user = security.loginPasskey(users, req.body || {});
     const session = security.openSession(user, req);
-    save(USERS_FILE, users);
+    saveNow(USERS_FILE, users);
     res.json({ ok: true, token: session.token, user: publicUser(user) });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message || 'Passkey was rejected' });
