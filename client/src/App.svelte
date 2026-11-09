@@ -11,6 +11,7 @@
   import UserSettings from './lib/components/UserSettings.svelte';
   import ServerSettings from './lib/components/ServerSettings.svelte';
   import Dialogs from './lib/components/Dialogs.svelte';
+  import Quick from './lib/components/Quick.svelte';
 
   onMount(() => {
     boot();
@@ -61,6 +62,7 @@
       <Members />
     {/if}
   </div>
+  <Quick />
   {#if ui.popout}<Popout />{/if}
   {#if ui.userSettings}<UserSettings />{/if}
   {#if ui.serverSettings}<ServerSettings />{/if}

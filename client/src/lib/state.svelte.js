@@ -56,6 +56,8 @@ export const ui = $state({
   voice: null,
   voiceRooms: {},
   addingAccount: false,
+  quickOpen: false,
+  quickUser: null,
 });
 
 let pollTimer = null;
@@ -412,12 +414,14 @@ export async function loadDms() {
     const seenAt = dmSeenAt();
     const unread = {};
     let changed = false;
+    let popped = null;
     for (const row of next) {
       const id = row.other && row.other.id;
       if (!id) continue;
       const key = 'dm:' + id;
       const stamp = row.lastId || String(row.updatedAt || '');
-      const viewing = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id);
+      const viewing = (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id))
+        || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
       if (viewing || own) {
         if (row.lastId && map[key] !== row.lastId) {
@@ -446,6 +450,8 @@ export async function loadDms() {
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
           const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
           noteArrival(stamp || key, who, 'New direct message');
+          const dockBusy = ui.quickOpen && ui.quickUser && String(ui.quickUser.id) !== String(id);
+          if (!dockBusy && !popped && row.other && ui.mode !== 'dm') popped = row.other;
         }
       }
       heardDm[id] = stamp;
@@ -453,7 +459,9 @@ export async function loadDms() {
     if (changed) {
       try { localStorage.setItem('nebula-seen', JSON.stringify(map)); } catch (_) {}
     }
+    if (popped) delete unread[popped.id];
     if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
+    if (popped) openQuick(popped);
     if (ui.dmUser) {
       const row = next.find((dm) => dm.other && String(dm.other.id) === String(ui.dmUser.id));
       if (row && row.other) ui.dmUser = { ...ui.dmUser, ...row.other };
@@ -478,6 +486,23 @@ export function showAddFriend() {
   ui.mode = 'add';
   ui.dmUser = null;
   applyTheme();
+}
+
+export function openQuick(user) {
+  if (!user || !user.id) return;
+  const same = ui.quickUser && String(ui.quickUser.id) === String(user.id);
+  ui.quickUser = same ? { ...ui.quickUser, ...user } : user;
+  ui.quickOpen = true;
+  if (ui.activity.dms[user.id]) {
+    const dms = { ...ui.activity.dms };
+    delete dms[user.id];
+    ui.activity = { ...ui.activity, dms };
+  }
+  rememberDm(user.id, Date.now());
+}
+
+export function closeQuick() {
+  ui.quickOpen = false;
 }
 
 export async function openDm(user) {

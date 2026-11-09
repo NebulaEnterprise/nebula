@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, MessageSquare } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -11,6 +11,7 @@
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
+  const quickUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
     const map = new Map();
@@ -492,6 +493,12 @@
   <Hash size={18} />
   <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message') : (channel?.name || 'channel')}</h2>
   <span class="topic">{ui.mode === 'dm' ? '@' + (ui.dmUser?.username || '') : (channel?.topic || '')}</span>
+  {#if ui.mode !== 'dm'}
+    <button class="btn icon quick-toggle" title="Quick reply" onclick={() => (ui.quickOpen = !ui.quickOpen)}>
+      <MessageSquare size={18} />
+      {#if quickUnread}<em class="pill-count">{quickUnread > 99 ? '99+' : quickUnread}</em>{/if}
+    </button>
+  {/if}
 </div>
 <div class="messages" bind:this={box} onscroll={trackScroll}>
   {#if ui.chatLoading && !ui.messages.length}
