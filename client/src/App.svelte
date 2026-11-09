@@ -14,7 +14,6 @@
   import Dialogs from './lib/components/Dialogs.svelte';
   import Quick from './lib/components/Quick.svelte';
   import Switcher from './lib/components/Switcher.svelte';
-  import Inbox from './lib/components/Inbox.svelte';
 
   onMount(() => {
     boot();
@@ -26,7 +25,6 @@
       }
       if (e.key !== 'Escape') return;
       ui.switcher = false;
-      ui.inboxOpen = false;
       ui.menuOpen = false;
       ui.popout = null;
       ui.picker = '';
@@ -41,7 +39,7 @@
       if (!inside('.picker') && !inside('.picker-toggle') && !inside('.react-picker')) ui.picker = '';
       if (!inside('.attach-menu') && !inside('.attach-toggle')) ui.attachOpen = false;
       if (!inside('.id-menu')) ui.idMenu = null;
-      if (!inside('.inbox-shelf') && !inside('.inbox-btn')) ui.inboxOpen = false;
+      if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
     window.addEventListener('keydown', onKey);
@@ -84,7 +82,6 @@
   {#if ui.userSettings}<UserSettings />{/if}
   {#if ui.serverSettings}<ServerSettings />{/if}
   {#if ui.dialog}<Dialogs />{/if}
-  <Inbox />
 {/if}
 {#if ui.toast}<div class="toast">{ui.toast}</div>{/if}
 {#if ui.idMenu}
