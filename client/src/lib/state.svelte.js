@@ -1809,19 +1809,22 @@ export async function friendAct(kind, body) {
 }
 
 export async function openPopout(user, x, y) {
-  const known = ui.members.find((m) => m.id === user.id);
-  const seed = known ? { ...user, ...known, roles: known.roles || user.roles || [] } : user;
+  const inServer = ui.mode === 'chat' && !!ui.serverId;
+  const known = inServer ? ui.members.find((m) => m.id === user.id) : null;
+  const seed = known
+    ? { ...user, ...known, roles: known.roles || [] }
+    : { ...user, roles: inServer ? (user.roles || []) : [] };
   ui.popout = { user: seed, x, y };
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
+  if (!inServer) return;
   try {
-    const q = ui.serverId ? ('?serverId=' + encodeURIComponent(ui.serverId)) : '';
-    const data = await api('/api/members' + q);
-    if (!ui.popout || ui.popout.user?.id !== user.id) return;
+    const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
+    if (!ui.popout || ui.popout.user?.id !== user.id || ui.mode !== 'chat') return;
     const fresh = (data.members || []).find((m) => m.id === user.id);
     ui.badgeDefs = data.badges || ui.badgeDefs;
     if (!fresh) return;
-    ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || seed.roles || [] }, x, y };
+    ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || [] }, x, y };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
   } catch (_) {}
 }

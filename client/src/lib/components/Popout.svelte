@@ -13,10 +13,10 @@
   const u = $derived.by(() => {
     const shown = ui.popout?.user;
     if (!shown) return shown;
-    if (ui.me?.id && shown.id === ui.me.id) return { ...shown, ...ui.me, roles: shown.roles || [] };
+    if (ui.me?.id && shown.id === ui.me.id) return { ...shown, ...ui.me, roles: ui.mode === 'chat' ? (shown.roles || []) : [] };
     return shown;
   });
-  const roles = $derived((u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
+  const roles = $derived(ui.mode === 'chat' ? (u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)) : []);
   const rel = $derived(u ? relation(u.id) : 'none');
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');

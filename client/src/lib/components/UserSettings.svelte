@@ -188,7 +188,7 @@
   }
 
   const showcaseChoice = $derived((ui.me?.tagChoices || []).find((choice) => choice.serverId === form.showcaseServerId) || null);
-  const previewRoles = $derived((ui.members.find((m) => m.id === ui.me?.id)?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)));
+  const previewRoles = $derived(ui.mode === 'chat' ? (ui.members.find((m) => m.id === ui.me?.id)?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)) : []);
 
   function setNameColor(index, value) {
     const next = [...(form.nameColors || ['#5ce1ff', '#7c6af7'])];
