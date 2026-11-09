@@ -722,18 +722,19 @@ function dropLive() {
   if (liveCtrl) liveCtrl.abort();
 }
 
-async function pullLive(live, signal) {
+async function pullLive(query, signal) {
   if (!pulseMissing) {
     try {
-      return await api('/api/pulse', { method: 'POST', body: live, signal });
+      return await api('/api/pulse?' + query, { signal });
     } catch (err) {
       if (err && err.name === 'AbortError') throw err;
       if (!/not found/i.test(err.message || '')) throw err;
       pulseMissing = true;
     }
   }
-  if (live && live.dmUserId) {
-    const data = await api('/api/dms/' + encodeURIComponent(live.dmUserId) + '/messages', { signal });
+  if (query.startsWith('dmUserId=')) {
+    const id = decodeURIComponent(query.slice('dmUserId='.length).split('&')[0]);
+    const data = await api('/api/dms/' + id + '/messages', { signal });
     return { messages: data.messages || [], typers: [] };
   }
   const data = await api('/api/channels/' + ui.channelId + '/messages', { signal });
@@ -767,7 +768,7 @@ async function watchChat() {
       await sleep(80);
       continue;
     }
-    if (Date.now() - started < 1500) await sleep(1000);
+    if (Date.now() - started < 1500) await sleep(150);
   }
 }
 
@@ -891,24 +892,18 @@ export async function loadMessages(quiet, live) {
   try {
     let data;
     const signal = live && live.signal;
-    if (!(ui.mode === 'dm' && ui.dmUser) && !ui.channelId) {
+    const wait = live
+      ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&polls=' + encodeURIComponent(live.polls || '') + '&edits=' + encodeURIComponent(live.edits || '') + '&wait=1'
+      : '';
+    if (ui.mode === 'dm' && ui.dmUser) {
+      data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
+    } else if (!ui.channelId) {
       ui.messages = [];
       ui.typers = [];
       return;
+    } else {
+      data = await pullLive('channelId=' + encodeURIComponent(ui.channelId) + '&serverId=' + encodeURIComponent(ui.serverId || '') + wait, signal);
     }
-    data = await pullLive({
-      dmUserId: ui.mode === 'dm' && ui.dmUser ? ui.dmUser.id : '',
-      channelId: ui.mode === 'dm' ? '' : ui.channelId,
-      serverId: ui.serverId || '',
-      after: live ? live.after || '' : '',
-      typing: live ? live.typing || '' : '',
-      members: live ? live.members || '' : '',
-      profiles: live ? live.profiles || '' : '',
-      polls: live ? live.polls || '' : '',
-      edits: live ? live.edits || '' : '',
-      alert: alertCursor,
-      wait: live ? '1' : '',
-    }, signal);
     if (serial !== pulseSerial) return 'skip';
     if (ui.mode !== mode || ui.channelId !== channelId || (ui.dmUser?.id || '') !== dmId) return 'skip';
     if (mode === 'chat' && data.members && data.members !== memberStamp) {
@@ -921,7 +916,6 @@ export async function loadMessages(quiet, live) {
     }
     if (typeof data.polls === 'string') pollStamp = data.polls;
     if (typeof data.edits === 'string') editStamp = data.edits;
-    if (typeof data.alert === 'string') noteAlert(data.alert);
     if (data.same) return 'same';
     if (!Array.isArray(data.messages)) {
       if (Array.isArray(data.typers)) acceptTypers(data.typers);
@@ -979,7 +973,7 @@ export async function loadMembers(quiet) {
       ui.badgeDefs = data.badges || {};
       adoptMe(ui.members);
       applyMemberNames(ui.members);
-      warmMedia(ui.members.map((m) => m.avatarUrl));
+      warmMedia(ui.members.flatMap((m) => [m.avatarUrl, m.bannerUrl]));
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
@@ -1725,17 +1719,13 @@ function startClocks() {
   setInterval(() => {
     if (document.hidden || !localStorage.getItem('dc_token')) return;
     if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
-  }, 20000);
-  setInterval(() => {
-    if (document.hidden || !localStorage.getItem('dc_token')) return;
-    if (ui.mode !== 'chat' || !ui.serverId) return;
-    import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
-  }, 15000);
-  setInterval(() => {
-    if (document.hidden || !localStorage.getItem('dc_token')) return;
-    pollActivity();
-  }, 30000);
-  pollActivity();
+  }, 1000);
+  const watchInbox = () => {
+    if (!localStorage.getItem('dc_token')) return;
+    pollActivity().then(() => loadDms());
+  };
+  setInterval(watchInbox, 1000);
+  watchInbox();
   watchAlerts();
   loadPacks();
 }
@@ -1743,30 +1733,21 @@ function startClocks() {
 let alertCursor = '';
 let alertMissing = false;
 
-function noteAlert(cursor) {
-  const next = String(cursor || '');
-  if (!next) return;
-  const changed = !!alertCursor && next !== alertCursor;
-  alertCursor = next;
-  if (!changed) return;
-  pollActivity();
-  loadDms();
-  loadFriends();
-}
-
 async function watchAlerts() {
   while (true) {
     if (alertMissing || !localStorage.getItem('dc_token')) {
       await sleep(4000);
       continue;
     }
-    if (ui.mode === 'chat' || ui.mode === 'dm') {
-      await sleep(1500);
-      continue;
-    }
     try {
-      const data = await api('/api/alert', { method: 'POST', body: { wait: '1', cursor: alertCursor } });
-      noteAlert(data.cursor);
+      const data = await api('/api/alert?wait=1&cursor=' + encodeURIComponent(alertCursor));
+      const next = String(data.cursor || '');
+      const changed = !!alertCursor && next !== alertCursor;
+      alertCursor = next;
+      if (changed) {
+        await pollActivity();
+        await loadDms();
+      }
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;
       else await sleep(1500);

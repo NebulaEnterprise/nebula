@@ -67,7 +67,9 @@ function touchProfiles() {
 }
 function touchAlerts() {
   alertRev += 1;
-  for (const waiter of [...pulseWaiters]) waiter.finish();
+  for (const waiter of [...pulseWaiters]) {
+    if (waiter.alert) waiter.finish();
+  }
 }
 function wakePulse(roomId) {
   for (const waiter of pulseWaiters) {
@@ -1310,28 +1312,7 @@ const FRONTEND_DIR = resolveFrontendDir();
 
 const app = express();
 app.set('etag', false);
-app.use(cors({ maxAge: 86400 }));
-app.use((req, res, next) => {
-  const json = res.json.bind(res);
-  res.json = (body) => {
-    let raw;
-    try { raw = Buffer.from(JSON.stringify(body)); } catch (_) { return json(body); }
-    const accept = String(req.headers['accept-encoding'] || '');
-    if (raw.length < 1024 || !/\bgzip\b/.test(accept) || res.headersSent) return json(body);
-    zlib.gzip(raw, (err, zipped) => {
-      if (err || res.writableEnded) {
-        if (!res.writableEnded) json(body);
-        return;
-      }
-      res.set('Content-Encoding', 'gzip');
-      res.set('Content-Type', 'application/json; charset=utf-8');
-      res.set('Vary', 'Accept-Encoding');
-      res.set('Content-Length', String(zipped.length));
-      res.end(zipped);
-    });
-  };
-  next();
-});
+app.use(cors({ maxAge: 7200 }));
 app.use((req, res, next) => {
   if (req.path === '/api/upload' || req.path === '/api/upload/part') return next();
   return express.json({ limit: '512mb' })(req, res, next);
@@ -2792,26 +2773,8 @@ app.get('/api/typing', auth, (req, res) => {
   res.json({ ok: true, typers: listTypers(key, req.user.id) });
 });
 
-function liveFields(req) {
-  const src = Object.assign({}, req.query || {}, req.body && typeof req.body === 'object' ? req.body : {});
-  return {
-    dmUserId: String(src.dmUserId || ''),
-    channelId: String(src.channelId || ''),
-    serverId: String(src.serverId || ''),
-    after: String(src.after || ''),
-    typing: String(src.typing || ''),
-    members: String(src.members || ''),
-    profiles: String(src.profiles || ''),
-    polls: String(src.polls || ''),
-    edits: String(src.edits || ''),
-    alert: String(src.alert || ''),
-    wait: String(src.wait || '') === '1',
-  };
-}
-
 function pulseSnap(req) {
-  const fields = liveFields(req);
-  const dmUserId = fields.dmUserId;
+  const dmUserId = String(req.query.dmUserId || '');
   if (dmUserId) {
     if (!users[dmUserId]) return null;
     const key = dmKey(req.user.id, dmUserId);
@@ -2831,11 +2794,10 @@ function pulseSnap(req) {
         profiles: String(profileRev),
         polls: pollStamp(raw.slice(-100)),
         edits: messageStamp(raw.slice(-100)),
-        alert: String(alertRev),
       },
     };
   }
-  const found = findChannel(fields.channelId, fields.serverId);
+  const found = findChannel(String(req.query.channelId || ''), String(req.query.serverId || ''));
   if (!found) return null;
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return { forbidden: true };
   const raw = messages[found.channel.id] || [];
@@ -2854,16 +2816,14 @@ function pulseSnap(req) {
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),
       edits: messageStamp(raw.slice(-100)),
-      alert: String(alertRev),
     },
   };
 }
 
-function handleAlert(req, res) {
-  const fields = liveFields(req);
-  const cursor = fields.alert || String((req.body && req.body.cursor) || req.query.cursor || '');
+app.get('/api/alert', auth, (req, res) => {
+  const cursor = String(req.query.cursor || '');
   const current = String(alertRev);
-  if (fields.wait && cursor === current) {
+  if (req.query.wait === '1' && cursor === current) {
     let settled = false;
     const waiter = { alert: true, finish };
     function finish() {
@@ -2884,16 +2844,20 @@ function handleAlert(req, res) {
     return;
   }
   res.json({ ok: true, cursor: current });
-}
+});
 
-function handlePulse(req, res) {
+app.get('/api/pulse', auth, (req, res) => {
   ensureGuilds();
   const snap = pulseSnap(req);
   if (!snap) return res.status(404).json({ error: 'Channel not found' });
   if (snap.forbidden) return res.status(403).json({ error: 'You cannot view this channel' });
-  const fields = liveFields(req);
-  const alertSame = !fields.alert || fields.alert === String(alertRev);
-  const hold = fields.wait && snap.body.cursor === fields.after && snap.body.typing === fields.typing && (snap.body.members || '') === fields.members && (snap.body.profiles || '') === fields.profiles && (snap.body.polls || '') === fields.polls && (snap.body.edits || '') === fields.edits && alertSame;
+  const after = String(req.query.after || '');
+  const typing = String(req.query.typing || '');
+  const members = String(req.query.members || '');
+  const profiles = String(req.query.profiles || '');
+  const polls = String(req.query.polls || '');
+  const edits = String(req.query.edits || '');
+  const hold = req.query.wait === '1' && snap.body.cursor === after && snap.body.typing === typing && (snap.body.members || '') === members && (snap.body.profiles || '') === profiles && (snap.body.polls || '') === polls && (snap.body.edits || '') === edits;
   if (!hold) return res.json(snap.body);
   let settled = false;
   const waiter = { roomId: snap.roomId, finish };
@@ -2905,13 +2869,8 @@ function handlePulse(req, res) {
     if (res.writableEnded) return;
     const next = pulseSnap(req);
     const body = next && next.body ? next.body : snap.body;
-    body.alert = String(alertRev);
-    const still = body.cursor === fields.after && body.typing === fields.typing && (body.members || '') === fields.members && (body.profiles || '') === fields.profiles && (body.polls || '') === fields.polls && (body.edits || '') === fields.edits && (!fields.alert || fields.alert === body.alert);
-    if (still) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '', alert: body.alert });
-    }
-    if (fields.alert && fields.alert !== body.alert && body.cursor === fields.after && body.typing === fields.typing && (body.members || '') === fields.members && (body.profiles || '') === fields.profiles && (body.polls || '') === fields.polls && (body.edits || '') === fields.edits) {
-      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '', alert: body.alert });
+    if (body.cursor === after && body.typing === typing && (body.members || '') === members && (body.profiles || '') === profiles && (body.polls || '') === polls && (body.edits || '') === edits) {
+      return res.json({ ok: true, same: true, cursor: body.cursor, typing: body.typing, members: body.members || '', profiles: body.profiles || '', polls: body.polls || '', edits: body.edits || '' });
     }
     res.json(body);
   }
@@ -2923,12 +2882,7 @@ function handlePulse(req, res) {
     clearTimeout(timer);
     pulseWaiters.delete(waiter);
   });
-}
-
-app.get('/api/alert', auth, handleAlert);
-app.post('/api/alert', auth, handleAlert);
-app.get('/api/pulse', auth, handlePulse);
-app.post('/api/pulse', auth, handlePulse);
+});
 
 app.get('/api/friends', auth, (req, res) => {
   const node = ensureFriendNode(req.user.id);
@@ -2978,7 +2932,6 @@ app.post('/api/friends/request', auth, (req, res) => {
     if (!me.friends.includes(target.id)) me.friends.push(target.id);
     if (!them.friends.includes(req.user.id)) them.friends.push(req.user.id);
     save(FRIENDS_FILE, friendGraph);
-    touchAlerts();
     return res.json({ ok: true, status: 'accepted', user: publicUser(target) });
   }
 
@@ -2991,7 +2944,6 @@ app.post('/api/friends/request', auth, (req, res) => {
   friendGraph[mid] = me;
   friendGraph[tid] = them;
   save(FRIENDS_FILE, friendGraph);
-  touchAlerts();
   res.json({ ok: true, status: 'pending', user: publicUser(target) });
 });
 
@@ -3009,7 +2961,6 @@ app.post('/api/friends/accept', auth, (req, res) => {
   if (!me.friends.map(String).includes(fromId)) me.friends.push(fromId);
   if (!them.friends.map(String).includes(String(req.user.id))) them.friends.push(req.user.id);
   save(FRIENDS_FILE, friendGraph);
-  touchAlerts();
   res.json({ ok: true, user: publicUser(users[fromId]) });
 });
 
@@ -3024,7 +2975,6 @@ app.post('/api/friends/decline', auth, (req, res) => {
   me.incoming = me.incoming.filter((id) => id !== fromId);
   them.outgoing = (them.outgoing || []).map(String).filter((id) => id !== String(req.user.id));
   save(FRIENDS_FILE, friendGraph);
-  touchAlerts();
   res.json({ ok: true });
 });
 
@@ -3036,7 +2986,6 @@ app.post('/api/friends/cancel', auth, (req, res) => {
   me.outgoing = (me.outgoing || []).map(String).filter((id) => id !== otherId);
   them.incoming = (them.incoming || []).map(String).filter((id) => id !== String(req.user.id));
   save(FRIENDS_FILE, friendGraph);
-  touchAlerts();
   res.json({ ok: true });
 });
 
@@ -3052,7 +3001,6 @@ app.post('/api/friends/remove', auth, (req, res) => {
   them.outgoing = them.outgoing.filter((id) => id !== req.user.id);
   them.incoming = them.incoming.filter((id) => id !== req.user.id);
   save(FRIENDS_FILE, friendGraph);
-  touchAlerts();
   res.json({ ok: true });
 });
 
