@@ -70,28 +70,52 @@
     if (next.toLowerCase() !== String(value || '').toLowerCase()) onpick?.(next);
   }
 
-  function fromPoint(e, mode) {
-    if (mode === 'hue' && wheelEl) {
-      const rect = wheelEl.getBoundingClientRect();
+  let lastEmit = '';
+
+  function fromPoint(e, mode, rect) {
+    if (!rect) return;
+    if (mode === 'hue') {
       const x = e.clientX - (rect.left + rect.width / 2);
       const y = e.clientY - (rect.top + rect.height / 2);
       let deg = Math.atan2(y, x) * 180 / Math.PI + 90;
       if (deg < 0) deg += 360;
-      h = deg;
-    } else if (svEl) {
-      const rect = svEl.getBoundingClientRect();
-      sat = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-      val = 1 - Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
+      deg = Math.round(deg);
+      if (deg !== h) h = deg;
+    } else {
+      const nextSat = Math.round(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * 100) / 100;
+      const nextVal = Math.round((1 - Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))) * 100) / 100;
+      if (nextSat !== sat) sat = nextSat;
+      if (nextVal !== val) val = nextVal;
     }
-    emit(hsvToHex(h, sat, val));
+    const next = hsvToHex(h, sat, val);
+    if (next !== lastEmit) {
+      lastEmit = next;
+      emit(next);
+    }
   }
 
   function start(e, mode) {
     drag = mode;
-    fromPoint(e, mode);
-    const move = (ev) => { if (drag) fromPoint(ev, drag); };
+    const el = mode === 'hue' ? wheelEl : svEl;
+    const rect = el ? el.getBoundingClientRect() : null;
+    let pending = null;
+    let frame = 0;
+    fromPoint(e, mode, rect);
+    const move = (ev) => {
+      if (!drag) return;
+      pending = ev;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (pending && drag) fromPoint(pending, drag, rect);
+        pending = null;
+      });
+    };
     const up = () => {
+      if (frame) cancelAnimationFrame(frame);
+      if (pending && drag) fromPoint(pending, drag, rect);
       drag = '';
+      pending = null;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
     };

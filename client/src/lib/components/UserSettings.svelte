@@ -598,10 +598,10 @@
                       </div>
                     {/if}
                   </div>
-                  <div class="choice-picks">
+                  <div class="choice-picks" style="--fx1:{form.nameColors[0] || '#5ce1ff'};--fx2:{form.nameColors[1] || '#7c6af7'}">
                     {#each effects as [id, label]}
                       <button type="button" class="choice-btn" class:on={form.nameEffect === id} onclick={() => (form.nameEffect = id)}>
-                        <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont, nameColors: form.nameColors }} />
+                        <Name user={{ displayName: form.displayName || form.username || 'Name', nameEffect: id, nameFont: form.nameFont }} />
                         <span class="choice-label">{label}</span>
                       </button>
                     {/each}
