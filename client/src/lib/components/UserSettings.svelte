@@ -37,6 +37,7 @@
   const page = $derived(ui.userPage || 'profile');
   let form = $state({
     username: ui.me?.username || '',
+    aliases: Array.isArray(ui.me?.aliases) ? [...ui.me.aliases] : [],
     displayName: ui.me?.displayName || '',
     pronouns: ui.me?.pronouns || '',
     bio: shortBio(ui.me?.bio),
@@ -202,6 +203,19 @@
     form.profileColors = next;
   }
 
+  function addAlias() {
+    if (form.aliases.length >= 10) return;
+    form.aliases = [...form.aliases, ''];
+  }
+
+  function setAlias(index, value) {
+    form.aliases = form.aliases.map((item, i) => i === index ? value : item);
+  }
+
+  function removeAlias(index) {
+    form.aliases = form.aliases.filter((_, i) => i !== index);
+  }
+
   async function save() {
     try {
       await Promise.all([inflight.avatarUrl, inflight.bannerUrl].filter(Boolean));
@@ -215,6 +229,7 @@
         if (String(body[field] || '').startsWith('blob:')) body[field] = savedUrl[field] || '';
       }
       await saveMe(body);
+      form.aliases = Array.isArray(ui.me?.aliases) ? [...ui.me.aliases] : [];
     } catch (err) { toast(err.message); }
   }
 </script>
@@ -240,6 +255,21 @@
           {#if page === 'profile'}
             <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
             <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
+            <div class="field">
+              <label>Aliases</label>
+              <p class="hint">Extra names this account owns. You can keep 10, such as apple or snow.</p>
+              <div class="alias-edit">
+                {#each form.aliases as alias, i}
+                  <div class="alias-line">
+                    <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
+                    <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
+                  </div>
+                {/each}
+              </div>
+              {#if form.aliases.length < 10}
+                <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
+              {/if}
+            </div>
             <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
             <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
           {:else if page === 'notify'}
@@ -410,6 +440,12 @@
               <section class="profile-panel">
                 <div class="profile-row"><span><User size={14} /> Display name</span><strong>{form.displayName || form.username}</strong></div>
                 <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{form.username}</strong></div>
+                {#if form.aliases.some((name) => String(name || '').trim())}
+                  <div class="profile-row alias-row">
+                    <span>Aliases</span>
+                    <strong class="alias-pills">{#each form.aliases.filter((name) => String(name || '').trim()) as name}<em>{name}</em>{/each}</strong>
+                  </div>
+                {/if}
                 <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
               </section>
               <section class="profile-panel">

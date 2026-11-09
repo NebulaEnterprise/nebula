@@ -96,6 +96,12 @@
       <section class="profile-panel">
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
+        {#if (u.aliases || []).length}
+          <div class="profile-row alias-row">
+            <span>Aliases</span>
+            <strong class="alias-pills">{#each u.aliases as name}<em>{name}</em>{/each}</strong>
+          </div>
+        {/if}
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
       </section>
       <section class="profile-panel">
