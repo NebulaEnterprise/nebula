@@ -3182,7 +3182,27 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   const key = dmKey(req.user.id, otherId);
   const list = messages['dm:' + key] || [];
-  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), other: publicUser(users[otherId]) });
+  const all = req.query.all === '1' || req.query.all === 'true';
+  const after = String(req.query.after || '');
+  let slice = list;
+  let mode = 'all';
+  if (!all) {
+    if (after) {
+      const at = list.findIndex((msg) => msg && msg.id === after);
+      if (at >= 0) {
+        slice = list.slice(at + 1);
+        mode = 'delta';
+      }
+    } else {
+      slice = list.slice(-100);
+    }
+  }
+  res.json({
+    ok: true,
+    mode,
+    messages: slice.map((msg) => presentMessage(msg, req.user.id)),
+    other: publicUser(users[otherId]),
+  });
 });
 
 app.post('/api/dms/:userId/messages', auth, (req, res) => {

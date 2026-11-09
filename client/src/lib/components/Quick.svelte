@@ -8,9 +8,23 @@
   let person = $state(null);
   let draft = $state('');
   let sending = $state(false);
+  let loading = $state(false);
   let log = $state(null);
+  let dock = $state(null);
   let follow = true;
+  let dragging = $state(false);
   let serial = 0;
+  let pos = $state(readPlace());
+
+  function readPlace() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('nebula-quick-pos') || 'null');
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y) && Number.isFinite(saved.w)) return saved;
+    } catch (_) {}
+    return null;
+  }
+
+  const dockStyle = $derived(pos ? `left:${pos.x}px;top:${pos.y}px;right:auto;bottom:auto;width:${pos.w}px;` : '');
 
   const who = $derived(person && ui.quickUser && String(person.id) === String(ui.quickUser.id) ? { ...ui.quickUser, ...person } : ui.quickUser);
   const unread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
@@ -20,7 +34,9 @@
   function time(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const clock = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    if (d.toDateString() === new Date().toDateString()) return clock;
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + clock;
   }
 
   function body(msg) {
@@ -38,12 +54,54 @@
     follow = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
   }
 
-  async function refresh(id) {
+  async function refresh(id, full) {
     const mine = ++serial;
-    const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages');
+    const after = !full && messages.length ? messages[messages.length - 1]?.id : '';
+    const query = full || !after ? '?all=1' : '?after=' + encodeURIComponent(after);
+    const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages' + query);
     if (mine !== serial || !ui.quickUser || String(ui.quickUser.id) !== String(id)) return;
-    messages = data.messages || [];
+    const incoming = data.messages || [];
+    if (full || !after || data.mode !== 'delta') {
+      messages = incoming;
+    } else if (incoming.length) {
+      const seen = new Set(messages.map((msg) => msg.id));
+      messages = [...messages, ...incoming.filter((msg) => msg && !seen.has(msg.id))];
+    }
     if (data.other) person = data.other;
+    loading = false;
+  }
+
+  function startDrag(event) {
+    if (event.button !== 0) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('button')) return;
+    const node = dock;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = rect.left;
+    const originY = rect.top;
+    const width = rect.width;
+    dragging = true;
+    const move = (e) => {
+      const maxX = Math.max(8, window.innerWidth - width - 8);
+      const maxY = Math.max(8, window.innerHeight - 56);
+      pos = {
+        x: Math.min(maxX, Math.max(8, originX + (e.clientX - startX))),
+        y: Math.min(maxY, Math.max(8, originY + (e.clientY - startY))),
+        w: width,
+      };
+    };
+    const up = () => {
+      dragging = false;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      try { localStorage.setItem('nebula-quick-pos', JSON.stringify(pos)); } catch (_) {}
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    event.preventDefault();
   }
 
   let openId = '';
@@ -56,16 +114,17 @@
       follow = true;
       messages = [];
       person = null;
+      loading = true;
     }
     if (!id) return;
     let stop = false;
     let timer = 0;
-    const tick = async () => {
+    const tick = async (full) => {
       if (stop) return;
-      try { await refresh(id); } catch (_) {}
-      if (!stop) timer = setTimeout(tick, 2500);
+      try { await refresh(id, full); } catch (_) { loading = false; }
+      if (!stop) timer = setTimeout(() => tick(false), 2500);
     };
-    tick();
+    tick(true);
     return () => {
       stop = true;
       clearTimeout(timer);
@@ -121,8 +180,8 @@
       {#if unread}<em>{unread > 99 ? '99+' : unread}</em>{/if}
     </button>
   {:else}
-    <aside class="quick-dock">
-      <header>
+    <aside class="quick-dock" class:dragging bind:this={dock} style={dockStyle}>
+      <header onpointerdown={startDrag}>
         {#if ui.quickUser}
           <button class="icon" title="All messages" onclick={() => (ui.quickUser = null)}><ChevronLeft size={16} /></button>
           <Avatar user={who} size={28} />
@@ -137,7 +196,9 @@
       </header>
       {#if ui.quickUser}
         <div class="quick-log" bind:this={log} onscroll={onScroll}>
-          {#if !messages.length}
+          {#if loading && !messages.length}
+            <p class="quick-empty">Loading history…</p>
+          {:else if !messages.length}
             <p class="quick-empty">This is the start of your conversation.</p>
           {/if}
           {#each messages as msg (msg.id)}

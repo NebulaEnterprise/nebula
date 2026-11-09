@@ -1236,7 +1236,9 @@ img { max-width: 100%; }
 .quick-dock header {
   display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 10px;
   border-bottom: 1px solid var(--line); flex-shrink: 0;
+  cursor: grab; touch-action: none; user-select: none;
 }
+.quick-dock.dragging header { cursor: grabbing; }
 .quick-dock header strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-dock header .icon {
   width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--muted);
