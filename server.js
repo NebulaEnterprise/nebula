@@ -936,18 +936,18 @@ async function putProfileObjects(cfg, folder, rel, names) {
 function bannerObjectNames(folder, storedName) {
   const names = new Set([storedName]);
   if (!/\.gif$/i.test(storedName)) return names;
-  const stem = storedName.replace(/\.(?:s)?(?:32|128|512)\.gif$/i, '').replace(/\.gif$/i, '');
+  const stem = storedName.replace(/\.(?:32|128|512)\.gif$/i, '.gif').replace(/\.gif$/i, '');
   const original = stem + '.gif';
   const originalPath = path.join(folder, original);
   if (fs.existsSync(originalPath)) {
     names.add(original);
-    const missing = [32, 128, 512].some((size) => !fs.existsSync(path.join(folder, stem + '.s' + size + '.gif')));
+    const missing = [32, 128, 512].some((size) => !fs.existsSync(path.join(folder, stem + '.' + size + '.gif')));
     if (missing) {
       try { writeBannerSizes(originalPath); } catch (_) {}
     }
   }
   for (const size of [32, 128, 512]) {
-    const sized = stem + '.s' + size + '.gif';
+    const sized = stem + '.' + size + '.gif';
     if (fs.existsSync(path.join(folder, sized))) names.add(sized);
   }
   return names;
@@ -963,7 +963,7 @@ async function saveProfileFile(user, slot, buf, ext) {
   let storedName = name;
   if (slot === 'banner' && ext === '.gif') {
     try { writeBannerSizes(full); } catch (_) {}
-    const sized = name.replace(/\.gif$/i, '.s512.gif');
+    const sized = name.replace(/\.gif$/i, '.512.gif');
     if (fs.existsSync(path.join(folder, sized))) storedName = sized;
   }
   const rel = bucket + '/' + user.id + '/' + storedName;
@@ -989,51 +989,28 @@ async function saveProfileFile(user, slot, buf, ext) {
 
 async function publishExistingMedia() {
   const cfg = r2Config();
+  if (!cfg) return;
   let changed = false;
   for (const user of Object.values(users)) {
     if (!user) continue;
-    const avatarRel = String(user.avatarPath || '').replace(/^\/+/, '');
-    if (cfg && /^avatars\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(avatarRel) && !isR2Url(user.avatarUrl)) {
-      const folder = path.join(FILES_DIR, path.dirname(avatarRel));
-      const storedName = path.basename(avatarRel);
-      if (fs.existsSync(path.join(folder, storedName))) {
-        try {
-          await putProfileObjects(cfg, folder, avatarRel, new Set([storedName]));
-          user.avatarUrl = cfg.publicBase + '/' + avatarRel;
-          changed = true;
-        } catch (err) {
-          console.log('  Cloudflare skipped ' + avatarRel + ': ' + (err.message || err));
-        }
+    for (const slot of ['avatar', 'banner']) {
+      const pathKey = slot === 'avatar' ? 'avatarPath' : 'bannerPath';
+      const urlKey = slot === 'avatar' ? 'avatarUrl' : 'bannerUrl';
+      const rel = String(user[pathKey] || '').replace(/^\/+/, '');
+      if (!/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(rel)) continue;
+      if (isR2Url(user[urlKey])) continue;
+      const folder = path.join(FILES_DIR, path.dirname(rel));
+      const storedName = path.basename(rel);
+      if (!fs.existsSync(path.join(folder, storedName))) continue;
+      try {
+        const names = slot === 'banner' ? bannerObjectNames(folder, storedName) : new Set([storedName]);
+        await putProfileObjects(cfg, folder, rel, names);
+        user[urlKey] = cfg.publicBase + '/' + rel;
+        changed = true;
+        console.log('  Cloudflare has ' + rel);
+      } catch (err) {
+        console.log('  Cloudflare skipped ' + rel + ': ' + (err.message || err));
       }
-    }
-    const rel = String(user.bannerPath || '').replace(/^\/+/, '');
-    if (!/^banners\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(rel)) continue;
-    if (/\.s512\.gif$/i.test(rel) && (!cfg || isR2Url(user.bannerUrl))) continue;
-    const folder = path.join(FILES_DIR, path.dirname(rel));
-    const sourceName = path.basename(rel).replace(/\.(?:s)?(?:32|128|512)\.gif$/i, '.gif');
-    const sourcePath = path.join(folder, sourceName);
-    if (!fs.existsSync(sourcePath)) continue;
-    try {
-      writeBannerSizes(sourcePath);
-      const smooth = sourceName.replace(/\.gif$/i, '.s512.gif');
-      if (!fs.existsSync(path.join(folder, smooth))) continue;
-      const smoothRel = path.posix.join(path.dirname(rel).replace(/\\/g, '/'), smooth);
-      if (cfg) {
-        const names = new Set([smooth]);
-        for (const size of [32, 128]) {
-          const item = sourceName.replace(/\.gif$/i, '.s' + size + '.gif');
-          if (fs.existsSync(path.join(folder, item))) names.add(item);
-        }
-        await putProfileObjects(cfg, folder, smoothRel, names);
-        user.bannerUrl = cfg.publicBase + '/' + smoothRel;
-      } else {
-        user.bannerUrl = '/files/' + smoothRel;
-      }
-      user.bannerPath = smoothRel;
-      changed = true;
-      console.log('  Smooth banner ' + smoothRel);
-    } catch (err) {
-      console.log('  Banner skipped ' + rel + ': ' + (err.message || err));
     }
   }
   if (changed) save(USERS_FILE, users);
@@ -1841,10 +1818,11 @@ function decodeGif(buf) {
   return { width, height, frames };
 }
 
-function paintGif(gif, onFrame) {
+function composite(gif) {
   const { width, height, frames } = gif;
   const canvas = Buffer.alloc(width * height * 4);
   let previous = null;
+  const out = [];
   for (const frame of frames) {
     if (frame.dispose === 3) previous = Buffer.from(canvas);
     for (let y = 0; y < frame.height; y++) {
@@ -1863,7 +1841,7 @@ function paintGif(gif, onFrame) {
         canvas[o + 3] = 255;
       }
     }
-    onFrame(canvas, frame.delay || 10);
+    out.push({ rgba: Buffer.from(canvas), delay: frame.delay });
     if (frame.dispose === 2) {
       for (let y = 0; y < frame.height; y++) {
         const dy = frame.top + y;
@@ -1875,41 +1853,7 @@ function paintGif(gif, onFrame) {
       previous = null;
     }
   }
-}
-
-function composite(gif) {
-  const out = [];
-  paintGif(gif, (canvas, delay) => out.push({ rgba: Buffer.from(canvas), delay }));
   return out;
-}
-
-function sampleBannerFrames(gif, box, maxFrames) {
-  const total = gif.frames.length;
-  const keep = Math.max(1, Math.min(maxFrames, total));
-  const pick = new Set();
-  if (keep === 1 || total === 1) pick.add(0);
-  else for (let i = 0; i < keep; i++) pick.add(Math.min(total - 1, Math.round(i * (total - 1) / (keep - 1))));
-  const out = [];
-  let pending = 0;
-  let index = 0;
-  paintGif(gif, (canvas, delay) => {
-    pending += delay || 10;
-    if (pick.has(index)) {
-      const scaled = scaleRGBA(canvas, gif.width, gif.height, box.w, box.h);
-      out.push({
-        rgba: Buffer.from(scaled),
-        delay: Math.max(8, Math.min(16, pending)),
-      });
-      pending = 0;
-    }
-    index += 1;
-  });
-  return { w: box.w, h: box.h, frames: out };
-}
-
-function fitBanner(w, h) {
-  const scale = Math.min(1, 480 / Math.max(1, w), 160 / Math.max(1, h));
-  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
 }
 
 function fitBox(w, h, max) {
@@ -2005,127 +1949,41 @@ function nearest(pal, r, g, b) {
   return best;
 }
 
-function paletteOfFrames(frames, w, h) {
-  const colors = new Map();
-  const pixels = w * h;
-  const step = Math.max(1, Math.floor(pixels / 2500));
-  const frameStep = Math.max(1, Math.floor(frames.length / 8));
-  for (let f = 0; f < frames.length; f += frameStep) {
-    const rgba = frames[f].rgba;
-    for (let i = 0; i < pixels; i += step) {
-      const o = i * 4;
-      if (rgba[o + 3] < 16) continue;
-      const key = (rgba[o] << 16) | (rgba[o + 1] << 8) | rgba[o + 2];
-      colors.set(key, (colors.get(key) || 0) + 1);
-    }
-  }
-  const ranked = [...colors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 63);
-  if (!ranked.length) ranked.push([0, 1]);
-  const pal = Buffer.alloc(ranked.length * 3);
-  ranked.forEach(([key], i) => {
-    pal[i * 3] = (key >> 16) & 255;
-    pal[i * 3 + 1] = (key >> 8) & 255;
-    pal[i * 3 + 2] = key & 255;
-  });
-  return pal;
-}
-
-function colorLut(pal) {
-  const levels = 32;
-  const lut = new Uint8Array(levels * levels * levels);
-  for (let r = 0; r < levels; r++) {
-    const rr = (r << 3) + 4;
-    for (let g = 0; g < levels; g++) {
-      const gg = (g << 3) + 4;
-      for (let b = 0; b < levels; b++) {
-        lut[(r * levels + g) * levels + b] = nearest(pal, rr, gg, (b << 3) + 4);
-      }
-    }
-  }
-  return lut;
-}
-
 function encodeGif(width, height, frames) {
-  if (!frames.length || !width || !height) return null;
-  const pal = paletteOfFrames(frames, width, height);
-  const count = pal.length / 3;
-  let sizeBits = 0;
-  while ((1 << (sizeBits + 1)) < count + 1) sizeBits++;
-  const tableLen = 1 << (sizeBits + 1);
-  const transparent = tableLen - 1;
-  const padded = Buffer.alloc(tableLen * 3);
-  pal.copy(padded);
-  const lut = colorLut(padded);
   const parts = [Buffer.from('GIF89a')];
   const lsd = Buffer.alloc(7);
   lsd.writeUInt16LE(width, 0);
   lsd.writeUInt16LE(height, 2);
-  lsd[4] = 0xf0 | sizeBits;
-  parts.push(lsd, padded);
+  parts.push(lsd);
   parts.push(Buffer.from([0x21, 0xff, 11]), Buffer.from('NETSCAPE2.0'), Buffer.from([3, 1, 0, 0, 0]));
-  let prev = null;
-  let lastGce = null;
   for (const frame of frames) {
+    const pal = paletteOf(frame.rgba, width, height);
+    const count = pal.length / 3;
+    let sizeBits = 0;
+    while ((1 << (sizeBits + 1)) < count) sizeBits++;
+    const tableLen = 1 << (sizeBits + 1);
+    const padded = Buffer.alloc(tableLen * 3);
+    pal.copy(padded);
     const indexes = Buffer.alloc(width * height);
-    const rgba = frame.rgba;
+    const transparent = tableLen - 1;
     for (let i = 0; i < width * height; i++) {
       const o = i * 4;
-      if (rgba[o + 3] < 16) indexes[i] = transparent;
-      else indexes[i] = lut[((rgba[o] >> 3) * 32 + (rgba[o + 1] >> 3)) * 32 + (rgba[o + 2] >> 3)];
-    }
-    const delay = Math.max(6, Math.min(18, frame.delay || 8));
-    let left = 0;
-    let top = 0;
-    let fw = width;
-    let fh = height;
-    let slice = indexes;
-    if (prev) {
-      let minX = width;
-      let minY = height;
-      let maxX = -1;
-      let maxY = -1;
-      for (let y = 0; y < height; y++) {
-        const row = y * width;
-        for (let x = 0; x < width; x++) {
-          if (indexes[row + x] !== prev[row + x]) {
-            if (x < minX) minX = x;
-            if (y < minY) minY = y;
-            if (x > maxX) maxX = x;
-            if (y > maxY) maxY = y;
-          }
-        }
-      }
-      if (maxX < 0) {
-        if (lastGce) lastGce.writeUInt16LE(Math.min(40, lastGce.readUInt16LE(4) + delay), 4);
-        continue;
-      }
-      const dw = maxX - minX + 1;
-      const dh = maxY - minY + 1;
-      if (dw * dh < width * height * 0.92) {
-        left = minX;
-        top = minY;
-        fw = dw;
-        fh = dh;
-        slice = Buffer.alloc(fw * fh);
-        for (let y = 0; y < fh; y++) indexes.copy(slice, y * fw, (top + y) * width + left, (top + y) * width + left + fw);
-      }
+      indexes[i] = frame.rgba[o + 3] < 16 ? transparent : nearest(padded, frame.rgba[o], frame.rgba[o + 1], frame.rgba[o + 2]);
     }
     const gce = Buffer.alloc(8);
     gce[0] = 0x21;
     gce[1] = 0xf9;
     gce[2] = 4;
-    gce[3] = 5;
-    gce.writeUInt16LE(delay, 4);
+    gce[3] = 9;
+    gce.writeUInt16LE(Math.max(1, frame.delay || 10), 4);
     gce[6] = transparent;
-    lastGce = gce;
+    parts.push(gce);
     const desc = Buffer.alloc(10);
     desc[0] = 0x2c;
-    desc.writeUInt16LE(left, 1);
-    desc.writeUInt16LE(top, 3);
-    desc.writeUInt16LE(fw, 5);
-    desc.writeUInt16LE(fh, 7);
-    parts.push(gce, desc, lzwEncode(Math.max(2, sizeBits + 1), slice));
-    prev = indexes;
+    desc.writeUInt16LE(width, 5);
+    desc.writeUInt16LE(height, 7);
+    desc[9] = 128 | sizeBits;
+    parts.push(desc, padded, lzwEncode(Math.max(2, sizeBits + 1), indexes));
   }
   parts.push(Buffer.from([0x3b]));
   return Buffer.concat(parts);
@@ -2149,23 +2007,25 @@ function sizedGif(gif, max) {
   return encodeGif(box.w, box.h, frames);
 }
 
+const BANNER_GIF_SIZES = [32, 128, 512];
+
 function writeBannerSizes(file) {
   const gif = decodeGif(fs.readFileSync(file));
-  const jobs = gif
-    ? [
-      ['.s32.gif', fitBox(gif.width, gif.height, 32), 8],
-      ['.s128.gif', fitBox(gif.width, gif.height, 128), 12],
-      ['.s512.gif', fitBanner(gif.width, gif.height), 16],
-    ]
-    : [['.s32.gif'], ['.s128.gif'], ['.s512.gif']];
-  for (const [suffix, box, maxFrames] of jobs) {
-    const dest = file.replace(/\.gif$/i, suffix);
-    if (!gif) {
+  const edge = gif ? Math.max(gif.width, gif.height) : 0;
+  let frames = null;
+  for (const size of BANNER_GIF_SIZES) {
+    const dest = file.replace(/\.gif$/i, '.' + size + '.gif');
+    if (!gif || edge <= size) {
       fs.copyFileSync(file, dest);
       continue;
     }
-    const sampled = sampleBannerFrames(gif, box, maxFrames);
-    const out = sampled.frames.length ? encodeGif(sampled.w, sampled.h, sampled.frames) : null;
+    if (!frames) frames = composite(gif);
+    const box = fitBox(gif.width, gif.height, size);
+    const scaled = frames.map((frame) => ({
+      rgba: scaleRGBA(frame.rgba, gif.width, gif.height, box.w, box.h),
+      delay: frame.delay,
+    }));
+    const out = encodeGif(box.w, box.h, scaled);
     if (out && out.length) fs.writeFileSync(dest, out);
     else fs.copyFileSync(file, dest);
   }
@@ -2328,7 +2188,7 @@ function allowMedia(req, res, next) {
 
 app.use('/files', allowMedia, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
-  const match = req.path.match(/^\/files\/banners\/([A-Za-z0-9_-]+)\/(.+)\.(s(?:32|128|512)|32|128|512)\.gif$/);
+  const match = req.path.match(/^\/files\/banners\/([A-Za-z0-9_-]+)\/(.+)\.(32|128|512)\.gif$/);
   if (!match) return next();
   const dir = path.join(FILES_DIR, 'banners', match[1]);
   const sized = path.join(dir, match[2] + '.' + match[3] + '.gif');

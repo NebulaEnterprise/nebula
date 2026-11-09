@@ -3,11 +3,9 @@
 
   let { url = '', fill = false, size = 0 } = $props();
   let src = $state('');
-  let step = 0;
 
   $effect(() => {
     const current = bannerGif(url, size || 512);
-    step = 0;
     if (!current) {
       src = '';
       return;
@@ -21,22 +19,15 @@
   });
 
   function failed() {
-    const smooth = fileUrl(bannerGif(url, size || 512));
-    const plain = fileUrl(url);
-    if (step === 0 && plain && plain !== src) {
-      step = 1;
-      src = plain;
-      return;
-    }
-    if (!plain || plain.startsWith('data:') || plain.startsWith('blob:')) return;
-    if (!plain.includes('/files/') && !plain.includes('/uploads/')) return;
-    resolveMedia(url).then((next) => {
+    const current = bannerGif(url, size || 512);
+    if (!current || current.startsWith('data:') || current.startsWith('blob:')) return;
+    resolveMedia(current).then((next) => {
       if (next && next !== src) src = next;
     });
   }
 </script>
 
-{#if src}<img class:fill src={src} alt="" decoding="async" onerror={failed} />{/if}
+{#if src}<img class:fill src={src} alt="" onerror={failed} />{/if}
 
 <style>
   img.fill {
