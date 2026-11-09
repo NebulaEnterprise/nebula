@@ -1,5 +1,5 @@
 <script>
-  import { X, User, AtSign, Smile, Clock, Circle } from '@lucide/svelte';
+  import { X, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
   import { ui, saveMe, logout, toast, playPing } from '../state.svelte.js';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -442,7 +442,7 @@
                 <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{form.username}</strong></div>
                 {#if form.aliases.some((name) => String(name || '').trim())}
                   <div class="profile-row alias-row">
-                    <span>Aliases</span>
+                    <span><Tags size={14} /> Aliases</span>
                     <strong class="alias-names">@{form.aliases.filter((name) => String(name || '').trim()).join(', @')}</strong>
                   </div>
                 {/if}

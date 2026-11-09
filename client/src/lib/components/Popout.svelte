@@ -1,5 +1,5 @@
 <script>
-  import { UserPlus, User, AtSign, Smile, Clock, Circle } from '@lucide/svelte';
+  import { UserPlus, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -98,7 +98,7 @@
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
         {#if (u.aliases || []).length}
           <div class="profile-row alias-row">
-            <span>Aliases</span>
+            <span><Tags size={14} /> Aliases</span>
             <strong class="alias-names">@{u.aliases.join(', @')}</strong>
           </div>
         {/if}
