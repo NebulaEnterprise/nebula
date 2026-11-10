@@ -276,7 +276,11 @@ async function sync() {
   const ticket = ++syncTicket;
   const data = await api('/api/voice/' + voice.channelId + '/sync?serverId=' + encodeURIComponent(voice.serverId));
   if (ticket !== syncTicket || !ui.voice || ui.voice.channelId !== voice.channelId) return;
-  const members = data.members || [];
+  const members = (data.members || []).map((member) => (
+    String(member.id) === String(ui.me?.id)
+      ? { ...member, sharing: !!voice.sharing }
+      : member
+  ));
   publishRoom(voice.channelId, members);
   const others = members.filter((member) => String(member.id) !== String(ui.me?.id));
   const live = new Set(others.map((member) => String(member.id)));
@@ -494,6 +498,7 @@ export async function leaveVoice() {
   stopLocal();
   speaking = false;
   ui.voice = null;
+  ui.streamUi = { view: 'auto', watching: false, hideChat: false };
   if (voice) {
     publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => String(member.id) !== String(ui.me?.id)));
   }
@@ -560,6 +565,54 @@ export async function toggleShare() {
   }
 }
 
+export async function changeShare() {
+  if (!ui.voice || !screenStream || sharingBusy) return;
+  let next = null;
+  try {
+    next = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  } catch (_) {
+    return;
+  }
+  const track = next.getVideoTracks()[0];
+  if (!track) {
+    next.getTracks().forEach((item) => item.stop());
+    return;
+  }
+  sharingBusy = true;
+  try {
+    screenStream.getTracks().forEach((item) => { item.onended = null; item.stop(); });
+    screenStream = next;
+    localScreen = next;
+    track.onended = () => { toggleShare().catch(() => {}); };
+    for (const [id, peer] of peers) {
+      const sender = videoSender(peer.pc);
+      if (sender) {
+        try { await sender.replaceTrack(track); } catch (_) {}
+      } else {
+        peer.pc.addTrack(track, next);
+      }
+      await renegotiate(id);
+    }
+    bumpScreen();
+  } finally {
+    sharingBusy = false;
+  }
+}
+
+export async function setWatching(on) {
+  const voice = ui.voice;
+  if (!voice || voice.watchingSent === on) return;
+  voice.watchingSent = on;
+  try {
+    await api('/api/voice/' + encodeURIComponent(voice.channelId) + '/state', {
+      method: 'POST',
+      body: { serverId: voice.serverId, watching: on },
+    });
+  } catch (_) {
+    voice.watchingSent = !on;
+  }
+}
+
 export async function toggleMute() {
   if (!ui.voice || !stream) return;
   ui.voice.muted = !ui.voice.muted;
@@ -617,16 +670,11 @@ export async function refreshVoiceRooms() {
   const next = { ...ui.voiceRooms };
   for (const channel of ui.channels || []) {
     if (channel.type !== 'voice') continue;
-    const listed = visibleMembers(channel.id, (data.rooms && data.rooms[channel.id]) || []);
-    if (ui.voice && ui.voice.channelId === channel.id) {
-      next[channel.id] = listed.map((person) => (
-        String(person.id) === String(ui.me?.id)
-          ? { ...person, speaking: !!(ui.voice.speaking && !ui.voice.muted), sharing: !!ui.voice.sharing }
-          : person
-      ));
-    } else {
-      next[channel.id] = listed;
+    if (ui.voice && ui.voice.channelId === channel.id && ui.voiceRooms[channel.id]) {
+      next[channel.id] = ui.voiceRooms[channel.id];
+      continue;
     }
+    next[channel.id] = visibleMembers(channel.id, (data.rooms && data.rooms[channel.id]) || []);
   }
   ui.voiceRooms = next;
   if (ui.voice && ui.voice.serverId !== 'call') ui.voice.name = channelName();

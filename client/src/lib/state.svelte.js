@@ -77,6 +77,7 @@ export const ui = $state({
   voice: null,
   voiceRooms: {},
   screen: null,
+  streamUi: { view: 'auto', watching: false, hideChat: false },
   incomingCall: null,
   outgoingCall: null,
   missedCalls: [],
@@ -686,6 +687,7 @@ export async function openDm(user) {
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
+  parkStream();
   ui.mode = 'dm';
   ui.dmUser = user;
   if (user && user.id) {
@@ -722,6 +724,7 @@ export async function openGroup(group) {
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'group' && ui.group && String(ui.group.id) === String(group.id);
+  parkStream();
   ui.mode = 'group';
   ui.group = group;
   ui.dmUser = null;
@@ -1008,9 +1011,17 @@ export async function openMention(row) {
   pickChannel(channel);
 }
 
+export function parkStream() {
+  if (!ui.voice || !ui.streamUi || ui.streamUi.view === 'off') return;
+  const live = !!(ui.voice.sharing || ui.screen?.local || ui.screen?.remote);
+  if (!live) return;
+  if (ui.streamUi.view !== 'mini') ui.streamUi = { ...ui.streamUi, view: 'mini', watching: true };
+}
+
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
+  parkStream();
   ui.readHold = '';
   const prev = currentRoom();
   if (ui.mode === 'chat') snapServer(ui.serverId);

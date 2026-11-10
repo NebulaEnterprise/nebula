@@ -5788,6 +5788,7 @@ app.get('/api/health', (req, res) => {
       deafened: !!member.deafened,
       speaking: !!member.speaking && !member.muted && !member.deafened,
       sharing: !!member.sharing,
+      watching: !!member.watching,
     };
   }
 
@@ -5878,6 +5879,7 @@ app.get('/api/health', (req, res) => {
       deafened: prev ? prev.deafened : false,
       speaking: false,
       sharing: false,
+      watching: false,
       seen: Date.now(),
     });
     touchAlerts();
@@ -5904,6 +5906,7 @@ app.get('/api/health', (req, res) => {
       member.sharing = !!req.body.sharing;
       touchAlerts();
     }
+    if (req.body.watching != null) member.watching = !!req.body.watching;
     member.seen = Date.now();
     res.json({ ok: true });
   });

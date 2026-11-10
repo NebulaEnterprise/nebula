@@ -51,10 +51,17 @@
 
   function onVoice(ch) {
     if (ui.voice && ui.voice.channelId === ch.id && ui.voice.serverId === ui.serverId) {
-      leaveVoice();
+      ui.streamUi = { ...ui.streamUi, view: 'wide', watching: true };
       return;
     }
+    ui.streamUi = { ...ui.streamUi, view: 'wide', watching: true };
     joinVoice(ch);
+  }
+
+  function dmSharing(other) {
+    if (!other || !ui.me) return false;
+    const id = 'dm:' + [ui.me.id, other.id].sort().join(':');
+    return (ui.voiceRooms[id] || []).some((person) => person.sharing && String(person.id) !== String(ui.me.id));
   }
 
   let accountOpen = $state(false);
@@ -253,7 +260,7 @@
                 <div class="voice-person" class:speaking={person.speaking}>
                   <Avatar user={person} size={22} dot={false} />
                   <span>{person.displayName || person.username}</span>
-                  {#if person.sharing || (ui.voice?.sharing && person.id === ui.me?.id)}<em class="live-pill">LIVE</em>{/if}
+                  {#if String(person.id) === String(ui.me?.id) ? !!ui.voice?.sharing : !!person.sharing}<em class="live-pill">LIVE</em>{/if}
                   {#if person.muted || person.deafened}<MicOff size={12} />{/if}
                 </div>
               {/each}
@@ -295,8 +302,9 @@
           {@const note = ui.activity.dms[dm.other?.id]}
           <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
             <Avatar user={dm.other} size={28} />
-            <span class="dm-copy">
+            <span class="dm-copy" class:sharing={dmSharing(dm.other)}>
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+              {#if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>{/if}
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}

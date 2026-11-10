@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2 } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
-  import { startCall, joinOpenCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
+  import { startCall, joinOpenCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
@@ -773,6 +773,61 @@
     return (ui.voiceRooms[callRoomId] || []).filter((person) => String(person.id) !== String(ui.me?.id));
   });
   let streamPop = null;
+  let gearOpen = $state(false);
+  const serverVoice = $derived(!!(ui.voice && ui.voice.serverId !== 'call'));
+  const streamLive = $derived(!!(ui.screen?.local || ui.screen?.remote));
+  const wideOpen = $derived(serverVoice && ui.streamUi?.view === 'wide');
+  const dmBoard = $derived((ui.mode === 'dm' || ui.mode === 'group') && ((ui.voice?.serverId === 'call') || rejoinPeople.length > 0));
+  const showBoard = $derived(dmBoard || wideOpen);
+  const miniOpen = $derived(!!ui.voice && streamLive && ui.streamUi?.view === 'mini' && !showBoard);
+  const boardPeople = $derived(ui.voice?.serverId === 'call' ? callPeople : (dmBoard ? rejoinPeople : (ui.voiceRooms[ui.voice?.channelId] || [])));
+  const sharer = $derived.by(() => {
+    if (ui.voice?.sharing || ui.screen?.local) return ui.me;
+    const room = ui.voiceRooms[ui.voice?.channelId || callRoomId] || [];
+    return room.find((person) => person.sharing) || null;
+  });
+  const watcherCount = $derived.by(() => {
+    const room = ui.voiceRooms[ui.voice?.channelId] || [];
+    const host = sharer?.id;
+    return room.filter((person) => person.watching && String(person.id) !== String(host)).length;
+  });
+  const mineStream = $derived(!!(ui.voice?.sharing || ui.screen?.local));
+
+  function setStream(patch) {
+    ui.streamUi = { ...ui.streamUi, ...patch };
+  }
+
+  function watchStream() {
+    if (!ui.voice) {
+      joinOpenCall().then(() => setStream({ watching: true, view: 'wide' }));
+      return;
+    }
+    setStream({ watching: true, view: serverVoice ? 'wide' : ui.streamUi.view });
+  }
+
+  function dockStream() {
+    setStream({ view: 'mini', watching: true });
+  }
+
+  function stopWatching() {
+    gearOpen = false;
+    setStream({ view: 'off', watching: false });
+  }
+
+  function openWide() {
+    setStream({ view: 'wide', watching: true });
+  }
+
+  $effect(() => {
+    const on = !!(ui.voice && streamLive && ui.streamUi?.view !== 'off' && (ui.streamUi?.view === 'mini' || ui.streamUi?.view === 'wide' || ui.streamUi?.watching));
+    setWatching(on);
+  });
+
+  $effect(() => {
+    if (!ui.voice) return;
+    if (!streamLive && ui.streamUi?.view === 'mini') setStream({ view: 'auto', watching: false });
+    else if (streamLive && ui.streamUi?.view === 'auto' && !dmBoard) setStream({ view: 'mini', watching: true });
+  });
 
   function streamTitle() {
     if (remoteScreen && !localScreen) {
@@ -871,7 +926,7 @@
 </script>
 
 <div class="chat-frame">
-<div class="chat-col">
+<div class="chat-col" class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 <div class="top">
   {#if ui.mode === 'thread'}
     <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
@@ -941,30 +996,35 @@
     {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
   </div>
 {/if}
-{#if (ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')) || (rejoinPeople.length && (ui.mode === 'dm' || ui.mode === 'group')) || (ui.voice && (ui.mode === 'chat' || ui.mode === 'thread') && (ui.screen?.local || ui.screen?.remote))}
-  <div class="call-stage" class:watching={ui.screen?.local || ui.screen?.remote}>
-    {#if ui.screen?.local || ui.screen?.remote}
-      <div class="call-view">
-        <div class="stream-tools">
-          <button type="button" title="Full screen" onclick={(event) => fillScreen(event.currentTarget.closest('.call-view'))}><Maximize2 size={16} /></button>
-          <button type="button" title="Pop out" onclick={popOutStream}><PictureInPicture2 size={16} /></button>
+{#if showBoard}
+  <div class="call-board" class:wide={wideOpen}>
+    <div class="call-tiles">
+      {#if streamLive && !mineStream && !ui.streamUi?.watching}
+        <button type="button" class="watch-tile" onclick={watchStream}>Watch Stream</button>
+      {/if}
+      {#if streamLive && (mineStream || ui.streamUi?.watching)}
+        <div class="stream-tile" class:main={ui.streamUi?.watching} onclick={() => (wideOpen ? dockStream() : setStream({ watching: true }))}>
+          {#key ui.screen?.at}
+            {#if ui.screen?.remote && !mineStream}
+              <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
+            {:else if ui.screen?.local}
+              <video class="call-video" autoplay playsinline muted use:attach={localScreen}></video>
+            {/if}
+          {/key}
+          <div class="tile-hover" onclick={(event) => event.stopPropagation()}>
+            <button type="button" title="Full screen" onclick={(event) => fillScreen(event.currentTarget.closest('.stream-tile'))}><Maximize2 size={16} /></button>
+            <button type="button" title="Pop out" onclick={popOutStream}><PictureInPicture2 size={16} /></button>
+            {#if !mineStream}<button type="button" title="Stop watching" onclick={stopWatching}><EyeOff size={16} /></button>{/if}
+            {#if wideOpen}<button type="button" title="Pop down" onclick={dockStream}><ChevronLeft size={16} /></button>{/if}
+          </div>
+          <span class="tile-name">{sharer?.displayName || sharer?.username || 'Stream'}</span>
+          {#if mineStream}<em class="watch-count"><Eye size={14} /> {watcherCount}</em>{/if}
         </div>
-        {#key ui.screen?.at}
-          {#if ui.screen?.remote}
-            <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
-          {/if}
-          {#if ui.screen?.local}
-            <video class="call-pip" class:solo={!ui.screen?.remote} autoplay playsinline muted use:attach={localScreen}></video>
-          {/if}
-        {/key}
-      </div>
-    {/if}
-    {#if ui.mode === 'dm' || ui.mode === 'group'}
-    <div class="call-bubbles">
-      {#each (ui.voice?.serverId === 'call' ? callPeople : rejoinPeople) as person (person.id)}
-        <div class="call-bubble" class:speaking={person.speaking}>
-          <Avatar user={person} size={84} />
-          <strong>{person.displayName || person.username || 'Call'}</strong>
+      {/if}
+      {#each boardPeople as person (person.id)}
+        <div class="person-tile" class:speaking={person.speaking}>
+          <Avatar user={person} size={72} />
+          <span>{person.displayName || person.username}</span>
         </div>
       {/each}
     </div>
@@ -980,11 +1040,12 @@
           <Monitor size={18} />
         </button>
         <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
-      {:else}
+      {:else if !ui.voice}
+        <button type="button" class="join-cam" title="Join call" onclick={joinOpenCall}><Video size={18} /></button>
         <button type="button" class="join-back" title="Join call" onclick={joinOpenCall}><Phone size={18} /></button>
       {/if}
+      <button type="button" class="hide-chat" onclick={() => setStream({ hideChat: !ui.streamUi.hideChat })}>{ui.streamUi?.hideChat ? 'Show chat' : 'Hide chat'}</button>
     </div>
-    {/if}
   </div>
 {/if}
 <div class="messages" bind:this={box} onscroll={trackScroll}>
@@ -1354,5 +1415,32 @@
   {/if}
 </div>
 </div>
+{#if miniOpen}
+  <div class="mini-stream">
+    <button type="button" class="mini-back" onclick={openWide}><ChevronLeft size={16} /> {ui.voice?.name || 'Call'}</button>
+    {#key ui.screen?.at}
+      {#if ui.screen?.remote && !mineStream}
+        <video autoplay playsinline use:attach={remoteScreen}></video>
+      {:else if ui.screen?.local}
+        <video autoplay playsinline muted use:attach={localScreen}></video>
+      {/if}
+    {/key}
+    <div class="mini-bar">
+      <strong>{sharer?.displayName || sharer?.username || 'Stream'}</strong>
+      {#if mineStream}<em class="watch-count"><Eye size={14} /> {watcherCount}</em>{/if}
+      <button type="button" title="Pop out" onclick={popOutStream}><PictureInPicture2 size={16} /></button>
+      {#if mineStream}
+        <button type="button" title="Stream settings" onclick={() => (gearOpen = !gearOpen)}><Settings size={16} /></button>
+      {/if}
+      <button type="button" title={mineStream ? 'Hide preview' : 'Stop watching'} onclick={stopWatching}><X size={16} /></button>
+    </div>
+    {#if gearOpen && mineStream}
+      <div class="stream-gear">
+        <button type="button" onclick={() => { gearOpen = false; toggleShare(); }}>Stop streaming</button>
+        <button type="button" onclick={() => { gearOpen = false; changeShare(); }}>Change stream</button>
+      </div>
+    {/if}
+  </div>
+{/if}
 {#if ui.dock}<Dock />{/if}
 </div>
