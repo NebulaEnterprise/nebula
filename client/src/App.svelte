@@ -142,19 +142,14 @@
   </div>
 {/if}
 {#if ui.reportPopup}
-  <div class="overlay">
-    <div class="sheet report-alert" role="dialog">
-      <div class="sheet-h"><h3>New report</h3></div>
-      <div class="body">
-        <p><strong>@{ui.reportPopup.target?.username || 'someone'}</strong> was reported.</p>
-        {#if ui.reportPopup.text}<p>{ui.reportPopup.text}</p>{/if}
-        <p class="hint">Sent by @{ui.reportPopup.reporter?.username || 'someone'}. Status: {ui.reportPopup.status}</p>
-        <div class="group-actions">
-          <button class="btn" type="button" onclick={() => { if (ui.me) localStorage.setItem('nebula-report-seen:' + ui.me.id, ui.reportPopup.id); ui.userPage = 'admin'; ui.userSettings = true; ui.reportPopup = null; }}>View</button>
-          <button class="btn" type="button" onclick={() => staffReport(ui.reportPopup.id, 'handle')}>Handle</button>
-          <button class="btn" type="button" onclick={() => staffReport(ui.reportPopup.id, 'close')}>Close</button>
-        </div>
+  <div class="report-slide">
+    <article>
+      <strong>New report</strong>
+      <p>@{ui.reportPopup.target?.username || 'someone'} was reported{ui.reportPopup.text ? ': ' + ui.reportPopup.text : ''}.</p>
+      <div>
+        <button type="button" onclick={() => { if (ui.me) localStorage.setItem('nebula-report-seen:' + ui.me.id, ui.reportPopup.id); ui.userPage = 'admin'; ui.userSettings = true; ui.reportPopup = null; }}>View</button>
+        <button type="button" onclick={() => staffReport(ui.reportPopup.id, 'close')}>Dismiss</button>
       </div>
-    </div>
+    </article>
   </div>
 {/if}

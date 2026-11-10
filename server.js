@@ -1665,7 +1665,7 @@ function pollStamp(list) {
 function messageStamp(list) {
   return (list || []).map((msg) => {
     if (!msg) return '';
-    const reacts = (msg.reactions || []).map((row) => row.emoji + ':' + ((row.users || []).length)).join(',');
+    const reacts = (msg.reactions || []).map((row) => row.emoji + ':' + (row.users || []).join('.')).join(',');
     const replyIds = (Array.isArray(msg.replies) && msg.replies.length ? msg.replies : (msg.reply ? [msg.reply] : []))
       .map((row) => row && row.id)
       .filter(Boolean)
@@ -4653,7 +4653,7 @@ function sendDmList(req, res) {
       return {
         id: t.id,
         other: publicUser(users[otherId]),
-        updatedAt: t.updatedAt,
+        updatedAt: Math.max(Number(t.updatedAt) || 0, last && last.createdAt ? Date.parse(last.createdAt) || 0 : 0),
         preview: last ? dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '') : '',
         lastId: last ? last.id : '',
         lastFrom: last ? last.authorId : '',
@@ -5201,6 +5201,12 @@ app.get('/api/forward-targets', auth, (req, res) => {
   res.json({ ok: true, channels, dms });
 });
 
+app.get('/api/messages/:id/reactions', auth, (req, res) => {
+  const found = locateMessage(req.params.id);
+  if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
+  res.json({ ok: true, reactions: publicReactions(found.msg, req.user.id) });
+});
+
 app.post('/api/messages/:id/reactions', auth, (req, res) => {
   const found = locateMessage(req.params.id);
   if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
@@ -5709,7 +5715,7 @@ app.get('/api/staff/reports', auth, (req, res) => {
   if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can see reports' });
   ensureGuilds();
   const g = guilds.servers[OFFICIAL_ID];
-  const list = ((g && g.reports) || []).map(presentReport);
+  const list = ((g && g.reports) || []).filter((row) => row.status !== 'closed').map(presentReport);
   res.json({ ok: true, reports: list });
 });
 

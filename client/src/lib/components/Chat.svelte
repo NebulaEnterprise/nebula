@@ -283,10 +283,24 @@
     reactTip = { x: rect.left + rect.width / 2, y: rect.top, text: reactWho(react) };
   }
 
+  async function loadReactors(message) {
+    if (!message?.id) return;
+    const missing = (message.reactions || []).some((row) => row && row.count && !(row.users && row.users.length));
+    if (!missing) return;
+    try {
+      const data = await api('/api/messages/' + encodeURIComponent(message.id) + '/reactions');
+      if (!Array.isArray(data.reactions)) return;
+      ui.messages = ui.messages.map((row) => row.id === message.id ? { ...row, reactions: data.reactions } : row);
+      const fresh = data.reactions.find((row) => reactTip && row.emoji && reactTip.text.startsWith(row.emoji));
+      if (fresh && reactTip) reactTip = { ...reactTip, text: reactWho(fresh) };
+    } catch (_) {}
+  }
+
   function openReactions(message) {
     reactionView = message?.id || '';
     reactionPick = message?.reactions?.[0]?.emoji || '';
     menu = null;
+    loadReactors(message);
   }
 
   $effect(() => {
@@ -970,7 +984,7 @@
         {#if msg.reactions?.length}
           <div class="reacts">
             {#each msg.reactions as react}
-              <button type="button" class:on={react.me} title={reactWho(react)} onclick={() => onReact(msg.id, react.emoji)} onmouseenter={(e) => showReactTip(e, react)} onmouseleave={() => (reactTip = null)}>
+              <button type="button" class:on={react.me} title={reactWho(react)} onclick={() => onReact(msg.id, react.emoji)} onmouseenter={(e) => { showReactTip(e, react); loadReactors(msg); }} onmouseleave={() => (reactTip = null)}>
                 {#if emojiSrc(react.emoji)}
                   <img src={emojiSrc(react.emoji)} alt={react.emoji} />
                 {:else}

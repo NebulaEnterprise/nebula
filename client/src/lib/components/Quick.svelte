@@ -33,8 +33,8 @@
 
   const who = $derived(person && ui.quickUser && String(person.id) === String(ui.quickUser.id) ? { ...ui.quickUser, ...person } : ui.quickUser);
   const unread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
-  const hidden = $derived(ui.mode === 'dm' && ui.dmUser && ui.quickUser && String(ui.dmUser.id) === String(ui.quickUser.id));
-  const rows = $derived((ui.dms || []).filter((dm) => dm.other));
+  const hidden = $derived(ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'friends' || ui.mode === 'add');
+  const rows = $derived([...(ui.dms || [])].filter((dm) => dm.other).sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0)));
   const emoji = $derived.by(() => {
     const map = new Map();
     for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);

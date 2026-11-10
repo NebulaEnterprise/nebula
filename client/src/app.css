@@ -549,6 +549,28 @@ img { max-width: 100%; }
 .report-send { width: auto; background: #da373c; color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; }
 .report-send:disabled { opacity: 0.45; }
 .member-menu { width: 180px; }
+.report-slide {
+  position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.report-slide article {
+  pointer-events: auto; width: min(420px, calc(100% - 32px));
+  padding: 22px 24px; border-radius: 16px; color: #fff; text-align: center;
+  background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(18px); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+  animation: report-in 0.38s var(--ease);
+}
+.report-slide strong { display: block; font-size: 18px; margin-bottom: 8px; }
+.report-slide p { margin: 0; color: #fff; font-size: 15px; line-height: 1.45; }
+.report-slide div { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }
+.report-slide button {
+  color: #fff; background: rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 8px 14px; font-weight: 700;
+}
+.report-slide button:hover { background: rgba(255, 255, 255, 0.2); }
+@keyframes report-in {
+  from { opacity: 0; transform: translateY(36px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .msg-menu {
   position: fixed; z-index: 40; width: 220px; padding: 6px;
   background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);

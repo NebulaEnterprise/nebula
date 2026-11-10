@@ -502,7 +502,7 @@
             </div>
           {:else if page === 'admin'}
             <div class="report-list">
-              {#each ui.staffReports as report (report.id)}
+              {#each ui.staffReports.filter((report) => report.status !== 'closed') as report (report.id)}
                 <article class="report-row">
                   <div>
                     <strong>@{report.target?.username || 'unknown'}</strong>
@@ -513,7 +513,7 @@
                   <div class="report-acts">
                     <button class="btn sm" onclick={() => viewing = report}>View</button>
                     {#if report.status !== 'handled'}<button class="btn sm" onclick={() => staffReport(report.id, 'handle')}>Handle</button>{/if}
-                    {#if report.status !== 'closed'}<button class="btn sm" onclick={() => staffReport(report.id, 'close')}>Close</button>{/if}
+                    {#if report.status !== 'closed'}<button class="btn sm" onclick={() => { staffReport(report.id, 'close'); if (viewing?.id === report.id) viewing = null; }}>Close</button>{/if}
                   </div>
                 </article>
               {:else}
@@ -530,7 +530,7 @@
                 <div class="report-acts">
                   <button class="btn sm" onclick={() => staffReport(viewing.id, 'view')}>Mark viewed</button>
                   <button class="btn sm" onclick={() => staffReport(viewing.id, 'handle')}>Handle</button>
-                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'close')}>Close</button>
+                  <button class="btn sm" onclick={() => { const id = viewing.id; viewing = null; staffReport(id, 'close'); }}>Close</button>
                   <button class="btn sm" onclick={() => (viewing = null)}>Back</button>
                 </div>
               </div>
