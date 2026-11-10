@@ -44,6 +44,7 @@
         return;
       }
       if (e.key !== 'Escape') return;
+      if (ui.dialog?.kind === 'leave') { ui.dialog = null; return; }
       ui.switcher = false;
       ui.menuOpen = false;
       ui.popout = null;
@@ -66,12 +67,26 @@
       if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
+    const onLink = (e) => {
+      const node = e.target instanceof Element ? e.target : null;
+      const link = node && node.closest('a.msg-link');
+      if (!link) return;
+      const url = link.getAttribute('href') || '';
+      if (!/^https?:\/\//i.test(url)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      ui.dialog = { kind: 'leave', url };
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('click', onClick);
+    window.addEventListener('click', onLink, true);
+    window.addEventListener('auxclick', onLink, true);
     window.addEventListener('pointerdown', onGesture);
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('click', onClick);
+      window.removeEventListener('click', onLink, true);
+      window.removeEventListener('auxclick', onLink, true);
       window.removeEventListener('pointerdown', onGesture);
     };
   });

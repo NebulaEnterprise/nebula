@@ -59,6 +59,23 @@ export function formatContent(text, emoji, stickers, namesList) {
       });
     } catch (_) {}
   }
+  const links = [];
+  raw = raw.replace(/https?:\/\/[^\s\u0000]+/gi, (url) => {
+    let body = url.replace(/[.,!?;:'"]+$/g, '');
+    const extra = (body.match(/\)/g) || []).length - (body.match(/\(/g) || []).length;
+    if (extra > 0) body = body.slice(0, -extra);
+    if (body.length < 8) return url;
+    let href = '';
+    try {
+      const parsed = new URL(body);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return url;
+      href = parsed.href;
+    } catch (_) {
+      return url;
+    }
+    links.push(href);
+    return '\u0000URL' + (links.length - 1) + '\u0000' + url.slice(body.length);
+  });
   let html = escapeHtml(raw);
   html = html.replace(/\u0000MEN(\d+)\u0000/g, (_, index) => {
     return '<span class="mention">@' + escapeHtml(mentions[Number(index)] || '') + '</span>';
@@ -77,6 +94,11 @@ export function formatContent(text, emoji, stickers, namesList) {
     const src = String(e.url).replace(/"/g, '');
     html = html.split(':' + e.name + ':').join('<img class="emoji" alt="" src="' + src + '">');
   }
+  html = html.replace(/\u0000URL(\d+)\u0000/g, (_, index) => {
+    const href = links[Number(index)] || '';
+    const safe = escapeHtml(href);
+    return '<a class="msg-link" href="' + safe + '" rel="noopener noreferrer">' + safe + '</a>';
+  });
   return html;
 }
 

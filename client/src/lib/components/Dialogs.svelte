@@ -156,6 +156,7 @@
         {:else if kind === 'onboarding'}Before you chat
         {:else if kind === 'group'}{groupStep === 1 ? 'Select friends' : 'Customize your group'}
         {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
+        {:else if kind === 'leave'}Leave Nebula
         {:else}Server{/if}
       </h3>
       {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
@@ -383,6 +384,18 @@
           close();
           await loadMembers();
         })}>Finish</button>
+
+      {:else if kind === 'leave'}
+        <p class="hint">This link will make you leave Nebula. Do you wish to proceed?</p>
+        <p class="leave-url">{ui.dialog.url}</p>
+        <div class="leave-actions">
+          <button class="btn" type="button" onclick={close}>No</button>
+          <button class="btn brand" type="button" onclick={() => {
+            const url = ui.dialog?.url;
+            close();
+            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+          }}>Yes</button>
+        </div>
 
       {:else if kind === 'delete'}
         <p class="hint">Delete {ui.serverMeta?.name}? This cannot be undone.</p>

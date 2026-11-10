@@ -821,6 +821,11 @@ img { max-width: 100%; }
   background: rgba(0, 0, 0, 0.55); color: #fff;
 }
 .msg-content { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
+.msg-link { color: #4da3ff; text-decoration: none; }
+.msg-link:hover { text-decoration: underline; }
+.leave-url { margin: 0 0 16px; color: #4da3ff; font-size: 13px; overflow-wrap: anywhere; }
+.leave-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.leave-actions .btn { width: auto; min-width: 88px; }
 .msg-content .emoji { width: 22px; height: 22px; vertical-align: -4px; }
 .msg-content.jumbo { font-size: 48px; line-height: 1.15; }
 .msg-content.jumbo-mid { font-size: 40px; line-height: 1.15; }
