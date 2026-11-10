@@ -156,6 +156,12 @@
   }
 
   function togglePeople() {
+    const phone = typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches;
+    if (phone && (ui.mode === 'chat' || ui.mode === 'thread')) {
+      ui.showMembers = true;
+      ui.phone = 'people';
+      return;
+    }
     if (ui.mode === 'chat' || ui.mode === 'thread') ui.showMembers = ui.showMembers === false;
     else toggleDock(ui.mode === 'group' ? 'group' : 'profile');
   }
@@ -1017,6 +1023,7 @@
   </div>
 {/if}
 <div class="top">
+  <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}
     <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
   {:else if ui.mode !== 'dm' && ui.mode !== 'group'}

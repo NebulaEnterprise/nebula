@@ -58,6 +58,7 @@ export const ui = $state({
   members: [],
   badgeDefs: {},
   menuOpen: false,
+  phone: 'browse',
   picker: '',
   attachOpen: false,
   packs: [],
@@ -676,6 +677,7 @@ export function showFriends(tab) {
     loadGroups();
     refreshVoiceList();
   }
+  phoneChat();
 }
 
 export function showAddFriend() {
@@ -689,6 +691,7 @@ export function showAddFriend() {
     loadGroups();
     refreshVoiceList();
   }
+  phoneChat();
 }
 
 export function openQuick(user) {
@@ -709,6 +712,7 @@ export function closeQuick() {
 }
 
 export async function openDm(user) {
+  phoneChat();
   const entering = !onDmSide();
   ui.readHold = '';
   const prev = currentRoom();
@@ -752,6 +756,7 @@ export async function openDm(user) {
 }
 
 export async function openGroup(group) {
+  phoneChat();
   if (!group || !group.id) return;
   const entering = !onDmSide();
   ui.readHold = '';
@@ -784,6 +789,7 @@ export async function openGroup(group) {
 
 export async function openThread(thread) {
   if (!thread || !thread.id) return;
+  phoneChat();
   const prev = currentRoom();
   const same = ui.mode === 'thread' && ui.thread && String(ui.thread.id) === String(thread.id);
   if (!same) stopTyping();
@@ -859,6 +865,7 @@ export async function openServer(id, opts = {}) {
   if (leavingRoom) stashRoom(prev);
   if (id) ui.serverId = id;
   ui.mode = 'chat';
+  if (!opts.keepDialog) phoneBrowse();
   ui.dmUser = null;
   ui.group = null;
   ui.thread = null;
@@ -1061,8 +1068,17 @@ export function parkStream() {
   if (ui.streamUi.view !== 'mini') ui.streamUi = { ...ui.streamUi, view: 'mini', watching: true };
 }
 
+export function phoneChat() {
+  ui.phone = 'chat';
+}
+
+export function phoneBrowse() {
+  ui.phone = 'browse';
+}
+
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
+  phoneChat();
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
   stopTyping();
   parkStream();

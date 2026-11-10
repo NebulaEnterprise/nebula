@@ -15,7 +15,7 @@
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity, phoneChat } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -269,12 +269,12 @@
       <span>Direct messages</span>
     </div>
     <div class="scroll">
-      <button class="nav-item" class:on={ui.mode === 'friends' && ui.friendsTab !== 'find'} onclick={() => showFriends('online')}>
+      <button class="nav-item" class:on={ui.mode === 'friends' && ui.friendsTab !== 'find'} onclick={() => { showFriends('online'); phoneChat(); }}>
         <Users size={16} />
         <span>Friends</span>
         {#if requestCount}<em class="pill-count" title="Friend requests">{countLabel(requestCount)}</em>{/if}
       </button>
-      <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}><Search size={16} /> Find people</button>
+      <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => { showFriends('find'); phoneChat(); }}><Search size={16} /> Find people</button>
       <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
       <div class="cat"><span>Direct messages</span></div>
       {#each ui.groups || [] as group (group.id)}
@@ -314,7 +314,7 @@
           <span class="empty-mark"><MessageSquare size={22} /></span>
           <strong>No DMs yet</strong>
           <p>{ui.friends.length ? 'Start a chat from Friends.' : 'Add a friend, then say hi.'}</p>
-          <button class="btn brand empty-act" type="button" onclick={() => showFriends(ui.friends.length ? 'online' : 'find')}>{ui.friends.length ? 'Friends' : 'Find friends'}</button>
+          <button class="btn brand empty-act" type="button" onclick={() => { showFriends(ui.friends.length ? 'online' : 'find'); phoneChat(); }}>{ui.friends.length ? 'Friends' : 'Find friends'}</button>
         </div>
       {/if}
     </div>

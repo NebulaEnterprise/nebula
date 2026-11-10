@@ -101,7 +101,7 @@
     <Home />
   {/if}
 {:else}
-  <div class="shell">
+  <div class="shell" class:phone-browse={ui.phone === 'browse'} class:phone-chat={ui.phone === 'chat'} class:phone-people={ui.phone === 'people'}>
     <Rail />
     <Sidebar />
     <main class="main">

@@ -27,6 +27,7 @@
 
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; overflow: hidden; }
+.phone-back, .phone-people-back { display: none; }
 button, input, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; cursor: pointer; }
 img { max-width: 100%; }
@@ -1955,10 +1956,51 @@ img { max-width: 100%; }
 .inbox-pop .btn.icon { width: 26px; height: 26px; border-radius: 8px; }
 
 @media (max-width: 900px) {
+  html, body, #app, .shell { height: 100%; height: 100dvh; }
+  button, a, input, textarea, .channel, .nav-item, .dm-item { touch-action: manipulation; }
+  .shell.phone-browse .main,
+  .shell.phone-browse .members,
+  .shell.phone-chat .rail,
+  .shell.phone-chat .side,
+  .shell.phone-chat .members,
+  .shell.phone-people .rail,
+  .shell.phone-people .side,
+  .shell.phone-people .main,
   .members { display: none; }
-  .quick-dock { left: 12px; right: 12px; width: auto; height: min(70vh, 540px); }
-  .side { width: 228px; }
-  .account-pop, .inbox-pop { left: 44px; width: min(252px, calc(100vw - 60px)); }
+  .shell.phone-browse .side { width: auto; flex: 1; min-width: 0; }
+  .shell.phone-browse .rail { width: 68px; }
+  .shell.phone-chat .main { width: 100%; flex: 1; }
+  .shell.phone-people .members { display: block; width: 100%; flex: 1; }
+  .phone-back {
+    display: grid; place-items: center; width: 36px; height: 36px; margin-left: -6px;
+    border-radius: 10px; color: var(--text); flex-shrink: 0;
+  }
+  .phone-people-back {
+    display: flex; align-items: center; gap: 4px; width: 100%; margin: 0 0 10px;
+    padding: 8px 6px; border-radius: 10px; color: var(--text); font-weight: 700; text-align: left;
+  }
+  .scroll, .messages, .set-main, .friends-body, .dock-body { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+  .me { margin-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .me-tools .btn.icon { width: 36px; height: 36px; }
+  .friends-bar { height: auto; min-height: 52px; padding: 8px; flex-wrap: wrap; }
+  .friends-bar .tabs { overflow-x: auto; max-width: 100%; }
+  .friends-bar .search { width: 100%; margin-left: 0; }
+  .top { height: auto; min-height: 52px; padding: 6px 8px; gap: 6px; }
+  .top h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topic, .status-word, .top-search, .bar-tool kbd { display: none; }
+  .top-tools { gap: 0; overflow-x: auto; }
+  .bar-tool { width: 36px; height: 36px; flex-shrink: 0; }
+  .composer-wrap { padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
+  .composer textarea, .field input, .field textarea, .textin, .search { font-size: 16px; }
+  .quick-pill, .quick-dock { display: none; }
+  .shell.phone-chat .dock { position: fixed; inset: 0; z-index: 28; width: 100%; max-width: none; background: var(--bg-main); }
+  .account-pop, .inbox-pop, .account-switch {
+    left: 12px; right: 12px; width: auto; bottom: calc(78px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 110px);
+  }
+  .overlay { padding: 0; align-items: stretch; }
+  .settings, .wide-sheet { width: 100%; height: 100%; height: 100dvh; max-height: none; border-radius: 0; }
+  .sheet { width: 100%; max-height: 100dvh; border-radius: 16px 16px 0 0; margin-top: auto; }
   .grid-2, .look-grid, .look-layout { grid-template-columns: 1fr; }
   .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .look-select { min-width: 0; }

@@ -1,4 +1,5 @@
 <script>
+  import { ChevronLeft } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -31,6 +32,7 @@
 </script>
 
 <aside class="members">
+  <button type="button" class="phone-people-back" onclick={() => (ui.phone = 'chat')}><ChevronLeft size={18} /> Back to chat</button>
   <div class="cat">Online — {online.length}</div>
   {#each online as m}
     <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>

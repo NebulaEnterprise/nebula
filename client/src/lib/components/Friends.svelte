@@ -1,5 +1,5 @@
 <script>
-  import { MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
+  import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
@@ -63,6 +63,7 @@
 </script>
 
 <div class="friends-bar">
+  <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   <div class="tabs">
     <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'online'} onclick={() => showFriends('online')}>Online</button>
     <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'all'} onclick={() => showFriends('all')}>All</button>
