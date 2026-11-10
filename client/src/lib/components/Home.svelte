@@ -10,7 +10,7 @@
 
   const nav = ['Developers', 'Plus', 'About'];
   const desktop = typeof window !== 'undefined' && (!!window.nebulaDesktop || /Electron/i.test(navigator.userAgent));
-  const downloadUrl = 'https://github.com/userxxxxxxxxx/nebula/releases/latest/download/Nebula.exe';
+  const downloadUrl = 'https://github.com/NebulaGateway/nebula/releases/latest/download/Nebula.exe';
   const features = [
     { icon: Zap, title: 'Blazing Fast', text: 'Messages show up as soon as they’re sent, wherever you are.' },
     { icon: Lock, title: 'Private rooms', text: 'Servers and chats stay with the people you let in.' },
@@ -80,7 +80,7 @@
     <nav class="nav" aria-label="Site">
       <button type="button" class="on" onclick={toTop}>Home</button>
       {#if !desktop}
-        <a href={downloadUrl}>Download</a>
+        <a href={downloadUrl} download="Nebula.exe">Download</a>
       {/if}
       {#each nav as label}
         <span>{label}</span>
@@ -106,7 +106,7 @@
       <p class="lead">Nebula is a fast, secure, and beautiful platform to chat, share, and build with your community.</p>
       <div class="actions">
         {#if !desktop}
-          <a class="cta" href={downloadUrl}>Download</a>
+          <a class="cta" href={downloadUrl} download="Nebula.exe">Download</a>
         {/if}
         <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
         <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>

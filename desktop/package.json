@@ -1,7 +1,7 @@
 {
   "name": "nebula",
   "productName": "Nebula",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Nebula desktop app. The window loads the live site, so updates ship with the website.",
   "main": "main.js",
   "author": "Nebula",
