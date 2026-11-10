@@ -80,7 +80,10 @@ export const ui = $state({
   outgoingCall: null,
   missedCalls: [],
   dmMenu: null,
+  memberMenu: null,
   pinTick: 0,
+  readHold: '',
+  jumpTo: '',
   addingAccount: false,
   authGate: false,
   quickOpen: false,
@@ -215,6 +218,7 @@ async function enterApp() {
   await loadDms();
   await openServer(ui.serverId || 'nebula-official');
   await consumeInvite();
+  await openSharedLink();
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = null;
   watchChat();
@@ -390,6 +394,69 @@ function pendingInvite() {
   return (new URLSearchParams(window.location.search).get('invite') || '').toLowerCase();
 }
 
+export async function openSharedLink() {
+  const params = new URLSearchParams(window.location.search);
+  const msg = params.get('msg');
+  if (!msg || !ui.me) return;
+  try {
+    if (params.get('dm')) {
+      const known = (ui.dms || []).find((row) => String(row.other?.id) === String(params.get('dm')));
+      await openDm(known?.other || { id: params.get('dm'), username: 'user', displayName: 'User' });
+    } else if (params.get('group')) {
+      const group = (ui.groups || []).find((row) => String(row.id) === String(params.get('group')));
+      if (group) await openGroup(group);
+    } else if (params.get('thread')) {
+      ui.jumpTo = msg;
+    } else if (params.get('server')) {
+      if (String(params.get('server')) !== String(ui.serverId)) await openServer(params.get('server'));
+      const channel = (ui.channels || []).find((row) => String(row.id) === String(params.get('channel')));
+      if (channel) pickChannel(channel);
+    }
+    ui.jumpTo = msg;
+    const clean = new URL(window.location.href);
+    ['msg', 'dm', 'group', 'server', 'channel', 'thread'].forEach((key) => clean.searchParams.delete(key));
+    history.replaceState(null, '', clean.pathname + (clean.searchParams.toString() ? '?' + clean.searchParams.toString() : '') + clean.hash);
+  } catch (_) {}
+}
+
+export function messageLink(message) {
+  if (!message) return '';
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  if (ui.mode === 'dm' && ui.dmUser) url.searchParams.set('dm', ui.dmUser.id);
+  else if (ui.mode === 'group' && ui.group) url.searchParams.set('group', ui.group.id);
+  else if (ui.mode === 'thread' && ui.thread) url.searchParams.set('thread', ui.thread.id);
+  else {
+    url.searchParams.set('server', ui.serverId || '');
+    url.searchParams.set('channel', ui.channelId || '');
+  }
+  url.searchParams.set('msg', message.id);
+  return url.toString();
+}
+
+export function markUnread(message) {
+  if (!message || !message.id) return;
+  const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
+  const list = (ui.messages || []).filter((row) => row && !row.pending && !row.failed && !String(row.id || '').startsWith('local-'));
+  const idx = list.findIndex((row) => row.id === message.id);
+  const prev = idx > 0 ? list[idx - 1].id : '';
+  const map = seenMap();
+  if (prev) map[roomKey] = prev;
+  else delete map[roomKey];
+  saveSeen(map);
+  ui.readHold = roomKey;
+  const count = Math.max(1, list.length - Math.max(idx, 0));
+  if (String(roomKey).startsWith('dm:')) {
+    const id = roomKey.slice(3);
+    ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [id]: { unread: count } } };
+  } else if (!String(roomKey).startsWith('group:') && !String(roomKey).startsWith('thread:')) {
+    const channels = { ...ui.activity.channels, [roomKey]: { unread: count, mentions: (ui.activity.channels[roomKey] || {}).mentions || 0, serverId: ui.serverId } };
+    ui.activity = { ...ui.activity, channels };
+  }
+  toast('Marked as unread');
+}
+
 export async function consumeInvite() {
   const slug = pendingInvite();
   if (!slug || !ui.me) return;
@@ -492,7 +559,6 @@ export async function loadGroups() {
 export async function loadDms() {
   const serial = ++dmSerial;
   hydrateClosed();
-  loadGroups();
   try {
     const seen = seenMap();
     const seeded = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
@@ -578,6 +644,7 @@ export async function loadDms() {
 
 export function showFriends(tab) {
   leaveChat();
+  ui.readHold = '';
   ui.mode = 'friends';
   ui.friendsTab = tab || ui.friendsTab || 'online';
   ui.dmUser = null;
@@ -615,6 +682,7 @@ export function closeQuick() {
 }
 
 export async function openDm(user) {
+  ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
   ui.mode = 'dm';
@@ -650,6 +718,7 @@ export async function openDm(user) {
 
 export async function openGroup(group) {
   if (!group || !group.id) return;
+  ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'group' && ui.group && String(ui.group.id) === String(group.id);
   ui.mode = 'group';
@@ -874,7 +943,7 @@ function rememberLog(id, list) {
 
 function msgSig(msg) {
   if (!msg) return '';
-  const reacts = (msg.reactions || []).map((row) => (row.emoji || '') + row.count + (row.me ? '1' : '0')).join('.');
+  const reacts = (msg.reactions || []).map((row) => (row.emoji || '') + row.count + (row.me ? '1' : '0') + (row.users || []).map((person) => person.id).join(',')).join('.');
   return [msg.id, msg.content || '', msg.editedAt || '', msg.pending ? 1 : 0, msg.failed ? 1 : 0, reacts, (msg.files || []).length, msg.poll ? JSON.stringify(msg.poll) : ''].join('|');
 }
 
@@ -941,6 +1010,7 @@ export async function openMention(row) {
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
+  ui.readHold = '';
   const prev = currentRoom();
   if (ui.mode === 'chat') snapServer(ui.serverId);
   stashRoom(prev);
@@ -1200,7 +1270,7 @@ export async function loadMessages(quiet, live) {
     const logKey = currentRoom();
     const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
     if (!list.length && hadReal) return 'same';
-    if (newest && newest.id) markSeen(roomKey, newest.id);
+    if (newest && newest.id && ui.readHold !== roomKey) markSeen(roomKey, newest.id);
     const known = new Set(list.map((msg) => msg && msg.id));
     const local = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && !known.has(msg.id) && (msg.roomKey === roomKey || !msg.roomKey));
     const next = local.length ? [...list, ...local] : list;
@@ -1518,7 +1588,7 @@ function acceptTypers(list) {
 setInterval(() => {
   if (!ui.typers.length) return;
   const now = Date.now();
-  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 420);
+  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 6500);
   if (next.length === ui.typers.length) return;
   for (const row of ui.typers) if (!next.includes(row)) typerSeen.delete(row.id);
   ui.typers = next;
@@ -1551,7 +1621,7 @@ function stopTyping() {
 
 function pingTyping() {
   const now = Date.now();
-  if (typingLive && now - lastTypingPing < 180) return;
+  if (typingLive && now - lastTypingPing < 2500) return;
   lastTypingPing = now;
   typingLive = true;
   postTyping({ token: ++typingSerial });
@@ -2003,7 +2073,7 @@ async function pollActivity() {
     const servers = { ...(data.servers || {}) };
     const channels = { ...(data.channels || {}) };
     const dms = { ...(data.dms || {}) };
-    if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId]) {
+    if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
       const note = channels[ui.channelId];
       delete channels[ui.channelId];
       const srv = servers[note.serverId];
@@ -2014,7 +2084,7 @@ async function pollActivity() {
         else delete servers[note.serverId];
       }
     }
-    if (ui.mode === 'dm' && ui.dmUser) delete dms[ui.dmUser.id];
+    if (ui.mode === 'dm' && ui.dmUser && ui.readHold !== 'dm:' + ui.dmUser.id) delete dms[ui.dmUser.id];
     serverDmNotes = dms;
     let mentions = 0;
     let dmUnread = 0;
@@ -2074,10 +2144,6 @@ async function pingSeen() {
 function noteActivity() {
   if (document.hidden) return;
   lastLocalActivity = Date.now();
-  const now = Date.now();
-  if (now - lastSeenPing < 20000) return;
-  lastSeenPing = now;
-  pingSeen();
 }
 
 function startPresence() {
@@ -2093,28 +2159,19 @@ function startPresence() {
   pingSeen();
   setInterval(() => {
     if (!ui.me || (ui.me.statusChoice || 'online') !== 'online') return;
-    if (!document.hidden) {
-      applyPresence('online', Date.now());
-      pingSeen();
-      return;
-    }
-    const idle = Date.now() - lastLocalActivity >= 10 * 60 * 1000;
-    applyPresence(idle ? 'idle' : 'online', ui.me.lastSeen);
-  }, 15000);
+    if (document.hidden && Date.now() - lastLocalActivity >= 10 * 60 * 1000) applyPresence('idle', ui.me.lastSeen);
+    else if (!document.hidden) pingSeen();
+  }, 20000);
 }
 
 function startClocks() {
   if (clocksStarted) return;
   clocksStarted = true;
-  setInterval(() => {
-    if (document.hidden || !localStorage.getItem('dc_token')) return;
-    if (ui.mode === 'chat' && ui.serverId) loadMembers(true);
-  }, 1000);
   const watchInbox = () => {
-    if (!localStorage.getItem('dc_token')) return;
-    pollActivity().then(() => loadDms());
+    if (document.hidden || !localStorage.getItem('dc_token')) return;
+    pollActivity().then(() => { loadDms(); loadGroups(); });
   };
-  setInterval(watchInbox, 1000);
+  setInterval(watchInbox, 15000);
   watchInbox();
   watchAlerts();
   loadPacks();
@@ -2202,6 +2259,19 @@ export function developerMode() {
 export function setDeveloperMode(on) {
   localStorage.setItem('nebula-dev', on ? '1' : '0');
   ui.devTick += 1;
+}
+
+export function openMemberMenu(event, user) {
+  if (!user) return;
+  event.preventDefault();
+  event.stopPropagation();
+  ui.dmMenu = null;
+  ui.idMenu = null;
+  ui.memberMenu = {
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 196)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 120)),
+    user,
+  };
 }
 
 export function openIdMenu(event, items) {

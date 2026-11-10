@@ -1681,6 +1681,17 @@ function publicReactions(msg, viewerId) {
       emoji: row.emoji,
       count: row.users.length,
       me: row.users.map(String).includes(String(viewerId)),
+      users: row.users.map((id) => {
+        const person = users[String(id)];
+        if (!person) return { id: String(id), username: 'Someone', displayName: 'Someone', avatarUrl: '', avatarColor: '#7c5cff' };
+        return {
+          id: person.id,
+          username: person.username,
+          displayName: person.displayName || person.username,
+          avatarUrl: publishedMedia(person, 'avatar') || '',
+          avatarColor: person.avatarColor || '#7c5cff',
+        };
+      }),
     }));
 }
 
@@ -3530,6 +3541,7 @@ function finishCall(row, missed) {
     }
   }
   saveCalls();
+  touchAlerts();
 }
 
 app.post('/api/activity', auth, (req, res) => {
@@ -3639,6 +3651,7 @@ app.post('/api/calls', auth, (req, res) => {
   saveCalls();
   save(MESSAGES_FILE, messages);
   wakePulse(channelId);
+  touchAlerts();
   res.json({ ok: true, call: callView(row) });
 });
 
@@ -3649,6 +3662,7 @@ app.post('/api/calls/:id/answer', auth, (req, res) => {
   row.status = 'active';
   row.answeredAt = Date.now();
   saveCalls();
+  touchAlerts();
   res.json({ ok: true, call: callView(row) });
 });
 
@@ -3659,6 +3673,7 @@ app.post('/api/calls/:id/decline', auth, (req, res) => {
     row.status = 'declined';
     row.endedAt = Date.now();
     saveCalls();
+    touchAlerts();
   }
   res.json({ ok: true });
 });
@@ -4101,7 +4116,7 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 500) {
+    if (now - row.at > 6000) {
       if (row.timer) clearTimeout(row.timer);
       room.delete(id);
       continue;
@@ -4153,7 +4168,7 @@ function armTyping(key, userId, row) {
     if (!current || current.at !== row.at) return;
     room.delete(userId);
     wakeTyping(key);
-  }, 420);
+  }, 6000);
   room.set(userId, row);
 }
 
@@ -4168,6 +4183,7 @@ app.post('/api/typing', auth, (req, res) => {
     return res.json({ ok: true });
   }
   if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
+  const already = !!(typingRooms.get(key) && typingRooms.get(key).has(req.user.id));
   armTyping(key, req.user.id, {
     name: req.user.displayName || req.user.username,
     nameEffect: cleanNameEffect(req.user.nameEffect),
@@ -4175,7 +4191,7 @@ app.post('/api/typing', auth, (req, res) => {
     at: Date.now(),
     token,
   });
-  wakeTyping(key);
+  if (!already) wakeTyping(key);
   res.json({ ok: true });
 });
 
@@ -5650,6 +5666,8 @@ function presentReport(report) {
     status: report.status || 'open',
     reason: report.reason || '',
     text: report.text || '',
+    excerpt: report.excerpt || '',
+    messageId: report.messageId || '',
     at: report.at,
     target: target
       ? { id: target.id, uid: target.uid, username: target.username, displayName: target.displayName || target.username }
@@ -5674,6 +5692,8 @@ app.post('/api/reports', auth, (req, res) => {
     status: 'open',
     reason,
     text: String(req.body?.text || '').slice(0, 500),
+    excerpt: String(req.body?.excerpt || '').slice(0, 240),
+    messageId: String(req.body?.messageId || '').slice(0, 80),
     targetId: target.id,
     targetName: target.username,
     by: req.user.id,

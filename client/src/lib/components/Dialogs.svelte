@@ -19,6 +19,7 @@
   let groupStep = $state(1);
   let groupQuery = $state('');
   let iconUrl = $state('');
+  let reportToken = '';
 
   const friendChoices = $derived((ui.friends || []).filter((person) => {
     const q = groupQuery.trim().toLowerCase();
@@ -59,6 +60,14 @@
     if (kind === 'edit-channel' && channel) {
       name = channel.name || '';
       extra = channel.topic || '';
+    }
+    if (kind === 'user-report') {
+      const token = (ui.dialog?.user?.id || '') + ':' + (ui.dialog?.message?.id || '');
+      if (token && token !== reportToken) {
+        reportToken = token;
+        name = '';
+        extra = '';
+      }
     }
   });
 
@@ -129,7 +138,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
@@ -149,7 +158,7 @@
         {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
         {:else}Server{/if}
       </h3>
-      <button class="btn icon" onclick={close}><X size={16} /></button>
+      {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
     </div>
     <div class="body">
       {#if kind === 'group'}
@@ -305,17 +314,17 @@
         </div>
 
       {:else if kind === 'user-report'}
-        <p class="hint">Only Nebula staff see reports. They won't know who sent it.</p>
+        <p class="hint report-lead">Only Nebula's admins see reports. They won't know who sent it.</p>
         <div class="report-reasons">
           {#each [['harassment', 'Harassment or bullying'], ['hate', 'Hate speech or slurs'], ['sexual', 'Sexual content'], ['child', 'Child safety (someone may be a minor at risk)'], ['threats', 'Threats or violence'], ['self-harm', 'Self-harm or suicide'], ['spam', 'Spam or scams'], ['illegal', 'Something illegal'], ['other', 'Something else']] as [id, label]}
-            <label class="check"><input type="radio" name="report-reason" value={id} bind:group={name} /> {label}</label>
+            <label class="report-choice"><input type="radio" name="report-reason" value={id} bind:group={name} /> {label}</label>
           {/each}
         </div>
         <div class="field"><label>Anything else? (optional)</label><textarea bind:value={extra} maxlength="500" rows="3" placeholder="Links, context, what happened..."></textarea></div>
         <div class="group-actions">
-          <button class="btn" type="button" onclick={close}>Cancel</button>
-          <button class="btn brand" type="button" disabled={busy || !name} onclick={() => go(async () => {
-            await api('/api/reports', { method: 'POST', body: { userId: ui.dialog.user?.id, reason: name, text: extra } });
+          <button class="btn report-cancel" type="button" onclick={close}>Cancel</button>
+          <button class="btn report-send" type="button" disabled={busy || !name} onclick={() => go(async () => {
+            await api('/api/reports', { method: 'POST', body: { userId: ui.dialog.user?.id, reason: name, text: extra, messageId: ui.dialog.message?.id || '', excerpt: String(ui.dialog.message?.content || '').slice(0, 240) } });
             close();
             toast('Report sent');
           })}>Send report</button>

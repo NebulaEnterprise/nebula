@@ -143,7 +143,7 @@
     const tick = async (full) => {
       if (stop) return;
       try { await refresh(id, full); } catch (_) { loading = false; }
-      if (!stop) timer = setTimeout(() => tick(false), 2500);
+      if (!stop) timer = setTimeout(() => tick(false), 5000);
     };
     tick(true);
     return () => {
@@ -166,7 +166,7 @@
       } catch (_) {}
     };
     look();
-    const timer = setInterval(look, 400);
+    const timer = setInterval(look, 3000);
     return () => {
       stop = true;
       clearInterval(timer);
@@ -212,7 +212,7 @@
     const token = ++typeToken;
     const ping = () => api('/api/typing', { method: 'POST', body: { dmUserId: id, token } }).catch(() => {});
     ping();
-    const timer = setInterval(ping, 180);
+    const timer = setInterval(ping, 2500);
     return () => {
       clearInterval(timer);
       api('/api/typing', { method: 'POST', body: { dmUserId: id, token, stop: true } }).catch(() => {});

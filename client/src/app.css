@@ -512,6 +512,43 @@ img { max-width: 100%; }
 }
 .reacts button.on { background: rgba(124, 106, 247, 0.22); border-color: var(--brand); }
 .reacts img, .react-flyout img { width: 18px; height: 18px; object-fit: contain; }
+.react-tip {
+  position: fixed; z-index: 70; transform: translate(-50%, calc(-100% - 10px));
+  max-width: 280px; padding: 8px 10px; border-radius: 8px; pointer-events: none;
+  background: #111214; border: 1px solid #2b2d31; color: #fff; font-size: 13px; font-weight: 650;
+  box-shadow: var(--shadow); text-align: center;
+}
+.react-overlay { z-index: 45; }
+.react-sheet { width: min(560px, 100%); }
+.react-board { display: grid; grid-template-columns: 168px 1fr; min-height: 280px; max-height: 460px; }
+.react-board aside { border-right: 1px solid var(--line); padding: 8px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.react-board aside button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; color: var(--text); }
+.react-board aside button.on, .react-board aside button:hover { background: #35373e; }
+.react-board aside img { width: 22px; height: 22px; object-fit: contain; }
+.react-board aside em { margin-left: auto; color: var(--muted); font-style: normal; font-weight: 700; }
+.react-people { overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.react-people > button { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; text-align: left; color: var(--text); }
+.react-people > button:hover { background: #2b2d31; }
+.react-people strong, .react-people em { display: block; }
+.react-people em { color: var(--faint); font-style: normal; font-size: 12px; font-weight: 500; }
+.report-sheet { width: min(440px, 100%); background: #313338; }
+.report-sheet .sheet-h h3 { font-size: 20px; }
+.report-lead { margin: 4px 0 12px; color: #b5bac1; }
+.report-choice { display: flex; align-items: center; gap: 12px; padding: 7px 2px; color: #f2f3f5; font-weight: 500; cursor: pointer; }
+.report-choice input {
+  appearance: none; width: 20px; height: 20px; margin: 0; border-radius: 50%;
+  border: 2px solid #80848e; background: transparent; flex-shrink: 0;
+}
+.report-choice input:checked { border-color: #fff; box-shadow: inset 0 0 0 4px #313338, inset 0 0 0 10px #fff; }
+.report-sheet .field label { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; font-weight: 800; color: #b5bac1; }
+.report-sheet textarea {
+  width: 100%; background: #1e1f22; border: 0; border-radius: 8px; color: #f2f3f5;
+  padding: 12px; resize: vertical; font: inherit;
+}
+.report-cancel { width: auto; background: transparent; color: #fff; }
+.report-send { width: auto; background: #da373c; color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; }
+.report-send:disabled { opacity: 0.45; }
+.member-menu { width: 180px; }
 .msg-menu {
   position: fixed; z-index: 40; width: 220px; padding: 6px;
   background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);

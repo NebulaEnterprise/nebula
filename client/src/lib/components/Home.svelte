@@ -63,7 +63,7 @@
 
   onMount(() => {
     loadOnline();
-    const timer = setInterval(loadOnline, 15000);
+    const timer = setInterval(loadOnline, 60000);
     return () => clearInterval(timer);
   });
 </script>

@@ -1,12 +1,12 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
   import { startCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, PERM } from '../format.js';
@@ -260,6 +260,42 @@
   }
 
   let flashId = $state('');
+  let reactTip = $state(null);
+  let reactionView = $state('');
+  let reactionPick = $state('');
+
+  function reactWho(react) {
+    const people = Array.isArray(react?.users) ? react.users : [];
+    const names = people.slice(0, 3).map((person) => person.displayName || person.username).filter(Boolean);
+    const extra = Math.max(0, (react?.count || people.length) - names.length);
+    const label = react?.emoji || 'That';
+    if (!names.length) return label + ' reacted by ' + (react?.count || 0);
+    const head = extra
+      ? names.join(', ') + ', and ' + extra + (extra === 1 ? ' other' : ' others')
+      : names.length === 1
+        ? names[0]
+        : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+    return label + ' reacted by ' + head;
+  }
+
+  function showReactTip(event, react) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    reactTip = { x: rect.left + rect.width / 2, y: rect.top, text: reactWho(react) };
+  }
+
+  function openReactions(message) {
+    reactionView = message?.id || '';
+    reactionPick = message?.reactions?.[0]?.emoji || '';
+    menu = null;
+  }
+
+  $effect(() => {
+    const id = ui.jumpTo;
+    if (!id || !ui.messages.some((row) => row && row.id === id)) return;
+    queueMicrotask(() => jumpTo(id));
+    ui.jumpTo = '';
+  });
+
   function jumpTo(id) {
     if (!id || !box) return;
     const node = box.querySelector('[data-id="' + CSS.escape(id) + '"]');
@@ -934,7 +970,7 @@
         {#if msg.reactions?.length}
           <div class="reacts">
             {#each msg.reactions as react}
-              <button type="button" class:on={react.me} onclick={() => onReact(msg.id, react.emoji)}>
+              <button type="button" class:on={react.me} title={reactWho(react)} onclick={() => onReact(msg.id, react.emoji)} onmouseenter={(e) => showReactTip(e, react)} onmouseleave={() => (reactTip = null)}>
                 {#if emojiSrc(react.emoji)}
                   <img src={emojiSrc(react.emoji)} alt={react.emoji} />
                 {:else}
@@ -950,9 +986,51 @@
     {/if}
   {/each}
 </div>
+{#if reactTip}
+  <div class="react-tip" style="left:{reactTip.x}px;top:{reactTip.y}px">{reactTip.text}</div>
+{/if}
+{#if reactionView}
+  {@const viewed = ui.messages.find((row) => row.id === reactionView)}
+  {@const rows = viewed?.reactions || []}
+  {@const chosen = rows.find((row) => row.emoji === reactionPick) || rows[0]}
+  <div class="overlay react-overlay" role="presentation" onclick={() => (reactionView = '')}>
+    <div class="sheet react-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="sheet-h">
+        <h3>Reactions</h3>
+        <button class="btn icon" type="button" aria-label="Close" onclick={() => (reactionView = '')}><X size={16} /></button>
+      </div>
+      <div class="react-board">
+        <aside>
+          {#each rows as row}
+            <button type="button" class:on={(chosen && chosen.emoji) === row.emoji} onclick={() => (reactionPick = row.emoji)}>
+              {#if emojiSrc(row.emoji)}<img src={emojiSrc(row.emoji)} alt="" />{:else}<span>{row.emoji}</span>{/if}
+              <em>{row.count}</em>
+            </button>
+          {/each}
+        </aside>
+        <div class="react-people">
+          {#each chosen?.users || [] as person (person.id)}
+            <button type="button" onclick={() => openPopout(person, window.innerWidth / 2, 120)}>
+              <Avatar user={person} size={36} dot={false} />
+              <span>
+                <strong>{person.displayName || person.username}</strong>
+                <em>@{person.username}</em>
+              </span>
+            </button>
+          {:else}
+            <p class="hint">Nobody is on this reaction.</p>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 {#if menu}
   {@const current = ui.messages.find((msg) => msg.id === menu.id)}
   <div class="msg-menu" style="left:{menu.x}px;top:{menu.y}px" onclick={(e) => e.stopPropagation()}>
+    {#if current?.reactions?.length}
+      <button type="button" onclick={() => openReactions(current)}><SmilePlus size={16} /> View Reactions</button>
+    {/if}
     <button type="button" onclick={() => (menu = { ...menu, react: !menu.react })}><SmilePlus size={16} /> Add Reaction</button>
     {#if menu.react}
       <div class="react-picker" style="left:{menu.x + 636 < window.innerWidth ? menu.x + 228 : Math.max(8, menu.x - 416)}px;top:{Math.max(8, Math.min(menu.y, window.innerHeight - 500))}px">
@@ -972,6 +1050,11 @@
       {/if}
       {#if ui.mode === 'chat'}
         <button type="button" onclick={() => createThread(current)}><MessagesSquare size={16} /> Create Thread</button>
+      {/if}
+      <button type="button" onclick={() => { copyText(messageLink(current), 'message link'); menu = null; }}><Link size={16} /> Copy Message Link</button>
+      <button type="button" onclick={() => { markUnread(current); menu = null; }}><Mail size={16} /> Mark Unread</button>
+      {#if !menu.mine}
+        <button type="button" class="danger" onclick={() => { ui.dialog = { kind: 'user-report', user: current.author, message: current }; menu = null; }}><Flag size={16} /> Report Message</button>
       {/if}
     {/if}
     {#if current && menu.mine}

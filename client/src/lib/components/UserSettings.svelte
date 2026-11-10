@@ -507,6 +507,7 @@
                   <div>
                     <strong>@{report.target?.username || 'unknown'}</strong>
                     <span>{reasonLabel[report.reason] || report.reason || 'Report'} · {report.status}</span>
+                    {#if report.excerpt}<p>Message: {report.excerpt}</p>{/if}
                     {#if report.text}<p>{report.text}</p>{/if}
                   </div>
                   <div class="report-acts">
@@ -523,6 +524,7 @@
               <div class="report-view">
                 <strong>Report on @{viewing.target?.username}</strong>
                 <p>{reasonLabel[viewing.reason] || 'Report'}</p>
+                {#if viewing.excerpt}<p>Message: {viewing.excerpt}</p>{/if}
                 <p>{viewing.text || 'No extra details.'}</p>
                 <p class="hint">From @{viewing.reporter?.username || 'someone'} · {viewing.status}</p>
                 <div class="report-acts">

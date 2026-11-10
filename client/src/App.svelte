@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats } from './lib/state.svelte.js';
+  import { UserRound, Flag } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode } from './lib/state.svelte.js';
   import { answerCall, declineCall } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
@@ -38,6 +39,7 @@
       ui.picker = '';
       ui.attachOpen = false;
       ui.dmMenu = null;
+      ui.memberMenu = null;
     };
     const onClick = (e) => {
       const node = e.target instanceof Element ? e.target : null;
@@ -49,6 +51,7 @@
       if (!inside('.attach-menu') && !inside('.attach-toggle')) ui.attachOpen = false;
       if (!inside('.id-menu')) ui.idMenu = null;
       if (!inside('.dm-menu')) ui.dmMenu = null;
+      if (!inside('.member-menu')) ui.memberMenu = null;
       if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
@@ -117,6 +120,18 @@
     {/if}
     <button type="button" onclick={() => togglePin(pinKey)}>{pinnedChats().includes(pinKey) ? 'Unpin DM' : 'Pin DM'}</button>
     <button type="button" onclick={() => { const row = (ui.dms || []).find((dm) => String(dm.other?.id) === String(person?.id)); closeConversation(pinKey, row && row.lastId); ui.dmMenu = null; }}>Close chat</button>
+  </div>
+{/if}
+{#if ui.memberMenu}
+  {@const person = ui.memberMenu.user}
+  <div class="msg-menu member-menu" style="left:{ui.memberMenu.x}px;top:{ui.memberMenu.y}px">
+    <button type="button" onclick={() => { openPopout(person, ui.memberMenu.x, ui.memberMenu.y); ui.memberMenu = null; }}><UserRound size={16} /> Profile</button>
+    {#if person && String(person.id) !== String(ui.me?.id)}
+      <button type="button" class="danger" onclick={() => { ui.dialog = { kind: 'user-report', user: person }; ui.memberMenu = null; }}><Flag size={16} /> Report</button>
+    {/if}
+    {#if developerMode()}
+      <button type="button" onclick={() => copyText(person?.id, 'user ID')}>Copy User ID</button>
+    {/if}
   </div>
 {/if}
 {#if ui.idMenu}

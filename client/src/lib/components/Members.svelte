@@ -3,7 +3,7 @@
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import { shortBio } from '../format.js';
-  import { ui, openPopout, openIdMenu } from '../state.svelte.js';
+  import { ui, openPopout, openMemberMenu } from '../state.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
       return {
@@ -32,7 +32,7 @@
 <aside class="members">
   <div class="cat">Online — {online.length}</div>
   {#each online as m}
-    <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'User ID', value: m.id }])}>
+    <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
       <Avatar user={m} size={34} />
       <div class="meta">
         <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} /></div>
@@ -43,7 +43,7 @@
   {#if offline.length}
     <div class="cat">Offline — {offline.length}</div>
     {#each offline as m}
-      <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'User ID', value: m.id }])}>
+      <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
         <Avatar user={m} size={34} />
         <div class="meta">
           <div class="name-row"><strong><Name user={shown(m)} /></strong><NameExtras user={shown(m)} /></div>
