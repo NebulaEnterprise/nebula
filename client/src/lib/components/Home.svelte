@@ -241,15 +241,16 @@
     letter-spacing: -0.03em;
   }
   .gem {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
     object-fit: cover;
-    background: #000;
-    box-shadow: 0 0 18px rgba(160, 100, 255, 0.7);
+    background: #14081f;
+    box-shadow: 0 0 14px #f0b6ff, 0 0 32px rgba(176, 70, 255, 0.9);
+    filter: drop-shadow(0 0 8px #e090ff);
   }
   .chrome strong { display: inline-flex; align-items: center; gap: 6px; }
-  .chrome strong img { width: 22px; height: 22px; object-fit: contain; background: transparent; }
+  .chrome strong img { width: 26px; height: 26px; object-fit: contain; background: transparent; filter: drop-shadow(0 0 6px #e090ff); }
   .nav {
     display: flex;
     align-items: center;
