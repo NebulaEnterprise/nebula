@@ -4116,13 +4116,13 @@ function listTypers(key, selfId) {
   const now = Date.now();
   const out = [];
   for (const [id, row] of room) {
-    if (now - row.at > 6000) {
+    if (now - row.at > 10000) {
       if (row.timer) clearTimeout(row.timer);
       room.delete(id);
       continue;
     }
     if (id === selfId) continue;
-    out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [], tick: Math.floor(row.at / 250) });
+    out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [], tick: Math.floor(row.at / 1000) });
   }
   return out;
 }
@@ -4158,6 +4158,14 @@ function silenceTyping(key, userId, token) {
   clearTyping(key, userId);
 }
 
+function typingToken(typers) {
+  return typers.map((row) => row.id + '@' + row.tick).sort().join(',');
+}
+
+function typingSignature(key) {
+  return typingToken(listTypers(key, ''));
+}
+
 function armTyping(key, userId, row) {
   if (!typingRooms.has(key)) typingRooms.set(key, new Map());
   const room = typingRooms.get(key);
@@ -4168,7 +4176,7 @@ function armTyping(key, userId, row) {
     if (!current || current.at !== row.at) return;
     room.delete(userId);
     wakeTyping(key);
-  }, 6000);
+  }, 10000);
   room.set(userId, row);
 }
 
@@ -4178,12 +4186,13 @@ app.post('/api/typing', auth, (req, res) => {
   const token = Number(req.body && req.body.token) || 0;
   if (req.body && req.body.stop) {
     if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
+    const before = typingSignature(key);
     clearTyping(key, req.user.id);
-    wakeTyping(key);
+    if (typingSignature(key) !== before) wakeTyping(key);
     return res.json({ ok: true });
   }
   if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
-  const already = !!(typingRooms.get(key) && typingRooms.get(key).has(req.user.id));
+  const before = typingSignature(key);
   armTyping(key, req.user.id, {
     name: req.user.displayName || req.user.username,
     nameEffect: cleanNameEffect(req.user.nameEffect),
@@ -4191,7 +4200,7 @@ app.post('/api/typing', auth, (req, res) => {
     at: Date.now(),
     token,
   });
-  if (!already) wakeTyping(key);
+  if (typingSignature(key) !== before) wakeTyping(key);
   res.json({ ok: true });
 });
 
@@ -4213,7 +4222,7 @@ function pulseBody(roomId, typeKey, userId, extra) {
       messages: list,
       typers,
       cursor: last ? last.id : '',
-      typing: typers.map((row) => row.id).sort().join(','),
+      typing: typingToken(typers),
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),
       edits: messageStamp(raw.slice(-100)),
@@ -4257,7 +4266,7 @@ function pulseSnap(req) {
       messages: list,
       typers,
       cursor: last ? last.id : '',
-      typing: typers.map((row) => row.id).sort().join(','),
+      typing: typingToken(typers),
       members: memberStamp(found.guild),
       profiles: String(profileRev),
       polls: pollStamp(raw.slice(-100)),

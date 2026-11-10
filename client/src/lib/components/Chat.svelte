@@ -6,13 +6,18 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
+  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
   import { startCall, joinOpenCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
+  const typingPhrase = $derived(typingLine(ui.typers));
+  let typingHold = $state({ kind: '', names: [] });
+  $effect(() => {
+    if (typingPhrase.kind) typingHold = typingPhrase;
+  });
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
     const map = new Map();
@@ -509,6 +514,7 @@
       ui.editing = null;
       ui.reply = null;
       ui.composer = '';
+      noteTyping();
       return;
     }
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -1232,9 +1238,16 @@
   {#if ui.picker}
     <Picker />
   {/if}
-  {#if ui.typers.length}
-    <p class="typing">{ui.typers.map((person) => person.name).filter(Boolean).join(', ')} {ui.typers.length === 1 ? 'is typing...' : 'are typing...'}</p>
-  {/if}
+  <p class="typing" class:on={!!typingPhrase.kind} aria-live="polite">
+    {#if typingHold.kind === 'one'}
+      <strong>{typingHold.names[0]}</strong> is typing
+    {:else if typingHold.kind === 'two'}
+      <strong>{typingHold.names[0]}</strong> and <strong>{typingHold.names[1]}</strong> are typing
+    {:else if typingHold.kind === 'many'}
+      Several people are typing
+    {/if}
+    <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+  </p>
   {#if replyTargets.length}
     <div class="compose-note reply-note">
       <span class="reply-label">

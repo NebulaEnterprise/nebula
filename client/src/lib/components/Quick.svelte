@@ -186,8 +186,9 @@
     if (!content || !user?.id || sending) return;
     sending = true;
     draft = '';
+    const typingToken = stopQuick(user.id, false);
     try {
-      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content } });
+      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content, typingToken } });
       if (data.message) messages = [...messages.filter((msg) => msg.id !== data.message.id), data.message];
       follow = true;
       loadDms();
@@ -199,24 +200,50 @@
     }
   }
 
+  let quickLive = false;
+  let quickAt = 0;
+  let quickTimer = 0;
+
+  function stopQuick(id, notify = true) {
+    clearTimeout(quickTimer);
+    quickTimer = 0;
+    const token = ++typeToken;
+    if (notify && quickLive && id) api('/api/typing', { method: 'POST', body: { dmUserId: id, token, stop: true } }).catch(() => {});
+    quickLive = false;
+    quickAt = 0;
+    return token;
+  }
+
+  function pokeQuick(id) {
+    if (!id) return;
+    const now = Date.now();
+    if (quickLive && now - quickAt < 8000) return;
+    quickAt = now;
+    quickLive = true;
+    const token = ++typeToken;
+    api('/api/typing', { method: 'POST', body: { dmUserId: id, token } }).catch(() => {});
+  }
+
+  function markQuick(id) {
+    if (!id || !draft.trim()) stopQuick(id);
+    else pokeQuick(id);
+  }
+
   function onKey(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       send();
+      return;
     }
+    const edits = event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
+    if (!edits || event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return;
+    if ((event.key === 'Backspace' || event.key === 'Delete') && !draft.trim()) return;
+    pokeQuick(ui.quickUser?.id);
   }
 
   $effect(() => {
     const id = ui.quickOpen && ui.quickUser?.id;
-    if (!id || !draft.trim()) return;
-    const token = ++typeToken;
-    const ping = () => api('/api/typing', { method: 'POST', body: { dmUserId: id, token } }).catch(() => {});
-    ping();
-    const timer = setInterval(ping, 2500);
-    return () => {
-      clearInterval(timer);
-      api('/api/typing', { method: 'POST', body: { dmUserId: id, token, stop: true } }).catch(() => {});
-    };
+    return () => { if (id) stopQuick(id); };
   });
 
   async function openFull() {
@@ -275,7 +302,7 @@
           {/each}
         </div>
         <form class="quick-compose" onsubmit={(event) => { event.preventDefault(); send(); }}>
-          <input bind:value={draft} maxlength="2000" placeholder={'Message @' + (who?.username || '')} onkeydown={onKey} />
+          <input bind:value={draft} maxlength="2000" placeholder={'Message @' + (who?.username || '')} onkeydown={onKey} oninput={() => markQuick(ui.quickUser?.id)} />
           <button class="send" type="submit" disabled={sending || !draft.trim()}>Send</button>
         </form>
       {:else}

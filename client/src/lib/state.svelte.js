@@ -299,6 +299,7 @@ export async function verify(code) {
 }
 
 function resetSession() {
+  stopTyping();
   roomLogs.clear();
   serverSnap.clear();
   memberStamp = '';
@@ -687,6 +688,7 @@ export async function openDm(user) {
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
+  if (!same) stopTyping();
   parkStream();
   ui.mode = 'dm';
   ui.dmUser = user;
@@ -724,6 +726,7 @@ export async function openGroup(group) {
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'group' && ui.group && String(ui.group.id) === String(group.id);
+  if (!same) stopTyping();
   parkStream();
   ui.mode = 'group';
   ui.group = group;
@@ -746,6 +749,8 @@ export async function openGroup(group) {
 export async function openThread(thread) {
   if (!thread || !thread.id) return;
   const prev = currentRoom();
+  const same = ui.mode === 'thread' && ui.thread && String(ui.thread.id) === String(thread.id);
+  if (!same) stopTyping();
   ui.mode = 'thread';
   ui.thread = thread;
   ui.dmUser = null;
@@ -761,6 +766,7 @@ export async function openThread(thread) {
 
 export async function leaveThread() {
   const prev = currentRoom();
+  stopTyping();
   stashRoom(prev);
   ui.mode = 'chat';
   ui.thread = null;
@@ -812,6 +818,7 @@ export async function openServer(id, opts = {}) {
   const fromChannel = ui.channelId;
   const target = id || ui.serverId;
   const leavingRoom = ui.mode !== 'chat' || (target && target !== ui.serverId);
+  if (leavingRoom) stopTyping();
   if (ui.mode === 'chat') snapServer(fromServer);
   if (leavingRoom) stashRoom(prev);
   if (id) ui.serverId = id;
@@ -1021,6 +1028,7 @@ export function parkStream() {
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
+  stopTyping();
   parkStream();
   ui.readHold = '';
   const prev = currentRoom();
@@ -1334,7 +1342,7 @@ async function postMessage(payload, target) {
   const poll = payload.poll || null;
   if (!content && !files.length && !poll) return;
   const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' };
-  const typingToken = stopTyping();
+  const typingToken = stopTyping(false);
   const body = { content, typingToken };
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
@@ -1554,6 +1562,7 @@ export function insertEmoji(token) {
   const text = String(token || '');
   if (!text) return;
   ui.composer = (ui.composer ? ui.composer + text : text);
+  noteTyping();
 }
 
 export async function loadPacks() {
@@ -1584,8 +1593,6 @@ export async function reloadSettings() {
 let lastTypingPing = 0;
 let typingSerial = 0;
 let typingLive = false;
-let typingIdle = null;
-let keysDown = 0;
 const typerSeen = new Map();
 
 function acceptTypers(list) {
@@ -1594,19 +1601,19 @@ function acceptTypers(list) {
   const ids = new Set(rows.map((row) => row && row.id).filter(Boolean));
   for (const id of [...typerSeen.keys()]) if (!ids.has(id)) typerSeen.delete(id);
   for (const row of rows) if (row && row.id) typerSeen.set(row.id, now);
-  ui.typers = rows;
+  const prev = ui.typers;
+  const same = rows.length === prev.length && rows.every((row, index) => prev[index] && prev[index].id === row.id && prev[index].name === row.name);
+  if (!same) ui.typers = rows;
 }
 
 setInterval(() => {
   if (!ui.typers.length) return;
   const now = Date.now();
-  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 6500);
+  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 12000);
   if (next.length === ui.typers.length) return;
   for (const row of ui.typers) if (!next.includes(row)) typerSeen.delete(row.id);
   ui.typers = next;
-}, 80);
-
-const SKIP_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+}, 400);
 
 function typingBody() {
   if (ui.mode === 'dm') return { dmUserId: ui.dmUser?.id };
@@ -1617,64 +1624,53 @@ function typingBody() {
 
 function postTyping(extra) {
   if (ui.mode === 'dm' && !ui.dmUser?.id) return;
+  if (ui.mode === 'group' && !ui.group?.id) return;
+  if (ui.mode === 'thread' && !ui.thread?.id) return;
   if (ui.mode === 'chat' && !ui.channelId) return;
   api('/api/typing', { method: 'POST', body: { ...typingBody(), ...extra } }).catch(() => {});
 }
 
-function stopTyping() {
-  clearTimeout(typingIdle);
-  keysDown = 0;
+function stopTyping(notify = true) {
   const token = ++typingSerial;
-  if (typingLive || lastTypingPing) postTyping({ stop: true, token });
+  if (notify && typingLive) postTyping({ stop: true, token });
   typingLive = false;
   lastTypingPing = 0;
   return token;
 }
 
-function pingTyping() {
+function markTyping() {
   const now = Date.now();
-  if (typingLive && now - lastTypingPing < 2500) return;
+  if (typingLive && now - lastTypingPing < 8000) return;
   lastTypingPing = now;
   typingLive = true;
   postTyping({ token: ++typingSerial });
 }
 
-function armTypingIdle() {
-  clearTimeout(typingIdle);
-  typingIdle = setTimeout(() => stopTyping(), 120);
-}
-
 export function noteKeyDown(event) {
   if (!event || event.isComposing) return;
   if (event.metaKey || event.ctrlKey || event.altKey) return;
-  if (SKIP_KEYS.has(event.key)) return;
   if (event.key === 'Enter') return;
-  if ((event.key === 'Backspace' || event.key === 'Delete') && !ui.composer.trim()) return;
-  if (!event.repeat) keysDown += 1;
-  pingTyping();
-  armTypingIdle();
+  const edits = event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete';
+  if (!edits) return;
+  if ((event.key === 'Backspace' || event.key === 'Delete') && !String(ui.composer || '').trim()) return;
+  markTyping();
 }
 
-export function noteKeyUp(event) {
-  if (event && !event.repeat) keysDown = Math.max(0, keysDown - 1);
-  if (keysDown > 0) return;
-  stopTyping();
-}
+export function noteKeyUp() {}
 
-export function noteTypingBlur() {
-  stopTyping();
-}
+export function noteTypingBlur() {}
 
 export function typingLine(list) {
-  const names = (list || []).map((row) => row.name).filter(Boolean);
-  if (!names.length) return '';
-  if (names.length > 5) return '5+ are typing';
-  if (names.length === 1) return names[0] + ' is typing';
-  return names.slice(0, 5).map((name) => name + ' is typing').join(', ');
+  const names = (list || []).map((row) => row && row.name).filter(Boolean);
+  if (names.length === 1) return { kind: 'one', names };
+  if (names.length === 2) return { kind: 'two', names };
+  if (names.length > 2) return { kind: 'many', names };
+  return { kind: '', names: [] };
 }
 
 export function noteTyping() {
-  if (!ui.composer.trim()) stopTyping();
+  if (!String(ui.composer || '').trim()) stopTyping();
+  else markTyping();
 }
 
 let typingBusy = false;
