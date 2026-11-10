@@ -652,8 +652,18 @@ img { max-width: 100%; }
   width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-weight: 650;
 }
 .forward-row:hover { background: var(--bg-hover); }
+.menu-reacts { display: none; }
 @media (hover: none) {
-  .msg-tools { opacity: 1; pointer-events: auto; }
+  .msg-tools { display: none; }
+  .menu-reacts {
+    display: flex; gap: 4px; padding: 2px 2px 6px; margin-bottom: 4px;
+    border-bottom: 1px solid var(--line);
+  }
+  .menu-reacts button {
+    flex: 1; height: 36px; border-radius: 8px; font-size: 18px;
+    display: grid; place-items: center;
+  }
+  .menu-reacts button:hover, .menu-reacts button:active { background: var(--bg-hover); }
 }
 .msg-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; max-width: 100%; }
 .msg-id { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
@@ -1956,7 +1966,11 @@ img { max-width: 100%; }
 .inbox-pop .btn.icon { width: 26px; height: 26px; border-radius: 8px; }
 
 @media (max-width: 900px) {
-  html, body, #app, .shell { height: 100%; height: 100dvh; }
+  html, body, #app {
+    position: fixed; left: 0; right: 0; width: 100%; overflow: hidden;
+    top: var(--vvt, 0px); height: var(--vvh, 100dvh);
+  }
+  .shell { height: 100%; }
   button, a, input, textarea, .channel, .nav-item, .dm-item { touch-action: manipulation; }
   .shell.phone-browse .main,
   .shell.phone-browse .members,
@@ -1991,6 +2005,18 @@ img { max-width: 100%; }
   .top-tools { gap: 0; overflow-x: auto; }
   .bar-tool { width: 36px; height: 36px; flex-shrink: 0; }
   .composer-wrap { padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
+  html.kb .composer-wrap { padding-bottom: 8px; }
+  .picker, .picker.picker-pop, .react-picker .picker {
+    left: 0; right: 0; width: 100%; max-height: min(42dvh, 320px);
+    border-radius: 16px 16px 0 0;
+  }
+  .composer-wrap > .picker { bottom: calc(100% + 6px); }
+  .picker.picker-pop .emoji-grid, .emoji-grid, .picker-grid { max-height: 160px; min-height: 0; }
+  .react-picker { left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important; width: 100%; }
+  .msg-menu {
+    left: 8px !important; right: 8px !important; width: auto; top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)); max-height: 46dvh; overflow: auto;
+  }
   .composer textarea, .field input, .field textarea, .textin, .search { font-size: 16px; }
   .quick-pill, .quick-dock { display: none; }
   .shell.phone-chat .dock { position: fixed; inset: 0; z-index: 28; width: 100%; max-width: none; background: var(--bg-main); }

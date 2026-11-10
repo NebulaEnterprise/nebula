@@ -37,6 +37,26 @@
 
   onMount(() => {
     boot();
+    const vv = window.visualViewport;
+    const fitKeyboard = () => {
+      const phone = window.matchMedia('(max-width: 900px)').matches;
+      const root = document.documentElement;
+      if (!phone || !vv) {
+        root.style.removeProperty('--vvh');
+        root.style.removeProperty('--vvt');
+        root.classList.remove('kb');
+        return;
+      }
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--vvh', Math.round(vv.height) + 'px');
+      root.style.setProperty('--vvt', Math.round(vv.offsetTop) + 'px');
+      root.classList.toggle('kb', overlap > 80);
+      if (window.scrollY) window.scrollTo(0, 0);
+    };
+    fitKeyboard();
+    vv?.addEventListener('resize', fitKeyboard);
+    vv?.addEventListener('scroll', fitKeyboard);
+    window.addEventListener('resize', fitKeyboard);
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -88,6 +108,9 @@
       window.removeEventListener('click', onLink, true);
       window.removeEventListener('auxclick', onLink, true);
       window.removeEventListener('pointerdown', onGesture);
+      vv?.removeEventListener('resize', fitKeyboard);
+      vv?.removeEventListener('scroll', fitKeyboard);
+      window.removeEventListener('resize', fitKeyboard);
     };
   });
 </script>

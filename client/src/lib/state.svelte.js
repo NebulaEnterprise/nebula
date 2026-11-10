@@ -222,9 +222,11 @@ async function enterApp() {
     ui.channels = ch.channels || [];
     ui.servers = ch.servers || [];
   } catch (_) {}
-  await loadFriends();
-  await loadDms();
-  await openServer(ui.serverId || 'nebula-official');
+  await Promise.all([
+    loadFriends(),
+    loadDms(),
+    openServer(ui.serverId || 'nebula-official'),
+  ]);
   await consumeInvite();
   await openSharedLink();
   if (pollTimer) clearInterval(pollTimer);
@@ -580,7 +582,8 @@ export async function loadDms() {
     if (serial !== dmSerial) return;
     const next = data.dms || [];
     if (!sameDms(ui.dms, next)) ui.dms = next;
-    for (const row of next.slice(0, 12)) warmDm(row.other && row.other.id);
+    const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
+    setTimeout(() => { for (const id of warmIds) warmDm(id); }, 1200);
     const map = seenMap();
     const ready = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     if (!ready) {
@@ -903,12 +906,13 @@ export async function openServer(id, opts = {}) {
     showCached(nextId ? 'ch:' + nextId : '');
   }
   snapServer(ui.serverId);
-  warmServerChannels(ui.channels, ui.serverId);
   ui.seenMessageId = '';
   memberStamp = '';
   dropLive();
-  await loadMessages();
-  await loadMembers();
+  const warming = (ui.channels || []).slice();
+  const warmServer = ui.serverId;
+  await Promise.all([loadMessages(), loadMembers()]);
+  setTimeout(() => warmServerChannels(warming, warmServer), 1200);
   import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
   if (!opts.keepDialog && ui.onboarding) ui.dialog = { kind: 'onboarding' };
 }
@@ -1022,7 +1026,7 @@ export function warmChannel(id, serverId) {
 }
 
 function warmServerChannels(channels, serverId) {
-  for (const ch of (channels || []).filter((row) => row && row.type === 'text').slice(0, 12)) warmChannel(ch.id, serverId);
+  for (const ch of (channels || []).filter((row) => row && row.type === 'text' && row.id !== ui.channelId).slice(0, 4)) warmChannel(ch.id, serverId);
 }
 
 function warmRoom(key, path) {

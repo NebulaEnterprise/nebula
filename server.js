@@ -1817,7 +1817,9 @@ function presentMessage(msg, viewerId) {
   const live = msg && msg.authorId ? users[msg.authorId] : null;
   const base = slimAuthor(msg.author || {}) || {};
   const author = Object.assign(base, live ? slimAuthor(live) : {});
-  author.avatarUrl = live && live.avatarUrl && !String(live.avatarUrl).startsWith('data:') ? live.avatarUrl : '';
+  const liveAvatar = live ? publishedMedia(live, 'avatar') : '';
+  const storedAvatar = String(base.avatarUrl || '');
+  author.avatarUrl = liveAvatar || (storedAvatar.startsWith('data:') ? '' : storedAvatar);
   const out = Object.assign({}, msg, { author });
   if (out.channelId && !String(out.channelId).startsWith('dm:')) {
     const room = findChannel(out.channelId, '');

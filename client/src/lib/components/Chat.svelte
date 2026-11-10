@@ -135,6 +135,9 @@
           : (channel?.name || 'channel')
   );
 
+  let holdTimer = 0;
+  let heldMenu = false;
+
   function openMenu(event, msg) {
     event.preventDefault();
     event.stopPropagation();
@@ -149,6 +152,32 @@
       y: Math.max(8, Math.min(y, window.innerHeight - 320)),
       react: false,
     };
+  }
+
+  function pressStart(event, msg) {
+    if (msg.pending || msg.failed || event.pointerType === 'mouse') return;
+    heldMenu = false;
+    const target = event.currentTarget;
+    const x = event.clientX;
+    const y = event.clientY;
+    holdTimer = window.setTimeout(() => {
+      holdTimer = 0;
+      heldMenu = true;
+      openMenu({
+        preventDefault() {},
+        stopPropagation() {},
+        type: 'contextmenu',
+        clientX: x,
+        clientY: y,
+        currentTarget: target,
+      }, msg);
+    }, 420);
+  }
+
+  function pressEnd() {
+    if (!holdTimer) return;
+    clearTimeout(holdTimer);
+    holdTimer = 0;
   }
 
   function toggleDock(name) {
@@ -245,6 +274,7 @@
   }
 
   function onMessageClick(event, msg) {
+    if (heldMenu) { heldMenu = false; return; }
     if (event.target.closest('button, a, input, textarea, label, video, img, .file-card, .poll-card, .msg-tools, .reacts')) return;
     const selected = window.getSelection();
     if (selected && String(selected).trim()) return;
@@ -676,40 +706,88 @@
   const roomScroll = new Map();
   let pinning = false;
 
+  function chatOnScreen() {
+    if (typeof window === 'undefined') return true;
+    if (!window.matchMedia('(max-width: 900px)').matches) return true;
+    return ui.phone === 'chat';
+  }
+
+  let pinGen = 0;
+
   function pinBottom() {
     if (!box) return;
+    const gen = ++pinGen;
     pinning = true;
     follow = true;
     const node = box;
-    const apply = () => {
-      node.scrollTop = node.scrollHeight;
-      follow = true;
+    let frames = 0;
+    const watchImages = () => {
+      node.querySelectorAll('img').forEach((img) => {
+        if (img.complete || img.dataset.pin) return;
+        img.dataset.pin = '1';
+        img.addEventListener('load', () => { if (follow) node.scrollTop = node.scrollHeight; }, { once: true });
+      });
     };
-    queueMicrotask(apply);
-    requestAnimationFrame(() => {
-      apply();
-      pinning = false;
-    });
+    const tick = () => {
+      if (gen !== pinGen) return;
+      node.scrollTop = node.scrollHeight;
+      watchImages();
+      frames += 1;
+      if (frames < 8) requestAnimationFrame(tick);
+      else pinning = false;
+    };
+    tick();
+  }
+
+  $effect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onKb = () => {
+      if (!follow || !chatOnScreen()) return;
+      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      if (overlap > 80) pinBottom();
+    };
+    vv.addEventListener('resize', onKb);
+    return () => vv.removeEventListener('resize', onKb);
+  });
+
+  function onComposerFocus() {
+    follow = true;
+    requestAnimationFrame(() => pinBottom());
   }
 
   function trackScroll() {
-    if (!box || pinning) return;
+    if (!box || pinning || !chatOnScreen()) return;
+    if (box.scrollHeight <= box.clientHeight + 8) return;
     follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
     if (roomKey) roomScroll.set(roomKey, { top: box.scrollTop, follow });
   }
 
+  function roomToken() {
+    if (ui.mode === 'dm') return 'dm:' + (ui.dmUser?.id || '');
+    if (ui.mode === 'group') return 'group:' + (ui.group?.id || '');
+    if (ui.mode === 'thread') return 'thread:' + (ui.thread?.id || '');
+    return 'ch:' + (ui.channelId || '');
+  }
+
   let roomKey = '';
+  let shownKey = '';
   $effect(() => {
-    const next = ui.mode + ':' + (ui.mode === 'dm' ? (ui.dmUser?.id || '') : (ui.channelId || ''));
-    if (next === roomKey) return;
+    const next = roomToken();
+    ui.phone;
+    const visible = chatOnScreen();
+    const token = (visible ? 'v:' : 'h:') + next;
+    if (token === shownKey) return;
+    shownKey = token;
     roomKey = next;
+    if (!visible) return;
     const saved = roomScroll.get(next);
     follow = saved ? saved.follow : true;
-    const node = box;
     const top = saved && !saved.follow ? saved.top : null;
     queueMicrotask(() => {
-      if (!node) return;
-      node.scrollTop = top == null ? node.scrollHeight : top;
+      if (!box) return;
+      if (top == null) pinBottom();
+      else box.scrollTop = top;
     });
   });
 
@@ -1184,7 +1262,7 @@
         <time>{time(msg.createdAt)}</time>
       </div>
     {:else}
-    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }}>
+    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }} onpointerdown={(e) => pressStart(e, msg)} onpointerup={pressEnd} onpointercancel={pressEnd} onpointerleave={pressEnd}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -1297,6 +1375,12 @@
 {#if menu}
   {@const current = ui.messages.find((msg) => msg.id === menu.id)}
   <div class="msg-menu" style="left:{menu.x}px;top:{menu.y}px" onclick={(e) => e.stopPropagation()}>
+    <div class="menu-reacts">
+      {#each quickReacts as glyph}
+        <button type="button" onclick={() => current && onReact(current.id, glyph)}>{glyph}</button>
+      {/each}
+      <button type="button" title="More reactions" onclick={() => (menu = { ...menu, react: !menu.react })}><SmilePlus size={16} /></button>
+    </div>
     {#if current?.reactions?.length}
       <button type="button" onclick={() => openReactions(current)}><SmilePlus size={16} /> View Reactions</button>
     {/if}
@@ -1422,6 +1506,7 @@
       onpaste={onPaste}
       onkeyup={noteKeyUp}
       oninput={syncMention}
+      onfocus={onComposerFocus}
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
