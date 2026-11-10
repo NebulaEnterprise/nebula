@@ -69,20 +69,27 @@ function attachGateway(httpServer, api) {
     return n;
   }
 
-  function dropConn(session) {
-    if (!session || !session.conn) return;
+  function dropConn(socket) {
+    const session = socket && socket._nebula;
+    if (!session || session.conn !== socket) return;
     const user = session.user;
     session.conn = null;
     session.until = Date.now() + SESSION_MS;
+    socket._nebula = null;
     if (user && !liveCount(user.id) && api.presence) api.presence(user, false);
   }
 
   function bind(socket, session) {
     const user = session.user;
+    const previous = session.conn;
     const was = user ? liveCount(user.id) : 0;
+    if (previous && previous !== socket) previous._nebula = null;
     session.conn = socket;
     session.until = 0;
     socket._nebula = session;
+    if (previous && previous !== socket) {
+      try { previous.destroy(); } catch (_) {}
+    }
     if (user && !was && api.presence) api.presence(user, true);
   }
 
@@ -160,6 +167,7 @@ function attachGateway(httpServer, api) {
     const op = Number(packet && packet.op);
     if (op === 1) {
       sendFrame(socket, 1, JSON.stringify({ op: 11 }));
+      if (session && session.conn === socket && session.user && api.touch) api.touch(session.user);
       return;
     }
     if (!session) {
@@ -224,18 +232,18 @@ function attachGateway(httpServer, api) {
         }
       } catch (_) { fail(); }
     });
-    socket.on('close', () => dropConn(socket._nebula));
-    socket.on('error', () => dropConn(socket._nebula));
-    socket.on('end', () => dropConn(socket._nebula));
+    socket.on('close', () => dropConn(socket));
+    socket.on('error', () => {});
   }
 
   setInterval(() => {
     const now = Date.now();
     for (const session of sessions.values()) {
-      if (!session.conn) continue;
+      const conn = session.conn;
+      if (!conn) continue;
       if (now - session.beat > HEARTBEAT_MS * 2) {
-        try { session.conn.end(); } catch (_) {}
-        dropConn(session);
+        try { conn.end(); } catch (_) {}
+        dropConn(conn);
       }
     }
     expire();

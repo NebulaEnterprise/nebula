@@ -1899,6 +1899,7 @@ function userOwnsBadge(u, id) {
 
 const liveUsers = new Set();
 const briefOnline = new Map();
+const presenceRefresh = new Map();
 
 function privacyMode(u) {
   if (!u) return 'everyone';
@@ -1950,7 +1951,7 @@ function seenFor(owner, viewer) {
   const live = chosen !== 'offline' && liveUsers.has(String(owner.id));
   if ((live || flash) && (exact || flash)) {
     const shown = live && exact ? effectiveStatus(owner) : 'online';
-    const until = exact && live ? Date.now() + 70000 : (row && row.until > Date.now() ? row.until : Date.now() + 30000);
+    const until = live ? Date.now() + 3 * 60 * 1000 : (row && row.until > Date.now() ? row.until : Date.now() + 30000);
     return { status: shown === 'offline' ? 'online' : shown, lastSeen: exact ? at : null, seen: exact ? 'exact' : 'online', onlineUntil: until };
   }
   if (!exact) return { status: 'offline', lastSeen: null, seen: seenBucket(at), onlineUntil: 0 };
@@ -1973,9 +1974,23 @@ function setLive(user, online) {
     if (was) return;
   } else if (was) {
     liveUsers.delete(id);
+    presenceRefresh.delete(id);
   } else return;
   user.lastSeen = Date.now();
   save(USERS_FILE, users);
+  pushPresence(user);
+}
+
+function touchLive(user) {
+  if (!user) return;
+  const id = String(user.id);
+  if (!liveUsers.has(id)) {
+    setLive(user, true);
+    return;
+  }
+  const now = Date.now();
+  if (now - (presenceRefresh.get(id) || 0) < 40000) return;
+  presenceRefresh.set(id, now);
   pushPresence(user);
 }
 
@@ -6296,6 +6311,7 @@ function listen() {
       },
       watch: resolveWatch,
       presence: setLive,
+      touch: touchLive,
       ready(user) {
         const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(user) : null;
         return { cursor: String(alertRev), voice };
