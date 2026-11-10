@@ -22,6 +22,7 @@
   let threadBody = $state('');
   let busy = $state(false);
   let addId = $state('');
+  let profileLoaded = '';
 
   const title = $derived(
     ui.dock === 'pins' ? 'Pinned messages'
@@ -92,8 +93,13 @@
   }
 
   $effect(() => {
-    const id = ui.mode === 'dm' ? ui.dmUser?.id : '';
-    if (!id) return;
+    const id = ui.dock === 'profile' && ui.mode === 'dm' ? String(ui.dmUser?.id || '') : '';
+    if (!id) {
+      profileLoaded = '';
+      return;
+    }
+    if (profileLoaded === id) return;
+    profileLoaded = id;
     let stop = false;
     loadProfile(id).then((fresh) => {
       if (stop || !fresh || !ui.dmUser || String(ui.dmUser.id) !== String(fresh.id)) return;
