@@ -1672,6 +1672,18 @@ function chimeWav() {
 const pingAudio = typeof Audio !== 'undefined' ? new Audio(chimeWav()) : null;
 if (pingAudio) pingAudio.preload = 'auto';
 
+function siteTitle() {
+  const mentions = Object.values(ui.activity?.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0);
+  const n = mentions + (ui.incoming || []).length + (ui.missedCalls || []).length;
+  return n > 0 ? '(' + n + ') Nebula' : 'Nebula';
+}
+
+let titleFlashing = false;
+export function applySiteTitle() {
+  if (typeof document === 'undefined' || titleFlashing) return;
+  document.title = siteTitle();
+}
+
 function chime() {
   const ctx = audioCtx();
   const start = ctx.currentTime;
@@ -1687,6 +1699,25 @@ function chime() {
   gain.connect(ctx.destination);
   osc.start(start);
   osc.stop(start + 0.44);
+}
+
+function spamChime() {
+  const ctx = audioCtx();
+  const start = ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const at = start + i * 0.09;
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(520 - i * 70, at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.12, at + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + 0.08);
+  }
 }
 
 let askedAccess = false;
@@ -1758,12 +1789,29 @@ export function playPing(force) {
   tryWebChime();
 }
 
+let lastSpam = 0;
+const burstTimes = [];
+
+function playSpam() {
+  if (!soundEnabled()) return;
+  const now = Date.now();
+  if (now - lastSpam < 1800) return;
+  lastSpam = now;
+  lastSound = now;
+  try {
+    const ctx = audioCtx();
+    if (ctx.state === 'running') spamChime();
+    else ctx.resume().then(() => { if (ctx.state === 'running') spamChime(); }).catch(() => {});
+  } catch (_) {}
+}
+
 function flashTitle() {
   if (!document.hidden) return;
-  const old = document.title;
+  titleFlashing = true;
   document.title = 'New message · Nebula';
   setTimeout(() => {
-    if (document.title === 'New message · Nebula') document.title = old;
+    titleFlashing = false;
+    applySiteTitle();
   }, 4000);
 }
 
@@ -1785,7 +1833,11 @@ function noteArrival(id, title, body) {
   if (!key || heardIds.has(key)) return;
   heardIds.add(key);
   if (heardIds.size > 500) heardIds.delete(heardIds.values().next().value);
-  playPing();
+  const now = Date.now();
+  burstTimes.push(now);
+  while (burstTimes.length && now - burstTimes[0] > 2500) burstTimes.shift();
+  if (burstTimes.length >= 4) playSpam();
+  else playPing();
   deskNotice(title, body);
 }
 

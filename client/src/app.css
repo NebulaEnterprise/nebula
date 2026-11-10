@@ -588,8 +588,12 @@ img { max-width: 100%; }
   background: #0c0d11;
 }
 .call-view { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; }
-.call-person { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.call-person strong { font-size: 18px; }
+.call-bubbles { display: flex; justify-content: center; align-items: flex-end; gap: 36px; flex-wrap: wrap; }
+.call-bubble { display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 96px; }
+.call-bubble strong { font-size: 15px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.call-bubble .avatar { box-shadow: 0 0 0 4px #111214; }
+.call-bubble.speaking .avatar { box-shadow: 0 0 0 4px #3ecf8e, 0 0 18px rgba(62, 207, 142, 0.7); }
+.call-pip.solo { position: static; width: min(760px, 100%); max-height: 360px; }
 .call-video {
   width: min(760px, 100%); max-height: 360px; border-radius: 12px; background: #000; object-fit: contain;
 }

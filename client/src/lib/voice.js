@@ -225,14 +225,25 @@ function watchMic() {
   source.connect(analyser);
   const bins = new Uint8Array(analyser.frequencyBinCount);
   levelTimer = setInterval(() => {
-    if (!ui.voice || ui.voice.muted || ui.voice.deafened) {
-      speaking = false;
-      return;
+    if (!ui.voice) return;
+    let next = false;
+    if (!ui.voice.muted && !ui.voice.deafened) {
+      analyser.getByteFrequencyData(bins);
+      let total = 0;
+      for (const value of bins) total += value;
+      next = total / bins.length > 16;
     }
-    analyser.getByteFrequencyData(bins);
-    let total = 0;
-    for (const value of bins) total += value;
-    speaking = total / bins.length > 16;
+    speaking = next;
+    if (ui.voice.speaking === next) return;
+    ui.voice.speaking = next;
+    const room = ui.voiceRooms[ui.voice.channelId];
+    if (!room || !ui.me) return;
+    ui.voiceRooms = {
+      ...ui.voiceRooms,
+      [ui.voice.channelId]: room.map((member) => (
+        String(member.id) === String(ui.me.id) ? { ...member, speaking: next } : member
+      )),
+    };
   }, 200);
 }
 

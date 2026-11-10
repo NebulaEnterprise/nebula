@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport } from './lib/state.svelte.js';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle } from './lib/state.svelte.js';
   import { answerCall, declineCall } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
@@ -15,6 +15,13 @@
   import Dialogs from './lib/components/Dialogs.svelte';
   import Quick from './lib/components/Quick.svelte';
   import Switcher from './lib/components/Switcher.svelte';
+
+  $effect(() => {
+    ui.activity;
+    ui.incoming;
+    ui.missedCalls;
+    applySiteTitle();
+  });
 
   onMount(() => {
     boot();

@@ -684,7 +684,30 @@
     return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   }
 
-  const callWho = $derived(ui.voice?.person || (ui.mode === 'dm' ? ui.dmUser : null));
+  const callPeople = $derived.by(() => {
+    const voice = ui.voice;
+    if (!voice || voice.serverId !== 'call') return [];
+    const meId = ui.me?.id;
+    const room = ui.voiceRooms[voice.channelId] || [];
+    const me = ui.me ? {
+      id: meId,
+      displayName: ui.me.displayName || ui.me.username,
+      username: ui.me.username,
+      avatarUrl: ui.me.avatarUrl || '',
+      avatarColor: ui.me.avatarColor,
+      speaking: !!(voice.speaking && !voice.muted && !voice.deafened),
+    } : null;
+    const seen = new Set(me ? [String(meId)] : []);
+    const rest = [];
+    for (const person of room) {
+      if (!person || seen.has(String(person.id))) continue;
+      seen.add(String(person.id));
+      rest.push(person);
+    }
+    const other = voice.person || (ui.mode === 'dm' ? ui.dmUser : null);
+    if (!rest.length && other && !seen.has(String(other.id))) rest.push({ ...other, speaking: false });
+    return me ? [me, ...rest] : rest;
+  });
 
   function attach(node, stream) {
     node.srcObject = stream || null;
@@ -779,22 +802,27 @@
     {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
   </div>
 {/if}
-{#if ui.voice?.serverId === 'call'}
+{#if ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')}
   <div class="call-stage">
-    <div class="call-view">
-      {#key ui.voice.screenTick}
-        {#if remoteScreen}
-          <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
-        {:else}
-          <div class="call-person">
-            <Avatar user={callWho} size={96} />
-            <strong>{callWho?.displayName || callWho?.username || ui.voice.name || 'Call'}</strong>
-          </div>
-        {/if}
-        {#if localScreen}
-          <video class="call-pip" autoplay playsinline muted use:attach={localScreen}></video>
-        {/if}
-      {/key}
+    {#if remoteScreen || localScreen}
+      <div class="call-view">
+        {#key ui.voice.screenTick}
+          {#if remoteScreen}
+            <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
+          {/if}
+          {#if localScreen}
+            <video class="call-pip" class:solo={!remoteScreen} autoplay playsinline muted use:attach={localScreen}></video>
+          {/if}
+        {/key}
+      </div>
+    {/if}
+    <div class="call-bubbles">
+      {#each callPeople as person (person.id)}
+        <div class="call-bubble" class:speaking={person.speaking}>
+          <Avatar user={person} size={84} />
+          <strong>{person.displayName || person.username || 'Call'}</strong>
+        </div>
+      {/each}
     </div>
     <div class="call-controls">
       <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
