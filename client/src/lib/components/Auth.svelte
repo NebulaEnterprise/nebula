@@ -19,7 +19,7 @@
 
 <div class="auth">
   <form class="auth-card" onsubmit={(e) => e.preventDefault()}>
-    <div class="mark"><img src="./logo.webp?v=2" alt="" /></div>
+    <div class="mark"><img src="./logo.webp?v=3" alt="" /></div>
     <h1>Nebula</h1>
     <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
