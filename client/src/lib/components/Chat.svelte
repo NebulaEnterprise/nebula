@@ -689,25 +689,39 @@
     if (!voice || voice.serverId !== 'call') return [];
     const meId = ui.me?.id;
     const room = ui.voiceRooms[voice.channelId] || [];
-    const me = ui.me ? {
-      id: meId,
-      displayName: ui.me.displayName || ui.me.username,
-      username: ui.me.username,
-      avatarUrl: ui.me.avatarUrl || '',
-      avatarColor: ui.me.avatarColor,
-      speaking: !!(voice.speaking && !voice.muted && !voice.deafened),
-    } : null;
-    const seen = new Set(me ? [String(meId)] : []);
-    const rest = [];
+    const people = [];
+    const seen = new Set();
     for (const person of room) {
       if (!person || seen.has(String(person.id))) continue;
       seen.add(String(person.id));
-      rest.push(person);
+      if (String(person.id) === String(meId)) {
+        people.push({ ...person, speaking: !!(voice.speaking && !voice.muted && !voice.deafened) });
+      } else {
+        people.push(person);
+      }
     }
-    const other = voice.person || (ui.mode === 'dm' ? ui.dmUser : null);
-    if (!rest.length && other && !seen.has(String(other.id))) rest.push({ ...other, speaking: false });
-    return me ? [me, ...rest] : rest;
+    if (ui.me && meId && !seen.has(String(meId))) {
+      people.unshift({
+        id: meId,
+        displayName: ui.me.displayName || ui.me.username,
+        username: ui.me.username,
+        avatarUrl: ui.me.avatarUrl || '',
+        avatarColor: ui.me.avatarColor,
+        speaking: !!(voice.speaking && !voice.muted && !voice.deafened),
+      });
+    }
+    return people;
   });
+
+  function callLength(seconds) {
+    const s = Number(seconds) || 0;
+    if (s < 60) return 'a few seconds';
+    const minutes = Math.round(s / 60);
+    if (minutes < 60) return minutes + (minutes === 1 ? ' minute' : ' minutes');
+    const hours = Math.floor(minutes / 60);
+    const rest = minutes % 60;
+    return hours + (hours === 1 ? ' hour' : ' hours') + (rest ? ' ' + rest + (rest === 1 ? ' minute' : ' minutes') : '');
+  }
 
   function attach(node, stream) {
     node.srcObject = stream || null;
@@ -861,7 +875,7 @@
     {#if msg.kind === 'call'}
       <div class="call-note">
         <Phone size={16} />
-        <span><Name user={liveAuthor(msg.author)} /> started a call.</span>
+        <span><Name user={liveAuthor(msg.author)} /> started a call{msg.callSeconds ? ' that lasted ' + callLength(msg.callSeconds) : ''}.</span>
         <time>{time(msg.createdAt)}</time>
       </div>
     {:else}

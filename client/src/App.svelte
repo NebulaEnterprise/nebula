@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle } from './lib/state.svelte.js';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats } from './lib/state.svelte.js';
   import { answerCall, declineCall } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
@@ -37,6 +37,7 @@
       ui.popout = null;
       ui.picker = '';
       ui.attachOpen = false;
+      ui.dmMenu = null;
     };
     const onClick = (e) => {
       const node = e.target instanceof Element ? e.target : null;
@@ -47,6 +48,7 @@
       if (!inside('.picker') && !inside('.picker-toggle') && !inside('.react-picker')) ui.picker = '';
       if (!inside('.attach-menu') && !inside('.attach-toggle')) ui.attachOpen = false;
       if (!inside('.id-menu')) ui.idMenu = null;
+      if (!inside('.dm-menu')) ui.dmMenu = null;
       if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
@@ -99,6 +101,24 @@
   {#if ui.dialog}<Dialogs />{/if}
 {/if}
 {#if ui.toast}<div class="toast">{ui.toast}</div>{/if}
+{#if ui.dmMenu}
+  {@const person = ui.dmMenu.user}
+  {@const pinKey = 'dm:' + person?.id}
+  <div class="msg-menu dm-menu" style="left:{ui.dmMenu.x}px;top:{ui.dmMenu.y}px">
+    <button type="button" onclick={() => { openPopout(person, ui.dmMenu.x, ui.dmMenu.y); ui.dmMenu = null; }}>View Profile</button>
+    <button type="button" onclick={() => (ui.dmMenu = { ...ui.dmMenu, notify: !ui.dmMenu.notify })}>Notifications</button>
+    {#if ui.dmMenu.notify}
+      <button type="button" onclick={() => { muteRoom(pinKey, 15 * 60 * 1000); ui.dmMenu = null; }}>For 15 minutes</button>
+      <button type="button" onclick={() => { muteRoom(pinKey, 60 * 60 * 1000); ui.dmMenu = null; }}>For 1 hour</button>
+      <button type="button" onclick={() => { muteRoom(pinKey, 8 * 60 * 60 * 1000); ui.dmMenu = null; }}>For 8 hours</button>
+      <button type="button" onclick={() => { muteRoom(pinKey, 24 * 60 * 60 * 1000); ui.dmMenu = null; }}>For 24 hours</button>
+      <button type="button" onclick={() => { muteRoom(pinKey, 'forever'); ui.dmMenu = null; }}>Until I turn it back on</button>
+      {#if roomMuted(pinKey)}<button type="button" onclick={() => { muteRoom(pinKey, 0); ui.dmMenu = null; }}>Unmute</button>{/if}
+    {/if}
+    <button type="button" onclick={() => togglePin(pinKey)}>{pinnedChats().includes(pinKey) ? 'Unpin DM' : 'Pin DM'}</button>
+    <button type="button" onclick={() => { const row = (ui.dms || []).find((dm) => String(dm.other?.id) === String(person?.id)); closeConversation(pinKey, row && row.lastId); ui.dmMenu = null; }}>Close chat</button>
+  </div>
+{/if}
 {#if ui.idMenu}
   <div class="msg-menu id-menu" style="left:{ui.idMenu.x}px;top:{ui.idMenu.y}px">
     {#each ui.idMenu.items as item}

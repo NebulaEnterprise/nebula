@@ -79,6 +79,8 @@ export const ui = $state({
   incomingCall: null,
   outgoingCall: null,
   missedCalls: [],
+  dmMenu: null,
+  pinTick: 0,
   addingAccount: false,
   authGate: false,
   quickOpen: false,
@@ -428,7 +430,7 @@ function sameDms(prev, next) {
     if (!a || !b || a.id !== b.id || a.preview !== b.preview || a.lastId !== b.lastId || a.unread !== b.unread) return false;
     const left = a.other || {};
     const right = b.other || {};
-    if (left.id !== right.id || left.displayName !== right.displayName || left.username !== right.username || left.avatarUrl !== right.avatarUrl) return false;
+        if (left.id !== right.id || left.displayName !== right.displayName || left.username !== right.username || left.avatarUrl !== right.avatarUrl || left.status !== right.status || left.lastSeen !== right.lastSeen) return false;
   }
   return true;
 }
@@ -525,7 +527,6 @@ export async function loadDms() {
     const seenAt = dmSeenAt();
     const unread = {};
     let changed = false;
-    let popped = null;
     for (const row of next) {
       const id = row.other && row.other.id;
       if (!id) continue;
@@ -561,16 +562,12 @@ export async function loadDms() {
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
           const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
           if (!roomMuted('dm:' + id)) noteArrival(stamp || key, who, 'New direct message');
-          const dockBusy = ui.quickOpen && ui.quickUser && String(ui.quickUser.id) !== String(id);
-          if (!dockBusy && !popped && row.other && ui.mode !== 'dm') popped = row.other;
         }
       }
       heardDm[id] = stamp;
     }
     if (changed) saveSeen(map);
-    if (popped) delete unread[popped.id];
     if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
-    if (popped) openQuick(popped);
     if (ui.dmUser) {
       const row = next.find((dm) => dm.other && String(dm.other.id) === String(ui.dmUser.id));
       if (row && row.other) ui.dmUser = { ...ui.dmUser, ...row.other };
@@ -1674,8 +1671,23 @@ if (pingAudio) pingAudio.preload = 'auto';
 
 function siteTitle() {
   const mentions = Object.values(ui.activity?.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0);
-  const n = mentions + (ui.incoming || []).length + (ui.missedCalls || []).length;
+  const dms = Object.values(ui.activity?.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0);
+  const n = mentions + dms;
   return n > 0 ? '(' + n + ') Nebula' : 'Nebula';
+}
+
+export function pinnedChats() {
+  ui.pinTick;
+  try { return JSON.parse(localStorage.getItem(accountKey('nebula-dm-pins')) || '[]'); }
+  catch { return []; }
+}
+
+export function togglePin(key) {
+  const current = pinnedChats();
+  const next = current.includes(key) ? current.filter((id) => id !== key) : [key, ...current];
+  localStorage.setItem(accountKey('nebula-dm-pins'), JSON.stringify(next));
+  ui.pinTick += 1;
+  ui.dmMenu = null;
 }
 
 let titleFlashing = false;

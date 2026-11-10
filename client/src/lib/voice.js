@@ -256,7 +256,7 @@ async function dropOutgoing(missed) {
   } catch (_) {}
 }
 
-async function connectCall(channelId, name, person) {
+async function connectCall(channelId, name, person, callId) {
   if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -284,6 +284,7 @@ async function connectCall(channelId, name, person) {
     channelId,
     name,
     person: person || null,
+    callId: callId || null,
     muted: false,
     deafened: false,
     speakingSent: false,
@@ -318,7 +319,7 @@ export async function startCall(user) {
       return;
     }
   }
-  await connectCall(channelId, name, person && person.id ? person : null);
+  await connectCall(channelId, name, person && person.id ? person : null, ui.outgoingCall && ui.outgoingCall.id);
 }
 
 export async function answerCall() {
@@ -332,7 +333,7 @@ export async function answerCall() {
   }
   ui.incomingCall = null;
   await leaveVoice();
-  await connectCall(call.channelId, call.from?.displayName || call.from?.username || 'Call', call.from || null);
+  await connectCall(call.channelId, call.from?.displayName || call.from?.username || 'Call', call.from || null, call.id);
 }
 
 export async function declineCall() {
@@ -389,6 +390,9 @@ export async function leaveVoice() {
   stopLocal();
   speaking = false;
   ui.voice = null;
+  if (voice && voice.callId) {
+    try { await api('/api/calls/' + encodeURIComponent(voice.callId) + '/end', { method: 'POST', body: {} }); } catch (_) {}
+  }
   await dropOutgoing(true);
   if (!voice) return;
   try {

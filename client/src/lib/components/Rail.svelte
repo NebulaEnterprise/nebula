@@ -1,25 +1,12 @@
 <script>
   import { MessageSquare, Plus } from '@lucide/svelte';
-  import Avatar from './Avatar.svelte';
-  import { ui, openServer, showFriends, openDm, warmDm } from '../state.svelte.js';
-
-  const incoming = $derived((ui.dms || []).filter((dm) => dm.other && ui.activity.dms[dm.other.id]));
-  const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
-  const requests = $derived((ui.incoming || []).length);
+  import { ui, openServer, showFriends } from '../state.svelte.js';
 </script>
 
 <aside class="rail">
   <button class="rail-btn" class:on={ui.mode !== 'chat'} title="Direct messages" onclick={() => showFriends('online')}>
     <MessageSquare size={22} />
-    {#if dmUnread}<em class="badge" title="Unread messages">{dmUnread > 99 ? '99+' : dmUnread}</em>{/if}
-    {#if requests}<em class="badge ask" title="Friend requests">{requests > 99 ? '99+' : requests}</em>{/if}
   </button>
-  {#each incoming as dm (dm.other.id)}
-    <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onpointerenter={() => warmDm(dm.other.id)} onclick={() => openDm(dm.other)}>
-      <Avatar user={dm.other} size={40} dot={false} />
-      <em class="badge">{(ui.activity.dms[dm.other.id].unread || 1) > 99 ? '99+' : (ui.activity.dms[dm.other.id].unread || 1)}</em>
-    </button>
-  {/each}
   <div class="sep"></div>
   {#each ui.servers as server}
     {@const note = ui.activity.servers[server.id]}

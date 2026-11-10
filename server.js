@@ -2950,7 +2950,7 @@ function auth(req, res, next) {
   }
   const now = Date.now();
   const seenAt = Number(found.user.lastSeen) || 0;
-  if (now - seenAt > 15000) {
+  if ((found.user.status || 'online') !== 'offline' && now - seenAt > 15000) {
     found.user.lastSeen = now;
     found.session.lastSeen = now;
     save(USERS_FILE, users);
@@ -3126,6 +3126,9 @@ app.get('/api/me', auth, (req, res) => {
 
 app.post('/api/seen', auth, (req, res) => {
   const now = Date.now();
+  if ((req.user.status || 'online') === 'offline') {
+    return res.json({ ok: true, lastSeen: Number(req.user.lastSeen) || now, status: 'offline' });
+  }
   const prev = Number(req.user.lastSeen) || 0;
   if (now - prev > 15000) {
     req.user.lastSeen = now;
@@ -3175,8 +3178,9 @@ app.patch('/api/me', auth, (req, res) => {
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
   if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) {
+    const prev = req.user.status || 'online';
     req.user.status = status;
-    if (status === 'online') req.user.lastSeen = Date.now();
+    if (status !== 'offline' && (prev === 'offline' || status === 'online')) req.user.lastSeen = Date.now();
   }
   if (hideLastSeen !== undefined) req.user.hideLastSeen = !!hideLastSeen;
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
@@ -3508,8 +3512,23 @@ function callsFor(userId) {
 
 function finishCall(row, missed) {
   if (!row || row.status === 'ended' || row.status === 'missed' || row.status === 'declined') return;
+  const wasActive = row.status === 'active';
+  const seconds = wasActive ? Math.max(1, Math.round((Date.now() - (Number(row.answeredAt) || Date.now())) / 1000)) : 0;
   row.status = row.status === 'ringing' && missed ? 'missed' : 'ended';
   row.endedAt = Date.now();
+  if (seconds && row.messageId && row.channelId && Array.isArray(messages[row.channelId])) {
+    const list = messages[row.channelId];
+    const idx = list.findIndex((msg) => msg && msg.id === row.messageId);
+    if (idx >= 0) {
+      const msg = list[idx];
+      msg.callSeconds = seconds;
+      msg.createdAt = new Date().toISOString();
+      list.splice(idx, 1);
+      list.push(msg);
+      save(MESSAGES_FILE, messages);
+      wakePulse(row.channelId);
+    }
+  }
   saveCalls();
 }
 
@@ -3597,7 +3616,6 @@ app.post('/api/calls', auth, (req, res) => {
   const channelId = 'dm:' + key;
   const row = { id: uuidv4(), channelId, from: String(req.user.id), to: String(other.id), status: 'ringing', at: Date.now() };
   callLog.push(row);
-  saveCalls();
   if (!dmThreads[key]) {
     dmThreads[key] = { id: key, a: key.split(':')[0], b: key.split(':')[1], updatedAt: Date.now() };
   } else {
@@ -3605,16 +3623,20 @@ app.post('/api/calls', auth, (req, res) => {
   }
   save(DMS_FILE, dmThreads);
   if (!messages[channelId]) messages[channelId] = [];
+  const messageId = uuidv4();
+  row.messageId = messageId;
   messages[channelId].push({
-    id: uuidv4(),
+    id: messageId,
     channelId,
     authorId: req.user.id,
     author: slimAuthor(req.user),
     content: '',
     kind: 'call',
+    callSeconds: 0,
     files: [],
     createdAt: new Date().toISOString(),
   });
+  saveCalls();
   save(MESSAGES_FILE, messages);
   wakePulse(channelId);
   res.json({ ok: true, call: callView(row) });
@@ -3625,6 +3647,7 @@ app.post('/api/calls/:id/answer', auth, (req, res) => {
   if (!row || String(row.to) !== String(req.user.id)) return res.status(404).json({ error: 'Call not found' });
   if (row.status !== 'ringing') return res.status(409).json({ error: 'That call already ended' });
   row.status = 'active';
+  row.answeredAt = Date.now();
   saveCalls();
   res.json({ ok: true, call: callView(row) });
 });
@@ -3637,6 +3660,16 @@ app.post('/api/calls/:id/decline', auth, (req, res) => {
     row.endedAt = Date.now();
     saveCalls();
   }
+  res.json({ ok: true });
+});
+
+app.post('/api/calls/:id/end', auth, (req, res) => {
+  const row = callLog.find((item) => item.id === req.params.id);
+  if (!row) return res.status(404).json({ error: 'Call not found' });
+  const mine = String(row.from) === String(req.user.id) || String(row.to) === String(req.user.id);
+  if (!mine) return res.status(404).json({ error: 'Call not found' });
+  if (row.status === 'active') finishCall(row, false);
+  else if (row.status === 'ringing' && String(row.from) === String(req.user.id)) finishCall(row, true);
   res.json({ ok: true });
 });
 

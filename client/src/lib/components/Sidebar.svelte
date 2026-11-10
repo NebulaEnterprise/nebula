@@ -15,12 +15,11 @@
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
   const requestCount = $derived((ui.incoming || []).length);
-  const dmUnread = $derived(Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
   const inboxBadge = $derived(mentionCount + (ui.incoming || []).length + (ui.missedCalls || []).length);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
@@ -268,7 +267,6 @@
   {:else}
     <div class="side-head">
       <span>Direct messages</span>
-      {#if dmUnread}<em class="pill-count" title="Unread messages">{countLabel(dmUnread)}</em>{/if}
     </div>
     <div class="scroll">
       <button class="nav-item" class:on={ui.mode === 'friends' && ui.friendsTab !== 'find'} onclick={() => showFriends('online')}>
@@ -278,7 +276,7 @@
       </button>
       <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}><Search size={16} /> Find people</button>
       <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
-      <div class="cat"><span>Direct messages</span>{#if dmUnread}<em class="pill-count">{countLabel(dmUnread)}</em>{/if}</div>
+      <div class="cat"><span>Direct messages</span></div>
       {#each ui.groups || [] as group (group.id)}
         {#if !chatClosed('group:' + group.id, group.lastId)}
           <div class="dm-item" role="button" tabindex="0" class:on={ui.group?.id === group.id} onclick={() => openGroup(group)} onkeydown={(e) => { if (e.key === 'Enter') openGroup(group); }}>
@@ -291,10 +289,10 @@
           </div>
         {/if}
       {/each}
-      {#each ui.dms as dm (dm.id)}
+      {#each [...ui.dms].sort((a, b) => (pinnedChats().includes('dm:' + a.other?.id) ? 0 : 1) - (pinnedChats().includes('dm:' + b.other?.id) ? 0 : 1)) as dm (dm.id)}
         {#if dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)}
           {@const note = ui.activity.dms[dm.other?.id]}
-          <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
+          <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
             <Avatar user={dm.other} size={28} />
             <span class="dm-copy">
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
