@@ -2496,7 +2496,6 @@ function startClocks() {
   pollActivity();
   watchAlerts();
   loadPacks();
-  setInterval(() => { refreshTyping(); }, 2000);
 }
 
 let alertCursor = '';
