@@ -61,16 +61,29 @@ function attachGateway(httpServer, api) {
     }
   }
 
+  function liveCount(userId) {
+    let n = 0;
+    for (const session of sessions.values()) {
+      if (session.user && String(session.user.id) === String(userId) && session.conn) n += 1;
+    }
+    return n;
+  }
+
   function dropConn(session) {
-    if (!session) return;
+    if (!session || !session.conn) return;
+    const user = session.user;
     session.conn = null;
     session.until = Date.now() + SESSION_MS;
+    if (user && !liveCount(user.id) && api.presence) api.presence(user, false);
   }
 
   function bind(socket, session) {
+    const user = session.user;
+    const was = user ? liveCount(user.id) : 0;
     session.conn = socket;
     session.until = 0;
     socket._nebula = session;
+    if (user && !was && api.presence) api.presence(user, true);
   }
 
   function hello(socket) {
@@ -267,6 +280,11 @@ function attachGateway(httpServer, api) {
     },
     all(type, build) {
       fanout(() => true, type, build);
+    },
+    users(ids, type, build) {
+      const want = new Set((ids || []).map(String));
+      if (!want.size) return;
+      fanout((session) => session.user && want.has(String(session.user.id)), type, build);
     },
   };
 }

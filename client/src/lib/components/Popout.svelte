@@ -7,7 +7,8 @@
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
-  import { ui, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
+  import { ui, nowClock, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
+  import { seenPhrase } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
@@ -23,16 +24,6 @@
   let more = $state(false);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
-
-  function lastSeenLabel(value) {
-    const t = Number(value);
-    if (!t) return '';
-    const d = new Date(t);
-    if (Number.isNaN(d.getTime())) return '';
-    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (d.toDateString() === new Date().toDateString()) return 'Today at ' + time;
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + time;
-  }
 
   function joinedLabel(value) {
     if (!value) return '—';
@@ -119,7 +110,7 @@
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
       </section>
       <section class="profile-panel">
-        <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{u.lastSeen ? lastSeenLabel(u.lastSeen) : (u.hideLastSeen ? 'Hidden' : '—')}</strong></div>
+        <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{seenPhrase(u, nowClock.t)}</strong></div>
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
       {#if rel === 'incoming' || rel === 'outgoing'}

@@ -2,7 +2,8 @@
   import { MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
+  import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
+  import { seenPhrase, presenceDot } from '../seen.js';
   import { api } from '../api.js';
   let q = $state('');
   let name = $state('');
@@ -19,7 +20,7 @@
 
   const list = $derived.by(() => {
     let rows = ui.friendsTab === 'blocked' ? ui.blocked : ui.friendsTab === 'suggested' ? ui.suggested : ui.friends;
-    if (ui.friendsTab === 'online') rows = rows.filter((u) => u.status !== 'offline' && u.status !== 'invisible');
+    if (ui.friendsTab === 'online') rows = rows.filter((u) => presenceDot(u, nowClock.t) !== 'offline');
     const query = q.trim().toLowerCase();
     if (query && ui.friendsTab !== 'find') rows = rows.filter((u) => ((u.username || '') + ' ' + (u.displayName || '')).toLowerCase().includes(query));
     return rows;
@@ -157,7 +158,7 @@
         <Avatar user={u} size={40} />
         <div class="meta">
           <strong><Name user={u} /></strong>
-          <span>{u.customStatus || (u.status === 'offline' ? 'Offline' : 'Online')}</span>
+          <span>{u.customStatus || seenPhrase(u, nowClock.t)}</span>
         </div>
         <button class="btn icon" title="Message" onclick={() => openDm(u)}><MessageSquare size={16} /></button>
         <button class="btn icon" title="More" onclick={(event) => { event.stopPropagation(); moreId = moreId === u.id ? '' : u.id; }}><MoreHorizontal size={16} /></button>

@@ -1,6 +1,7 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag } from '@lucide/svelte';
-  import { ui, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport } from '../state.svelte.js';
+  import { seenPhrase } from '../seen.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -125,12 +126,11 @@
     }
   }
 
-  async function toggleLastSeen() {
-    const hideLastSeen = !ui.me?.hideLastSeen;
+  async function setLastSeenPrivacy(lastSeenPrivacy) {
     try {
-      const data = await api('/api/me', { method: 'PATCH', body: { hideLastSeen } });
-      ui.me = { ...ui.me, ...data.user, hideLastSeen };
-      toast(hideLastSeen ? 'Last seen hidden' : 'Last seen shown');
+      const data = await api('/api/me', { method: 'PATCH', body: { lastSeenPrivacy } });
+      ui.me = { ...ui.me, ...data.user };
+      toast(lastSeenPrivacy === 'nobody' ? 'Last seen hidden' : lastSeenPrivacy === 'contacts' ? 'Last seen shared with contacts' : 'Last seen shown to everyone');
     } catch (err) {
       toast(err.message);
     }
@@ -219,16 +219,6 @@
   let aboutDraft = $state(ui.me?.aboutMe || '');
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
-
-  function lastSeenLabel(value) {
-    const t = Number(value);
-    if (!t) return '';
-    const d = new Date(t);
-    if (Number.isNaN(d.getTime())) return '';
-    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    if (d.toDateString() === new Date().toDateString()) return 'Today at ' + time;
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' at ' + time;
-  }
 
   function joinedLabel(value) {
     if (!value) return '—';
@@ -487,8 +477,12 @@
           {:else if page === 'privacy'}
             <div class="field">
               <label>Last seen</label>
-              <button type="button" class="btn" class:brand={!ui.me?.hideLastSeen} onclick={toggleLastSeen}>{ui.me?.hideLastSeen ? 'Hidden' : 'Shown'}</button>
-              <p class="hint">Turn this off to hide the last seen time on your profile. People still see when you are online, idle, or offline.</p>
+              <div class="row">
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'everyone'} onclick={() => setLastSeenPrivacy('everyone')}>Everyone</button>
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'contacts'} onclick={() => setLastSeenPrivacy('contacts')}>Contacts</button>
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'nobody'} onclick={() => setLastSeenPrivacy('nobody')}>Nobody</button>
+              </div>
+              <p class="hint">People you hide your last seen from only see “recently”, “within a week”, or “within a month”. You see the same kind of time for them. Sending, reading, or typing still shows you online for 30 seconds.</p>
             </div>
           {:else if page === 'advanced'}
             <div class="field">
@@ -841,7 +835,7 @@
                 <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
               </section>
               <section class="profile-panel">
-                <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{ui.me?.lastSeen ? lastSeenLabel(ui.me.lastSeen) : (ui.me?.hideLastSeen ? 'Hidden' : '—')}</strong></div>
+                <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{seenPhrase(ui.me, nowClock.t)}</strong></div>
                 <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[form.status] || statusColor.offline}"></i>{statusName[form.status] || 'Offline'}</strong></div>
               </section>
               <div class="pop-meta">

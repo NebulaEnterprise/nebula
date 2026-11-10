@@ -1523,8 +1523,8 @@ function findChannel(channelId, serverId) {
   return null;
 }
 
-function memberView(g, u) {
-  const pub = publicUser(u);
+function memberView(g, u, viewer) {
+  const pub = publicUser(u, viewer);
   const roles = memberRoles(g, u).slice().sort((a, b) => (b.position || 0) - (a.position || 0));
   const top = roles.find((r) => r.id !== 'everyone' && r.id !== 'owner');
   const mem = (g.members && g.members[u.id]) || {};
@@ -1897,18 +1897,122 @@ function userOwnsBadge(u, id) {
   return false;
 }
 
-const IDLE_MS = 10 * 60 * 1000;
+const liveUsers = new Set();
+const briefOnline = new Map();
+
+function privacyMode(u) {
+  if (!u) return 'everyone';
+  if (u.lastSeenPrivacy === 'everyone' || u.lastSeenPrivacy === 'contacts' || u.lastSeenPrivacy === 'nobody') return u.lastSeenPrivacy;
+  return u.hideLastSeen ? 'nobody' : 'everyone';
+}
+
+function friendsWith(a, b) {
+  if (!a || !b) return false;
+  return ensureFriendNode(a).friends.map(String).includes(String(b));
+}
+
+function sharesExact(owner, viewer) {
+  if (!owner || !viewer) return false;
+  if (String(owner.id) === String(viewer.id)) return true;
+  const mode = privacyMode(owner);
+  if (mode === 'nobody') return false;
+  if (mode === 'contacts') return friendsWith(owner.id, viewer.id);
+  return true;
+}
+
+function canSeeExact(viewer, owner) {
+  return sharesExact(owner, viewer) && sharesExact(viewer, owner);
+}
 
 function effectiveStatus(u) {
   const chosen = u && u.status ? u.status : 'online';
-  if (chosen !== 'online') return chosen;
-  const seen = Number(u && u.lastSeen) || 0;
-  if (!seen || Date.now() - seen > IDLE_MS) return 'idle';
-  return 'online';
+  if (!u || chosen === 'offline') return 'offline';
+  if (!liveUsers.has(String(u.id))) return 'offline';
+  return chosen === 'online' ? 'online' : chosen;
 }
 
-function publicUser(u) {
+function seenBucket(at) {
+  if (!at) return 'long';
+  const age = Date.now() - at;
+  if (age <= 3 * 24 * 60 * 60 * 1000) return 'recent';
+  if (age <= 7 * 24 * 60 * 60 * 1000) return 'week';
+  if (age <= 30 * 24 * 60 * 60 * 1000) return 'month';
+  return 'long';
+}
+
+function seenFor(owner, viewer) {
+  const self = !viewer || String(owner.id) === String(viewer.id);
+  const exact = self || canSeeExact(viewer, owner);
+  const at = Number(owner.lastSeen) || 0;
+  const chosen = owner.status || 'online';
+  const row = briefOnline.get(String(owner.id));
+  const flash = !self && viewer && row && row.until > Date.now() && row.peers.has(String(viewer.id));
+  const live = chosen !== 'offline' && liveUsers.has(String(owner.id));
+  if ((live || flash) && (exact || flash)) {
+    const shown = live && exact ? effectiveStatus(owner) : 'online';
+    const until = exact && live ? Date.now() + 70000 : (row && row.until > Date.now() ? row.until : Date.now() + 30000);
+    return { status: shown === 'offline' ? 'online' : shown, lastSeen: exact ? at : null, seen: exact ? 'exact' : 'online', onlineUntil: until };
+  }
+  if (!exact) return { status: 'offline', lastSeen: null, seen: seenBucket(at), onlineUntil: 0 };
+  return { status: chosen === 'idle' || chosen === 'dnd' ? 'offline' : 'offline', lastSeen: at || null, seen: 'exact', onlineUntil: 0 };
+}
+
+function pushPresence(user, onlyIds) {
+  if (!hub || !user) return;
+  const build = (viewer) => Object.assign({ id: user.id }, seenFor(user, viewer));
+  if (onlyIds) hub.users([user.id, ...onlyIds], 'PRESENCE', build);
+  else hub.all('PRESENCE', build);
+}
+
+function setLive(user, online) {
+  if (!user) return;
+  const id = String(user.id);
+  const was = liveUsers.has(id);
+  if (online) {
+    liveUsers.add(id);
+    if (was) return;
+  } else if (was) {
+    liveUsers.delete(id);
+  } else return;
+  user.lastSeen = Date.now();
+  save(USERS_FILE, users);
+  pushPresence(user);
+}
+
+function noteBrief(user, peerIds) {
+  if (!user) return;
+  const next = new Set((peerIds || []).map(String).filter((id) => id && id !== String(user.id)));
+  if (!next.size) return;
+  const id = String(user.id);
+  const now = Date.now();
+  const prev = briefOnline.get(id);
+  const fresh = !prev || prev.until < now;
+  let added = fresh;
+  const peers = fresh ? next : new Set(prev.peers);
+  if (!fresh) {
+    for (const peer of next) {
+      if (!peers.has(peer)) added = true;
+      peers.add(peer);
+    }
+  }
+  briefOnline.set(id, { until: now + 30000, peers });
+  if (added || (prev && prev.until - now < 10000)) pushPresence(user, peers);
+}
+
+function peersOfRoom(roomId, selfId) {
+  const id = String(roomId || '');
+  if (id.startsWith('dm:')) return id.slice(3).split(':').filter((item) => item && item !== String(selfId));
+  if (id.startsWith('group:')) {
+    const group = groups[id.slice(6)];
+    return ((group && group.memberIds) || []).map(String).filter((item) => item !== String(selfId));
+  }
+  return [];
+}
+
+function publicUser(u, viewer) {
   if (!u) return null;
+  const seen = seenFor(u, viewer || u);
+  const self = !viewer || String(viewer.id) === String(u.id);
   return {
     id: u.id,
     uid: u.uid || null,
@@ -1919,10 +2023,13 @@ function publicUser(u) {
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
     aliases: Array.isArray(u.aliases) ? u.aliases.slice(0, 10) : [],
-    status: effectiveStatus(u),
-    statusChoice: u.status || 'online',
-    lastSeen: u.hideLastSeen ? null : (Number(u.lastSeen) || null),
-    hideLastSeen: !!u.hideLastSeen,
+    status: seen.status,
+    statusChoice: self ? (u.status || 'online') : undefined,
+    lastSeen: seen.lastSeen,
+    seen: seen.seen,
+    onlineUntil: seen.onlineUntil,
+    hideLastSeen: self ? privacyMode(u) === 'nobody' : false,
+    lastSeenPrivacy: self ? privacyMode(u) : undefined,
     customStatus: u.customStatus || '',
     accentColor: u.accentColor || '#7c5cff',
     avatarColor: u.avatarColor || '#7c5cff',
@@ -2982,13 +3089,6 @@ function auth(req, res, next) {
     found.session.ua = String(req.headers['user-agent'] || '').slice(0, 180);
     save(USERS_FILE, users);
   }
-  const now = Date.now();
-  const seenAt = Number(found.user.lastSeen) || 0;
-  if ((found.user.status || 'online') !== 'offline' && now - seenAt > 15000) {
-    found.user.lastSeen = now;
-    found.session.lastSeen = now;
-    save(USERS_FILE, users);
-  }
   next();
 }
 
@@ -3159,16 +3259,8 @@ app.get('/api/me', auth, (req, res) => {
 });
 
 app.post('/api/seen', auth, (req, res) => {
-  const now = Date.now();
-  if ((req.user.status || 'online') === 'offline') {
-    return res.json({ ok: true, lastSeen: Number(req.user.lastSeen) || now, status: 'offline' });
-  }
-  const prev = Number(req.user.lastSeen) || 0;
-  if (now - prev > 15000) {
-    req.user.lastSeen = now;
-    save(USERS_FILE, users);
-  }
-  res.json({ ok: true, lastSeen: Number(req.user.lastSeen) || now, status: effectiveStatus(req.user) });
+  const seen = seenFor(req.user, req.user);
+  res.json({ ok: true, lastSeen: seen.lastSeen, status: seen.status, seen: seen.seen, onlineUntil: seen.onlineUntil });
 });
 
 app.get('/api/username-available', auth, (req, res) => {
@@ -3211,12 +3303,22 @@ app.patch('/api/me', auth, (req, res) => {
   if (aboutMe !== undefined) req.user.aboutMe = String(aboutMe).slice(0, 190);
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
+  let presenceChanged = false;
   if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) {
     const prev = req.user.status || 'online';
     req.user.status = status;
     if (status !== 'offline' && (prev === 'offline' || status === 'online')) req.user.lastSeen = Date.now();
+    presenceChanged = status !== prev;
   }
-  if (hideLastSeen !== undefined) req.user.hideLastSeen = !!hideLastSeen;
+  if (req.body && ['everyone', 'contacts', 'nobody'].includes(req.body.lastSeenPrivacy)) {
+    presenceChanged = presenceChanged || req.user.lastSeenPrivacy !== req.body.lastSeenPrivacy;
+    req.user.lastSeenPrivacy = req.body.lastSeenPrivacy;
+    req.user.hideLastSeen = req.body.lastSeenPrivacy === 'nobody';
+  } else if (hideLastSeen !== undefined) {
+    presenceChanged = presenceChanged || !!req.user.hideLastSeen !== !!hideLastSeen;
+    req.user.hideLastSeen = !!hideLastSeen;
+    req.user.lastSeenPrivacy = hideLastSeen ? 'nobody' : 'everyone';
+  }
   if (accentColor) req.user.accentColor = String(accentColor).slice(0, 20);
   if (avatarColor) req.user.avatarColor = String(avatarColor).slice(0, 20);
   if (bannerColor) req.user.bannerColor = String(bannerColor).slice(0, 20);
@@ -3274,6 +3376,7 @@ app.patch('/api/me', auth, (req, res) => {
   }
   save(USERS_FILE, users);
   touchProfiles();
+  if (presenceChanged) pushPresence(req.user);
   res.json({ ok: true, user: publicUser(req.user) });
 });
 
@@ -3390,7 +3493,7 @@ app.delete('/api/me/passkeys/:id', auth, (req, res) => {
 app.get('/api/members', auth, (req, res) => {
   ensureGuilds();
   if (!req.query.serverId) {
-    const list = Object.values(users).map(publicUser);
+    const list = Object.values(users).map((u) => publicUser(u, req.user));
     return res.json({ ok: true, members: list, badges: BADGE_DEFS, server: SERVER_NAME });
   }
   const serverId = String(req.query.serverId);
@@ -3400,7 +3503,7 @@ app.get('/api/members', auth, (req, res) => {
   const list = Object.keys(g.members)
     .map((id) => users[id])
     .filter(Boolean)
-    .map((u) => memberView(g, u));
+    .map((u) => memberView(g, u, req.user));
   res.json({ ok: true, members: list, badges: BADGE_DEFS, server: g.name, roles: g.roles });
 });
 
@@ -4235,6 +4338,7 @@ app.post('/api/typing', auth, (req, res) => {
     token,
   });
   if (typingSignature(key) !== before) wakeTyping(key);
+  noteBrief(req.user, peersOfRoom(key.startsWith('ch:') ? '' : key, req.user.id));
   res.json({ ok: true });
 });
 
@@ -4410,7 +4514,7 @@ app.get('/api/friends', auth, (req, res) => {
   const mapUser = (id) => {
     const u = users[id];
     if (!u) return null;
-    return publicUser(u);
+    return publicUser(u, req.user);
   };
   const skip = new Set([
     String(req.user.id),
@@ -4424,7 +4528,7 @@ app.get('/api/friends', auth, (req, res) => {
     if (!other || skip.has(String(other.id))) continue;
     if (isBlocked(req.user.id, other.id)) continue;
     if (!sharesServer(req.user.id, other.id)) continue;
-    suggested.push(publicUser(other));
+    suggested.push(publicUser(other, req.user));
     if (suggested.length >= 40) break;
   }
   res.json({
@@ -4468,7 +4572,7 @@ app.post('/api/friends/request', auth, (req, res) => {
     if (!me.friends.includes(target.id)) me.friends.push(target.id);
     if (!them.friends.includes(req.user.id)) them.friends.push(req.user.id);
     save(FRIENDS_FILE, friendGraph);
-    return res.json({ ok: true, status: 'accepted', user: publicUser(target) });
+    return res.json({ ok: true, status: 'accepted', user: publicUser(target, req.user) });
   }
 
   const tid = String(target.id);
@@ -4480,7 +4584,7 @@ app.post('/api/friends/request', auth, (req, res) => {
   friendGraph[mid] = me;
   friendGraph[tid] = them;
   save(FRIENDS_FILE, friendGraph);
-  res.json({ ok: true, status: 'pending', user: publicUser(target) });
+  res.json({ ok: true, status: 'pending', user: publicUser(target, req.user) });
 });
 
 app.post('/api/friends/accept', auth, (req, res) => {
@@ -4497,7 +4601,7 @@ app.post('/api/friends/accept', auth, (req, res) => {
   if (!me.friends.map(String).includes(fromId)) me.friends.push(fromId);
   if (!them.friends.map(String).includes(String(req.user.id))) them.friends.push(req.user.id);
   save(FRIENDS_FILE, friendGraph);
-  res.json({ ok: true, user: publicUser(users[fromId]) });
+  res.json({ ok: true, user: publicUser(users[fromId], req.user) });
 });
 
 app.post('/api/friends/decline', auth, (req, res) => {
@@ -4727,7 +4831,7 @@ function sendDmList(req, res) {
       const note = notes[String(otherId)];
       return {
         id: t.id,
-        other: publicUser(users[otherId]),
+        other: publicUser(users[otherId], req.user),
         updatedAt: Math.max(Number(t.updatedAt) || 0, last && last.createdAt ? Date.parse(last.createdAt) || 0 : 0),
         preview: last ? dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '') : '',
         lastId: last ? last.id : '',
@@ -4762,11 +4866,12 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
       slice = list.slice(-100);
     }
   }
+  noteBrief(req.user, [otherId]);
   res.json({
     ok: true,
     mode,
     messages: slice.map((msg) => presentMessage(msg, req.user.id)),
-    other: publicUser(users[otherId]),
+    other: publicUser(users[otherId], req.user),
   });
 });
 
@@ -4816,6 +4921,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   publishCreate(channelId, msg);
+  noteBrief(req.user, [otherId]);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -4841,13 +4947,14 @@ function appendRoomMessage(roomId, req) {
   save(MESSAGES_FILE, messages);
   silenceTyping(roomId, req.user.id, req.body && req.body.typingToken);
   publishCreate(roomId, msg);
+  noteBrief(req.user, peersOfRoom(roomId, req.user.id));
   touchAlerts();
   return { message: msg };
 }
 
-function publicGroup(group) {
+function publicGroup(group, viewer) {
   const memberIds = (group.memberIds || []).map(String);
-  const members = memberIds.map((id) => publicUser(users[id])).filter(Boolean);
+  const members = memberIds.map((id) => publicUser(users[id], viewer)).filter(Boolean);
   const room = messages['group:' + group.id] || [];
   const last = room[room.length - 1];
   return {
@@ -4924,7 +5031,7 @@ app.get('/api/users/search', auth, (req, res) => {
     if (isBlocked(req.user.id, user.id)) continue;
     const blob = ((user.username || '') + ' ' + (user.displayName || '') + ' ' + (user.uid || '')).toLowerCase();
     if (!blob.includes(q)) continue;
-    rows.push(publicUser(user));
+    rows.push(publicUser(user, req.user));
     if (rows.length >= 20) break;
   }
   res.json({ ok: true, users: rows });
@@ -4933,7 +5040,7 @@ app.get('/api/users/search', auth, (req, res) => {
 app.get('/api/users/:id', auth, (req, res) => {
   const user = users[req.params.id];
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const pub = publicUser(user);
+  const pub = publicUser(user, req.user);
   delete pub.email;
   delete pub.mfa;
   delete pub.passkeyCount;
@@ -4985,7 +5092,7 @@ app.post('/api/groups', auth, (req, res) => {
     system: true,
   }];
   save(MESSAGES_FILE, messages);
-  res.json({ ok: true, group: publicGroup(group) });
+  res.json({ ok: true, group: publicGroup(group, req.user) });
 });
 
 app.post('/api/groups/:id/messages', auth, (req, res) => {
@@ -5006,7 +5113,8 @@ app.get('/api/groups/:id/messages', auth, (req, res) => {
     return res.status(404).json({ error: 'Group not found' });
   }
   const list = messages['group:' + group.id] || [];
-  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), group: publicGroup(group) });
+  noteBrief(req.user, peersOfRoom('group:' + group.id, req.user.id));
+  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), group: publicGroup(group, req.user) });
 });
 
 app.post('/api/groups/:id/members', auth, (req, res) => {
@@ -5025,7 +5133,7 @@ app.post('/api/groups/:id/members', auth, (req, res) => {
     group.updatedAt = Date.now();
     save(GROUPS_FILE, groups);
   }
-  res.json({ ok: true, group: publicGroup(group) });
+  res.json({ ok: true, group: publicGroup(group, req.user) });
 });
 
 app.post('/api/groups/:id/leave', auth, (req, res) => {
@@ -5051,7 +5159,7 @@ app.post('/api/groups/:id', auth, (req, res) => {
   if (req.body && typeof req.body.iconUrl === 'string') group.iconUrl = req.body.iconUrl.slice(0, 300);
   group.updatedAt = Date.now();
   save(GROUPS_FILE, groups);
-  res.json({ ok: true, group: publicGroup(group) });
+  res.json({ ok: true, group: publicGroup(group, req.user) });
 });
 
 app.get('/api/channels/:id/threads', auth, (req, res) => {
@@ -5457,7 +5565,7 @@ function settingsView(g, user) {
     reports: g.reports,
     audit: g.audit,
     bans: Object.keys(g.bans).map((id) => ({ userId: id, reason: g.bans[id].reason, at: g.bans[id].at, user: users[id] ? publicUser(users[id]) : null })),
-    members: Object.keys(g.members).map((id) => users[id] ? memberView(g, users[id]) : null).filter(Boolean),
+    members: Object.keys(g.members).map((id) => users[id] ? memberView(g, users[id], user) : null).filter(Boolean),
   });
 }
 
@@ -5854,8 +5962,8 @@ app.get('/api/health', (req, res) => {
     room.signals = room.signals.filter((signal) => now - signal.at < 20000);
   }
 
-  function present(member) {
-    const user = publicUser(users[member.userId]) || {
+  function present(member, viewer) {
+    const user = publicUser(users[member.userId], viewer) || {
       id: member.userId,
       username: 'Someone',
       displayName: 'Someone',
@@ -5984,7 +6092,7 @@ app.get('/api/health', (req, res) => {
       if (!allowedCall(user, split[1])) continue;
       prune(room);
       if (!room.members.size) continue;
-      out[split[1]] = [...room.members.values()].map(present);
+      out[split[1]] = [...room.members.values()].map((member) => present(member, user));
     }
     return out;
   }
@@ -5998,7 +6106,7 @@ app.get('/api/health', (req, res) => {
       if (!room) continue;
       prune(room);
       if (!room.members.size) continue;
-      out[channel.id] = [...room.members.values()].map(present);
+      out[channel.id] = [...room.members.values()].map((member) => present(member, user));
     }
     return out;
   }
@@ -6048,7 +6156,7 @@ app.get('/api/health', (req, res) => {
     });
     noteCrowd(room);
     bumpVoice();
-    res.json({ ok: true, rev: voiceRev, members: [...room.members.values()].map(present) });
+    res.json({ ok: true, rev: voiceRev, members: [...room.members.values()].map((member) => present(member, req.user)) });
   });
 
   app.post('/api/voice/:channelId/leave', auth, (req, res) => {
@@ -6106,7 +6214,7 @@ app.get('/api/health', (req, res) => {
       ok: true,
       rev: voiceRev,
       joined: !!member,
-      members: [...room.members.values()].map(present),
+      members: [...room.members.values()].map((member) => present(member, req.user)),
       signals: mine.map((signal) => ({ from: signal.from, kind: signal.kind, payload: signal.payload })),
     });
   });
@@ -6187,6 +6295,7 @@ function listen() {
         return found ? found.user : null;
       },
       watch: resolveWatch,
+      presence: setLive,
       ready(user) {
         const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(user) : null;
         return { cursor: String(alertRev), voice };

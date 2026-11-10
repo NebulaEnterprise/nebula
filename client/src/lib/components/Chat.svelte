@@ -6,7 +6,8 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
+  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
+  import { seenPhrase, presenceDot } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, PERM } from '../format.js';
@@ -125,13 +126,8 @@
           : 'ch:' + (ui.channelId || '')
   );
   const muted = $derived(roomMuted(muteKey));
-  const statusLabel = $derived(
-    ui.dmUser?.status === 'dnd' ? 'Do Not Disturb'
-      : ui.dmUser?.status === 'idle' ? 'Idle'
-        : ui.dmUser?.status === 'online' ? 'Online'
-          : ui.dmUser?.status === 'invisible' ? 'Invisible'
-            : 'Offline'
-  );
+  const statusLabel = $derived(seenPhrase(ui.dmUser, nowClock.t));
+  const statusDot = $derived(presenceDot(ui.dmUser, nowClock.t));
   const titleName = $derived(
     ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message')
       : ui.mode === 'group' ? (ui.group?.name || 'Group')
@@ -1030,7 +1026,7 @@
   {#if ui.mode === 'dm' && partnerInCall(ui.dmUser)}
     <span class="in-call"><Phone size={14} /> In a call</span>
   {:else if ui.mode === 'dm'}
-    <span class="status-word {ui.dmUser?.status || 'offline'}">{statusLabel}</span>
+    <span class="status-word {statusDot}">{statusLabel}</span>
   {:else if ui.mode === 'group'}
     <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
   {:else if ui.mode !== 'thread'}

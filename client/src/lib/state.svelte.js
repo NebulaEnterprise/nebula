@@ -4,6 +4,9 @@ import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
 
+export const nowClock = $state({ t: Date.now() });
+if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
+
 export const ui = $state({
   booting: true,
   me: null,
@@ -1243,7 +1246,9 @@ function applySocket(packet) {
   }
   if (type === 'VOICE') {
     import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data)).catch(() => {});
+    return;
   }
+  if (type === 'PRESENCE') applyRemotePresence(data);
 }
 
 async function watchChat() {
@@ -2298,49 +2303,31 @@ export async function pollActivity() {
 }
 
 let presenceStarted = false;
-let lastLocalActivity = Date.now();
-let lastSeenPing = 0;
 
-function applyPresence(status, lastSeen) {
-  if (!ui.me || !status) return;
-  const seen = lastSeen || ui.me.lastSeen;
-  if (ui.me.status === status && ui.me.lastSeen === seen) return;
-  ui.me = { ...ui.me, status, lastSeen: seen };
-  ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, status, lastSeen: ui.me.hideLastSeen ? null : seen } : member);
-  if (ui.popout?.user?.id === ui.me.id) {
-    ui.popout = { ...ui.popout, user: { ...ui.popout.user, status, lastSeen: ui.me.hideLastSeen ? null : seen } };
+function patchPerson(person, row) {
+  if (!person || String(person.id) !== String(row.id)) return person;
+  return { ...person, status: row.status, lastSeen: row.lastSeen, seen: row.seen, onlineUntil: row.onlineUntil };
+}
+
+function applyRemotePresence(row) {
+  if (!row || !row.id) return;
+  if (ui.me && String(ui.me.id) === String(row.id)) ui.me = patchPerson(ui.me, row);
+  if (ui.dmUser) ui.dmUser = patchPerson(ui.dmUser, row);
+  if (ui.popout?.user) ui.popout = { ...ui.popout, user: patchPerson(ui.popout.user, row) };
+  if (ui.quickUser) ui.quickUser = patchPerson(ui.quickUser, row);
+  ui.members = (ui.members || []).map((member) => patchPerson(member, row));
+  ui.friends = (ui.friends || []).map((member) => patchPerson(member, row));
+  ui.incoming = (ui.incoming || []).map((member) => patchPerson(member, row));
+  ui.outgoing = (ui.outgoing || []).map((member) => patchPerson(member, row));
+  ui.dms = (ui.dms || []).map((dm) => dm && dm.other ? { ...dm, other: patchPerson(dm.other, row) } : dm);
+  if (ui.group && Array.isArray(ui.group.members)) {
+    ui.group = { ...ui.group, members: ui.group.members.map((member) => patchPerson(member, row)) };
   }
-}
-
-async function pingSeen() {
-  if (!localStorage.getItem('dc_token') || !ui.me) return;
-  try {
-    const data = await api('/api/seen', { method: 'POST', body: {} });
-    applyPresence(data.status, data.lastSeen);
-  } catch (_) {}
-}
-
-function noteActivity() {
-  if (document.hidden) return;
-  lastLocalActivity = Date.now();
 }
 
 function startPresence() {
   if (presenceStarted || typeof window === 'undefined') return;
   presenceStarted = true;
-  lastLocalActivity = Date.now();
-  for (const type of ['pointerdown', 'keydown', 'mousemove', 'touchstart']) {
-    window.addEventListener(type, noteActivity, { passive: true });
-  }
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) noteActivity();
-  });
-  pingSeen();
-  setInterval(() => {
-    if (!ui.me || (ui.me.statusChoice || 'online') !== 'online') return;
-    if (document.hidden && Date.now() - lastLocalActivity >= 10 * 60 * 1000) applyPresence('idle', ui.me.lastSeen);
-    else if (!document.hidden) pingSeen();
-  }, 20000);
 }
 
 function startClocks() {

@@ -3,7 +3,8 @@
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import { shortBio } from '../format.js';
-  import { ui, openPopout, openMemberMenu } from '../state.svelte.js';
+  import { ui, nowClock, openPopout, openMemberMenu } from '../state.svelte.js';
+  import { presenceDot } from '../seen.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
       return {
@@ -25,8 +26,8 @@
     }
     return m;
   }
-  const online = $derived(ui.members.filter((m) => m.status !== 'offline'));
-  const offline = $derived(ui.members.filter((m) => m.status === 'offline'));
+  const online = $derived(ui.members.filter((m) => presenceDot(m, nowClock.t) !== 'offline'));
+  const offline = $derived(ui.members.filter((m) => presenceDot(m, nowClock.t) === 'offline'));
 </script>
 
 <aside class="members">
