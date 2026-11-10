@@ -16,6 +16,8 @@ let iceQueue = new Map();
 let levelTimer = null;
 let audioCtx = null;
 let speaking = false;
+let roomTicket = 0;
+let syncTicket = 0;
 
 function publishScreens() {
   ui.screen = { at: Date.now(), local: !!localScreen, remote: !!remoteScreen };
@@ -105,9 +107,10 @@ function ensurePeer(id) {
   if (peer) return peer;
   const pc = new RTCPeerConnection({ iceServers: ICE });
   if (stream) stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
-  const video = pc.addTransceiver('video', { direction: 'sendrecv' });
-  const screenTrack = screenStream && screenStream.getVideoTracks()[0];
-  if (screenTrack) video.sender.replaceTrack(screenTrack).catch(() => {});
+  if (screenStream) {
+    const screenTrack = screenStream.getVideoTracks()[0];
+    if (screenTrack) pc.addTrack(screenTrack, screenStream);
+  }
   pc.onicecandidate = (event) => {
     if (!event.candidate || !ui.voice) return;
     sendSignal(id, 'ice', event.candidate.toJSON()).catch(() => {});
@@ -115,20 +118,31 @@ function ensurePeer(id) {
   pc.ontrack = (event) => {
     if (event.track && event.track.kind === 'video') {
       const show = () => {
-        if (event.track.readyState === 'ended') return;
-        remoteScreen = new MediaStream([event.track]);
+        if (!event.track || event.track.readyState === 'ended' || event.track.muted) return;
+        remoteScreen = (event.streams && event.streams[0]) || new MediaStream([event.track]);
         publishScreens();
       };
       const hide = () => {
-        remoteScreen = null;
-        publishScreens();
+        if (remoteScreen && remoteScreen.getVideoTracks().includes(event.track)) {
+          remoteScreen = null;
+          publishScreens();
+        }
       };
       event.track.onunmute = show;
       event.track.onmute = () => {
-        setTimeout(() => { if (event.track.muted || event.track.readyState === 'ended') hide(); }, 500);
+        setTimeout(() => { if (event.track.muted || event.track.readyState === 'ended') hide(); }, 700);
       };
       event.track.onended = hide;
-      if (!event.track.muted) show();
+      show();
+      let tries = 0;
+      const watch = setInterval(() => {
+        tries += 1;
+        if (!event.track || event.track.readyState === 'ended' || tries > 12) {
+          clearInterval(watch);
+          return;
+        }
+        show();
+      }, 400);
       return;
     }
     const audio = new Audio();
@@ -160,17 +174,7 @@ async function flushIce(id) {
 async function handleSignal(signal) {
   if (!ui.voice || !signal) return;
   if (signal.kind === 'offer') {
-    const peer = ensurePeer(signal.from);
-    const polite = String(ui.me?.id || '') > String(signal.from);
-    if (peer.pc.signalingState !== 'stable') {
-      if (!polite) return;
-      try { await peer.pc.setLocalDescription({ type: 'rollback' }); } catch (_) {}
-    }
-    await peer.pc.setRemoteDescription(signal.payload);
-    await flushIce(signal.from);
-    const answer = await peer.pc.createAnswer();
-    await peer.pc.setLocalDescription(answer);
-    await sendSignal(signal.from, 'answer', peer.pc.localDescription);
+    await acceptOffer(signal);
     return;
   }
   if (signal.kind === 'answer') {
@@ -191,6 +195,28 @@ async function handleSignal(signal) {
       iceQueue.set(signal.from, queued);
     }
   }
+}
+
+async function acceptOffer(signal, attempt = 0) {
+  if (!ui.voice || !signal) return;
+  const peer = ensurePeer(signal.from);
+  if (!peer) return;
+  if (peer.pc.signalingState === 'have-local-offer') {
+    const polite = String(ui.me?.id || '') > String(signal.from);
+    if (!polite) {
+      if (attempt < 8) setTimeout(() => { acceptOffer(signal, attempt + 1).catch(() => {}); }, 250);
+      return;
+    }
+    try { await peer.pc.setLocalDescription({ type: 'rollback' }); } catch (_) {}
+  } else if (peer.pc.signalingState !== 'stable') {
+    if (attempt < 8) setTimeout(() => { acceptOffer(signal, attempt + 1).catch(() => {}); }, 250);
+    return;
+  }
+  await peer.pc.setRemoteDescription(signal.payload);
+  await flushIce(signal.from);
+  const answer = await peer.pc.createAnswer();
+  await peer.pc.setLocalDescription(answer);
+  await sendSignal(signal.from, 'answer', peer.pc.localDescription);
 }
 
 async function offerTo(id) {
@@ -247,8 +273,9 @@ async function postSharing(sharing) {
 async function sync() {
   const voice = ui.voice;
   if (!voice) return;
+  const ticket = ++syncTicket;
   const data = await api('/api/voice/' + voice.channelId + '/sync?serverId=' + encodeURIComponent(voice.serverId));
-  if (!ui.voice || ui.voice.channelId !== voice.channelId) return;
+  if (ticket !== syncTicket || !ui.voice || ui.voice.channelId !== voice.channelId) return;
   const members = data.members || [];
   publishRoom(voice.channelId, members);
   const others = members.filter((member) => String(member.id) !== String(ui.me?.id));
@@ -458,6 +485,8 @@ export async function joinVoice(channel) {
 }
 
 export async function leaveVoice() {
+  roomTicket += 1;
+  syncTicket += 1;
   const voice = ui.voice;
   if (poll) clearInterval(poll);
   poll = null;
@@ -514,14 +543,15 @@ export async function toggleShare() {
   const track = next.getVideoTracks()[0];
   if (track) track.onended = () => { toggleShare().catch(() => {}); };
   for (const [id, peer] of peers) {
-    let sender = videoSender(peer.pc);
-    if (!sender) {
-      sender = peer.pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
-      if (track) await sender.replaceTrack(track);
-      await renegotiate(id);
-    } else if (track) {
+    const sender = videoSender(peer.pc);
+    if (sender && track) {
+      const transceiver = (peer.pc.getTransceivers?.() || []).find((item) => item.sender === sender);
+      if (transceiver) transceiver.direction = 'sendrecv';
       try { await sender.replaceTrack(track); } catch (_) {}
+    } else if (track) {
+      peer.pc.addTrack(track, next);
     }
+    await renegotiate(id);
   }
   bumpScreen();
   postSharing(true);
@@ -558,14 +588,23 @@ export async function toggleDeafen() {
   } catch (_) {}
 }
 
+function visibleMembers(channelId, listed) {
+  const mine = String(ui.me?.id || '');
+  const here = !!(ui.voice && ui.voice.channelId === channelId);
+  if (here || !mine) return listed || [];
+  return (listed || []).filter((person) => String(person.id) !== mine);
+}
+
 export async function refreshVoiceRooms() {
+  const ticket = ++roomTicket;
   if (ui.mode === 'dm' || ui.mode === 'group') {
     const data = await api('/api/voice/overview?serverId=call');
+    if (ticket !== roomTicket) return data;
     const next = { ...ui.voiceRooms };
     for (const id of Object.keys(next)) {
       if ((id.startsWith('dm:') || id.startsWith('group:')) && !(data.rooms && data.rooms[id])) delete next[id];
     }
-    Object.assign(next, data.rooms || {});
+    for (const [id, listed] of Object.entries(data.rooms || {})) next[id] = visibleMembers(id, listed);
     if (ui.voice && ui.voice.serverId === 'call' && ui.voiceRooms[ui.voice.channelId]) {
       next[ui.voice.channelId] = ui.voiceRooms[ui.voice.channelId];
     }
@@ -574,10 +613,11 @@ export async function refreshVoiceRooms() {
   }
   if (!ui.serverId || ui.mode !== 'chat') return null;
   const data = await api('/api/voice/overview?serverId=' + encodeURIComponent(ui.serverId));
+  if (ticket !== roomTicket) return data;
   const next = { ...ui.voiceRooms };
   for (const channel of ui.channels || []) {
     if (channel.type !== 'voice') continue;
-    const listed = (data.rooms && data.rooms[channel.id]) || [];
+    const listed = visibleMembers(channel.id, (data.rooms && data.rooms[channel.id]) || []);
     if (ui.voice && ui.voice.channelId === channel.id) {
       next[channel.id] = listed.map((person) => (
         String(person.id) === String(ui.me?.id)
