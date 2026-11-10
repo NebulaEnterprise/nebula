@@ -742,12 +742,11 @@
     pinning = true;
     follow = true;
     const node = box;
+    node.scrollTop = node.scrollHeight;
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (gen !== pinGen || !node) return;
-        node.scrollTop = node.scrollHeight;
-        pinning = false;
-      });
+      if (gen !== pinGen || !node) return;
+      node.scrollTop = node.scrollHeight;
+      pinning = false;
     });
   }
 
@@ -805,12 +804,20 @@
     });
   });
 
+  let stickKey = '';
+  let stickCount = -1;
   $effect(() => {
-    ui.messages.length;
-    ui.messages[ui.messages.length - 1]?.id;
+    const last = ui.messages[ui.messages.length - 1];
+    const key = (last && (last.clientKey || last.id)) || '';
+    const count = ui.messages.length;
     ui.reply;
     ui.editing;
+    ui.composer;
+    if (composerEl) fitComposer();
     if (!box || !follow) return;
+    if (key === stickKey && count === stickCount) return;
+    stickKey = key;
+    stickCount = count;
     pinBottom();
   });
 
@@ -1255,7 +1262,7 @@
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
-  {#each ui.messages as msg, index (msg.id)}
+  {#each ui.messages as msg, index (msg.clientKey || msg.id)}
     {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
       <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
     {/if}

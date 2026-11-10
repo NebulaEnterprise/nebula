@@ -1191,10 +1191,21 @@ function applySocketMessage(type, data) {
     rememberLog(logKey, ui.messages);
     return;
   }
-  if (idx >= 0) {
+  const mine = ui.me && message.author && message.author.id === ui.me.id;
+  let localIdx = idx;
+  if (localIdx < 0 && mine) {
+    localIdx = ui.messages.findIndex((msg) => msg && msg.pending && msg.author && msg.author.id === ui.me.id && String(msg.content || '') === String(message.content || ''));
+  }
+  if (localIdx >= 0) {
+    const prev = ui.messages[localIdx];
     const next = ui.messages.slice();
-    next[idx] = message;
-    ui.messages = next;
+    next[localIdx] = { ...message, clientKey: prev.clientKey || prev.id, pending: false, failed: false };
+    ui.messages = next.filter((msg, i) => i === localIdx || msg.id !== message.id);
+    if (mine) {
+      if (message.author && message.author.id) ui.typers = ui.typers.filter((row) => row.id !== message.author.id);
+      if (ui.readHold !== roomKey) markSeen(roomKey, message.id);
+      ui.seenMessageId = message.id;
+    }
   } else {
     ui.messages = [...ui.messages, message];
     paintNames([message]);
@@ -1484,9 +1495,7 @@ export async function loadMessages(quiet, live) {
     const hadReal = ui.messages.some((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
     if (!list.length && hadReal) return 'same';
     if (newest && newest.id && ui.readHold !== roomKey) markSeen(roomKey, newest.id);
-    const known = new Set(list.map((msg) => msg && msg.id));
-    const local = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && !known.has(msg.id) && (msg.roomKey === roomKey || !msg.roomKey));
-    const next = local.length ? [...list, ...local] : list;
+    const next = stitchLog(list, logKey);
     if (!sameLog(ui.messages, next)) ui.messages = next;
     rememberLog(logKey, next);
     ui.chatLoading = false;
@@ -1529,6 +1538,35 @@ export async function loadMembers(quiet) {
   finally { membersBusy = false; }
 }
 
+function stitchLog(list, roomKey) {
+  const pending = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && (msg.roomKey === roomKey || !msg.roomKey));
+  const used = new Set();
+  const stitched = list.map((msg) => {
+    const saved = ui.messages.find((row) => row && row.clientKey && row.id === msg.id);
+    if (saved) return { ...msg, clientKey: saved.clientKey };
+    const local = pending.find((row) => !used.has(row.clientKey) && row.author && msg.author && row.author.id === msg.author.id && String(row.content || '') === String(msg.content || ''));
+    if (!local) return msg;
+    used.add(local.clientKey);
+    return { ...msg, clientKey: local.clientKey };
+  });
+  const leftover = pending.filter((row) => row.clientKey && !used.has(row.clientKey) && !stitched.some((msg) => msg.id === row.id));
+  return leftover.length ? [...stitched, ...leftover] : stitched;
+}
+
+function settleSent(tempId, message) {
+  const next = ui.messages.slice();
+  let idx = next.findIndex((msg) => msg && (msg.id === tempId || msg.clientKey === tempId || msg.id === message.id));
+  if (idx < 0) {
+    ui.messages = [...next.filter((msg) => msg.id !== message.id), { ...message, clientKey: tempId || message.id }];
+  } else {
+    const prev = next[idx];
+    const key = prev.clientKey || tempId || prev.id;
+    next[idx] = { ...message, clientKey: key, pending: false, failed: false };
+    ui.messages = next.filter((msg, i) => i === idx || (msg.id !== message.id && msg.id !== tempId && msg.clientKey !== key));
+  }
+  rememberLog(currentRoom(), ui.messages);
+}
+
 async function postMessage(payload, target) {
   const content = String(payload.content || '').trim();
   const files = payload.files || [];
@@ -1561,8 +1599,7 @@ async function postMessage(payload, target) {
   );
   if (sameRoom && data.message) {
     lastSentId = data.message.id;
-    const without = ui.messages.filter((msg) => msg.id !== data.message.id && msg.id !== payload.replaceId);
-    ui.messages = [...without, data.message];
+    settleSent(payload.replaceId, data.message);
     paintNames(ui.messages);
   } else if (data.message) {
     lastSentId = data.message.id;
@@ -1599,6 +1636,7 @@ export async function sendMessage() {
   ui.reply = null;
   ui.messages = [...ui.messages, {
     id: tempId,
+    clientKey: tempId,
     pending: true,
     roomKey,
     createdAt: new Date().toISOString(),
@@ -1674,6 +1712,7 @@ export async function sendFiles(list) {
   }));
   ui.messages = [...ui.messages, {
     id: tempId,
+    clientKey: tempId,
     pending: true,
     roomKey,
     createdAt: new Date().toISOString(),
