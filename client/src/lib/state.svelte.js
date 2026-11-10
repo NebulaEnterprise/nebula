@@ -1224,7 +1224,6 @@ function noteSocketAlert(data) {
         await pollActivity();
         loadDms();
         loadGroups();
-        if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') loadMessages(true);
       }
     } finally {
       alertTask = null;
@@ -1834,7 +1833,7 @@ function stopTyping(notify = true) {
 
 function markTyping() {
   const now = Date.now();
-  if (typingLive && now - lastTypingPing < 8000) return;
+  if (typingLive && now - lastTypingPing < 3000) return;
   lastTypingPing = now;
   typingLive = true;
   postTyping({ token: ++typingSerial });
@@ -1862,8 +1861,9 @@ export function typingLine(list) {
   return { kind: '', names: [] };
 }
 
-export function noteTyping() {
-  if (!String(ui.composer || '').trim()) stopTyping();
+export function noteTyping(text) {
+  const value = text == null ? ui.composer : text;
+  if (!String(value || '').trim()) stopTyping();
   else markTyping();
 }
 
@@ -2316,6 +2316,27 @@ export async function pollActivity() {
     if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels) || !sameNotes(ui.activity.dms, dms)) {
       ui.activity = { ...ui.activity, servers, channels, dms };
     }
+    const heads = data.heads || {};
+    for (const [id, note] of Object.entries(channels)) {
+      if (!note || !note.unread) continue;
+      const key = 'ch:' + id;
+      const cached = roomLogs.get(key);
+      if (!cached || !cached.length || (heads[id] && cached[cached.length - 1]?.id !== heads[id])) {
+        roomLogs.delete(key);
+        warmSeen.delete(key);
+        warmChannel(id, note.serverId);
+      }
+    }
+    for (const id of Object.keys(dms)) {
+      const key = 'dm:' + id;
+      const head = heads['dm:' + id];
+      const cached = roomLogs.get(key);
+      if (!cached || !cached.length || (head && cached[cached.length - 1]?.id !== head)) {
+        roomLogs.delete(key);
+        warmSeen.delete(key);
+        warmDm(id);
+      }
+    }
   } catch (err) {
     if (err && err.status === 404) activityMissing = true;
   }
@@ -2355,6 +2376,7 @@ function startClocks() {
   pollActivity();
   watchAlerts();
   loadPacks();
+  setInterval(() => { refreshTyping(); }, 2000);
 }
 
 let alertCursor = '';
@@ -2383,7 +2405,6 @@ async function watchAlerts() {
         await pollActivity();
         loadDms();
         loadGroups();
-        if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') loadMessages(true);
       }
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;

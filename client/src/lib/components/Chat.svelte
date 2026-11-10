@@ -509,7 +509,7 @@
   }
 
   function syncMention(event) {
-    noteTyping();
+    noteTyping((event.currentTarget || event.target).value);
     fitComposer();
     const el = event.currentTarget || event.target;
     const value = String(el.value || '');
@@ -742,23 +742,13 @@
     pinning = true;
     follow = true;
     const node = box;
-    let frames = 0;
-    const watchImages = () => {
-      node.querySelectorAll('img').forEach((img) => {
-        if (img.complete || img.dataset.pin) return;
-        img.dataset.pin = '1';
-        img.addEventListener('load', () => { if (follow) node.scrollTop = node.scrollHeight; }, { once: true });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (gen !== pinGen || !node) return;
+        node.scrollTop = node.scrollHeight;
+        pinning = false;
       });
-    };
-    const tick = () => {
-      if (gen !== pinGen) return;
-      node.scrollTop = node.scrollHeight;
-      watchImages();
-      frames += 1;
-      if (frames < 8) requestAnimationFrame(tick);
-      else pinning = false;
-    };
-    tick();
+    });
   }
 
   $effect(() => {
@@ -818,7 +808,6 @@
   $effect(() => {
     ui.messages.length;
     ui.messages[ui.messages.length - 1]?.id;
-    ui.typers.length;
     ui.reply;
     ui.editing;
     if (!box || !follow) return;
