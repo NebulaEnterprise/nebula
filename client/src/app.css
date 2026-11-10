@@ -687,7 +687,13 @@ img { max-width: 100%; }
   background: rgba(0, 0, 0, 0.55); color: #fff;
 }
 .msg-content { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; line-height: 1.5; color: #e6e7ee; }
-.msg-content .emoji { width: 22px; height: 22px; vertical-align: middle; }
+.msg-content .emoji { width: 22px; height: 22px; vertical-align: -4px; }
+.msg-content.jumbo { font-size: 48px; line-height: 1.15; }
+.msg-content.jumbo-mid { font-size: 40px; line-height: 1.15; }
+.msg-content.jumbo-sm { font-size: 32px; line-height: 1.2; }
+.msg-content.jumbo .emoji { width: 48px; height: 48px; }
+.msg-content.jumbo-mid .emoji { width: 40px; height: 40px; }
+.msg-content.jumbo-sm .emoji { width: 32px; height: 32px; }
 .msg-content .sticker { width: 148px; display: block; border-radius: 12px; }
 .msg-content .gif { max-width: min(320px, 100%); max-height: 280px; border-radius: 12px; display: block; margin-top: 4px; }
 .mention { color: #c7bfff; background: rgba(124, 106, 247, 0.28); border-radius: 4px; padding: 0 2px; font-weight: 650; }
@@ -1607,7 +1613,11 @@ img { max-width: 100%; }
 .quick-empty { margin: 18px 12px; color: var(--faint); font-size: 13px; }
 .qbubble { max-width: 82%; padding: 8px 10px 4px; border-radius: 14px; }
 .qbubble p, .quick-text { margin: 0; font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
-.quick-text .emoji { width: 22px; height: 22px; vertical-align: middle; }
+.quick-text .emoji { width: 22px; height: 22px; vertical-align: -4px; }
+.quick-text.jumbo { font-size: 42px; line-height: 1.15; }
+.quick-text.jumbo-mid { font-size: 34px; line-height: 1.15; }
+.quick-text.jumbo .emoji { width: 42px; height: 42px; }
+.quick-text.jumbo-mid .emoji { width: 34px; height: 34px; }
 .quick-text .sticker, .quick-text .gif, .quick-files .file-img, .quick-files .file-video {
   max-width: 100%; width: auto; height: auto; max-height: 180px; object-fit: contain;
   border-radius: 10px; display: block; margin-top: 4px;

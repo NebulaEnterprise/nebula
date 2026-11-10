@@ -9,7 +9,7 @@
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
   import { startCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
-  import { formatContent, PERM } from '../format.js';
+  import { formatContent, emojiScale, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -966,7 +966,7 @@
           <p class="forward-tag">Forwarded from {msg.forward.name}</p>
         {/if}
         {#if msg.content}
-          <div class="msg-content">{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
+          <div class="msg-content" class:jumbo={emojiScale(msg.content) === 'jumbo'} class:jumbo-mid={emojiScale(msg.content) === 'jumbo-mid'} class:jumbo-sm={emojiScale(msg.content) === 'jumbo-sm'}>{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
         {/if}
         {#if msg.files?.length}
           <div class="msg-files">

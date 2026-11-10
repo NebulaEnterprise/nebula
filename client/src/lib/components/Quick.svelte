@@ -4,7 +4,7 @@
   import Attachment from './Attachment.svelte';
   import { ui, openQuick, closeQuick, openDm, loadDms, toast } from '../state.svelte.js';
   import { api } from '../api.js';
-  import { formatContent } from '../format.js';
+  import { formatContent, emojiScale } from '../format.js';
   import { startCall } from '../voice.js';
 
   let messages = $state([]);
@@ -261,7 +261,7 @@
             {@const mine = msg.author?.id === ui.me?.id}
             {@const text = textOf(msg)}
             <div class="qbubble" class:mine class:theirs={!mine}>
-              {#if text}<div class="quick-text">{@html formatContent(text, emoji, stickers, names)}</div>{/if}
+              {#if text}<div class="quick-text" class:jumbo={emojiScale(text) === 'jumbo'} class:jumbo-mid={emojiScale(text) === 'jumbo-mid'} class:jumbo-sm={emojiScale(text) === 'jumbo-sm'}>{@html formatContent(text, emoji, stickers, names)}</div>{/if}
               {#if msg.files?.length}
                 <div class="quick-files">
                   {#each msg.files as file}

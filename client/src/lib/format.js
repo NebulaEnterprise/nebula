@@ -10,6 +10,25 @@ export function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
+const EMOJI_TOKEN = '(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator})(?:\\uFE0F|\\uFE0E)?(?:\\p{Emoji_Modifier})?(?:\\u200D(?:\\p{Extended_Pictographic})(?:\\uFE0F)?(?:\\p{Emoji_Modifier})?)*|:[a-z0-9_]+:';
+
+export function emojiScale(text) {
+  const raw = String(text || '').trim();
+  if (!raw || /[\r\n]/.test(raw) || raw.includes('[[')) return '';
+  let count = 0;
+  try {
+    const re = new RegExp('^(' + EMOJI_TOKEN + ')(?:\\s+(' + EMOJI_TOKEN + '))*$', 'u');
+    if (!re.test(raw)) return '';
+    count = raw.split(/\s+/).filter(Boolean).length;
+  } catch (_) {
+    return '';
+  }
+  if (!count || count > 27) return '';
+  if (count === 1) return 'jumbo';
+  if (count < 7) return 'jumbo-mid';
+  return 'jumbo-sm';
+}
+
 export function formatContent(text, emoji, stickers, namesList) {
   const gifs = [];
   let raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,1000})\]\]/g, (_, url) => {
