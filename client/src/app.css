@@ -62,7 +62,7 @@ img { max-width: 100%; }
   box-shadow: var(--shadow);
 }
 .mark {
-  width: 52px; height: 52px; border-radius: 16px;
+  width: 84px; height: 84px; border-radius: 22px;
   display: grid; place-items: center; overflow: hidden;
   background: #000;
   box-shadow: 0 10px 30px rgba(124, 106, 247, 0.35);
