@@ -1,6 +1,7 @@
 <script>
-  import { MessageSquare, Plus } from '@lucide/svelte';
+  import { Plus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
+  import dmMark from '../../assets/dm-mark.png';
   import { ui, openServer, showFriends, openDm, warmDm, phoneBrowse } from '../state.svelte.js';
 
   const incoming = $derived(
@@ -11,8 +12,8 @@
 </script>
 
 <aside class="rail">
-  <button class="rail-btn" class:on={ui.mode !== 'chat'} title="Direct messages" onclick={() => { showFriends('online'); phoneBrowse(); }}>
-    <MessageSquare size={22} />
+  <button class="rail-btn dm-mark" class:on={ui.mode !== 'chat'} title="Direct messages" onclick={() => { showFriends('online'); phoneBrowse(); }}>
+    <img src={dmMark} alt="" />
   </button>
   {#each incoming as dm (dm.other.id)}
     <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onpointerenter={() => warmDm(dm.other.id)} onclick={() => openDm(dm.other)}>
