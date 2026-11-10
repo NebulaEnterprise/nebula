@@ -223,17 +223,38 @@ img { max-width: 100%; }
   border-radius: 8px; background: #2b2d31; color: #fff;
 }
 .voice-tool:hover { background: #3a3c43; }
-.leave-call {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 8px 10px; border-radius: 6px; background: #da373c; color: #fff;
-  font-weight: 700; font-size: 14px;
+.join-voice {
+  margin-left: auto; height: 22px; padding: 0 8px; border-radius: 4px; flex-shrink: 0;
+  background: #248046; color: #fff; font-size: 12px; font-weight: 700;
 }
-.leave-call:hover { background: #a12828; }
-.leave-mini {
-  margin-left: auto; flex-shrink: 0; padding: 2px 7px; border-radius: 4px;
-  background: #da373c; color: #fff; font-size: 11px; font-weight: 700;
+.join-voice:hover { background: #1a6334; }
+.live-pill {
+  margin-left: 6px; padding: 1px 5px; border-radius: 4px; flex-shrink: 0;
+  background: #da373c; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; font-style: normal;
 }
-.leave-mini:hover { background: #a12828; }
+.profile-hero h3 { display: flex; align-items: center; gap: 8px; }
+.rejoin-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 8px 16px 0; padding: 10px 12px; border-radius: 8px; background: #2b2d31;
+  color: #fff; font-size: 14px; font-weight: 600;
+}
+.rejoin-bar button {
+  border: 0; border-radius: 8px; padding: 8px 12px; background: #248046; color: #fff; font-weight: 700;
+}
+.rejoin-bar button:hover { background: #1a6334; }
+.stream-tools {
+  position: absolute; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 2;
+}
+.stream-tools button {
+  height: 32px; padding: 0 10px; border-radius: 8px; background: rgba(0, 0, 0, 0.65);
+  color: #fff; font-size: 13px; font-weight: 700; backdrop-filter: blur(8px);
+}
+.call-view:fullscreen, .call-view:-webkit-full-screen {
+  width: 100%; height: 100%; background: #000; display: flex; align-items: center; justify-content: center;
+}
+.call-view:fullscreen .call-video, .call-view:-webkit-full-screen .call-video {
+  width: 100%; height: 100%; max-height: none; border-radius: 0;
+}
 .me {
   display: flex; align-items: center; gap: 4px; padding: 6px; flex-shrink: 0;
   margin: 8px; border-radius: 14px; background: #0e0f14; position: relative;
@@ -420,9 +441,8 @@ img { max-width: 100%; }
 }
 .badge.dot { width: 10px; height: 10px; min-width: 10px; padding: 0; background: #fff; border-radius: 50%; }
 .channel.unread .ch-name, .dm-item.unread { color: #fff; font-weight: 700; }
-.dm-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.dm-preview { display: block; min-height: 16px; color: var(--faint); font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dm-item.unread .dm-preview { color: #fff; }
+.dm-copy { flex: 1; min-width: 0; display: flex; align-items: center; }
+.dm-copy .ch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pill-count {
   margin-left: auto; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px;
   background: #f23f43; color: #fff; font-size: 11px; font-weight: 800; font-style: normal;
@@ -654,6 +674,8 @@ img { max-width: 100%; }
 .call-bubble .avatar { box-shadow: 0 0 0 3px #1a1b20; }
 .call-bubble.speaking .avatar { box-shadow: 0 0 0 3px #3ecf8e, 0 0 0 6px rgba(62, 207, 142, 0.35); }
 .call-pip.solo { position: static; width: min(760px, 100%); max-height: 360px; }
+.call-stage.watching { min-height: min(72vh, 720px); }
+.call-stage.watching .call-video { width: 100%; max-height: min(68vh, 680px); }
 .call-video {
   width: min(760px, 100%); max-height: 360px; border-radius: 12px; background: #000; object-fit: contain;
 }
@@ -1605,7 +1627,7 @@ img { max-width: 100%; }
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; text-align: left;
 }
 .quick-person:hover, .quick-person.unread { background: rgba(255, 255, 255, 0.04); }
-.quick-person span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.quick-person span { flex: 1; min-width: 0; display: flex; align-items: center; }
 .quick-person strong, .quick-person em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-person em { color: var(--faint); font-size: 12px; font-style: normal; font-weight: 500; }
 .quick-person.unread strong, .quick-person.unread em { color: #fff; }

@@ -286,7 +286,6 @@
               <Avatar user={dm.other} size={32} />
               <span>
                 <strong>{dm.other.displayName || dm.other.username}</strong>
-                <em>{dm.preview || 'No messages yet'}</em>
               </span>
               {#if note}<i>{note.unread > 99 ? '99+' : note.unread}</i>{/if}
             </button>

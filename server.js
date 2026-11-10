@@ -5787,6 +5787,7 @@ app.get('/api/health', (req, res) => {
       muted: !!member.muted,
       deafened: !!member.deafened,
       speaking: !!member.speaking && !member.muted && !member.deafened,
+      sharing: !!member.sharing,
     };
   }
 
@@ -5830,6 +5831,24 @@ app.get('/api/health', (req, res) => {
 
   app.get('/api/voice/overview', auth, (req, res) => {
     const serverId = String(req.query.serverId || '');
+    if (serverId === 'call') {
+      const out = {};
+      for (const [id, room] of rooms) {
+        const split = id.split('\n');
+        if (split[0] !== 'call' || !split[1]) continue;
+        const channelId = split[1];
+        const allowed = channelId.startsWith('dm:')
+          ? channelId.slice(3).split(':').map(String).includes(String(req.user.id))
+          : channelId.startsWith('group:')
+            ? !!((groups[channelId.slice(6)] || {}).memberIds || []).map(String).includes(String(req.user.id))
+            : false;
+        if (!allowed) continue;
+        prune(room);
+        if (!room.members.size) continue;
+        out[channelId] = [...room.members.values()].map(present);
+      }
+      return res.json({ ok: true, rooms: out });
+    }
     const guild = guilds.servers[serverId];
     if (!guild || !guild.members || !guild.members[req.user.id]) {
       return res.status(403).json({ error: 'You are not in this server' });
@@ -5858,6 +5877,7 @@ app.get('/api/health', (req, res) => {
       muted: prev ? prev.muted : false,
       deafened: prev ? prev.deafened : false,
       speaking: false,
+      sharing: false,
       seen: Date.now(),
     });
     res.json({ ok: true, members: [...room.members.values()].map(present) });
@@ -5878,6 +5898,7 @@ app.get('/api/health', (req, res) => {
     if (req.body.muted != null) member.muted = !!req.body.muted;
     if (req.body.deafened != null) member.deafened = !!req.body.deafened;
     if (req.body.speaking != null) member.speaking = !!req.body.speaking;
+    if (req.body.sharing != null) member.sharing = !!req.body.sharing;
     member.seen = Date.now();
     res.json({ ok: true });
   });

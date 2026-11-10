@@ -4,6 +4,7 @@
   import NameExtras from './NameExtras.svelte';
   import { shortBio } from '../format.js';
   import { ui, openPopout, openMemberMenu } from '../state.svelte.js';
+  import { isLive } from '../voice.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
       return {
@@ -35,7 +36,7 @@
     <button class="member" onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
       <Avatar user={m} size={34} />
       <div class="meta">
-        <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} /></div>
+        <div class="name-row"><strong><Name user={shown(m)} color={m.nameEffect ? '' : (m.roleColor || m.accentColor || 'inherit')} /></strong><NameExtras user={shown(m)} />{#if isLive(m.id)}<em class="live-pill">LIVE</em>{/if}</div>
         {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
       </div>
     </button>

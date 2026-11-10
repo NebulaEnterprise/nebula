@@ -242,6 +242,9 @@
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
                 </button>
+                {#if (ui.voiceRooms[ch.id] || []).length && ui.voice?.channelId !== ch.id}
+                  <button class="join-voice" onclick={() => onVoice(ch)}>Join</button>
+                {/if}
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
                   <span class="row-actions">
                     <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>
@@ -253,10 +256,8 @@
                 <div class="voice-person" class:speaking={person.speaking}>
                   <Avatar user={person} size={22} dot={false} />
                   <span>{person.displayName || person.username}</span>
+                  {#if person.sharing || (ui.voice?.sharing && person.id === ui.me?.id)}<em class="live-pill">LIVE</em>{/if}
                   {#if person.muted || person.deafened}<MicOff size={12} />{/if}
-                  {#if ui.voice?.channelId === ch.id && person.id === ui.me?.id}
-                    <button class="leave-mini" onclick={leaveVoice}>Leave</button>
-                  {/if}
                 </div>
               {/each}
             {/each}
@@ -283,7 +284,6 @@
             <span class="group-mark">{(group.name || 'G').slice(0, 1)}</span>
             <span class="dm-copy">
               <span class="ch-name">{group.name}</span>
-              <span class="dm-preview">{group.memberCount || (group.members || []).length} members</span>
             </span>
             <button class="dm-x" title="Close" onclick={(e) => { e.stopPropagation(); closeConversation('group:' + group.id, group.lastId); }}><X size={14} /></button>
           </div>
@@ -300,7 +300,6 @@
             <Avatar user={dm.other} size={28} />
             <span class="dm-copy">
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-              <span class="dm-preview">{dm.preview || ''}</span>
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}
@@ -340,7 +339,6 @@
           <Monitor size={18} />
         </button>
       </div>
-      <button class="leave-call" onclick={leaveVoice}><PhoneOff size={16} /> Leave call</button>
     </div>
   {/if}
   {#if accountOpen}

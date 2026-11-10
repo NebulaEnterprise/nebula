@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2 } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
-  import { startCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
+  import { startCall, joinOpenCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, localScreen, remoteScreen } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
@@ -763,6 +763,81 @@
     return people;
   });
 
+  const callRoomId = $derived.by(() => {
+    if (ui.mode === 'group' && ui.group) return 'group:' + ui.group.id;
+    if (ui.mode === 'dm' && ui.me && ui.dmUser) return 'dm:' + [ui.me.id, ui.dmUser.id].sort().join(':');
+    return '';
+  });
+  const rejoinPeople = $derived.by(() => {
+    if (!callRoomId || (ui.voice && ui.voice.channelId === callRoomId)) return [];
+    return (ui.voiceRooms[callRoomId] || []).filter((person) => String(person.id) !== String(ui.me?.id));
+  });
+  let streamPop = null;
+
+  function streamTitle() {
+    if (remoteScreen && !localScreen) {
+      const room = ui.voiceRooms[ui.voice?.channelId] || [];
+      const host = room.find((person) => person.sharing && String(person.id) !== String(ui.me?.id));
+      return (host?.displayName || host?.username || 'Someone') + ' is sharing';
+    }
+    return 'Your screen';
+  }
+
+  function paintPopout(win, stream) {
+    if (!win || win.closed) return;
+    let video = win.document.querySelector('video');
+    if (!video) {
+      win.document.title = 'Nebula stream';
+      win.document.body.innerHTML = '';
+      const style = win.document.createElement('style');
+      style.textContent = 'html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,sans-serif}.bar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;background:linear-gradient(#000,transparent)}button{background:#2b2d31;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer;font-weight:700}video{width:100%;height:100%;object-fit:contain;background:#000}';
+      win.document.head.appendChild(style);
+      const bar = win.document.createElement('div');
+      bar.className = 'bar';
+      const name = win.document.createElement('strong');
+      name.className = 'who';
+      const back = win.document.createElement('button');
+      back.textContent = 'Return to Nebula';
+      back.onclick = () => win.close();
+      bar.append(name, back);
+      video = win.document.createElement('video');
+      video.autoplay = true;
+      video.playsInline = true;
+      win.document.body.append(video, bar);
+    }
+    const name = win.document.querySelector('.who');
+    if (name) name.textContent = streamTitle();
+    if (video.srcObject !== stream) {
+      video.srcObject = stream || null;
+      if (stream) video.play().catch(() => {});
+    }
+  }
+
+  function popOutStream() {
+    const stream = remoteScreen || localScreen;
+    if (!stream) return;
+    const win = window.open('', 'nebula-stream', 'popup=yes,width=1100,height=700');
+    if (!win) {
+      toast('Allow pop-ups to pop the stream out');
+      return;
+    }
+    streamPop = win;
+    paintPopout(win, stream);
+  }
+
+  function fillScreen(node) {
+    if (!node) return;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else node.requestFullscreen?.().catch(() => {});
+  }
+
+  $effect(() => {
+    const stream = remoteScreen || localScreen;
+    const tick = ui.voice?.screenTick;
+    if (!streamPop || streamPop.closed || (tick == null && !stream)) return;
+    paintPopout(streamPop, stream);
+  });
+
   function callLength(seconds) {
     const s = Number(seconds) || 0;
     if (s < 60) return 'a few seconds';
@@ -866,10 +941,20 @@
     {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
   </div>
 {/if}
-{#if ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')}
-  <div class="call-stage">
+{#if rejoinPeople.length}
+  <div class="rejoin-bar">
+    <span>{rejoinPeople.map((person) => person.displayName || person.username).join(', ')} {rejoinPeople.length === 1 ? 'is' : 'are'} in the call</span>
+    <button type="button" onclick={joinOpenCall}>Join call</button>
+  </div>
+{/if}
+{#if (ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')) || (ui.voice && (ui.mode === 'chat' || ui.mode === 'thread') && (remoteScreen || localScreen))}
+  <div class="call-stage" class:watching={remoteScreen || localScreen}>
     {#if remoteScreen || localScreen}
       <div class="call-view">
+        <div class="stream-tools">
+          <button type="button" title="Full screen" onclick={(event) => fillScreen(event.currentTarget.closest('.call-view'))}><Maximize2 size={16} /></button>
+          <button type="button" title="Pop out" onclick={popOutStream}><PictureInPicture2 size={16} /></button>
+        </div>
         {#key ui.voice.screenTick}
           {#if remoteScreen}
             <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
@@ -880,6 +965,7 @@
         {/key}
       </div>
     {/if}
+    {#if ui.voice?.serverId === 'call'}
     <div class="call-bubbles">
       {#each callPeople as person (person.id)}
         <div class="call-bubble" class:speaking={person.speaking}>
@@ -900,6 +986,7 @@
       </button>
       <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
     </div>
+    {/if}
   </div>
 {/if}
 <div class="messages" bind:this={box} onscroll={trackScroll}>
