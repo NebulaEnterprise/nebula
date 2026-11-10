@@ -7,14 +7,20 @@
       :root { color-scheme: dark; }
       html, body { margin: 0; height: 100%; overflow: hidden; background: #08090c; color: #f4f5f7; font-family: Outfit, "Segoe UI", sans-serif; user-select: none; }
       .bar {
+        position: relative;
         height: 40px; display: flex; align-items: center;
         background:
-          linear-gradient(90deg, rgba(124, 106, 247, 0.16), transparent 220px),
+          radial-gradient(220px 40px at 50% 50%, rgba(124, 106, 247, 0.2), transparent 72%),
           #08090c;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         -webkit-app-region: drag;
       }
-      .brand { display: flex; align-items: center; gap: 8px; padding-left: 14px; }
+      .brand {
+        position: absolute; left: 50%; top: 50%;
+        transform: translate(-50%, -50%);
+        display: flex; align-items: center; gap: 8px;
+        pointer-events: none;
+      }
       .brand img {
         width: 22px; height: 22px; display: block;
         filter: drop-shadow(0 0 8px rgba(155, 140, 255, 0.55));
@@ -39,16 +45,15 @@
       .bar.mac .wins button.max { background: #62c554; }
       .bar.mac .wins button.close { background: #ed6a5e; }
       .bar.mac .wins button:hover { filter: brightness(0.92); }
-      .bar.mac .brand { padding-left: 8px; }
     </style>
   </head>
   <body>
     <div class="bar" id="bar">
+      <div class="drag"></div>
       <div class="brand">
         <img src="build/icon.png" alt="" />
         <strong>Nebula</strong>
       </div>
-      <div class="drag"></div>
       <div class="wins" id="wins"></div>
     </div>
     <script>
