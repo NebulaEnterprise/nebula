@@ -299,7 +299,7 @@
             <Avatar user={dm.other} size={28} />
             <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other) || !!(ui.dmTyping && ui.dmTyping[dm.other.id])}>
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-              {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="dm-share">Typing…</span>
+              {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="dm-share">is typing...</span>
               {:else if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>
               {:else if partnerInCall(dm.other)}<span class="dm-share">In a call</span>{/if}
             </span>

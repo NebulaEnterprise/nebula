@@ -4273,7 +4273,7 @@ function listTypers(key, selfId) {
       room.delete(id);
       continue;
     }
-    if (id === selfId) continue;
+    if (String(id) === String(selfId)) continue;
     out.push({ id, name: row.name, nameEffect: row.nameEffect || '', nameColors: row.nameColors || [], tick: Math.floor(row.at / 1000) });
   }
   return out;
@@ -4316,7 +4316,9 @@ function silenceTyping(key, userId, token) {
   const prev = typingEpoch.get(key)?.get(userId) || 0;
   const floor = Math.max(prev + 1, Number(token) || 0);
   noteEpoch(key, userId, floor);
+  const before = typingSignature(key);
   clearTyping(key, userId);
+  if (typingSignature(key) !== before) wakeTyping(key);
 }
 
 function typingToken(typers) {

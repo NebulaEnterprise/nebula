@@ -18,7 +18,7 @@
   let dragging = $state(false);
   let serial = 0;
   let pos = $state(readPlace());
-  let quickTyping = $state(false);
+  const quickTyping = $derived(!!(ui.quickUser && ui.dmTyping && ui.dmTyping[ui.quickUser.id]));
   let typeToken = 0;
 
   function readPlace() {
@@ -153,27 +153,6 @@
   });
 
   $effect(() => {
-    const id = ui.quickOpen && ui.quickUser?.id;
-    if (!id) {
-      quickTyping = false;
-      return;
-    }
-    let stop = false;
-    const look = async () => {
-      try {
-        const data = await api('/api/typing?dmUserId=' + encodeURIComponent(id));
-        if (!stop) quickTyping = (data.typers || []).some((row) => String(row.id) === String(id));
-      } catch (_) {}
-    };
-    look();
-    const timer = setInterval(look, 3000);
-    return () => {
-      stop = true;
-      clearInterval(timer);
-    };
-  });
-
-  $effect(() => {
     messages.length;
     messages[messages.length - 1]?.id;
     if (!follow || !log) return;
@@ -204,7 +183,7 @@
   let quickAt = 0;
   let quickTimer = 0;
 
-  function stopQuick(id, notify = true) {
+  function stopQuick(id, notify = false) {
     clearTimeout(quickTimer);
     quickTimer = 0;
     const token = ++typeToken;
@@ -225,8 +204,8 @@
   }
 
   function markQuick(id) {
-    if (!id || !draft.trim()) stopQuick(id);
-    else pokeQuick(id);
+    if (!id || !draft.trim()) return;
+    pokeQuick(id);
   }
 
   function onKey(event) {
@@ -267,7 +246,7 @@
         {#if ui.quickUser}
           <button class="icon" title="All messages" onclick={() => (ui.quickUser = null)}><ChevronLeft size={16} /></button>
           <Avatar user={who} size={28} />
-          <strong>{quickTyping ? 'typing' : (who.displayName || who.username)}</strong>
+          <strong>{who.displayName || who.username}</strong>
           <button class="icon" title="Call" onclick={() => startCall(who)}><Phone size={15} /></button>
           <button class="icon" title="Open conversation" onclick={openFull}><ExternalLink size={15} /></button>
         {:else}
@@ -301,6 +280,9 @@
             </div>
           {/each}
         </div>
+        {#if quickTyping}
+          <p class="quick-typing"><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span> <strong>{who.displayName || who.username}</strong> is typing...</p>
+        {/if}
         <form class="quick-compose" onsubmit={(event) => { event.preventDefault(); send(); }}>
           <input bind:value={draft} maxlength="2000" placeholder={'Message @' + (who?.username || '')} onkeydown={onKey} oninput={() => markQuick(ui.quickUser?.id)} />
           <button class="send" type="submit" disabled={sending || !draft.trim()}>Send</button>

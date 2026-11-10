@@ -1127,7 +1127,7 @@
   {#if ui.mode === 'dm' && partnerInCall(ui.dmUser)}
     <span class="in-call"><Phone size={14} /> In a call</span>
   {:else if ui.mode === 'dm' && typingPhrase.kind}
-    <span class="status-word typing-status">{typingPhrase.kind === 'one' ? typingPhrase.names[0] + ' is typing…' : 'Typing…'}</span>
+    <span class="status-word typing-status">{typingPhrase.kind === 'one' ? typingPhrase.names[0] + ' is typing...' : 'Several people are typing...'}</span>
   {:else if ui.mode === 'dm'}
     <span class="status-word {statusDot}">{statusLabel}</span>
   {:else if ui.mode === 'group'}
@@ -1481,14 +1481,14 @@
     <Picker />
   {/if}
   <p class="typing" class:on={!!typingPhrase.kind} aria-live="polite">
-    {#if typingPhrase.kind === 'one'}
-      <strong>{typingPhrase.names[0]}</strong> is typing
-    {:else if typingPhrase.kind === 'two'}
-      <strong>{typingPhrase.names[0]}</strong> and <strong>{typingPhrase.names[1]}</strong> are typing
-    {:else if typingPhrase.kind === 'many'}
-      Several people are typing
-    {/if}
     <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    {#if typingPhrase.kind === 'one'}
+      <strong>{typingPhrase.names[0]}</strong> is typing...
+    {:else if typingPhrase.kind === 'two'}
+      <strong>{typingPhrase.names[0]}</strong> and <strong>{typingPhrase.names[1]}</strong> are typing...
+    {:else if typingPhrase.kind === 'many'}
+      Several people are typing...
+    {/if}
   </p>
   {#if replyTargets.length}
     <div class="compose-note reply-note">
