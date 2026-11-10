@@ -124,7 +124,7 @@ img { max-width: 100%; }
 .srv img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .rail-btn.on { background: var(--brand); color: white; border-radius: 16px; }
 .rail-btn.dm-mark { padding: 0; overflow: hidden; background: #000; }
-.rail-btn.dm-mark img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.rail-btn.dm-mark img { width: 92%; height: 92%; object-fit: contain; pointer-events: none; }
 .rail-btn.dm-mark:hover, .rail-btn.dm-mark.on { background: #000; }
 .rail-btn.dm-mark.on { box-shadow: inset 0 0 0 2px #d946ef; }
 .dm-rail, .dm-rail:hover { width: 40px; height: 40px; border-radius: 50%; padding: 0; overflow: visible; background: transparent; }
