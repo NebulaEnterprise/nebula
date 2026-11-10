@@ -1965,6 +1965,19 @@ img { max-width: 100%; }
     position: absolute; left: 0; top: 0; right: 0; height: 100%;
     overflow: hidden;
   }
+  html:not(:has(.shell)),
+  html:not(:has(.shell)) body {
+    position: static; inset: auto; height: auto; min-height: 100%;
+    overflow: auto;
+  }
+  html:not(:has(.shell)) #app {
+    position: static; height: auto; min-height: 100dvh; overflow: visible;
+    transform: none !important;
+  }
+  .auth {
+    min-height: 100dvh; align-items: flex-start; justify-content: flex-start;
+    padding: 24px 16px 48px;
+  }
   .shell { height: 100%; }
   button, a, input, textarea, .channel, .nav-item, .dm-item { touch-action: manipulation; }
   .shell.phone-browse .main,

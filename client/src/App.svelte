@@ -53,6 +53,12 @@
       const height = Math.round(vv.height);
       const offset = Math.round(vv.offsetTop);
       const overlap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      if (!app.querySelector('.shell')) {
+        app.style.removeProperty('height');
+        app.style.transform = 'none';
+        root.classList.remove('kb');
+        return;
+      }
       app.style.height = height + 'px';
       app.style.transform = offset ? 'translateY(' + offset + 'px)' : 'none';
       root.classList.toggle('kb', overlap > 60);
