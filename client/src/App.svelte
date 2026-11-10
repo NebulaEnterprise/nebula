@@ -41,17 +41,21 @@
     const fitKeyboard = () => {
       const phone = window.matchMedia('(max-width: 900px)').matches;
       const root = document.documentElement;
-      if (!phone || !vv) {
-        root.style.removeProperty('--vvh');
-        root.style.removeProperty('--vvt');
+      const app = document.getElementById('app');
+      if (!phone || !vv || !app) {
         root.classList.remove('kb');
+        if (app) {
+          app.style.removeProperty('height');
+          app.style.removeProperty('transform');
+        }
         return;
       }
-      const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty('--vvh', Math.round(vv.height) + 'px');
-      root.style.setProperty('--vvt', Math.round(vv.offsetTop) + 'px');
-      root.classList.toggle('kb', overlap > 80);
-      if (window.scrollY) window.scrollTo(0, 0);
+      const height = Math.round(vv.height);
+      const offset = Math.round(vv.offsetTop);
+      const overlap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      app.style.height = height + 'px';
+      app.style.transform = offset ? 'translateY(' + offset + 'px)' : 'none';
+      root.classList.toggle('kb', overlap > 60);
     };
     fitKeyboard();
     vv?.addEventListener('resize', fitKeyboard);

@@ -652,18 +652,9 @@ img { max-width: 100%; }
   width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; font-weight: 650;
 }
 .forward-row:hover { background: var(--bg-hover); }
-.menu-reacts { display: none; }
 @media (hover: none) {
   .msg-tools { display: none; }
-  .menu-reacts {
-    display: flex; gap: 4px; padding: 2px 2px 6px; margin-bottom: 4px;
-    border-bottom: 1px solid var(--line);
-  }
-  .menu-reacts button {
-    flex: 1; height: 36px; border-radius: 8px; font-size: 18px;
-    display: grid; place-items: center;
-  }
-  .menu-reacts button:hover, .menu-reacts button:active { background: var(--bg-hover); }
+  .msg { -webkit-touch-callout: none; }
 }
 .msg-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; max-width: 100%; }
 .msg-id { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
@@ -1966,9 +1957,13 @@ img { max-width: 100%; }
 .inbox-pop .btn.icon { width: 26px; height: 26px; border-radius: 8px; }
 
 @media (max-width: 900px) {
-  html, body, #app {
-    position: fixed; left: 0; right: 0; width: 100%; overflow: hidden;
-    top: var(--vvt, 0px); height: var(--vvh, 100dvh);
+  html, body {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    overflow: hidden; overscroll-behavior: none;
+  }
+  #app {
+    position: absolute; left: 0; top: 0; right: 0; height: 100%;
+    overflow: hidden;
   }
   .shell { height: 100%; }
   button, a, input, textarea, .channel, .nav-item, .dm-item { touch-action: manipulation; }
@@ -2004,19 +1999,47 @@ img { max-width: 100%; }
   .topic, .status-word, .top-search, .bar-tool kbd { display: none; }
   .top-tools { gap: 0; overflow-x: auto; }
   .bar-tool { width: 36px; height: 36px; flex-shrink: 0; }
-  .composer-wrap { padding: 0 10px calc(10px + env(safe-area-inset-bottom)); }
+  .composer { flex-wrap: nowrap; border-radius: 24px; }
+  .composer-wrap { padding: 0 10px calc(8px + env(safe-area-inset-bottom)); }
   html.kb .composer-wrap { padding-bottom: 8px; }
-  .picker, .picker.picker-pop, .react-picker .picker {
+  .composer-wrap > .picker {
     left: 0; right: 0; width: 100%; max-height: min(42dvh, 320px);
-    border-radius: 16px 16px 0 0;
+    border-radius: 16px 16px 0 0; bottom: calc(100% + 6px);
   }
-  .composer-wrap > .picker { bottom: calc(100% + 6px); }
-  .picker.picker-pop .emoji-grid, .emoji-grid, .picker-grid { max-height: 160px; min-height: 0; }
-  .react-picker { left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important; width: 100%; }
-  .msg-menu {
-    left: 8px !important; right: 8px !important; width: auto; top: auto !important;
-    bottom: calc(8px + env(safe-area-inset-bottom)); max-height: 46dvh; overflow: auto;
+  .composer-wrap > .picker .emoji-grid,
+  .composer-wrap > .picker .picker-grid { max-height: 160px; min-height: 0; }
+  .msg-sheet-back {
+    position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end;
+    background: rgba(0, 0, 0, 0.5);
   }
+  .msg-sheet {
+    width: 100%; max-height: min(78%, 560px); overflow: auto;
+    background: #111214; border-radius: 16px 16px 0 0;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .msg-sheet .menu-reacts {
+    display: flex; align-items: center; gap: 2px;
+    padding: 4px 6px 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line);
+  }
+  .msg-sheet .menu-reacts button {
+    flex: 1; height: 44px; border-radius: 999px; font-size: 24px;
+    display: grid; place-items: center; background: transparent;
+  }
+  .msg-sheet .menu-reacts button:active { background: var(--bg-hover); }
+  .msg-sheet .menu-reacts .react-more {
+    flex: 0 0 42px; width: 42px; color: #949ba4; background: #2b2d31;
+  }
+  .msg-sheet > button, .msg-sheet .sheet-back {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 13px 14px; border-radius: 8px; text-align: left; font-weight: 650; font-size: 16px;
+  }
+  .msg-sheet > button.danger { color: #f23f43; }
+  .msg-sheet > button:active, .msg-sheet .sheet-back:active { background: var(--bg-hover); }
+  .msg-sheet .picker, .msg-sheet .picker.picker-pop {
+    position: relative; left: auto; right: auto; bottom: auto; width: 100%;
+    max-height: min(62dvh, 460px); border: 0; box-shadow: none; background: transparent; border-radius: 0;
+  }
+  .msg-sheet .emoji-grid, .msg-sheet .picker-grid { max-height: min(48dvh, 360px); min-height: 0; }
   .composer textarea, .field input, .field textarea, .textin, .search { font-size: 16px; }
   .quick-pill, .quick-dock { display: none; }
   .shell.phone-chat .dock { position: fixed; inset: 0; z-index: 28; width: 100%; max-width: none; background: var(--bg-main); }

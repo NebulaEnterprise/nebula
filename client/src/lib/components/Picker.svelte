@@ -130,7 +130,7 @@
 
   {#if reacting || tab === 'emoji'}
     <div class="picker-search">
-      <input bind:value={query} placeholder={reacting ? 'Find the perfect reaction' : 'Find an emoji'} />
+      <input bind:value={query} placeholder={reacting ? 'Find the perfect emoji' : 'Find an emoji'} />
     </div>
     <div class="picker-grid emoji-grid">
       {#if reacting && query.trim()}

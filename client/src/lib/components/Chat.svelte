@@ -92,6 +92,7 @@
   let forwardTargets = $state({ channels: [], dms: [] });
   let forwardBusy = $state(false);
   const quickReacts = ['💯', '👍', '👎', '❤️'];
+  const holdReacts = ['👍', '❤️', '😂', '🔥', '😮', '😢'];
 
   const reactionEmoji = $derived.by(() => {
     const rows = [];
@@ -137,6 +138,16 @@
 
   let holdTimer = 0;
   let heldMenu = false;
+  let holdMove = null;
+  let phoneMenu = $state(false);
+
+  $effect(() => {
+    const media = window.matchMedia('(max-width: 900px)');
+    const apply = () => (phoneMenu = media.matches);
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  });
 
   function openMenu(event, msg) {
     event.preventDefault();
@@ -145,6 +156,7 @@
     const rect = event.currentTarget.getBoundingClientRect();
     const x = point ? event.clientX : rect.right - 232;
     const y = point ? event.clientY : rect.bottom + 6;
+    if (phoneMenu && composerEl) composerEl.blur();
     menu = {
       id: msg.id,
       mine: msg.author?.id === ui.me?.id,
@@ -160,9 +172,15 @@
     const target = event.currentTarget;
     const x = event.clientX;
     const y = event.clientY;
+    pressEnd();
+    holdMove = (ev) => {
+      if (Math.abs(ev.clientX - x) > 10 || Math.abs(ev.clientY - y) > 10) pressEnd();
+    };
+    window.addEventListener('pointermove', holdMove);
     holdTimer = window.setTimeout(() => {
-      holdTimer = 0;
+      pressEnd();
       heldMenu = true;
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
       openMenu({
         preventDefault() {},
         stopPropagation() {},
@@ -175,6 +193,10 @@
   }
 
   function pressEnd() {
+    if (holdMove) {
+      window.removeEventListener('pointermove', holdMove);
+      holdMove = null;
+    }
     if (!holdTimer) return;
     clearTimeout(holdTimer);
     holdTimer = 0;
@@ -752,6 +774,7 @@
   });
 
   function onComposerFocus() {
+    menu = null;
     follow = true;
     requestAnimationFrame(() => pinBottom());
   }
@@ -1372,15 +1395,52 @@
     </div>
   </div>
 {/if}
-{#if menu}
+{#if menu && phoneMenu}
+  {@const current = ui.messages.find((msg) => msg.id === menu.id)}
+  <div class="msg-sheet-back" role="presentation" onclick={() => (menu = null)}>
+    <div class="msg-sheet" role="dialog" aria-label="Message actions" onclick={(e) => e.stopPropagation()}>
+      {#if menu.react}
+        <button type="button" class="sheet-back" onclick={() => (menu = { ...menu, react: false })}><ChevronLeft size={18} /> Quick reactions</button>
+        <Picker onpick={(emoji) => current && onReact(current.id, emoji)} />
+      {:else}
+        <div class="menu-reacts">
+          {#each holdReacts as glyph}
+            <button type="button" onclick={() => current && onReact(current.id, glyph)}>{glyph}</button>
+          {/each}
+          <button type="button" class="react-more" title="All emoji" onclick={() => (menu = { ...menu, react: true })}><Smile size={22} /></button>
+        </div>
+        {#if current?.reactions?.length}
+          <button type="button" onclick={() => openReactions(current)}><SmilePlus size={16} /> View Reactions</button>
+        {/if}
+        {#if current && menu.mine}
+          <button type="button" onclick={() => beginEdit(current)}><Pencil size={16} /> Edit Message</button>
+        {/if}
+        {#if current}
+          <button type="button" onclick={() => beginReply(current)}><Reply size={16} /> {replyTargets.some((row) => row.id === current.id) ? 'Remove Reply' : 'Reply'}</button>
+          <button type="button" onclick={() => beginForward(current)}><Forward size={16} /> Forward</button>
+          <button type="button" onclick={() => onPin(current)}><Pin size={16} /> {current.pinned ? 'Unpin Message' : 'Pin Message'}</button>
+          {#if developerMode()}
+            <button type="button" onclick={() => copyText(current.id, 'message ID')}>Copy Message ID</button>
+            <button type="button" onclick={() => copyText(current.author?.id, 'user ID')}>Copy User ID</button>
+          {/if}
+          {#if ui.mode === 'chat'}
+            <button type="button" onclick={() => createThread(current)}><MessagesSquare size={16} /> Create Thread</button>
+          {/if}
+          <button type="button" onclick={() => { copyText(messageLink(current), 'message link'); menu = null; }}><Link size={16} /> Copy Message Link</button>
+          <button type="button" onclick={() => { markUnread(current); menu = null; }}><Mail size={16} /> Mark Unread</button>
+          {#if !menu.mine}
+            <button type="button" class="danger" onclick={() => { ui.dialog = { kind: 'user-report', user: current.author, message: current }; menu = null; }}><Flag size={16} /> Report Message</button>
+          {/if}
+        {/if}
+        {#if current && menu.mine}
+          <button type="button" class="danger" onclick={() => onDelete(current.id)}><Trash2 size={16} /> Delete Message</button>
+        {/if}
+      {/if}
+    </div>
+  </div>
+{:else if menu}
   {@const current = ui.messages.find((msg) => msg.id === menu.id)}
   <div class="msg-menu" style="left:{menu.x}px;top:{menu.y}px" onclick={(e) => e.stopPropagation()}>
-    <div class="menu-reacts">
-      {#each quickReacts as glyph}
-        <button type="button" onclick={() => current && onReact(current.id, glyph)}>{glyph}</button>
-      {/each}
-      <button type="button" title="More reactions" onclick={() => (menu = { ...menu, react: !menu.react })}><SmilePlus size={16} /></button>
-    </div>
     {#if current?.reactions?.length}
       <button type="button" onclick={() => openReactions(current)}><SmilePlus size={16} /> View Reactions</button>
     {/if}
