@@ -1,5 +1,5 @@
 <script>
-  import { MessageSquare, Check, X, Ban } from '@lucide/svelte';
+  import { MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import { ui, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
@@ -8,6 +8,14 @@
   let name = $state('');
   let people = $state([]);
   let finding = $state(false);
+  let moreId = $state('');
+
+  $effect(() => {
+    if (!moreId) return;
+    const close = () => { moreId = ''; };
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  });
 
   const list = $derived.by(() => {
     let rows = ui.friendsTab === 'blocked' ? ui.blocked : ui.friendsTab === 'suggested' ? ui.suggested : ui.friends;
@@ -152,7 +160,14 @@
           <span>{u.customStatus || (u.status === 'offline' ? 'Offline' : 'Online')}</span>
         </div>
         <button class="btn icon" title="Message" onclick={() => openDm(u)}><MessageSquare size={16} /></button>
-        <button class="btn icon" title="Block" onclick={() => friendAct('block', { userId: u.id })}><Ban size={16} /></button>
+        <button class="btn icon" title="More" onclick={(event) => { event.stopPropagation(); moreId = moreId === u.id ? '' : u.id; }}><MoreHorizontal size={16} /></button>
+        {#if moreId === u.id}
+          <div class="friend-menu" onclick={(event) => event.stopPropagation()}>
+            <button type="button" onclick={() => { moreId = ''; openPopout(u); }}>Profile</button>
+            <button type="button" class="danger" onclick={() => { moreId = ''; friendAct('remove', { userId: u.id }); }}>Remove friend</button>
+            <button type="button" class="danger" onclick={() => { moreId = ''; friendAct('block', { userId: u.id }); }}>Block</button>
+          </div>
+        {/if}
       </div>
     {/each}
     {#if !list.length}

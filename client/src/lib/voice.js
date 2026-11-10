@@ -17,7 +17,8 @@ let levelTimer = null;
 let audioCtx = null;
 let speaking = false;
 
-function bumpScreen() {
+function publishScreens() {
+  ui.screen = { at: Date.now(), local: !!localScreen, remote: !!remoteScreen };
   if (!ui.voice) return;
   ui.voice.sharing = !!screenStream;
   ui.voice.screenTick = Date.now();
@@ -29,6 +30,10 @@ function bumpScreen() {
       String(member.id) === String(ui.me.id) ? { ...member, sharing: !!screenStream } : member
     )),
   };
+}
+
+function bumpScreen() {
+  publishScreens();
 }
 
 function dropScreenTracks() {
@@ -69,6 +74,7 @@ function stopLocal() {
   stream = null;
   dropScreenTracks();
   remoteScreen = null;
+  publishScreens();
 }
 
 function closePeer(id) {
@@ -98,30 +104,31 @@ function ensurePeer(id) {
   let peer = peers.get(id);
   if (peer) return peer;
   const pc = new RTCPeerConnection({ iceServers: ICE });
-  if (stream) stream.getTracks().forEach((track) => pc.addTrack(track, stream));
-  if (screenStream) screenStream.getTracks().forEach((track) => pc.addTrack(track, screenStream));
+  if (stream) stream.getAudioTracks().forEach((track) => pc.addTrack(track, stream));
+  const video = pc.addTransceiver('video', { direction: 'sendrecv' });
+  const screenTrack = screenStream && screenStream.getVideoTracks()[0];
+  if (screenTrack) video.sender.replaceTrack(screenTrack).catch(() => {});
   pc.onicecandidate = (event) => {
     if (!event.candidate || !ui.voice) return;
     sendSignal(id, 'ice', event.candidate.toJSON()).catch(() => {});
   };
   pc.ontrack = (event) => {
     if (event.track && event.track.kind === 'video') {
-      let shown = false;
       const show = () => {
-        shown = true;
-        remoteScreen = (event.streams[0] && event.streams[0].getVideoTracks().some((track) => track.readyState === 'live' && !track.muted))
-          ? event.streams[0]
-          : new MediaStream([event.track]);
-        bumpScreen();
+        if (event.track.readyState === 'ended') return;
+        remoteScreen = new MediaStream([event.track]);
+        publishScreens();
       };
       const hide = () => {
         remoteScreen = null;
-        bumpScreen();
+        publishScreens();
       };
       event.track.onunmute = show;
-      event.track.onmute = () => { if (shown) hide(); };
+      event.track.onmute = () => {
+        setTimeout(() => { if (event.track.muted || event.track.readyState === 'ended') hide(); }, 500);
+      };
       event.track.onended = hide;
-      if (event.track.readyState === 'live' && !event.track.muted) show();
+      if (!event.track.muted) show();
       return;
     }
     const audio = new Audio();
@@ -217,7 +224,13 @@ async function renegotiate(id, attempt = 0) {
 }
 
 function videoSender(pc) {
-  return pc.getSenders().find((sender) => sender.track && sender.track.kind === 'video') || null;
+  const direct = pc.getSenders().find((sender) => sender.track && sender.track.kind === 'video');
+  if (direct) return direct;
+  const transceiver = (pc.getTransceivers?.() || []).find((item) => {
+    const kind = item.sender?.track?.kind || item.receiver?.track?.kind;
+    return kind === 'video';
+  });
+  return transceiver ? transceiver.sender : null;
 }
 
 async function postSharing(sharing) {
@@ -335,7 +348,7 @@ async function connectCall(channelId, name, person, callId) {
   };
   watchMic();
   try { await sync(); } catch (_) {}
-  poll = setInterval(() => { sync().catch(() => {}); }, 1000);
+  poll = setInterval(() => { sync().catch(() => {}); }, 700);
 }
 
 export async function startCall(user) {
@@ -441,7 +454,7 @@ export async function joinVoice(channel) {
   };
   watchMic();
   try { await sync(); } catch (_) {}
-  poll = setInterval(() => { sync().catch(() => {}); }, 1000);
+  poll = setInterval(() => { sync().catch(() => {}); }, 700);
 }
 
 export async function leaveVoice() {
@@ -501,12 +514,13 @@ export async function toggleShare() {
   const track = next.getVideoTracks()[0];
   if (track) track.onended = () => { toggleShare().catch(() => {}); };
   for (const [id, peer] of peers) {
-    const sender = videoSender(peer.pc);
-    if (sender && track) {
-      try { await sender.replaceTrack(track); } catch (_) {}
-    } else if (track) {
-      peer.pc.addTrack(track, next);
+    let sender = videoSender(peer.pc);
+    if (!sender) {
+      sender = peer.pc.addTransceiver('video', { direction: 'sendrecv' }).sender;
+      if (track) await sender.replaceTrack(track);
       await renegotiate(id);
+    } else if (track) {
+      try { await sender.replaceTrack(track); } catch (_) {}
     }
   }
   bumpScreen();
@@ -579,6 +593,12 @@ export async function refreshVoiceRooms() {
   return data;
 }
 
+export function pokeVoice() {
+  const jobs = [refreshVoiceRooms().catch(() => null)];
+  if (ui.voice) jobs.push(sync().catch(() => null));
+  return Promise.all(jobs);
+}
+
 export function isLive(userId) {
   if (!userId) return false;
   if (ui.voice && ui.voice.sharing && String(ui.me?.id) === String(userId)) return true;
@@ -589,11 +609,15 @@ export function isLive(userId) {
 }
 
 if (typeof window !== 'undefined') {
+  let lastRoomLook = 0;
   setInterval(() => {
     if (document.hidden || !ui.me) return;
     if (ui.mode !== 'chat' && ui.mode !== 'dm' && ui.mode !== 'group') return;
+    const busy = !!ui.voice || Object.values(ui.voiceRooms || {}).some((room) => (room || []).length);
+    if (!busy && Date.now() - lastRoomLook < 4000) return;
+    lastRoomLook = Date.now();
     refreshVoiceRooms().catch(() => {});
-  }, 4000);
+  }, 1000);
   window.addEventListener('pagehide', () => {
     const voice = ui.voice;
     if (!voice) return;

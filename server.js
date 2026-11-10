@@ -5880,6 +5880,7 @@ app.get('/api/health', (req, res) => {
       sharing: false,
       seen: Date.now(),
     });
+    touchAlerts();
     res.json({ ok: true, members: [...room.members.values()].map(present) });
   });
 
@@ -5887,6 +5888,7 @@ app.get('/api/health', (req, res) => {
     const serverId = String((req.body && req.body.serverId) || '');
     const room = rooms.get(key(serverId, req.params.channelId));
     if (room) room.members.delete(req.user.id);
+    touchAlerts();
     res.json({ ok: true });
   });
 
@@ -5898,7 +5900,10 @@ app.get('/api/health', (req, res) => {
     if (req.body.muted != null) member.muted = !!req.body.muted;
     if (req.body.deafened != null) member.deafened = !!req.body.deafened;
     if (req.body.speaking != null) member.speaking = !!req.body.speaking;
-    if (req.body.sharing != null) member.sharing = !!req.body.sharing;
+    if (req.body.sharing != null && !!member.sharing !== !!req.body.sharing) {
+      member.sharing = !!req.body.sharing;
+      touchAlerts();
+    }
     member.seen = Date.now();
     res.json({ ok: true });
   });

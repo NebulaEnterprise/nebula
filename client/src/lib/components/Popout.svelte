@@ -8,7 +8,6 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
-  import { isLive } from '../voice.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
@@ -92,7 +91,7 @@
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
-        <h3><Name user={u} />{#if isLive(u.id)}<em class="live-pill">LIVE</em>{/if}</h3>
+        <h3><Name user={u} /></h3>
         <p class="handle">
           <span>@{u.username}</span>
           {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}

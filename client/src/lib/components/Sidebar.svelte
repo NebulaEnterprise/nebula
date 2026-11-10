@@ -242,9 +242,6 @@
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
                 </button>
-                {#if (ui.voiceRooms[ch.id] || []).length && ui.voice?.channelId !== ch.id}
-                  <button class="join-voice" onclick={() => onVoice(ch)}>Join</button>
-                {/if}
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
                   <span class="row-actions">
                     <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>

@@ -833,7 +833,7 @@
 
   $effect(() => {
     const stream = remoteScreen || localScreen;
-    const tick = ui.voice?.screenTick;
+    const tick = ui.screen?.at;
     if (!streamPop || streamPop.closed || (tick == null && !stream)) return;
     paintPopout(streamPop, stream);
   });
@@ -941,33 +941,27 @@
     {#if muted}<button type="button" onclick={() => { muteRoom(muteKey, 0); bell = false; }}>Unmute</button>{/if}
   </div>
 {/if}
-{#if rejoinPeople.length}
-  <div class="rejoin-bar">
-    <span>{rejoinPeople.map((person) => person.displayName || person.username).join(', ')} {rejoinPeople.length === 1 ? 'is' : 'are'} in the call</span>
-    <button type="button" onclick={joinOpenCall}>Join call</button>
-  </div>
-{/if}
-{#if (ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')) || (ui.voice && (ui.mode === 'chat' || ui.mode === 'thread') && (remoteScreen || localScreen))}
-  <div class="call-stage" class:watching={remoteScreen || localScreen}>
-    {#if remoteScreen || localScreen}
+{#if (ui.voice?.serverId === 'call' && (ui.mode === 'dm' || ui.mode === 'group')) || (rejoinPeople.length && (ui.mode === 'dm' || ui.mode === 'group')) || (ui.voice && (ui.mode === 'chat' || ui.mode === 'thread') && (ui.screen?.local || ui.screen?.remote))}
+  <div class="call-stage" class:watching={ui.screen?.local || ui.screen?.remote}>
+    {#if ui.screen?.local || ui.screen?.remote}
       <div class="call-view">
         <div class="stream-tools">
           <button type="button" title="Full screen" onclick={(event) => fillScreen(event.currentTarget.closest('.call-view'))}><Maximize2 size={16} /></button>
           <button type="button" title="Pop out" onclick={popOutStream}><PictureInPicture2 size={16} /></button>
         </div>
-        {#key ui.voice.screenTick}
-          {#if remoteScreen}
+        {#key ui.screen?.at}
+          {#if ui.screen?.remote}
             <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
           {/if}
-          {#if localScreen}
-            <video class="call-pip" class:solo={!remoteScreen} autoplay playsinline muted use:attach={localScreen}></video>
+          {#if ui.screen?.local}
+            <video class="call-pip" class:solo={!ui.screen?.remote} autoplay playsinline muted use:attach={localScreen}></video>
           {/if}
         {/key}
       </div>
     {/if}
-    {#if ui.voice?.serverId === 'call'}
+    {#if ui.mode === 'dm' || ui.mode === 'group'}
     <div class="call-bubbles">
-      {#each callPeople as person (person.id)}
+      {#each (ui.voice?.serverId === 'call' ? callPeople : rejoinPeople) as person (person.id)}
         <div class="call-bubble" class:speaking={person.speaking}>
           <Avatar user={person} size={84} />
           <strong>{person.displayName || person.username || 'Call'}</strong>
@@ -975,16 +969,20 @@
       {/each}
     </div>
     <div class="call-controls">
-      <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
-        {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
-      </button>
-      <button type="button" class:on={ui.voice.deafened} title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
-        {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
-      </button>
-      <button type="button" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
-        <Monitor size={18} />
-      </button>
-      <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
+      {#if ui.voice?.serverId === 'call'}
+        <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
+          {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
+        </button>
+        <button type="button" class:on={ui.voice.deafened} title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
+          {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
+        </button>
+        <button type="button" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
+          <Monitor size={18} />
+        </button>
+        <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
+      {:else}
+        <button type="button" class="join-back" title="Join call" onclick={joinOpenCall}><Phone size={18} /></button>
+      {/if}
     </div>
     {/if}
   </div>

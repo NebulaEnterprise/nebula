@@ -76,6 +76,7 @@ export const ui = $state({
   typers: [],
   voice: null,
   voiceRooms: {},
+  screen: null,
   incomingCall: null,
   outgoingCall: null,
   missedCalls: [],
@@ -2194,6 +2195,7 @@ async function watchAlerts() {
       if (changed) {
         await pollActivity();
         await loadDms();
+        import('./voice.js').then((mod) => mod.pokeVoice()).catch(() => {});
       }
       await noteReports(changed || !localStorage.getItem('nebula-report-seen:' + (ui.me && ui.me.id)));
     } catch (err) {
