@@ -1,7 +1,7 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport } from '../state.svelte.js';
-  import { seenPhrase } from '../seen.js';
+  import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import ColorBox from './ColorBox.svelte';
@@ -835,7 +835,7 @@
                 <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
               </section>
               <section class="profile-panel">
-                <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{seenPhrase(ui.me, nowClock.t)}</strong></div>
+                <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(ui.me, nowClock.t)}</strong></div>
                 <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[form.status] || statusColor.offline}"></i>{statusName[form.status] || 'Offline'}</strong></div>
               </section>
               <div class="pop-meta">

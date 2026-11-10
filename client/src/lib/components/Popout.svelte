@@ -8,7 +8,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
-  import { seenPhrase } from '../seen.js';
+  import { profileSeen } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
@@ -110,7 +110,7 @@
         <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
       </section>
       <section class="profile-panel">
-        <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{seenPhrase(u, nowClock.t)}</strong></div>
+        <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(u, nowClock.t)}</strong></div>
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
       {#if rel === 'incoming' || rel === 'outgoing'}

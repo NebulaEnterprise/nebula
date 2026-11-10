@@ -6,6 +6,28 @@ export function presenceDot(user, now = Date.now()) {
   return 'offline';
 }
 
+function seenAt(user) {
+  const raw = user && user.lastSeen;
+  if (raw == null || raw === '') return 0;
+  const n = Number(raw);
+  if (n > 0) return n;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+export function profileSeen(user, now = Date.now()) {
+  if (!user) return '—';
+  const hidden = user.seen === 'recent' || user.seen === 'week' || user.seen === 'month' || user.seen === 'long';
+  const at = seenAt(user);
+  if (!hidden && at) {
+    const d = new Date(at);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+  }
+  return seenPhrase(user, now);
+}
+
 export function seenPhrase(user, now = Date.now()) {
   if (!user) return '';
   const dot = presenceDot(user, now);

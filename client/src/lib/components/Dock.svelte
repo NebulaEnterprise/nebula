@@ -10,7 +10,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
-  import { seenPhrase } from '../seen.js';
+  import { profileSeen } from '../seen.js';
   import { api, uploadFile, fileUrl } from '../api.js';
 
   let pins = $state([]);
@@ -334,7 +334,7 @@
             <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns || '—'}</strong></div>
           </section>
           <section class="profile-panel">
-            <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{seenPhrase(person, nowClock.t)}</strong></div>
+            <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(person, nowClock.t)}</strong></div>
             <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[person.status] || statusColor.offline}"></i>{statusName[person.status] || 'Offline'}</strong></div>
           </section>
           <div class="pop-meta">
