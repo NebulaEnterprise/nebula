@@ -794,6 +794,48 @@
     }
     return '';
   });
+  let callDrag = $state({ x: 0, y: 0 });
+  let callDragging = $state(false);
+  let callDragFor = '';
+
+  $effect(() => {
+    const id = String(ui.incomingCall?.id || '');
+    if (id === callDragFor) return;
+    callDragFor = id;
+    callDrag = { x: 0, y: 0 };
+  });
+
+  function dragCall(event) {
+    if (event.button !== 0 || event.target.closest('button')) return;
+    const box = event.currentTarget;
+    const parent = box.offsetParent;
+    if (!parent) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = callDrag.x;
+    const originY = callDrag.y;
+    callDragging = true;
+    const move = (e) => {
+      const bounds = parent.getBoundingClientRect();
+      const width = box.offsetWidth;
+      const height = box.offsetHeight;
+      const baseLeft = bounds.width / 2 - width / 2;
+      const baseTop = 64;
+      let x = originX + e.clientX - startX;
+      let y = originY + e.clientY - startY;
+      x = Math.min(bounds.width - width - 8 - baseLeft, Math.max(8 - baseLeft, x));
+      y = Math.min(bounds.height - height - 8 - baseTop, Math.max(8 - baseTop, y));
+      callDrag = { x, y };
+    };
+    const up = () => {
+      callDragging = false;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
   let streamPop = null;
   let gearOpen = $state(false);
   const serverVoice = $derived(!!(ui.voice && ui.voice.serverId !== 'call'));
@@ -968,7 +1010,7 @@
 <div class="chat-frame">
 <div class="chat-col" class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 {#if showIncoming}
-  <div class="incoming-call" role="dialog" aria-label="Incoming call">
+  <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
     <Avatar user={ui.incomingCall.from} size={80} />
     <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'}</strong>
     <span>Incoming Call...</span>
