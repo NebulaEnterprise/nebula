@@ -1968,7 +1968,7 @@ function announceFresh(list, roomKey) {
   roomHeard[roomKey] = newest.id;
 }
 
-function mentionsMessage(msg) {
+export function mentionsMessage(msg) {
   const mentions = msg && msg.mentions;
   const text = String(msg && msg.content || '');
   if (/(^|\s)@everyone(?![\w.])/i.test(text) && (!mentions || mentions.everyone)) return true;

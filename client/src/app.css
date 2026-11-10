@@ -466,6 +466,20 @@ img { max-width: 100%; }
 .msg:hover { background: rgba(255,255,255,0.025); }
 .msg.picked { background: rgba(124, 106, 247, 0.14); }
 .msg.flash { background: rgba(250, 168, 26, 0.16); }
+.msg.mentioned { background: rgba(240, 178, 50, 0.12); }
+.msg.mentioned:hover { background: rgba(240, 178, 50, 0.18); }
+.msg.mentioned::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #f0b232;
+  border-radius: 2px;
+}
+.msg.mentioned .mention { color: #ffe7a3; background: rgba(240, 178, 50, 0.28); }
+.msg.mentioned.picked { background: rgba(124, 106, 247, 0.14); }
 .msg-av { grid-column: 1; grid-row: 1; padding: 2px 0 0; border-radius: 50%; line-height: 0; }
 .msg-body { grid-column: 2; grid-row: 1; min-width: 0; padding-top: 2px; }
 .msg.many { row-gap: 0; padding-top: 1px; }
