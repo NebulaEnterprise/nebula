@@ -15,7 +15,7 @@
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -435,7 +435,7 @@
       </div>
     </button>
     <div class="me-tools">
-      <button class="btn icon inbox-btn" title="Inbox" onclick={(e) => { e.stopPropagation(); accountOpen = false; ui.inboxOpen = !ui.inboxOpen; }}>
+      <button class="btn icon inbox-btn" title="Inbox" onclick={(e) => { e.stopPropagation(); accountOpen = false; ui.inboxOpen = !ui.inboxOpen; if (ui.inboxOpen) pollActivity(); }}>
         <InboxIcon size={15} />
         {#if inboxBadge}<em class="inbox-badge">{countLabel(inboxBadge)}</em>{/if}
       </button>

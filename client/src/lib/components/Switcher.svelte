@@ -1,5 +1,8 @@
 <script>
-  import { ui, openDm, openGroup, openServer, pickChannel, showFriends, logout } from '../state.svelte.js';
+  import { onMount } from 'svelte';
+  import { ui, openDm, openGroup, openServer, pickChannel, showFriends, logout, loadGroups } from '../state.svelte.js';
+
+  onMount(() => { loadGroups(); });
 
   let q = $state('');
   let cursor = $state(0);

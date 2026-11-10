@@ -645,7 +645,16 @@ export async function loadDms() {
   } catch (_) {}
 }
 
+function onDmSide() {
+  return ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'dm' || ui.mode === 'group' || !!ui.quickOpen;
+}
+
+function refreshVoiceList() {
+  import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
+}
+
 export function showFriends(tab) {
+  const entering = !onDmSide();
   leaveChat();
   ui.readHold = '';
   ui.mode = 'friends';
@@ -658,13 +667,23 @@ export function showFriends(tab) {
   applyTheme();
   loadFriends();
   loadDms();
+  if (entering) {
+    loadGroups();
+    refreshVoiceList();
+  }
 }
 
 export function showAddFriend() {
+  const entering = !onDmSide();
   leaveChat();
   ui.mode = 'add';
   ui.dmUser = null;
   applyTheme();
+  if (entering) {
+    loadDms();
+    loadGroups();
+    refreshVoiceList();
+  }
 }
 
 export function openQuick(user) {
@@ -685,6 +704,7 @@ export function closeQuick() {
 }
 
 export async function openDm(user) {
+  const entering = !onDmSide();
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
@@ -719,10 +739,16 @@ export async function openDm(user) {
   }
   dropLive();
   await loadMessages();
+  if (entering) {
+    loadDms();
+    loadGroups();
+    refreshVoiceList();
+  }
 }
 
 export async function openGroup(group) {
   if (!group || !group.id) return;
+  const entering = !onDmSide();
   ui.readHold = '';
   const prev = currentRoom();
   const same = ui.mode === 'group' && ui.group && String(ui.group.id) === String(group.id);
@@ -744,6 +770,11 @@ export async function openGroup(group) {
   }
   dropLive();
   await loadMessages();
+  if (entering) {
+    loadGroups();
+    loadDms();
+    refreshVoiceList();
+  }
 }
 
 export async function openThread(thread) {
@@ -2054,7 +2085,7 @@ function sameNotes(prev, next) {
   });
 }
 
-async function pollActivity() {
+export async function pollActivity() {
   if (activityMissing) return;
   const serial = ++activitySerial;
   try {
@@ -2176,12 +2207,7 @@ function startPresence() {
 function startClocks() {
   if (clocksStarted) return;
   clocksStarted = true;
-  const watchInbox = () => {
-    if (document.hidden || !localStorage.getItem('dc_token')) return;
-    pollActivity().then(() => { loadDms(); loadGroups(); });
-  };
-  setInterval(watchInbox, 15000);
-  watchInbox();
+  pollActivity();
   watchAlerts();
   loadPacks();
 }
@@ -2202,12 +2228,15 @@ async function watchAlerts() {
       const next = String(data.cursor || '');
       const changed = !!alertCursor && next !== alertCursor;
       alertCursor = next;
-      if (changed) {
-        if (voiceMod && !data.voice) voiceMod.pokeVoice();
+      if (changed && voiceMod && ui.voice) voiceMod.syncCall();
+      if (changed && !document.hidden) {
+        if (voiceMod && !ui.voice && !data.voice && (ui.mode === 'chat' || onDmSide())) voiceMod.refreshVoiceRooms();
         await pollActivity();
-        await loadDms();
+        if (onDmSide()) {
+          loadDms();
+          loadGroups();
+        }
       }
-      await noteReports(changed || !localStorage.getItem('nebula-report-seen:' + (ui.me && ui.me.id)));
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;
       else await sleep(1500);

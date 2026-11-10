@@ -746,9 +746,15 @@ export function applyVoiceSnapshot(snap) {
   ui.voiceRooms = next;
 }
 
+export function syncCall() {
+  if (!ui.voice) return Promise.resolve();
+  return sync().catch(() => null);
+}
+
 export async function refreshVoiceRooms() {
   const ticket = ++roomTicket;
-  if (ui.mode === 'dm' || ui.mode === 'group') {
+  const dmSide = ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'friends' || ui.mode === 'add';
+  if (dmSide) {
     const data = await api('/api/voice/overview?serverId=call');
     if (ticket !== roomTicket || !newerRev(data.rev)) return data;
     const next = { ...ui.voiceRooms };
@@ -794,7 +800,6 @@ export function isLive(userId) {
 }
 
 if (typeof window !== 'undefined') {
-  let lastRoomLook = 0;
   setInterval(() => {
     if (!ui.voice || !ui.me) {
       aloneSince = 0;
@@ -812,14 +817,6 @@ if (typeof window !== 'undefined') {
     toast('The call ended after 3 minutes alone');
     leaveVoice();
   }, 5000);
-  setInterval(() => {
-    if (document.hidden || !ui.me) return;
-    if (ui.mode !== 'chat' && ui.mode !== 'dm' && ui.mode !== 'group') return;
-    const busy = !!ui.voice || Object.values(ui.voiceRooms || {}).some((room) => (room || []).length);
-    if (!busy && Date.now() - lastRoomLook < 4000) return;
-    lastRoomLook = Date.now();
-    refreshVoiceRooms().catch(() => {});
-  }, 500);
   window.addEventListener('pagehide', () => {
     if (ui.voice) postLeave(ui.voice);
   });
