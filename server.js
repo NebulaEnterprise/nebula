@@ -3501,15 +3501,9 @@ function saveCalls() {
 
 function expireCalls() {
   const now = Date.now();
-  let changed = false;
   for (const row of callLog) {
-    if (row.status === 'ringing' && now - row.at > 45000) {
-      row.status = 'missed';
-      row.endedAt = now;
-      changed = true;
-    }
+    if (row.status === 'ringing' && now - Number(row.at) > 22000) finishCall(row, true);
   }
-  if (changed) saveCalls();
 }
 
 function callsFor(userId) {
@@ -3527,15 +3521,19 @@ function finishCall(row, missed) {
   const seconds = wasActive ? Math.max(1, Math.round((Date.now() - (Number(row.answeredAt) || Date.now())) / 1000)) : 0;
   row.status = row.status === 'ringing' && missed ? 'missed' : 'ended';
   row.endedAt = Date.now();
-  if (seconds && row.messageId && row.channelId && Array.isArray(messages[row.channelId])) {
+  if (row.messageId && row.channelId && Array.isArray(messages[row.channelId])) {
     const list = messages[row.channelId];
     const idx = list.findIndex((msg) => msg && msg.id === row.messageId);
     if (idx >= 0) {
       const msg = list[idx];
-      msg.callSeconds = seconds;
-      msg.createdAt = new Date().toISOString();
-      list.splice(idx, 1);
-      list.push(msg);
+      if (seconds) {
+        msg.callSeconds = seconds;
+        msg.createdAt = new Date().toISOString();
+        list.splice(idx, 1);
+        list.push(msg);
+      } else if (row.status === 'missed') {
+        msg.callMissed = true;
+      }
       save(MESSAGES_FILE, messages);
       wakePulse(row.channelId);
     }
@@ -3543,6 +3541,10 @@ function finishCall(row, missed) {
   saveCalls();
   touchAlerts();
 }
+
+setInterval(() => {
+  try { expireCalls(); } catch (_) {}
+}, 2000);
 
 app.post('/api/activity', auth, (req, res) => {
   ensureGuilds();
@@ -3678,11 +3680,17 @@ app.post('/api/calls/:id/decline', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+function dropVoiceNow(userId) {
+  const drop = app.locals.dropVoiceUser;
+  if (typeof drop === 'function') drop(userId);
+}
+
 app.post('/api/calls/:id/end', auth, (req, res) => {
   const row = callLog.find((item) => item.id === req.params.id);
   if (!row) return res.status(404).json({ error: 'Call not found' });
   const mine = String(row.from) === String(req.user.id) || String(row.to) === String(req.user.id);
   if (!mine) return res.status(404).json({ error: 'Call not found' });
+  dropVoiceNow(req.user.id);
   if (row.status === 'active') finishCall(row, false);
   else if (row.status === 'ringing' && String(row.from) === String(req.user.id)) finishCall(row, true);
   res.json({ ok: true });
@@ -3691,6 +3699,7 @@ app.post('/api/calls/:id/end', auth, (req, res) => {
 app.post('/api/calls/:id/cancel', auth, (req, res) => {
   const row = callLog.find((item) => item.id === req.params.id);
   if (!row || String(row.from) !== String(req.user.id)) return res.status(404).json({ error: 'Call not found' });
+  dropVoiceNow(req.user.id);
   finishCall(row, !(req.body && req.body.drop));
   res.json({ ok: true });
 });
@@ -4286,7 +4295,10 @@ app.get('/api/alert', auth, (req, res) => {
       settled = true;
       clearTimeout(timer);
       pulseWaiters.delete(waiter);
-      if (!res.writableEnded) res.json({ ok: true, cursor: String(alertRev) });
+      if (!res.writableEnded) {
+        const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(req.user) : null;
+        res.json({ ok: true, cursor: String(alertRev), voice });
+      }
     }
     const timer = setTimeout(finish, 25000);
     pulseWaiters.add(waiter);
@@ -4298,7 +4310,8 @@ app.get('/api/alert', auth, (req, res) => {
     });
     return;
   }
-  res.json({ ok: true, cursor: current });
+  const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(req.user) : null;
+  res.json({ ok: true, cursor: current, voice });
 });
 
 app.get('/api/pulse', auth, (req, res) => {
@@ -5773,10 +5786,16 @@ app.get('/api/health', (req, res) => {
     return rooms.get(id);
   }
 
+  let voiceRev = 1;
+  function bumpVoice() {
+    voiceRev += 1;
+    touchAlerts();
+  }
+
   function prune(room) {
     const now = Date.now();
     for (const [id, member] of room.members) {
-      if (now - member.seen > 20000) room.members.delete(id);
+      if (now - member.seen > 8000) room.members.delete(id);
     }
     room.signals = room.signals.filter((signal) => now - signal.at < 20000);
   }
@@ -5832,47 +5851,129 @@ app.get('/api/health', (req, res) => {
     return found;
   }
 
+  function noteCrowd(room) {
+    if (!room) return;
+    if (room.members.size === 1) {
+      if (!room.aloneSince) room.aloneSince = Date.now();
+    } else room.aloneSince = 0;
+  }
+
   function dropUser(userId, exceptKey) {
     for (const [id, room] of rooms) {
       if (id === exceptKey) continue;
-      room.members.delete(userId);
+      if (room.members.delete(userId)) noteCrowd(room);
     }
   }
 
-  app.get('/api/voice/overview', auth, (req, res) => {
-    const serverId = String(req.query.serverId || '');
-    if (serverId === 'call') {
-      const out = {};
-      for (const [id, room] of rooms) {
-        const split = id.split('\n');
-        if (split[0] !== 'call' || !split[1]) continue;
-        const channelId = split[1];
-        const allowed = channelId.startsWith('dm:')
-          ? channelId.slice(3).split(':').map(String).includes(String(req.user.id))
-          : channelId.startsWith('group:')
-            ? !!((groups[channelId.slice(6)] || {}).memberIds || []).map(String).includes(String(req.user.id))
-            : false;
-        if (!allowed) continue;
-        prune(room);
-        if (!room.members.size) continue;
-        out[channelId] = [...room.members.values()].map(present);
+  function dropVoiceUser(userId) {
+    const id = String(userId || '');
+    if (!id) return false;
+    let changed = false;
+    for (const room of rooms.values()) {
+      if (room.members.delete(id)) {
+        changed = true;
+        noteCrowd(room);
       }
-      return res.json({ ok: true, rooms: out });
     }
-    const guild = guilds.servers[serverId];
-    if (!guild || !guild.members || !guild.members[req.user.id]) {
-      return res.status(403).json({ error: 'You are not in this server' });
+    if (changed) bumpVoice();
+    return changed;
+  }
+
+  function finishSittingCall(channelId) {
+    for (const row of callLog) {
+      if (row.channelId !== channelId) continue;
+      if (row.status === 'active') finishCall(row, false);
+      else if (row.status === 'ringing') finishCall(row, true);
     }
+  }
+
+  function sweepAlone() {
+    const now = Date.now();
+    const ended = [];
+    let changed = false;
+    for (const [id, room] of rooms) {
+      const before = room.members.size;
+      prune(room);
+      if (room.members.size !== before) changed = true;
+      noteCrowd(room);
+      const split = id.split('\n');
+      const callChannel = split[0] === 'call' ? split[1] : '';
+      if (before > 0 && !room.members.size) {
+        if (callChannel) ended.push(callChannel);
+        continue;
+      }
+      if (room.members.size !== 1 || !room.aloneSince || now - room.aloneSince < 3 * 60 * 1000) continue;
+      room.members.clear();
+      room.aloneSince = 0;
+      changed = true;
+      if (callChannel) ended.push(callChannel);
+    }
+    for (const channelId of ended) finishSittingCall(channelId);
+    if (changed) bumpVoice();
+  }
+
+  setInterval(() => {
+    try { sweepAlone(); } catch (_) {}
+  }, 5000);
+
+  function allowedCall(user, channelId) {
+    if (channelId.startsWith('dm:')) return channelId.slice(3).split(':').map(String).includes(String(user.id));
+    if (channelId.startsWith('group:')) return !!((groups[channelId.slice(6)] || {}).memberIds || []).map(String).includes(String(user.id));
+    return false;
+  }
+
+  function callRoomsFor(user) {
     const out = {};
+    for (const [id, room] of rooms) {
+      const split = id.split('\n');
+      if (split[0] !== 'call' || !split[1]) continue;
+      if (!allowedCall(user, split[1])) continue;
+      prune(room);
+      if (!room.members.size) continue;
+      out[split[1]] = [...room.members.values()].map(present);
+    }
+    return out;
+  }
+
+  function guildRoomsFor(user, guild) {
+    const out = {};
+    if (!guild || !guild.members || !guild.members[user.id]) return out;
     for (const channel of guild.channels || []) {
       if (channel.type !== 'voice') continue;
-      const room = rooms.get(key(serverId, channel.id));
+      const room = rooms.get(key(guild.id, channel.id));
       if (!room) continue;
       prune(room);
       if (!room.members.size) continue;
       out[channel.id] = [...room.members.values()].map(present);
     }
-    res.json({ ok: true, rooms: out });
+    return out;
+  }
+
+  app.locals.dropVoiceUser = dropVoiceUser;
+  app.locals.voiceSnapshot = (user) => {
+    const servers = {};
+    for (const guild of Object.values(guilds.servers || {})) {
+      const listed = guildRoomsFor(user, guild);
+      if (Object.keys(listed).length) servers[guild.id] = listed;
+    }
+    return { rev: voiceRev, call: callRoomsFor(user), servers };
+  };
+
+  app.post('/api/voice/leave', auth, (req, res) => {
+    dropVoiceUser(req.user.id);
+    res.json({ ok: true, rev: voiceRev });
+  });
+
+  app.get('/api/voice/overview', auth, (req, res) => {
+    const serverId = String(req.query.serverId || '');
+    if (serverId === 'call') {
+      return res.json({ ok: true, rev: voiceRev, rooms: callRoomsFor(req.user) });
+    }
+    const guild = guilds.servers[serverId];
+    if (!guild || !guild.members || !guild.members[req.user.id]) {
+      return res.status(403).json({ error: 'You are not in this server' });
+    }
+    res.json({ ok: true, rev: voiceRev, rooms: guildRoomsFor(req.user, guild) });
   });
 
   app.post('/api/voice/:channelId/join', auth, (req, res) => {
@@ -5891,16 +5992,14 @@ app.get('/api/health', (req, res) => {
       watching: false,
       seen: Date.now(),
     });
-    touchAlerts();
-    res.json({ ok: true, members: [...room.members.values()].map(present) });
+    noteCrowd(room);
+    bumpVoice();
+    res.json({ ok: true, rev: voiceRev, members: [...room.members.values()].map(present) });
   });
 
   app.post('/api/voice/:channelId/leave', auth, (req, res) => {
-    const serverId = String((req.body && req.body.serverId) || '');
-    const room = rooms.get(key(serverId, req.params.channelId));
-    if (room) room.members.delete(req.user.id);
-    touchAlerts();
-    res.json({ ok: true });
+    dropVoiceUser(req.user.id);
+    res.json({ ok: true, rev: voiceRev });
   });
 
   app.post('/api/voice/:channelId/state', auth, (req, res) => {
@@ -5913,7 +6012,7 @@ app.get('/api/health', (req, res) => {
     if (req.body.speaking != null) member.speaking = !!req.body.speaking;
     if (req.body.sharing != null && !!member.sharing !== !!req.body.sharing) {
       member.sharing = !!req.body.sharing;
-      touchAlerts();
+      bumpVoice();
     }
     if (req.body.watching != null) member.watching = !!req.body.watching;
     member.seen = Date.now();
@@ -5951,6 +6050,7 @@ app.get('/api/health', (req, res) => {
     room.signals = room.signals.filter((signal) => signal.to !== req.user.id);
     res.json({
       ok: true,
+      rev: voiceRev,
       joined: !!member,
       members: [...room.members.values()].map(present),
       signals: mine.map((signal) => ({ from: signal.from, kind: signal.kind, payload: signal.payload })),

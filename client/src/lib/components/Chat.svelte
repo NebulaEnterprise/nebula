@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
-  import { startCall, joinOpenCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen } from '../voice.js';
+  import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, PERM } from '../format.js';
   import { fileUrl, api } from '../api.js';
@@ -778,14 +778,36 @@
     if (!callRoomId || (ui.voice && ui.voice.channelId === callRoomId)) return [];
     return (ui.voiceRooms[callRoomId] || []).filter((person) => String(person.id) !== String(ui.me?.id));
   });
+  const showIncoming = $derived.by(() => {
+    const call = ui.incomingCall;
+    if (!call?.from) return false;
+    const fromId = String(call.from.id || '');
+    if (ui.mode === 'chat' || ui.mode === 'thread' || ui.mode === 'group') return true;
+    if (ui.mode === 'dm') return String(ui.dmUser?.id || '') !== fromId;
+    return false;
+  });
+  const liveCallMessage = $derived.by(() => {
+    if (ui.mode !== 'dm' || !partnerInCall(ui.dmUser)) return '';
+    for (let i = ui.messages.length - 1; i >= 0; i -= 1) {
+      const msg = ui.messages[i];
+      if (msg?.kind === 'call' && !msg.callSeconds && !msg.callMissed) return msg.id;
+    }
+    return '';
+  });
   let streamPop = null;
   let gearOpen = $state(false);
   const serverVoice = $derived(!!(ui.voice && ui.voice.serverId !== 'call'));
   const streamLive = $derived(!!(ui.screen?.local || ui.screen?.remote));
+  const mineStream = $derived(!!(ui.voice?.sharing || ui.screen?.local));
   const wideOpen = $derived(serverVoice && ui.streamUi?.view === 'wide');
-  const dmBoard = $derived((ui.mode === 'dm' || ui.mode === 'group') && ((ui.voice?.serverId === 'call') || rejoinPeople.length > 0));
+  const dmBoard = $derived((ui.mode === 'dm' || ui.mode === 'group') && ui.streamUi?.view !== 'mini' && ((ui.voice?.serverId === 'call') || rejoinPeople.length > 0));
   const showBoard = $derived(dmBoard || wideOpen);
-  const miniOpen = $derived(!!ui.voice && streamLive && ui.streamUi?.view === 'mini' && !showBoard);
+  const remoteSharer = $derived.by(() => {
+    if (mineStream) return null;
+    const room = ui.voiceRooms[ui.voice?.channelId || callRoomId] || [];
+    return room.find((person) => person.sharing && String(person.id) !== String(ui.me?.id)) || null;
+  });
+  const miniOpen = $derived(!!ui.voice && ui.streamUi?.view === 'mini' && !showBoard && (streamLive || !!remoteSharer || !!mineStream));
   const boardPeople = $derived(ui.voice?.serverId === 'call' ? callPeople : (dmBoard ? rejoinPeople : (ui.voiceRooms[ui.voice?.channelId] || [])));
   const sharer = $derived.by(() => {
     if (ui.voice?.sharing || ui.screen?.local) return ui.me;
@@ -797,22 +819,22 @@
     const host = sharer?.id;
     return room.filter((person) => person.watching && String(person.id) !== String(host)).length;
   });
-  const mineStream = $derived(!!(ui.voice?.sharing || ui.screen?.local));
 
   function setStream(patch) {
     ui.streamUi = { ...ui.streamUi, ...patch };
   }
 
   function watchStream() {
+    const wide = !!(ui.voice && ui.voice.serverId !== 'call');
     if (!ui.voice) {
-      joinOpenCall().then(() => setStream({ watching: true, view: 'wide' }));
+      joinOpenCall().then(() => setStream({ watching: true, view: 'auto', hideChat: false }));
       return;
     }
-    setStream({ watching: true, view: serverVoice ? 'wide' : ui.streamUi.view });
+    setStream({ watching: true, view: wide ? 'wide' : 'auto', hideChat: wide ? true : !!ui.streamUi?.hideChat });
   }
 
   function dockStream() {
-    setStream({ view: 'mini', watching: true });
+    setStream({ view: 'mini', watching: true, hideChat: false });
   }
 
   function stopWatching() {
@@ -821,18 +843,30 @@
   }
 
   function openWide() {
-    setStream({ view: 'wide', watching: true });
+    setStream({ view: 'wide', watching: true, hideChat: true });
+  }
+
+  function toggleChat() {
+    const hidden = !!ui.streamUi?.hideChat;
+    const live = !!(remoteSharer || mineStream || streamLive);
+    if (serverVoice) {
+      if (hidden) setStream({ hideChat: false, view: live ? 'mini' : 'auto', watching: live });
+      else setStream({ hideChat: true, view: 'wide' });
+      return;
+    }
+    if (hidden) setStream({ hideChat: false, view: live && ui.streamUi?.watching ? 'mini' : 'auto' });
+    else setStream({ hideChat: true, view: 'auto' });
   }
 
   $effect(() => {
-    const on = !!(ui.voice && streamLive && ui.streamUi?.view !== 'off' && (ui.streamUi?.view === 'mini' || ui.streamUi?.view === 'wide' || ui.streamUi?.watching));
+    const on = !!(ui.voice && (streamLive || ui.streamUi?.watching) && ui.streamUi?.view !== 'off' && (ui.streamUi?.view === 'mini' || ui.streamUi?.view === 'wide' || ui.streamUi?.watching));
     setWatching(on);
   });
 
   $effect(() => {
     if (!ui.voice) return;
-    if (!streamLive && ui.streamUi?.view === 'mini') setStream({ view: 'auto', watching: false });
-    else if (streamLive && ui.streamUi?.view === 'auto' && !dmBoard) setStream({ view: 'mini', watching: true });
+    const sharing = !!(ui.voice.sharing || remoteSharer || streamLive);
+    if (!sharing && ui.streamUi?.view === 'mini') setStream({ view: 'auto', watching: false });
   });
 
   function streamTitle() {
@@ -933,6 +967,17 @@
 
 <div class="chat-frame">
 <div class="chat-col" class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
+{#if showIncoming}
+  <div class="incoming-call" role="dialog" aria-label="Incoming call">
+    <Avatar user={ui.incomingCall.from} size={80} />
+    <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'}</strong>
+    <span>Incoming Call...</span>
+    <div class="incoming-actions">
+      <button type="button" class="decline" title="Decline" onclick={declineCall}><X size={18} /></button>
+      <button type="button" class="accept" title="Accept" onclick={answerCall}><Phone size={18} /></button>
+    </div>
+  </div>
+{/if}
 <div class="top">
   {#if ui.mode === 'thread'}
     <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
@@ -940,7 +985,9 @@
     <Hash size={18} />
   {/if}
   <h2>{titleName}</h2>
-  {#if ui.mode === 'dm'}
+  {#if ui.mode === 'dm' && partnerInCall(ui.dmUser)}
+    <span class="in-call"><Phone size={14} /> In a call</span>
+  {:else if ui.mode === 'dm'}
     <span class="status-word {ui.dmUser?.status || 'offline'}">{statusLabel}</span>
   {:else if ui.mode === 'group'}
     <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
@@ -1003,13 +1050,13 @@
   </div>
 {/if}
 {#if showBoard}
-  <div class="call-board" class:wide={wideOpen}>
+  <div class="call-board" class:wide={wideOpen || (showBoard && ui.streamUi?.hideChat)} class:focus={!!(remoteSharer || mineStream)}>
     <div class="call-tiles">
-      {#if streamLive && !mineStream && !ui.streamUi?.watching}
+      {#if remoteSharer && !ui.streamUi?.watching}
         <button type="button" class="watch-tile" onclick={watchStream}>Watch Stream</button>
       {/if}
-      {#if streamLive && (mineStream || ui.streamUi?.watching)}
-        <div class="stream-tile" class:main={ui.streamUi?.watching} onclick={() => (wideOpen ? dockStream() : setStream({ watching: true }))}>
+      {#if mineStream || (ui.streamUi?.watching && (streamLive || remoteSharer))}
+        <div class="stream-tile" class:main={!!ui.streamUi?.watching} onclick={() => (wideOpen ? dockStream() : setStream({ watching: true }))}>
           {#key ui.screen?.at}
             {#if ui.screen?.remote && !mineStream}
               <video class="call-video" autoplay playsinline use:attach={remoteScreen}></video>
@@ -1027,12 +1074,14 @@
           {#if mineStream}<em class="watch-count"><Eye size={14} /> {watcherCount}</em>{/if}
         </div>
       {/if}
-      {#each boardPeople as person (person.id)}
-        <div class="person-tile" class:speaking={person.speaking}>
-          <Avatar user={person} size={72} />
-          <span>{person.displayName || person.username}</span>
-        </div>
-      {/each}
+      <div class="call-people">
+        {#each boardPeople as person (person.id)}
+          <div class="person-tile" class:speaking={person.speaking}>
+            <Avatar user={person} size={72} />
+            <span>{person.displayName || person.username}</span>
+          </div>
+        {/each}
+      </div>
     </div>
     <div class="call-controls">
       {#if ui.voice?.serverId === 'call'}
@@ -1050,7 +1099,7 @@
         <button type="button" class="join-cam" title="Join call" onclick={joinOpenCall}><Video size={18} /></button>
         <button type="button" class="join-back" title="Join call" onclick={joinOpenCall}><Phone size={18} /></button>
       {/if}
-      <button type="button" class="hide-chat" onclick={() => setStream({ hideChat: !ui.streamUi.hideChat })}>{ui.streamUi?.hideChat ? 'Show chat' : 'Hide chat'}</button>
+      <button type="button" class="hide-chat" onclick={toggleChat}>{ui.streamUi?.hideChat ? 'Show chat' : 'Hide chat'}</button>
     </div>
   </div>
 {/if}
@@ -1077,7 +1126,16 @@
     {#if msg.kind === 'call'}
       <div class="call-note">
         <Phone size={16} />
-        <span><Name user={liveAuthor(msg.author)} /> started a call{msg.callSeconds ? ' that lasted ' + callLength(msg.callSeconds) : ''}.</span>
+        <span>
+          {#if msg.callMissed && String(msg.authorId) !== String(ui.me?.id)}
+            You missed a call from <Name user={liveAuthor(msg.author)} />.
+          {:else if msg.callMissed}
+            Your call wasn't answered.
+          {:else}
+            <Name user={liveAuthor(msg.author)} /> started a call{msg.callSeconds ? ' that lasted ' + callLength(msg.callSeconds) : ''}.
+            {#if msg.id === liveCallMessage}<button type="button" class="join-link" onclick={joinOpenCall}>Join the call</button>{/if}
+          {/if}
+        </span>
         <time>{time(msg.createdAt)}</time>
       </div>
     {:else}

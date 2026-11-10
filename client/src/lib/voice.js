@@ -18,6 +18,44 @@ let audioCtx = null;
 let speaking = false;
 let roomTicket = 0;
 let syncTicket = 0;
+let seenRev = 0;
+let leaving = false;
+let aloneSince = 0;
+
+function newerRev(rev) {
+  const n = Number(rev) || 0;
+  if (!n) return true;
+  if (n < seenRev) return false;
+  seenRev = n;
+  return true;
+}
+
+function paintList(channelId, listed) {
+  const mine = String(ui.me?.id || '');
+  const here = !!(ui.voice && ui.voice.channelId === channelId);
+  let rows = Array.isArray(listed) ? listed : [];
+  if (!here && mine) rows = rows.filter((person) => String(person.id) !== mine);
+  if (!here) return rows;
+  rows = rows.map((person) => (
+    String(person.id) === mine
+      ? { ...person, sharing: !!ui.voice.sharing, speaking: !!ui.voice.speaking, muted: !!ui.voice.muted, deafened: !!ui.voice.deafened }
+      : person
+  ));
+  if (mine && !rows.some((person) => String(person.id) === mine)) {
+    rows = [{
+      id: ui.me.id,
+      displayName: ui.me.displayName || ui.me.username,
+      username: ui.me.username,
+      avatarUrl: ui.me.avatarUrl || '',
+      avatarColor: ui.me.avatarColor,
+      sharing: !!ui.voice.sharing,
+      speaking: !!ui.voice.speaking,
+      muted: !!ui.voice.muted,
+      deafened: !!ui.voice.deafened,
+    }, ...rows];
+  }
+  return rows;
+}
 
 function publishScreens() {
   ui.screen = { at: Date.now(), local: !!localScreen, remote: !!remoteScreen };
@@ -55,13 +93,30 @@ function channelName() {
 }
 
 function publishRoom(channelId, members) {
-  ui.voiceRooms = Object.assign({}, ui.voiceRooms, { [channelId]: members });
+  const next = Object.assign({}, ui.voiceRooms);
+  if (!members.length && !(ui.voice && ui.voice.channelId === channelId)) delete next[channelId];
+  else next[channelId] = members;
+  ui.voiceRooms = next;
+}
+
+function postLeave(voice) {
+  if (!voice) return;
+  const token = localStorage.getItem('dc_token') || '';
+  const headers = {
+    Authorization: 'Bearer ' + token,
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
+  };
+  const body = JSON.stringify({ serverId: voice.serverId || '', channelId: voice.channelId || '' });
+  const send = (path) => fetch(getApiBase() + path, { method: 'POST', keepalive: true, headers, body }).catch(() => {});
+  send('/api/voice/leave');
+  if (voice.channelId) send('/api/voice/' + encodeURIComponent(voice.channelId) + '/leave');
 }
 
 async function sendSignal(to, kind, payload) {
   const voice = ui.voice;
   if (!voice) return;
-  await api('/api/voice/' + voice.channelId + '/signal', {
+  await api('/api/voice/' + encodeURIComponent(voice.channelId) + '/signal', {
     method: 'POST',
     body: { serverId: voice.serverId, to, kind, payload },
   });
@@ -274,18 +329,27 @@ async function sync() {
   const voice = ui.voice;
   if (!voice) return;
   const ticket = ++syncTicket;
-  const data = await api('/api/voice/' + voice.channelId + '/sync?serverId=' + encodeURIComponent(voice.serverId));
+  const data = await api('/api/voice/' + encodeURIComponent(voice.channelId) + '/sync?serverId=' + encodeURIComponent(voice.serverId));
   if (ticket !== syncTicket || !ui.voice || ui.voice.channelId !== voice.channelId) return;
-  const members = (data.members || []).map((member) => (
-    String(member.id) === String(ui.me?.id)
-      ? { ...member, sharing: !!voice.sharing }
-      : member
-  ));
-  publishRoom(voice.channelId, members);
+  const fresh = newerRev(data.rev);
+  if (fresh && data.joined === false && Date.now() - (voice.joinedAt || 0) > 1500) {
+    const satTooLong = aloneSince && Date.now() - aloneSince >= 3 * 60 * 1000 - 8000;
+    publishRoom(voice.channelId, (data.members || []).filter((member) => String(member.id) !== String(ui.me?.id)));
+    for (const signal of data.signals || []) {
+      try { await handleSignal(signal); } catch (_) {}
+    }
+    leaveVoice();
+    if (satTooLong) toast('The call ended after 3 minutes alone');
+    return;
+  }
+  const members = fresh ? paintList(voice.channelId, data.members || []) : (ui.voiceRooms[voice.channelId] || []);
+  if (fresh) publishRoom(voice.channelId, members);
   const others = members.filter((member) => String(member.id) !== String(ui.me?.id));
   const live = new Set(others.map((member) => String(member.id)));
-  for (const id of [...peers.keys()]) {
-    if (!live.has(String(id))) closePeer(id);
+  if (fresh) {
+    for (const id of [...peers.keys()]) {
+      if (!live.has(String(id))) closePeer(id);
+    }
   }
   for (const signal of data.signals || []) {
     try { await handleSignal(signal); } catch (_) {}
@@ -295,7 +359,7 @@ async function sync() {
   }
   if (speaking !== voice.speakingSent) {
     voice.speakingSent = speaking;
-    api('/api/voice/' + voice.channelId + '/state', {
+    api('/api/voice/' + encodeURIComponent(voice.channelId) + '/state', {
       method: 'POST',
       body: { serverId: voice.serverId, speaking },
     }).catch(() => {});
@@ -376,10 +440,12 @@ async function connectCall(channelId, name, person, callId) {
     speakingSent: false,
     sharing: false,
     screenTick: 0,
+    joinedAt: Date.now(),
   };
+  ui.streamUi = { view: 'auto', watching: false, hideChat: false };
   watchMic();
   try { await sync(); } catch (_) {}
-  poll = setInterval(() => { sync().catch(() => {}); }, 700);
+  poll = setInterval(() => { sync().catch(() => {}); }, 500);
 }
 
 export async function startCall(user) {
@@ -451,7 +517,11 @@ export async function declineCall() {
 
 export async function joinVoice(channel) {
   if (!channel || channel.type !== 'voice') return;
-  if (ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId) return;
+  const same = ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId;
+  if (same && stream) {
+    ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: true };
+    return;
+  }
   await leaveVoice();
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -463,7 +533,7 @@ export async function joinVoice(channel) {
     return;
   }
   try {
-    await api('/api/voice/' + channel.id + '/join', {
+    await api('/api/voice/' + encodeURIComponent(channel.id) + '/join', {
       method: 'POST',
       body: { serverId: ui.serverId },
     });
@@ -482,39 +552,56 @@ export async function joinVoice(channel) {
     speakingSent: false,
     sharing: false,
     screenTick: 0,
+    joinedAt: Date.now(),
   };
+  ui.streamUi = { view: 'wide', watching: false, hideChat: true };
   watchMic();
   try { await sync(); } catch (_) {}
-  poll = setInterval(() => { sync().catch(() => {}); }, 700);
+  poll = setInterval(() => { sync().catch(() => {}); }, 500);
 }
 
 export async function leaveVoice() {
+  if (leaving) return;
+  leaving = true;
   roomTicket += 1;
   syncTicket += 1;
   const voice = ui.voice;
-  if (poll) clearInterval(poll);
-  poll = null;
-  closeAll();
-  stopLocal();
-  speaking = false;
-  ui.voice = null;
-  ui.streamUi = { view: 'auto', watching: false, hideChat: false };
-  if (voice) {
-    publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => String(member.id) !== String(ui.me?.id)));
-  }
-  if (voice && voice.callId) {
-    try { await api('/api/calls/' + encodeURIComponent(voice.callId) + '/end', { method: 'POST', body: {} }); } catch (_) {}
-  }
-  await dropOutgoing(true);
-  if (!voice) return;
   try {
-    await api('/api/voice/' + voice.channelId + '/leave', {
-      method: 'POST',
-      body: { serverId: voice.serverId },
-    });
-  } catch (_) {}
-  const data = await refreshVoiceRooms().catch(() => null);
-  if (!data) publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => member.id !== ui.me?.id));
+    if (poll) clearInterval(poll);
+    poll = null;
+    closeAll();
+    stopLocal();
+    speaking = false;
+    aloneSince = 0;
+    ui.voice = null;
+    ui.streamUi = { view: 'auto', watching: false, hideChat: false };
+    if (voice) {
+      publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => String(member.id) !== String(ui.me?.id)));
+      postLeave(voice);
+    }
+    if (voice && voice.callId) {
+      try { await api('/api/calls/' + encodeURIComponent(voice.callId) + '/end', { method: 'POST', body: {} }); } catch (_) {}
+    }
+    await dropOutgoing(true);
+    if (!voice) return;
+    try {
+      await api('/api/voice/leave', {
+        method: 'POST',
+        body: { serverId: voice.serverId, channelId: voice.channelId },
+      });
+    } catch (_) {
+      try {
+        await api('/api/voice/' + encodeURIComponent(voice.channelId) + '/leave', {
+          method: 'POST',
+          body: { serverId: voice.serverId },
+        });
+      } catch (_) {}
+    }
+    publishRoom(voice.channelId, (ui.voiceRooms[voice.channelId] || []).filter((member) => String(member.id) !== String(ui.me?.id)));
+    await refreshVoiceRooms().catch(() => null);
+  } finally {
+    leaving = false;
+  }
 }
 
 let sharingBusy = false;
@@ -619,7 +706,7 @@ export async function toggleMute() {
   stream.getAudioTracks().forEach((track) => { track.enabled = !ui.voice.muted && !ui.voice.deafened; });
   if (ui.voice.muted) speaking = false;
   try {
-    await api('/api/voice/' + ui.voice.channelId + '/state', {
+    await api('/api/voice/' + encodeURIComponent(ui.voice.channelId) + '/state', {
       method: 'POST',
       body: { serverId: ui.voice.serverId, muted: ui.voice.muted },
     });
@@ -634,51 +721,61 @@ export async function toggleDeafen() {
   applyDeaf();
   if (ui.voice.deafened) speaking = false;
   try {
-    await api('/api/voice/' + ui.voice.channelId + '/state', {
+    await api('/api/voice/' + encodeURIComponent(ui.voice.channelId) + '/state', {
       method: 'POST',
       body: { serverId: ui.voice.serverId, muted: ui.voice.muted, deafened: ui.voice.deafened },
     });
   } catch (_) {}
 }
 
-function visibleMembers(channelId, listed) {
-  const mine = String(ui.me?.id || '');
-  const here = !!(ui.voice && ui.voice.channelId === channelId);
-  if (here || !mine) return listed || [];
-  return (listed || []).filter((person) => String(person.id) !== mine);
+export function applyVoiceSnapshot(snap) {
+  if (!snap || typeof snap !== 'object' || !newerRev(snap.rev)) return;
+  const next = { ...ui.voiceRooms };
+  const call = snap.call || {};
+  for (const id of Object.keys(next)) {
+    if ((id.startsWith('dm:') || id.startsWith('group:')) && !call[id]) delete next[id];
+  }
+  for (const [id, listed] of Object.entries(call)) next[id] = paintList(id, listed);
+  const serverRooms = ui.mode === 'chat' && ui.serverId && snap.servers ? snap.servers[ui.serverId] : null;
+  if (serverRooms) {
+    for (const channel of ui.channels || []) {
+      if (channel.type !== 'voice') continue;
+      next[channel.id] = paintList(channel.id, serverRooms[channel.id] || []);
+    }
+  }
+  ui.voiceRooms = next;
 }
 
 export async function refreshVoiceRooms() {
   const ticket = ++roomTicket;
   if (ui.mode === 'dm' || ui.mode === 'group') {
     const data = await api('/api/voice/overview?serverId=call');
-    if (ticket !== roomTicket) return data;
+    if (ticket !== roomTicket || !newerRev(data.rev)) return data;
     const next = { ...ui.voiceRooms };
     for (const id of Object.keys(next)) {
       if ((id.startsWith('dm:') || id.startsWith('group:')) && !(data.rooms && data.rooms[id])) delete next[id];
     }
-    for (const [id, listed] of Object.entries(data.rooms || {})) next[id] = visibleMembers(id, listed);
-    if (ui.voice && ui.voice.serverId === 'call' && ui.voiceRooms[ui.voice.channelId]) {
-      next[ui.voice.channelId] = ui.voiceRooms[ui.voice.channelId];
-    }
+    for (const [id, listed] of Object.entries(data.rooms || {})) next[id] = paintList(id, listed);
     ui.voiceRooms = next;
     return data;
   }
   if (!ui.serverId || ui.mode !== 'chat') return null;
   const data = await api('/api/voice/overview?serverId=' + encodeURIComponent(ui.serverId));
-  if (ticket !== roomTicket) return data;
+  if (ticket !== roomTicket || !newerRev(data.rev)) return data;
   const next = { ...ui.voiceRooms };
   for (const channel of ui.channels || []) {
     if (channel.type !== 'voice') continue;
-    if (ui.voice && ui.voice.channelId === channel.id && ui.voiceRooms[channel.id]) {
-      next[channel.id] = ui.voiceRooms[channel.id];
-      continue;
-    }
-    next[channel.id] = visibleMembers(channel.id, (data.rooms && data.rooms[channel.id]) || []);
+    next[channel.id] = paintList(channel.id, (data.rooms && data.rooms[channel.id]) || []);
   }
   ui.voiceRooms = next;
   if (ui.voice && ui.voice.serverId !== 'call') ui.voice.name = channelName();
   return data;
+}
+
+export function partnerInCall(user) {
+  if (!user || !ui.me) return false;
+  const id = 'dm:' + [ui.me.id, user.id].sort().join(':');
+  return (ui.voiceRooms[id] || []).some((person) => String(person.id) === String(user.id));
 }
 
 export function pokeVoice() {
@@ -699,26 +796,31 @@ export function isLive(userId) {
 if (typeof window !== 'undefined') {
   let lastRoomLook = 0;
   setInterval(() => {
+    if (!ui.voice || !ui.me) {
+      aloneSince = 0;
+      return;
+    }
+    const room = ui.voiceRooms[ui.voice.channelId] || [];
+    const others = room.some((person) => String(person.id) !== String(ui.me.id));
+    if (others) {
+      aloneSince = 0;
+      return;
+    }
+    if (!aloneSince) aloneSince = Date.now();
+    if (Date.now() - aloneSince < 3 * 60 * 1000) return;
+    aloneSince = 0;
+    toast('The call ended after 3 minutes alone');
+    leaveVoice();
+  }, 5000);
+  setInterval(() => {
     if (document.hidden || !ui.me) return;
     if (ui.mode !== 'chat' && ui.mode !== 'dm' && ui.mode !== 'group') return;
     const busy = !!ui.voice || Object.values(ui.voiceRooms || {}).some((room) => (room || []).length);
     if (!busy && Date.now() - lastRoomLook < 4000) return;
     lastRoomLook = Date.now();
     refreshVoiceRooms().catch(() => {});
-  }, 1000);
+  }, 500);
   window.addEventListener('pagehide', () => {
-    const voice = ui.voice;
-    if (!voice) return;
-    const token = localStorage.getItem('dc_token') || '';
-    fetch(getApiBase() + '/api/voice/' + voice.channelId + '/leave', {
-      method: 'POST',
-      keepalive: true,
-      headers: {
-        Authorization: 'Bearer ' + token,
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-      },
-      body: JSON.stringify({ serverId: voice.serverId }),
-    }).catch(() => {});
+    if (ui.voice) postLeave(ui.voice);
   });
 }

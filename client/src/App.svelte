@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { UserRound, Flag } from '@lucide/svelte';
   import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode } from './lib/state.svelte.js';
-  import { answerCall, declineCall } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
@@ -22,6 +21,18 @@
     ui.incoming;
     ui.missedCalls;
     applySiteTitle();
+  });
+
+  $effect(() => {
+    const call = ui.incomingCall;
+    if (!call) return;
+    const at = Number(call.at) || Date.now();
+    const wait = Math.max(0, 22000 - (Date.now() - at));
+    const id = call.id;
+    const timer = setTimeout(() => {
+      if (ui.incomingCall && ui.incomingCall.id === id) ui.incomingCall = null;
+    }, wait);
+    return () => clearTimeout(timer);
   });
 
   onMount(() => {
@@ -90,13 +101,6 @@
     {/if}
   </div>
   <Quick />
-  {#if ui.incomingCall}
-    <div class="call-alert" role="dialog">
-      <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'} is calling</strong>
-      <button type="button" class="accept" onclick={answerCall}>Accept</button>
-      <button type="button" class="decline" onclick={declineCall}>Decline</button>
-    </div>
-  {/if}
   {#if ui.switcher}<Switcher />{/if}
   {#if ui.popout}<Popout />{/if}
   {#if ui.userSettings}<UserSettings />{/if}

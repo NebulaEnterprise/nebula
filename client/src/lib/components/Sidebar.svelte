@@ -14,7 +14,7 @@
   import Inbox from './Inbox.svelte';
   import { api } from '../api.js';
   import { shortBio, visibleBadges } from '../format.js';
-  import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare } from '../voice.js';
+  import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats } from '../state.svelte.js';
   import { PERM } from '../format.js';
 
@@ -50,11 +50,6 @@
   });
 
   function onVoice(ch) {
-    if (ui.voice && ui.voice.channelId === ch.id && ui.voice.serverId === ui.serverId) {
-      ui.streamUi = { ...ui.streamUi, view: 'wide', watching: true };
-      return;
-    }
-    ui.streamUi = { ...ui.streamUi, view: 'wide', watching: true };
     joinVoice(ch);
   }
 
@@ -302,9 +297,10 @@
           {@const note = ui.activity.dms[dm.other?.id]}
           <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
             <Avatar user={dm.other} size={28} />
-            <span class="dm-copy" class:sharing={dmSharing(dm.other)}>
+            <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other)}>
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-              {#if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>{/if}
+              {#if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>
+              {:else if partnerInCall(dm.other)}<span class="dm-share">In a call</span>{/if}
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}

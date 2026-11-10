@@ -2063,7 +2063,8 @@ async function pollActivity() {
       body: { seen: seenMap(), seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1' },
     });
     const calls = data.calls || {};
-    ui.incomingCall = (calls.incoming || [])[0] || null;
+    const ringing = (calls.incoming || []).filter((call) => !call.at || Date.now() - Number(call.at) < 22000);
+    ui.incomingCall = ringing[0] || null;
     ui.missedCalls = calls.missed || [];
     const firstChannels = localStorage.getItem(accountKey('nebula-channel-baseline')) !== '1';
     if (firstChannels && data.heads) {
@@ -2196,13 +2197,15 @@ async function watchAlerts() {
     }
     try {
       const data = await api('/api/alert?wait=1&cursor=' + encodeURIComponent(alertCursor));
+      const voiceMod = await import('./voice.js').catch(() => null);
+      if (voiceMod && data.voice) voiceMod.applyVoiceSnapshot(data.voice);
       const next = String(data.cursor || '');
       const changed = !!alertCursor && next !== alertCursor;
       alertCursor = next;
       if (changed) {
+        if (voiceMod && !data.voice) voiceMod.pokeVoice();
         await pollActivity();
         await loadDms();
-        import('./voice.js').then((mod) => mod.pokeVoice()).catch(() => {});
       }
       await noteReports(changed || !localStorage.getItem('nebula-report-seen:' + (ui.me && ui.me.id)));
     } catch (err) {
