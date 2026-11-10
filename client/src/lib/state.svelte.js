@@ -1222,10 +1222,9 @@ function noteSocketAlert(data) {
         alertPending = false;
         if (document.hidden) break;
         await pollActivity();
-        if (onDmSide()) {
-          loadDms();
-          loadGroups();
-        }
+        loadDms();
+        loadGroups();
+        if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') loadMessages(true);
       }
     } finally {
       alertTask = null;
@@ -2314,8 +2313,8 @@ export async function pollActivity() {
     dmSnap = dmUnread;
     ui.mentions = Array.isArray(data.inbox) ? data.inbox : [];
     ui.heads = data.heads || {};
-    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels)) {
-      ui.activity = { ...ui.activity, servers, channels };
+    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels) || !sameNotes(ui.activity.dms, dms)) {
+      ui.activity = { ...ui.activity, servers, channels, dms };
     }
   } catch (err) {
     if (err && err.status === 404) activityMissing = true;
@@ -2382,10 +2381,9 @@ async function watchAlerts() {
       if (changed && !document.hidden) {
         if (voiceMod && !ui.voice && !data.voice && (ui.mode === 'chat' || onDmSide())) voiceMod.refreshVoiceRooms();
         await pollActivity();
-        if (onDmSide()) {
-          loadDms();
-          loadGroups();
-        }
+        loadDms();
+        loadGroups();
+        if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') loadMessages(true);
       }
     } catch (err) {
       if (err && err.status === 404) alertMissing = true;
