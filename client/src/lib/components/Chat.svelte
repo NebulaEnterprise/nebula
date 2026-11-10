@@ -15,10 +15,6 @@
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const typingPhrase = $derived(typingLine(ui.typers));
-  let typingHold = $state({ kind: '', names: [] });
-  $effect(() => {
-    if (typingPhrase.kind) typingHold = typingPhrase;
-  });
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const emoji = $derived.by(() => {
     const map = new Map();
@@ -1485,11 +1481,11 @@
     <Picker />
   {/if}
   <p class="typing" class:on={!!typingPhrase.kind} aria-live="polite">
-    {#if typingHold.kind === 'one'}
-      <strong>{typingHold.names[0]}</strong> is typing
-    {:else if typingHold.kind === 'two'}
-      <strong>{typingHold.names[0]}</strong> and <strong>{typingHold.names[1]}</strong> are typing
-    {:else if typingHold.kind === 'many'}
+    {#if typingPhrase.kind === 'one'}
+      <strong>{typingPhrase.names[0]}</strong> is typing
+    {:else if typingPhrase.kind === 'two'}
+      <strong>{typingPhrase.names[0]}</strong> and <strong>{typingPhrase.names[1]}</strong> are typing
+    {:else if typingPhrase.kind === 'many'}
       Several people are typing
     {/if}
     <span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span>

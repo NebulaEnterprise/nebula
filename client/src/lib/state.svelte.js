@@ -1855,18 +1855,14 @@ export async function reloadSettings() {
 let lastTypingPing = 0;
 let typingSerial = 0;
 let typingLive = false;
-const typerSeen = new Map();
+let typingStopTimer = 0;
 
-function acceptTypers(list) {
+function typingTokenNow() {
   const now = Date.now();
-  const rows = Array.isArray(list) ? list : [];
-  const ids = new Set(rows.map((row) => row && row.id).filter(Boolean));
-  for (const id of [...typerSeen.keys()]) if (!ids.has(id)) typerSeen.delete(id);
-  for (const row of rows) if (row && row.id) typerSeen.set(row.id, now);
-  const prev = ui.typers;
-  const same = rows.length === prev.length && rows.every((row, index) => prev[index] && prev[index].id === row.id && prev[index].name === row.name);
-  if (!same) ui.typers = rows;
+  typingSerial = now > typingSerial ? now : typingSerial + 1;
+  return typingSerial;
 }
+const typerSeen = new Map();
 
 setInterval(() => {
   const now = Date.now();
@@ -1903,7 +1899,11 @@ function postTyping(extra) {
 }
 
 function stopTyping(notify = true) {
-  const token = ++typingSerial;
+  if (typingStopTimer) {
+    clearTimeout(typingStopTimer);
+    typingStopTimer = 0;
+  }
+  const token = typingTokenNow();
   if (notify && typingLive) postTyping({ stop: true, token });
   typingLive = false;
   lastTypingPing = 0;
@@ -1911,11 +1911,15 @@ function stopTyping(notify = true) {
 }
 
 function markTyping() {
+  if (typingStopTimer) {
+    clearTimeout(typingStopTimer);
+    typingStopTimer = 0;
+  }
   const now = Date.now();
   if (typingLive && now - lastTypingPing < 3000) return;
   lastTypingPing = now;
   typingLive = true;
-  postTyping({ token: ++typingSerial });
+  postTyping({ token: typingTokenNow() });
 }
 
 export function noteKeyDown(event) {
@@ -1942,32 +1946,61 @@ export function typingLine(list) {
 
 export function noteTyping(text) {
   const value = text == null ? ui.composer : text;
-  if (!String(value || '').trim()) stopTyping();
-  else markTyping();
+  if (String(value || '').trim()) {
+    markTyping();
+    return;
+  }
+  if (typingStopTimer) return;
+  typingStopTimer = setTimeout(() => {
+    typingStopTimer = 0;
+    if (!String(ui.composer || '').trim()) stopTyping();
+  }, 900);
 }
 
 let typingBusy = false;
+let typingSeenAt = 0;
+
+function acceptTypers(list) {
+  const now = Date.now();
+  typingSeenAt = now;
+  const rows = Array.isArray(list) ? list : [];
+  const ids = new Set(rows.map((row) => row && row.id).filter(Boolean));
+  for (const id of [...typerSeen.keys()]) if (!ids.has(id)) typerSeen.delete(id);
+  for (const row of rows) if (row && row.id) typerSeen.set(row.id, now);
+  const prev = ui.typers;
+  const same = rows.length === prev.length && rows.every((row, index) => prev[index] && prev[index].id === row.id && prev[index].name === row.name);
+  if (!same) ui.typers = rows;
+}
 
 export async function refreshTyping() {
   if (document.hidden) return;
-  if (ui.mode !== 'chat' && ui.mode !== 'dm') {
+  if (ui.mode !== 'chat' && ui.mode !== 'dm' && ui.mode !== 'group' && ui.mode !== 'thread') {
     ui.typers = [];
     return;
   }
   if (typingBusy) return;
-  const q = ui.mode === 'dm'
-    ? 'dmUserId=' + encodeURIComponent(ui.dmUser?.id || '')
-    : 'channelId=' + encodeURIComponent(ui.channelId || '') + '&serverId=' + encodeURIComponent(ui.serverId || '');
+  const mode = ui.mode;
+  const room = mode === 'dm' ? (ui.dmUser?.id || '') : mode === 'group' ? (ui.group?.id || '') : mode === 'thread' ? (ui.thread?.id || '') : (ui.channelId || '');
+  const q = mode === 'dm'
+    ? 'dmUserId=' + encodeURIComponent(room)
+    : mode === 'group'
+      ? 'groupId=' + encodeURIComponent(room)
+      : mode === 'thread'
+        ? 'threadId=' + encodeURIComponent(room)
+        : 'channelId=' + encodeURIComponent(room) + '&serverId=' + encodeURIComponent(ui.serverId || '');
+  const started = Date.now();
   typingBusy = true;
   try {
     const data = await api('/api/typing?' + q);
+    const current = ui.mode === 'dm' ? (ui.dmUser?.id || '') : ui.mode === 'group' ? (ui.group?.id || '') : ui.mode === 'thread' ? (ui.thread?.id || '') : (ui.channelId || '');
+    if (ui.mode !== mode || current !== room) return;
+    if (typingSeenAt > started && !(data.typers || []).length) return;
     acceptTypers(data.typers || []);
-    if (ui.mode === 'dm' && ui.dmUser?.id) {
-      const id = String(ui.dmUser.id);
-      const hit = (data.typers || []).find((row) => row && String(row.id) === id);
+    if (ui.mode === 'dm' && room) {
+      const hit = (data.typers || []).find((row) => row && String(row.id) === String(room));
       const book = { ...(ui.dmTyping || {}) };
-      if (hit) book[id] = { name: hit.name || 'Someone', until: Date.now() + 10000 };
-      else delete book[id];
+      if (hit) book[room] = { name: hit.name || 'Someone', until: Date.now() + 10000 };
+      else if (!(typingSeenAt > started)) delete book[room];
       ui.dmTyping = book;
     }
   } catch (_) {}

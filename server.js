@@ -4300,7 +4300,7 @@ function noteEpoch(key, userId, token) {
   if (!typingEpoch.has(key)) typingEpoch.set(key, new Map());
   const book = typingEpoch.get(key);
   const prev = book.get(userId) || 0;
-  if (next < prev) return false;
+  if (next < prev && !(next > 1e12 && Math.abs(Date.now() - next) < 120000)) return false;
   book.set(userId, next);
   return true;
 }
@@ -4353,7 +4353,6 @@ app.post('/api/typing', auth, (req, res) => {
     return res.json({ ok: true });
   }
   if (!noteEpoch(key, req.user.id, token)) return res.json({ ok: true });
-  const before = typingSignature(key);
   armTyping(key, req.user.id, {
     name: req.user.displayName || req.user.username,
     nameEffect: cleanNameEffect(req.user.nameEffect),
@@ -4361,7 +4360,7 @@ app.post('/api/typing', auth, (req, res) => {
     at: Date.now(),
     token,
   });
-  if (typingSignature(key) !== before) wakeTyping(key);
+  wakeTyping(key);
   noteBrief(req.user, peersOfRoom(key.startsWith('ch:') ? '' : key, req.user.id));
   res.json({ ok: true });
 });

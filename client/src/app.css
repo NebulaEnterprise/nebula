@@ -856,11 +856,11 @@ img { max-width: 100%; }
 .lobby p { margin: 6px 0 0; color: var(--muted); white-space: pre-wrap; }
 .typing {
   display: flex; align-items: center; gap: 4px;
-  height: 22px; margin: 0 16px; opacity: 0; overflow: hidden;
-  color: var(--muted); font-size: 13px; font-weight: 500; line-height: 22px;
-  transition: opacity .12s var(--ease);
+  height: 22px; margin: 0 16px; overflow: hidden;
+  color: var(--muted); font-size: 13px; font-weight: 600; line-height: 22px;
+  visibility: hidden;
 }
-.typing.on { opacity: 1; }
+.typing.on { visibility: visible; }
 .typing strong { color: var(--text); font-weight: 700; }
 .typing-dots { display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
 .typing-dots i {
