@@ -1,0 +1,57 @@
+{
+  "name": "nebula",
+  "productName": "Nebula",
+  "version": "1.0.0",
+  "description": "Nebula desktop app. The window loads the live site, so updates ship with the website.",
+  "main": "main.js",
+  "author": "Nebula",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "lol.nebulaspace.desktop",
+    "productName": "Nebula",
+    "icon": "build/icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "title-preload.js",
+      "titlebar.html",
+      "splash.html",
+      "error.html",
+      "picker.html",
+      "build/icon.png",
+      "build/icon.ico"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.social-networking",
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Network",
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
+}

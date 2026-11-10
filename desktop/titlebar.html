@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nebula</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #08090c; color: #f4f5f7; font-family: Outfit, "Segoe UI", sans-serif; user-select: none; }
+      .bar {
+        height: 40px; display: flex; align-items: center;
+        background:
+          linear-gradient(90deg, rgba(124, 106, 247, 0.16), transparent 220px),
+          #08090c;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        -webkit-app-region: drag;
+      }
+      .brand { display: flex; align-items: center; gap: 8px; padding-left: 14px; }
+      .brand img {
+        width: 22px; height: 22px; display: block;
+        filter: drop-shadow(0 0 8px rgba(155, 140, 255, 0.55));
+      }
+      .brand strong { font-size: 13px; font-weight: 650; letter-spacing: -0.03em; }
+      .drag { flex: 1; height: 100%; }
+      .wins { display: flex; height: 100%; -webkit-app-region: no-drag; }
+      .wins button {
+        width: 46px; height: 40px; border: 0; background: transparent; color: #b4b7c2;
+        display: grid; place-items: center; cursor: pointer;
+      }
+      .wins button:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+      .wins button.close:hover { background: #e5484d; color: #fff; }
+      .wins svg { display: block; }
+      .bar.mac { flex-direction: row; }
+      .bar.mac .wins { order: -1; padding-left: 10px; gap: 8px; align-items: center; }
+      .bar.mac .wins button {
+        width: 13px; height: 13px; padding: 0; border-radius: 50%; color: transparent;
+      }
+      .bar.mac .wins button svg { display: none; }
+      .bar.mac .wins button.min { background: #f5c451; }
+      .bar.mac .wins button.max { background: #62c554; }
+      .bar.mac .wins button.close { background: #ed6a5e; }
+      .bar.mac .wins button:hover { filter: brightness(0.92); }
+      .bar.mac .brand { padding-left: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="bar" id="bar">
+      <div class="brand">
+        <img src="build/icon.png" alt="" />
+        <strong>Nebula</strong>
+      </div>
+      <div class="drag"></div>
+      <div class="wins" id="wins"></div>
+    </div>
+    <script>
+      const mac = nebulaChrome.platform === 'darwin';
+      if (mac) document.getElementById('bar').classList.add('mac');
+      const wins = document.getElementById('wins');
+      const buttons = mac
+        ? [['close', 'Close'], ['min', 'Minimize'], ['max', 'Zoom']]
+        : [['min', 'Minimize'], ['max', 'Maximize'], ['close', 'Close']];
+      const icons = {
+        min: '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+        max: '<svg width="12" height="12" viewBox="0 0 12 12"><rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>',
+        restore: '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 3.2h5.2V8.4M3 4.4h5.2V9.6H3z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+        close: '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3L3 9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+      };
+      const nodes = {};
+      for (const [id, label] of buttons) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = id;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        button.innerHTML = icons[id];
+        button.onclick = () => {
+          if (id === 'min') nebulaChrome.minimize();
+          else if (id === 'max') nebulaChrome.toggleMax();
+          else nebulaChrome.close();
+        };
+        nodes[id] = button;
+        wins.appendChild(button);
+      }
+      document.getElementById('bar').addEventListener('dblclick', (event) => {
+        if (event.target.closest('button')) return;
+        nebulaChrome.toggleMax();
+      });
+      nebulaChrome.onState((maximized) => {
+        if (!nodes.max) return;
+        nodes.max.innerHTML = maximized ? icons.restore : icons.max;
+        nodes.max.title = maximized ? 'Restore' : 'Maximize';
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Share your screen</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { height: 100%; margin: 0; background: #121318; color: #f4f5f7; font-family: Outfit, "Segoe UI", sans-serif; }
+      header {
+        height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        -webkit-app-region: drag;
+      }
+      header img { width: 22px; height: 22px; filter: drop-shadow(0 0 8px rgba(155, 140, 255, 0.45)); }
+      h1 { margin: 0; flex: 1; font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+      button.cancel {
+        -webkit-app-region: no-drag;
+        border: 0; background: transparent; color: #b4b7c2; width: 36px; height: 36px;
+        border-radius: 10px; font-size: 18px; cursor: pointer;
+      }
+      button.cancel:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+      .grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+        padding: 16px; overflow: auto; max-height: calc(100vh - 52px);
+      }
+      button.source {
+        border: 1px solid rgba(255, 255, 255, 0.08); background: #181920; color: inherit;
+        border-radius: 12px; padding: 8px; text-align: left; cursor: pointer;
+      }
+      button.source:hover { border-color: #7c6af7; background: #1d1e28; }
+      button.source img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 8px; background: #0c0d11; display: block; }
+      button.source span { display: block; margin-top: 8px; font-size: 13px; color: #d7d9e0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      p { margin: 8px 4px; color: #b4b7c2; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="build/icon.png" alt="" />
+      <h1>Share your screen</h1>
+      <button class="cancel" type="button" onclick="nebulaDesktop.cancel()" aria-label="Cancel">×</button>
+    </header>
+    <div class="grid" id="grid"><p>Looking for screens…</p></div>
+    <script>
+      nebulaDesktop.onSources((rows) => {
+        const grid = document.getElementById('grid');
+        grid.textContent = '';
+        if (!rows.length) {
+          const note = document.createElement('p');
+          note.textContent = 'No screens are available.';
+          grid.appendChild(note);
+          return;
+        }
+        for (const row of rows) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'source';
+          const img = document.createElement('img');
+          img.alt = '';
+          img.src = row.thumb;
+          const label = document.createElement('span');
+          label.textContent = row.name || 'Screen';
+          button.append(img, label);
+          button.onclick = () => nebulaDesktop.choose(row.id);
+          grid.appendChild(button);
+        }
+      });
+    </script>
+  </body>
+</html>
