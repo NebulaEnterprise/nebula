@@ -1099,8 +1099,10 @@ let dmThreads = load(DMS_FILE, {});
 const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
 const CALLS_FILE = path.join(DATA_DIR, 'calls.json');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
+const READS_FILE = path.join(DATA_DIR, 'reads.json');
 let groups = load(GROUPS_FILE, {});
 let threads = load(THREADS_FILE, {});
+let reads = load(READS_FILE, {});
 
 let strippedSecrets = false;
 for (const u of Object.values(users)) {
@@ -3689,9 +3691,27 @@ setInterval(() => {
   try { expireCalls(); } catch (_) {}
 }, 2000);
 
+app.post('/api/read', auth, (req, res) => {
+  ensureGuilds();
+  const rows = Array.isArray(req.body && req.body.reads) ? req.body.reads.slice(0, 100) : [];
+  const incoming = {};
+  const rewinds = {};
+  for (const row of rows) {
+    if (!row || !row.roomId) continue;
+    incoming[String(row.roomId)] = row.messageId || '';
+    if (row.rewind) rewinds[String(row.roomId)] = true;
+  }
+  const { book, changed } = mergeReadMap(req.user.id, incoming, rewinds);
+  publishReads(req.user.id, changed, String(req.body && req.body.client || '').slice(0, 40));
+  res.json({ ok: true, seen: book });
+});
+
 app.post('/api/activity', auth, (req, res) => {
   ensureGuilds();
-  const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  const incoming = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  const merged = mergeReadMap(req.user.id, incoming, null);
+  const seen = merged.book;
+  publishReads(req.user.id, merged.changed, String(req.body && req.body.client || '').slice(0, 40));
   const seeded = !!(req.body && req.body.seeded);
   const servers = {};
   const channels = {};
@@ -3757,7 +3777,7 @@ app.post('/api/activity', auth, (req, res) => {
     }
   }
   inbox.sort((a, b) => Date.parse(b.at || 0) - Date.parse(a.at || 0));
-  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers, inbox: inbox.slice(0, 30), calls: callsFor(req.user.id) });
+  res.json({ ok: true, servers, channels, dms: dmNotes.counts, heads, speakers, inbox: inbox.slice(0, 30), calls: callsFor(req.user.id), seen });
 });
 
 app.post('/api/calls', auth, (req, res) => {
@@ -4786,6 +4806,80 @@ function sharesServer(a, b) {
   return Object.values(guilds.servers).some((g) => g && g.members && g.members[a] && g.members[b]);
 }
 
+function accountReads(userId) {
+  const id = String(userId);
+  if (!reads[id] || typeof reads[id] !== 'object' || Array.isArray(reads[id])) reads[id] = {};
+  return reads[id];
+}
+
+function readList(userId, key) {
+  if (key.startsWith('dm:')) return messages['dm:' + dmKey(userId, key.slice(3))] || [];
+  return messages[key] || [];
+}
+
+function cleanReadKey(userId, key) {
+  const id = String(key || '');
+  if (!id || id.length > 140 || /\s/.test(id)) return '';
+  if (id.startsWith('dm:')) {
+    const other = id.slice(3);
+    if (!other || other.length > 80 || !users[other]) return '';
+    return 'dm:' + other;
+  }
+  if (id.startsWith('group:') || id.startsWith('thread:')) return id;
+  for (const g of Object.values(guilds.servers)) {
+    if (!g || !g.members || !g.members[userId]) continue;
+    if ((g.channels || []).some((channel) => channel && channel.id === id)) return id;
+  }
+  return '';
+}
+
+function cursorRank(list, messageId) {
+  if (!messageId) return -1;
+  const idx = (list || []).findIndex((msg) => msg && msg.id === messageId);
+  if (idx === -1) return (list || []).length;
+  return idx;
+}
+
+function mergeReadMap(userId, incoming, rewinds) {
+  const book = accountReads(userId);
+  const changed = [];
+  const source = incoming && typeof incoming === 'object' ? incoming : {};
+  const rewindOf = rewinds && typeof rewinds === 'object' ? rewinds : {};
+  for (const raw of Object.keys(source).slice(0, 500)) {
+    const key = cleanReadKey(userId, raw);
+    if (!key) continue;
+    const messageId = String(source[raw] || '').slice(0, 80);
+    const before = book[key] || '';
+    if (rewindOf[raw] || rewindOf[key]) {
+      if (!messageId) {
+        if (!before) continue;
+        delete book[key];
+        changed.push({ roomId: key, messageId: '', rewind: true });
+        continue;
+      }
+      if (before === messageId) continue;
+      book[key] = messageId;
+      changed.push({ roomId: key, messageId, rewind: true });
+      continue;
+    }
+    if (!messageId || before === messageId) continue;
+    const list = readList(userId, key);
+    if (before && cursorRank(list, messageId) < cursorRank(list, before)) continue;
+    book[key] = messageId;
+    changed.push({ roomId: key, messageId, rewind: false });
+  }
+  return { book, changed };
+}
+
+function publishReads(userId, changed, client) {
+  if (!changed.length) return;
+  save(READS_FILE, reads);
+  if (!hub) return;
+  hub.users([String(userId)], 'READ', {
+    reads: changed.map((row) => ({ roomId: row.roomId, messageId: row.messageId || '', rewind: !!row.rewind, client: client || '' })),
+  });
+}
+
 function dmInbox(userId, seen, seeded) {
   const others = new Set();
   for (const thread of Object.values(dmThreads)) {
@@ -4832,7 +4926,14 @@ function dmPreview(content) {
 }
 
 function sendDmList(req, res) {
-  const seen = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : {};
+  ensureGuilds();
+  const incoming = req.body && req.body.seen && typeof req.body.seen === 'object' ? req.body.seen : null;
+  let seen = accountReads(req.user.id);
+  if (incoming) {
+    const merged = mergeReadMap(req.user.id, incoming, null);
+    seen = merged.book;
+    publishReads(req.user.id, merged.changed, String(req.body && req.body.client || '').slice(0, 40));
+  }
   const seeded = !!(req.body && req.body.seeded);
   const notes = dmInbox(req.user.id, seen, seeded).counts;
   for (const roomId of Object.keys(messages)) {
@@ -4865,7 +4966,7 @@ function sendDmList(req, res) {
       };
     })
     .filter((t) => t.other);
-  res.json({ ok: true, dms: list });
+  res.json({ ok: true, dms: list, seen });
 }
 
 app.get('/api/dms', auth, sendDmList);

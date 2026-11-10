@@ -458,6 +458,7 @@ export function markUnread(message) {
   if (prev) map[roomKey] = prev;
   else delete map[roomKey];
   saveSeen(map);
+  queueRead(roomKey, prev, true);
   ui.readHold = roomKey;
   const count = Math.max(1, list.length - Math.max(idx, 0));
   if (String(roomKey).startsWith('dm:')) {
@@ -577,11 +578,12 @@ export async function loadDms() {
     const seeded = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     let data;
     try {
-      data = await api('/api/dms', { method: 'POST', body: { seen, seeded } });
+      data = await api('/api/dms', { method: 'POST', body: { seen, seeded, client: readClientId } });
     } catch (_) {
       data = await api('/api/dms');
     }
     if (serial !== dmSerial) return;
+    adoptRemoteSeen(seen, data.seen);
     const next = data.dms || [];
     if (!sameDms(ui.dms, next)) ui.dms = next;
     const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
@@ -1301,6 +1303,10 @@ function applySocket(packet) {
   }
   if (type === 'ALERT') {
     noteSocketAlert(data);
+    return;
+  }
+  if (type === 'READ') {
+    noteRemoteRead(data);
     return;
   }
   if (type === 'VOICE') {
@@ -2297,12 +2303,84 @@ function forgetActivity(id) {
   ui.activity = { ...ui.activity, channels, servers };
 }
 
+const readClientId = Math.random().toString(36).slice(2);
+const readQueue = new Map();
+let readTimer = 0;
+
+function queueRead(id, messageId, rewind) {
+  if (!id) return;
+  readQueue.set(id, { messageId: messageId || '', rewind: !!rewind });
+  if (readTimer) return;
+  readTimer = setTimeout(flushReads, 350);
+}
+
+function flushReads() {
+  readTimer = 0;
+  if (!readQueue.size) return;
+  const reads = [];
+  for (const [roomId, row] of readQueue) reads.push({ roomId, messageId: row.messageId, rewind: row.rewind });
+  readQueue.clear();
+  api('/api/read', { method: 'POST', body: { client: readClientId, reads } }).catch(() => {});
+}
+
+function readIsFurther(roomKey, current, next) {
+  if (!current) return true;
+  if (!next || current === next) return false;
+  const logKey = roomKey.startsWith('dm:') || roomKey.startsWith('group:') || roomKey.startsWith('thread:') ? roomKey : 'ch:' + roomKey;
+  const open = currentRoom() === logKey ? ui.messages : null;
+  const list = open && open.length ? open : (roomLogs.get(logKey) || []);
+  const from = list.findIndex((msg) => msg && msg.id === current);
+  const to = list.findIndex((msg) => msg && msg.id === next);
+  if (from === -1 || to === -1) return true;
+  return to > from;
+}
+
+function adoptRemoteSeen(sent, remote) {
+  if (!remote || typeof remote !== 'object') return;
+  const map = seenMap();
+  let changed = false;
+  for (const [id, messageId] of Object.entries(remote)) {
+    if (!messageId || map[id] === messageId) continue;
+    if (map[id] !== (sent && sent[id])) continue;
+    if (map[id] && !readIsFurther(id, map[id], messageId)) continue;
+    map[id] = messageId;
+    changed = true;
+  }
+  if (changed) saveSeen(map);
+}
+
+function noteRemoteRead(data) {
+  const rows = data && Array.isArray(data.reads) ? data.reads : [];
+  const map = seenMap();
+  let changed = false;
+  for (const row of rows) {
+    if (!row || !row.roomId || (row.client && row.client === readClientId)) continue;
+    const id = String(row.roomId);
+    const messageId = String(row.messageId || '');
+    if (row.rewind) {
+      if (messageId) map[id] = messageId;
+      else delete map[id];
+      changed = true;
+      continue;
+    }
+    if (!messageId || map[id] === messageId) continue;
+    if (map[id] && !readIsFurther(id, map[id], messageId)) continue;
+    map[id] = messageId;
+    changed = true;
+  }
+  if (!changed) return;
+  saveSeen(map);
+  pollActivity();
+  loadDms();
+}
+
 export function markSeen(id, messageId) {
   if (!id || !messageId) return;
   const map = seenMap();
   if (map[id] !== messageId) {
     map[id] = messageId;
     saveSeen(map);
+    queueRead(id, messageId, false);
   }
   forgetActivity(id);
 }
@@ -2326,9 +2404,10 @@ export async function pollActivity() {
   if (activityMissing) return;
   const serial = ++activitySerial;
   try {
+    const sentSeen = seenMap();
     const data = await api('/api/activity', {
       method: 'POST',
-      body: { seen: seenMap(), seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1' },
+      body: { seen: sentSeen, seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1', client: readClientId },
     });
     const calls = data.calls || {};
     const ringing = (calls.incoming || []).filter((call) => !call.at || Date.now() - Number(call.at) < 22000);
@@ -2337,15 +2416,25 @@ export async function pollActivity() {
     const firstChannels = localStorage.getItem(accountKey('nebula-channel-baseline')) !== '1';
     if (firstChannels && data.heads) {
       const map = seenMap();
-      for (const [id, messageId] of Object.entries(data.heads)) {
-        if (String(id).startsWith('dm:') || map[id] || !messageId) continue;
-        map[id] = messageId;
+      const remote = data.seen && typeof data.seen === 'object' ? data.seen : {};
+      const know = Object.keys(remote).length > 0;
+      for (const [id, messageId] of Object.entries(remote)) {
+        if (messageId) map[id] = messageId;
+      }
+      if (!know) {
+        for (const [id, messageId] of Object.entries(data.heads)) {
+          if (String(id).startsWith('dm:') || map[id] || !messageId) continue;
+          map[id] = messageId;
+        }
       }
       saveSeen(map);
       try { localStorage.setItem(accountKey('nebula-channel-baseline'), '1'); } catch (_) {}
-      ui.activity = { ...ui.activity, servers: {}, channels: {} };
-      return;
+      if (!know) {
+        ui.activity = { ...ui.activity, servers: {}, channels: {} };
+        return;
+      }
     }
+    adoptRemoteSeen(sentSeen, data.seen);
     if (serial !== activitySerial) return;
     const servers = { ...(data.servers || {}) };
     const channels = { ...(data.channels || {}) };
