@@ -1130,6 +1130,8 @@
   <h2>{titleName}</h2>
   {#if ui.mode === 'dm' && partnerInCall(ui.dmUser)}
     <span class="in-call"><Phone size={14} /> In a call</span>
+  {:else if ui.mode === 'dm' && typingPhrase.kind}
+    <span class="status-word typing-status">{typingPhrase.kind === 'one' ? typingPhrase.names[0] + ' is typing…' : 'Typing…'}</span>
   {:else if ui.mode === 'dm'}
     <span class="status-word {statusDot}">{statusLabel}</span>
   {:else if ui.mode === 'group'}

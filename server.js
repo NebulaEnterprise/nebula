@@ -4284,7 +4284,14 @@ const typingEpoch = new Map();
 function wakeTyping(key) {
   const roomId = key.startsWith('ch:') ? key.split(':').pop() : key;
   wakePulse(roomId);
-  if (hub) hub.room(roomId, 'TYPING', (user) => ({ roomId, typers: listTypers(key, user.id) }));
+  if (!hub) return;
+  const build = (user) => ({ roomId, typers: listTypers(key, user.id) });
+  hub.room(roomId, 'TYPING', build);
+  if (key.startsWith('dm:')) hub.users(key.slice(3).split(':'), 'TYPING', build);
+  else if (key.startsWith('group:')) {
+    const group = groups[key.slice('group:'.length)];
+    if (group) hub.users(group.memberIds || [], 'TYPING', build);
+  }
 }
 
 function noteEpoch(key, userId, token) {

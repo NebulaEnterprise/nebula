@@ -79,6 +79,7 @@ export const ui = $state({
   reply: null,
   editing: null,
   typers: [],
+  dmTyping: {},
   voice: null,
   voiceRooms: {},
   screen: null,
@@ -337,6 +338,7 @@ function resetSession() {
   ui.reply = null;
   ui.editing = null;
   ui.typers = [];
+  ui.dmTyping = {};
   ui.voice = null;
   ui.voiceRooms = {};
   ui.activity = { servers: {}, channels: {}, dms: {} };
@@ -1167,12 +1169,40 @@ function viewingRoom(roomId) {
   return false;
 }
 
+function typingHere(data) {
+  const roomId = String((data && data.roomId) || '');
+  if (viewingRoom(roomId)) return true;
+  if (ui.mode === 'dm' && ui.dmUser) {
+    const id = String(ui.dmUser.id || '');
+    if (id && roomId.split(':').includes(id)) return true;
+    if ((data.typers || []).some((row) => row && String(row.id) === id)) return true;
+  }
+  return false;
+}
+
+function noteTypingEvent(data) {
+  const roomId = String((data && data.roomId) || '');
+  const rows = Array.isArray(data && data.typers) ? data.typers : [];
+  if (roomId.startsWith('dm:') && ui.me) {
+    const otherId = roomId.split(':').slice(1).find((id) => id && id !== String(ui.me.id));
+    if (otherId) {
+      const hit = rows.find((row) => row && String(row.id) === String(otherId));
+      const book = { ...(ui.dmTyping || {}) };
+      if (hit) book[otherId] = { name: hit.name || 'Someone', until: Date.now() + 10000 };
+      else delete book[otherId];
+      ui.dmTyping = book;
+    }
+  }
+  if (!typingHere(data)) return;
+  acceptTypers(rows);
+}
+
 function applySocketMessage(type, data) {
-  if (!viewingRoom(data.roomId)) return;
   if (type === 'TYPING') {
-    acceptTypers(data.typers || []);
+    noteTypingEvent(data);
     return;
   }
+  if (!viewingRoom(data.roomId)) return;
   const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
   const logKey = currentRoom();
   if (type === 'MESSAGE_DELETE') {
@@ -1839,12 +1869,22 @@ function acceptTypers(list) {
 }
 
 setInterval(() => {
-  if (!ui.typers.length) return;
   const now = Date.now();
-  const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 12000);
-  if (next.length === ui.typers.length) return;
-  for (const row of ui.typers) if (!next.includes(row)) typerSeen.delete(row.id);
-  ui.typers = next;
+  if (ui.typers.length) {
+    const next = ui.typers.filter((row) => now - (typerSeen.get(row.id) || 0) < 12000);
+    if (next.length !== ui.typers.length) {
+      for (const row of ui.typers) if (!next.includes(row)) typerSeen.delete(row.id);
+      ui.typers = next;
+    }
+  }
+  const book = ui.dmTyping || {};
+  let changed = false;
+  const kept = {};
+  for (const [id, row] of Object.entries(book)) {
+    if (row && row.until > now) kept[id] = row;
+    else changed = true;
+  }
+  if (changed) ui.dmTyping = kept;
 }, 400);
 
 function typingBody() {
@@ -1922,6 +1962,14 @@ export async function refreshTyping() {
   try {
     const data = await api('/api/typing?' + q);
     acceptTypers(data.typers || []);
+    if (ui.mode === 'dm' && ui.dmUser?.id) {
+      const id = String(ui.dmUser.id);
+      const hit = (data.typers || []).find((row) => row && String(row.id) === id);
+      const book = { ...(ui.dmTyping || {}) };
+      if (hit) book[id] = { name: hit.name || 'Someone', until: Date.now() + 10000 };
+      else delete book[id];
+      ui.dmTyping = book;
+    }
   } catch (_) {}
   finally { typingBusy = false; }
 }

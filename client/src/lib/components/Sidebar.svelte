@@ -297,9 +297,10 @@
           {@const note = ui.activity.dms[dm.other?.id]}
           <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
             <Avatar user={dm.other} size={28} />
-            <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other)}>
+            <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other) || !!(ui.dmTyping && ui.dmTyping[dm.other.id])}>
               <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-              {#if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>
+              {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="dm-share">Typing…</span>
+              {:else if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>
               {:else if partnerInCall(dm.other)}<span class="dm-share">In a call</span>{/if}
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>

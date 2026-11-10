@@ -1850,6 +1850,7 @@ img { max-width: 100%; }
 }
 .top-search input::placeholder { color: #6d717a; }
 .status-word { font-size: 13px; font-weight: 650; color: var(--muted); }
+.status-word.typing-status { color: #3ecf8e; }
 .status-word.online { color: #3ecf8e; }
 .status-word.idle { color: #f0b429; }
 .status-word.dnd { color: #f06a6a; }
@@ -2013,6 +2014,10 @@ img { max-width: 100%; }
   .top { height: auto; min-height: 52px; padding: 6px 8px; gap: 6px; }
   .top h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .topic, .status-word, .top-search, .bar-tool kbd { display: none; }
+  .status-word.typing-status {
+    display: block; flex: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
   .top-tools { gap: 0; overflow-x: auto; }
   .bar-tool { width: 36px; height: 36px; flex-shrink: 0; }
   .composer { flex-wrap: nowrap; border-radius: 24px; }
