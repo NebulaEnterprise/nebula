@@ -8,7 +8,9 @@
   let online = $state(null);
   let onlineState = $state('loading');
 
-  const nav = ['Download', 'Developers', 'Plus', 'About'];
+  const nav = ['Developers', 'Plus', 'About'];
+  const desktop = typeof window !== 'undefined' && (!!window.nebulaDesktop || /Electron/i.test(navigator.userAgent));
+  const downloadUrl = 'https://github.com/userxxxxxxxxx/nebula/releases/latest/download/Nebula.exe';
   const features = [
     { icon: Zap, title: 'Blazing Fast', text: 'Messages show up as soon as they’re sent, wherever you are.' },
     { icon: Lock, title: 'Private rooms', text: 'Servers and chats stay with the people you let in.' },
@@ -77,6 +79,9 @@
     </button>
     <nav class="nav" aria-label="Site">
       <button type="button" class="on" onclick={toTop}>Home</button>
+      {#if !desktop}
+        <a href={downloadUrl}>Download</a>
+      {/if}
       {#each nav as label}
         <span>{label}</span>
       {/each}
@@ -100,6 +105,9 @@
       <h1>Connect beyond<br /><em>the stars.</em></h1>
       <p class="lead">Nebula is a fast, secure, and beautiful platform to chat, share, and build with your community.</p>
       <div class="actions">
+        {#if !desktop}
+          <a class="cta" href={downloadUrl}>Download</a>
+        {/if}
         <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
         <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
       </div>
@@ -253,14 +261,16 @@
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.28);
     backdrop-filter: blur(16px);
   }
-  .nav button, .nav span {
+  .nav button, .nav span, .nav a {
     padding: 8px 14px;
     border-radius: 999px;
     color: rgba(244, 240, 255, 0.72);
     font-size: 14px;
     font-weight: 600;
+    text-decoration: none;
   }
-  .nav button {
+  .nav a:hover { color: #fff; }
+  .nav button.on {
     background: #f4f1ff;
     color: #1a1028;
   }
@@ -352,6 +362,7 @@
   }
   .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
   .join .actions { justify-content: center; }
+  a.cta, a.ghost { text-decoration: none; }
   .cta, .ghost {
     display: inline-flex;
     align-items: center;
@@ -489,8 +500,9 @@
     border-color: rgba(90, 40, 160, 0.12);
     box-shadow: 0 12px 32px rgba(80, 40, 140, 0.08);
   }
-  .home.light .nav span, .home.light .lead, .home.light .live, .home.light .features p, .home.light .join p { color: #5c4d78; }
-  .home.light .nav button { background: #1b1230; color: white; }
+  .home.light .nav span, .home.light .nav a, .home.light .lead, .home.light .live, .home.light .features p, .home.light .join p { color: #5c4d78; }
+  .home.light .nav a:hover { color: #1b1230; }
+  .home.light .nav button.on { background: #1b1230; color: white; }
   .home.light .window { background: #fff; color: #1b1230; border-color: rgba(90, 40, 160, 0.16); }
   .home.light aside { background: #f6f1ff; }
   .home.light .thread footer { background: #f3eefe; color: #8b7aa8; }

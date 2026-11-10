@@ -24,4 +24,4 @@ npm install
 npm run dist
 ```
 
-Windows builds an installer and a portable `.exe` in `desktop/dist`. Those files are not committed. The installed app still loads the live site, so later site updates show up without building again.
+Windows builds an installer and a portable `Nebula.exe` in `desktop/dist`. Those files are not committed. The installed app still loads the live site, so later site updates show up without building again. Upload each new portable file to the GitHub release as `Nebula.exe`. The home page Download button always uses that file.

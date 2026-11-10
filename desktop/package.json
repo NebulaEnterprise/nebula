@@ -39,6 +39,12 @@
         "portable"
       ]
     },
+    "portable": {
+      "artifactName": "Nebula.exe"
+    },
+    "nsis": {
+      "artifactName": "Nebula-Setup-${version}.${ext}"
+    },
     "mac": {
       "icon": "build/icon.png",
       "category": "public.app-category.social-networking",
