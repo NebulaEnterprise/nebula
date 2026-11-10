@@ -1974,6 +1974,10 @@ img { max-width: 100%; }
     position: static; height: auto; min-height: 100dvh; overflow: visible;
     transform: none !important;
   }
+  html:has(.shell) #app {
+    position: fixed; left: 0; right: 0; top: 0; bottom: var(--kb, 0px);
+    height: auto; transform: none !important;
+  }
   .auth {
     min-height: 100dvh; align-items: flex-start; justify-content: flex-start;
     padding: 24px 16px 48px;

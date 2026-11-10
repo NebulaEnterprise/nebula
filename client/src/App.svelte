@@ -50,17 +50,18 @@
         }
         return;
       }
-      const height = Math.round(vv.height);
-      const offset = Math.round(vv.offsetTop);
-      const overlap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
       if (!app.querySelector('.shell')) {
         app.style.removeProperty('height');
-        app.style.transform = 'none';
+        app.style.removeProperty('transform');
+        root.style.setProperty('--kb', '0px');
         root.classList.remove('kb');
         return;
       }
-      app.style.height = height + 'px';
-      app.style.transform = offset ? 'translateY(' + offset + 'px)' : 'none';
+      if (vv.offsetTop > 1 || window.scrollY > 0) window.scrollTo(0, 0);
+      const overlap = Math.max(0, Math.round(window.innerHeight - vv.offsetTop - vv.height));
+      app.style.removeProperty('height');
+      app.style.removeProperty('transform');
+      root.style.setProperty('--kb', overlap + 'px');
       root.classList.toggle('kb', overlap > 60);
     };
     fitKeyboard();

@@ -776,6 +776,7 @@
   function onComposerFocus() {
     menu = null;
     follow = true;
+    if (window.scrollY) window.scrollTo(0, 0);
     requestAnimationFrame(() => pinBottom());
   }
 
