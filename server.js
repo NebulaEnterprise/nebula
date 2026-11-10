@@ -9,6 +9,7 @@ const { execFile, spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
+const { attachGateway } = require('./gateway');
 const security = (() => {
 const qrApi = (() => {
 const EXP = new Uint8Array(512);
@@ -1024,20 +1025,41 @@ let messages = load(MESSAGES_FILE, {});
 const pulseWaiters = new Set();
 let profileRev = 1;
 let alertRev = 1;
+let hub = null;
 function touchProfiles() {
   profileRev += 1;
   for (const waiter of [...pulseWaiters]) waiter.finish();
+  if (hub) hub.all('PROFILES', { profiles: String(profileRev) });
 }
 function touchAlerts() {
   alertRev += 1;
   for (const waiter of [...pulseWaiters]) {
     if (waiter.alert) waiter.finish();
   }
+  if (hub) hub.all('ALERT', { cursor: String(alertRev) });
+}
+function pushVoice() {
+  if (!hub || typeof app.locals.voiceSnapshot !== 'function') return;
+  hub.all('VOICE', (user) => {
+    try { return app.locals.voiceSnapshot(user); } catch (_) { return null; }
+  });
 }
 function wakePulse(roomId) {
   for (const waiter of pulseWaiters) {
     if (waiter.roomId === roomId) waiter.finish();
   }
+}
+function publishCreate(roomId, msg) {
+  wakePulse(roomId);
+  if (hub) hub.room(roomId, 'MESSAGE_CREATE', (user) => ({ roomId, message: presentMessage(msg, user.id) }));
+}
+function publishUpdate(roomId, msg) {
+  wakePulse(roomId);
+  if (hub) hub.room(roomId, 'MESSAGE_UPDATE', (user) => ({ roomId, message: presentMessage(msg, user.id) }));
+}
+function publishDelete(roomId, id) {
+  wakePulse(roomId);
+  if (hub) hub.room(roomId, 'MESSAGE_DELETE', () => ({ roomId, id }));
 }
 function memberStamp(g) {
   const rows = Object.keys((g && g.members) || {}).sort().map((id) => {
@@ -1069,6 +1091,7 @@ function wakeGuild(g) {
   for (const waiter of [...pulseWaiters]) {
     if (rooms.has(waiter.roomId)) waiter.finish();
   }
+  if (hub) hub.guild(g.id, 'MEMBERS', { serverId: g.id });
 }
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
@@ -3535,7 +3558,7 @@ function finishCall(row, missed) {
         msg.callMissed = true;
       }
       save(MESSAGES_FILE, messages);
-      wakePulse(row.channelId);
+      publishUpdate(row.channelId, msg);
     }
   }
   saveCalls();
@@ -3652,7 +3675,7 @@ app.post('/api/calls', auth, (req, res) => {
   });
   saveCalls();
   save(MESSAGES_FILE, messages);
-  wakePulse(channelId);
+  publishCreate(channelId, messages[channelId][messages[channelId].length - 1]);
   touchAlerts();
   res.json({ ok: true, call: callView(row) });
 });
@@ -4085,7 +4108,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
   save(MESSAGES_FILE, messages);
   silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
-  wakePulse(found.channel.id);
+  publishCreate(found.channel.id, msg);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -4139,7 +4162,9 @@ function listTypers(key, selfId) {
 const typingEpoch = new Map();
 
 function wakeTyping(key) {
-  wakePulse(key.startsWith('ch:') ? key.split(':').pop() : key);
+  const roomId = key.startsWith('ch:') ? key.split(':').pop() : key;
+  wakePulse(roomId);
+  if (hub) hub.room(roomId, 'TYPING', (user) => ({ roomId, typers: listTypers(key, user.id) }));
 }
 
 function noteEpoch(key, userId, token) {
@@ -4313,6 +4338,34 @@ app.get('/api/alert', auth, (req, res) => {
   const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(req.user) : null;
   res.json({ ok: true, cursor: current, voice });
 });
+
+function resolveWatch(user, data) {
+  const dmUserId = String(data.dmUserId || '');
+  if (dmUserId) {
+    if (!users[dmUserId]) return null;
+    const key = dmKey(user.id, dmUserId);
+    return { roomId: 'dm:' + key, serverId: '' };
+  }
+  const groupId = String(data.groupId || '');
+  if (groupId) {
+    const group = groups[groupId];
+    if (!group || !(group.memberIds || []).map(String).includes(String(user.id))) return null;
+    return { roomId: 'group:' + groupId, serverId: '' };
+  }
+  const threadId = String(data.threadId || '');
+  if (threadId) {
+    const thread = threads[threadId];
+    if (!thread) return null;
+    const found = findChannel(thread.channelId, thread.serverId);
+    if (!found || !can(found.guild, user, PERM.VIEW, found.channel)) return null;
+    return { roomId: 'thread:' + threadId, serverId: found.guild.id };
+  }
+  const channelId = String(data.channelId || '');
+  if (!channelId) return null;
+  const found = findChannel(channelId, String(data.serverId || ''));
+  if (!found || !can(found.guild, user, PERM.VIEW, found.channel)) return null;
+  return { roomId: found.channel.id, serverId: found.guild.id };
+}
 
 app.get('/api/pulse', auth, (req, res) => {
   ensureGuilds();
@@ -4762,7 +4815,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
   save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
-  wakePulse(channelId);
+  publishCreate(channelId, msg);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -4787,7 +4840,7 @@ function appendRoomMessage(roomId, req) {
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
   save(MESSAGES_FILE, messages);
   silenceTyping(roomId, req.user.id, req.body && req.body.typingToken);
-  wakePulse(roomId);
+  publishCreate(roomId, msg);
   touchAlerts();
   return { message: msg };
 }
@@ -5114,7 +5167,7 @@ app.post('/api/messages/:id/pin', auth, (req, res) => {
   found.msg.pinned = on;
   found.msg.pinnedAt = on ? new Date().toISOString() : '';
   save(MESSAGES_FILE, messages);
-  wakePulse(found.roomId);
+  publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
 
@@ -5247,7 +5300,7 @@ app.post('/api/messages/:id/reactions', auth, (req, res) => {
   else row.users.push(String(req.user.id));
   msg.reactions = msg.reactions.filter((item) => item && item.users && item.users.length);
   save(MESSAGES_FILE, messages);
-  wakePulse(found.roomId);
+  publishUpdate(found.roomId, msg);
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
 
@@ -5264,7 +5317,7 @@ app.patch('/api/messages/:id', auth, (req, res) => {
     if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
   }
   save(MESSAGES_FILE, messages);
-  wakePulse(found.roomId);
+  publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
 
@@ -5276,7 +5329,7 @@ app.delete('/api/messages/:id', auth, (req, res) => {
   if (String(found.msg.authorId) !== String(req.user.id) && !manage) return res.status(403).json({ error: 'You can only delete your own messages' });
   found.list.splice(found.index, 1);
   save(MESSAGES_FILE, messages);
-  wakePulse(found.roomId);
+  publishDelete(found.roomId, req.params.id);
   res.json({ ok: true });
 });
 
@@ -5332,7 +5385,7 @@ app.post('/api/messages/:id/forward', auth, (req, res) => {
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
   save(MESSAGES_FILE, messages);
-  wakePulse(roomId);
+  publishCreate(roomId, msg);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -5358,7 +5411,7 @@ app.post('/api/polls/:messageId/vote', auth, (req, res) => {
       msg.poll.votes[id].push(req.user.id);
     }
     save(MESSAGES_FILE, messages);
-    wakePulse(msg.channelId);
+    publishUpdate(msg.channelId, msg);
     return res.json({ ok: true, poll: publicPoll(msg.poll, req.user.id) });
   }
   res.status(404).json({ error: 'Poll not found' });
@@ -5790,6 +5843,7 @@ app.get('/api/health', (req, res) => {
   function bumpVoice() {
     voiceRev += 1;
     touchAlerts();
+    pushVoice();
   }
 
   function prune(room) {
@@ -6127,6 +6181,17 @@ async function pullUpdates() {
 
 function listen() {
   httpServer = app.listen(PORT, '0.0.0.0', () => {
+    hub = attachGateway(httpServer, {
+      identify(token) {
+        const found = security.findSession(users, token);
+        return found ? found.user : null;
+      },
+      watch: resolveWatch,
+      ready(user) {
+        const voice = typeof app.locals.voiceSnapshot === 'function' ? app.locals.voiceSnapshot(user) : null;
+        return { cursor: String(alertRev), voice };
+      },
+    });
     console.log('\n  Nebula backend -> http://localhost:' + PORT);
     console.log('  Frontend folder: ' + FRONTEND_DIR);
     console.log('  Users: ' + Object.keys(users).length);

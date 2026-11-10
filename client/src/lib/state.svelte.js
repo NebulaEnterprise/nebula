@@ -1,4 +1,5 @@
 import { api, pinMedia, warmMedia, uploadFile, setUnauthorizedHandler } from './api.js';
+import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
@@ -157,6 +158,7 @@ export function logout() {
   import('./voice.js').then((mod) => mod.leaveVoice());
   if (id) writeAccounts(savedAccounts().filter((row) => row.id !== id));
   localStorage.removeItem('dc_token');
+  disconnectGateway();
   ui.me = null;
   ui.members = [];
   ui.messages = [];
@@ -1125,13 +1127,150 @@ async function pullLive(query, signal) {
   return { messages: data.messages || [], typers: [] };
 }
 
+function roomWatch() {
+  if (ui.mode === 'dm' && ui.dmUser) return { dmUserId: ui.dmUser.id };
+  if (ui.mode === 'group' && ui.group) return { groupId: ui.group.id };
+  if (ui.mode === 'thread' && ui.thread) return { threadId: ui.thread.id };
+  if (ui.mode === 'chat' && ui.channelId) return { channelId: ui.channelId, serverId: ui.serverId || '' };
+  return {};
+}
+
+function viewingRoom(roomId) {
+  if (!roomId || !ui.me) return false;
+  if (ui.mode === 'chat') return roomId === ui.channelId;
+  if (ui.mode === 'dm' && ui.dmUser) return roomId === 'dm:' + [ui.me.id, ui.dmUser.id].sort().join(':');
+  if (ui.mode === 'group' && ui.group) return roomId === 'group:' + ui.group.id;
+  if (ui.mode === 'thread' && ui.thread) return roomId === 'thread:' + ui.thread.id;
+  return false;
+}
+
+function applySocketMessage(type, data) {
+  if (!viewingRoom(data.roomId)) return;
+  if (type === 'TYPING') {
+    acceptTypers(data.typers || []);
+    return;
+  }
+  const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
+  const logKey = currentRoom();
+  if (type === 'MESSAGE_DELETE') {
+    ui.messages = ui.messages.filter((msg) => msg && msg.id !== data.id);
+    rememberLog(logKey, ui.messages);
+    return;
+  }
+  const message = data.message;
+  if (!message || !message.id) return;
+  const idx = ui.messages.findIndex((msg) => msg && msg.id === message.id);
+  if (type === 'MESSAGE_UPDATE') {
+    if (idx < 0) return;
+    const next = ui.messages.slice();
+    next[idx] = message;
+    ui.messages = next;
+    rememberLog(logKey, ui.messages);
+    return;
+  }
+  if (idx >= 0) {
+    const next = ui.messages.slice();
+    next[idx] = message;
+    ui.messages = next;
+  } else {
+    ui.messages = [...ui.messages, message];
+    paintNames([message]);
+    if (message.author && message.author.id) ui.typers = ui.typers.filter((row) => row.id !== message.author.id);
+    if (ui.readHold !== roomKey) markSeen(roomKey, message.id);
+    ui.seenMessageId = message.id;
+    announceFresh(ui.messages, roomKey);
+  }
+  rememberLog(logKey, ui.messages);
+  ui.chatLoading = false;
+}
+
+let alertTask = null;
+let alertPending = false;
+function noteSocketAlert(data) {
+  const next = String((data && data.cursor) || '');
+  const changed = !!alertCursor && next !== alertCursor;
+  if (next) alertCursor = next;
+  if (!changed) return;
+  alertPending = true;
+  if (alertTask) return;
+  alertTask = (async () => {
+    try {
+      while (alertPending) {
+        alertPending = false;
+        if (document.hidden) break;
+        await pollActivity();
+        if (onDmSide()) {
+          loadDms();
+          loadGroups();
+        }
+      }
+    } finally {
+      alertTask = null;
+    }
+  })();
+}
+
+function applySocket(packet) {
+  const type = packet && packet.t;
+  const data = (packet && packet.d) || {};
+  if (type === 'READY' || type === 'RESUMED') {
+    if (data.cursor) alertCursor = String(data.cursor);
+    if (data.voice) import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data.voice)).catch(() => {});
+    return;
+  }
+  if (type === 'RESYNC') {
+    const looking = ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread';
+    if (looking) loadMessages();
+    pollActivity();
+    return;
+  }
+  if (type === 'MESSAGE_CREATE' || type === 'MESSAGE_UPDATE' || type === 'MESSAGE_DELETE' || type === 'TYPING') {
+    applySocketMessage(type, data);
+    return;
+  }
+  if (type === 'MEMBERS') {
+    if (ui.mode === 'chat' && data.serverId === ui.serverId) loadMembers(true);
+    return;
+  }
+  if (type === 'PROFILES') {
+    if (ui.mode === 'chat') loadMembers(true);
+    else if (ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') loadMessages(true);
+    return;
+  }
+  if (type === 'ALERT') {
+    noteSocketAlert(data);
+    return;
+  }
+  if (type === 'VOICE') {
+    import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data)).catch(() => {});
+  }
+}
+
 async function watchChat() {
   if (watchStarted) return;
   watchStarted = true;
+  connectGateway();
+  onGateway(applySocket);
+  let followed = '';
   while (true) {
     const looking = !!localStorage.getItem('dc_token') && (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread');
-    if (!looking) {
-      await sleep(1500);
+    if (gatewayReady()) {
+      if (liveCtrl) {
+        liveCtrl.abort();
+        liveCtrl = null;
+      }
+      const query = looking ? roomWatch() : {};
+      const key = JSON.stringify(query);
+      if (key !== followed) {
+        followed = key;
+        subscribeGateway(query);
+      }
+      await sleep(400);
+      continue;
+    }
+    followed = '';
+    if (!looking || !gatewayStale()) {
+      await sleep(400);
       continue;
     }
     liveCtrl = new AbortController();
@@ -2219,6 +2358,10 @@ async function watchAlerts() {
   while (true) {
     if (alertMissing || !localStorage.getItem('dc_token')) {
       await sleep(4000);
+      continue;
+    }
+    if (gatewayReady()) {
+      await sleep(1000);
       continue;
     }
     try {
