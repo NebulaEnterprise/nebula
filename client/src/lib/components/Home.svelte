@@ -72,7 +72,7 @@
   <div class="sky" aria-hidden="true"></div>
   <header class="bar">
     <button class="logo" type="button" onclick={toTop}>
-      <span class="gem" aria-hidden="true"></span>
+      <img class="gem" src="./logo.webp" alt="" />
       Nebula
     </button>
     <nav class="nav" aria-label="Site">
@@ -120,7 +120,7 @@
       <div class="window">
         <div class="chrome">
           <span></span><span></span><span></span>
-          <strong>Nebula</strong>
+          <strong><img src="./logo.webp" alt="" /> Nebula</strong>
           <em>×</em>
         </div>
         <div class="app">
@@ -233,12 +233,15 @@
     letter-spacing: -0.03em;
   }
   .gem {
-    width: 22px;
-    height: 22px;
-    background: linear-gradient(145deg, #d8c8ff, #7c4dff 55%, #4c1d95);
-    clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: #000;
     box-shadow: 0 0 16px rgba(160, 100, 255, 0.7);
   }
+  .chrome strong { display: inline-flex; align-items: center; gap: 6px; }
+  .chrome strong img { width: 16px; height: 16px; border-radius: 4px; object-fit: cover; background: #000; }
   .nav {
     display: flex;
     align-items: center;
