@@ -1,5 +1,5 @@
 import { api, getApiBase } from './api.js';
-import { ui, toast, callTone } from './state.svelte.js';
+import { ui, toast, callTone, gateCall } from './state.svelte.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -470,6 +470,7 @@ export async function startCall(user) {
     return;
   }
   if (person && ui.me && String(person.id) !== String(ui.me.id)) {
+    if (gateCall(person)) return;
     try {
       const data = await api('/api/calls', { method: 'POST', body: { userId: person.id } });
       ui.outgoingCall = data.call;

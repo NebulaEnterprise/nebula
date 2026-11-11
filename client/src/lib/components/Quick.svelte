@@ -161,8 +161,8 @@
 
   async function send() {
     const content = draft.trim();
-    const user = ui.quickUser;
-    if (!content || !user?.id || sending) return;
+    const user = who;
+    if (!content || !user?.id || sending || user.canMessage === false) return;
     sending = true;
     draft = '';
     const typingToken = stopQuick(user.id, false);
@@ -283,10 +283,14 @@
         {#if quickTyping}
           <p class="quick-typing"><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span> <strong>{who.displayName || who.username}</strong> is typing...</p>
         {/if}
+        {#if who?.canMessage === false}
+          <div class="quick-compose blocked-bar"><span>You can't message this user.</span></div>
+        {:else}
         <form class="quick-compose" onsubmit={(event) => { event.preventDefault(); send(); }}>
           <input bind:value={draft} maxlength="2000" placeholder={'Message @' + (who?.username || '')} onkeydown={onKey} oninput={() => markQuick(ui.quickUser?.id)} />
           <button class="send" type="submit" disabled={sending || !draft.trim()}>Send</button>
         </form>
+        {/if}
       {:else}
         <div class="quick-list">
           {#each rows as dm (dm.id)}
