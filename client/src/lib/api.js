@@ -229,6 +229,40 @@ export function warmMedia(urls) {
   }
 }
 
+const decodedMedia = new Set();
+
+export function mediaReady(url) {
+  if (!url) return false;
+  if (decodedMedia.has(url)) return true;
+  return decodedMedia.has(fileUrl(bannerGif(url)));
+}
+
+function decodeSrc(src) {
+  if (!src || decodedMedia.has(src)) return Promise.resolve(src);
+  return new Promise((resolve) => {
+    const img = new Image();
+    const finish = () => {
+      decodedMedia.add(src);
+      resolve(src);
+    };
+    img.onload = () => {
+      if (typeof img.decode === 'function') img.decode().then(finish).catch(finish);
+      else finish();
+    };
+    img.onerror = () => resolve('');
+    img.src = src;
+  });
+}
+
+export function primeMedia(urls) {
+  const list = Array.isArray(urls) ? urls : [urls];
+  return Promise.all(list.filter((url) => url && !isSongFile(url)).map(async (url) => {
+    const src = await resolveMedia(bannerGif(url));
+    if (!src) return '';
+    return decodeSrc(src);
+  }));
+}
+
 export function pinMedia(url, file) {
   if (!url || !file) return;
   const full = fileUrl(url);

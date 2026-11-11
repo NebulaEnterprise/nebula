@@ -6,7 +6,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
+  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
   import { seenPhrase, presenceDot } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
@@ -1304,12 +1304,12 @@
           {/each}
         </div>
       {/if}
-      <button type="button" class="msg-av" onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
+      <button type="button" class="msg-av" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <span class="msg-id"><strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong><NameExtras user={liveAuthor(msg.author)} /></span>
+          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}><strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong></button><NameExtras user={liveAuthor(msg.author)} /></span>
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

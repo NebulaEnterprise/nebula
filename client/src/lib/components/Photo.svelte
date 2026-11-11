@@ -1,8 +1,14 @@
 <script>
-  import { bannerGif, fileUrl, pinnedSrc, resolveMedia } from '../api.js';
+  import { bannerGif, fileUrl, pinnedSrc, resolveMedia, primeMedia, mediaReady } from '../api.js';
 
   let { url = '', fill = false } = $props();
   let src = $state('');
+  let ready = $state(false);
+
+  function motion(value) {
+    const raw = String(value || '');
+    return /\.gif(\?|#|$)/i.test(raw) || /\/uploads\/a_/i.test(raw);
+  }
 
   function direct(value) {
     if (!value) return '';
@@ -13,18 +19,35 @@
     return '';
   }
 
+  function show(next) {
+    if (!next) return;
+    const known = mediaReady(next);
+    if (next !== src) {
+      ready = known;
+      src = next;
+    } else if (known) {
+      ready = true;
+    }
+  }
+
   $effect(() => {
     const current = bannerGif(url);
     let stop = false;
-    const apply = () => {
+    const paint = () => {
       if (stop) return;
-      const next = direct(current);
-      if (next) src = next;
+      show(direct(current));
     };
-    apply();
-    const onReady = () => apply();
+    if (motion(current) && !current.startsWith('blob:') && !current.startsWith('data:')) {
+      primeMedia(current).then((next) => { if (!stop) show(next); });
+    } else {
+      paint();
+      if (current && !direct(current)) resolveMedia(current).then((next) => { if (!stop) show(next); });
+    }
+    const onReady = () => {
+      if (motion(current)) primeMedia(current).then((next) => { if (!stop) show(next); });
+      else paint();
+    };
     navigator.serviceWorker?.addEventListener('controllerchange', onReady);
-    if (current && !direct(current)) resolveMedia(current).then((next) => { if (!stop && next) src = next; });
     return () => {
       stop = true;
       navigator.serviceWorker?.removeEventListener('controllerchange', onReady);
@@ -34,11 +57,11 @@
   function failed() {
     const current = bannerGif(url);
     if (!current || current.startsWith('blob:') || current.startsWith('data:')) return;
-    resolveMedia(current).then((next) => { if (next) src = next; });
+    resolveMedia(current).then((next) => show(next));
   }
 </script>
 
-{#if src}<img class:fill src={src} alt="" decoding="async" onerror={failed} />{/if}
+{#if src}<img class:fill class:ready src={src} alt="" decoding={ready ? 'sync' : 'async'} onload={() => (ready = true)} onerror={failed} />{/if}
 
 <style>
   img.fill {

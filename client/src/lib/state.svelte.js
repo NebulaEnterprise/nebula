@@ -1,4 +1,4 @@
-import { api, pinMedia, warmMedia, uploadFile, setUnauthorizedHandler } from './api.js';
+import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandler } from './api.js';
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
@@ -208,6 +208,7 @@ export async function boot() {
     ui.me = data.user;
     rememberAccount(data.user, token);
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
+    primeMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
   } catch {
     forgetToken(token);
@@ -366,6 +367,7 @@ export async function switchAccount(id) {
     ui.me = data.user;
     rememberAccount(data.user, row.token);
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
+    primeMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
   } catch (err) {
     forgetToken(row.token);
@@ -2719,6 +2721,23 @@ export async function loadProfile(id) {
   return data.user || null;
 }
 
+const profileLoads = new Map();
+
+export function peekProfile(user) {
+  if (!user || !user.id) return Promise.resolve(null);
+  primeMedia([user.bannerUrl, user.avatarUrl]);
+  if (profileLoads.has(user.id)) return profileLoads.get(user.id);
+  const job = loadProfile(user.id).then((fresh) => {
+    if (fresh) primeMedia([fresh.bannerUrl, fresh.avatarUrl]);
+    return fresh;
+  }).catch(() => {
+    profileLoads.delete(user.id);
+    return null;
+  });
+  profileLoads.set(user.id, job);
+  return job;
+}
+
 export async function openPopout(user, x, y) {
   const inServer = ui.mode === 'chat' && !!ui.serverId;
   const known = inServer ? ui.members.find((m) => m.id === user.id) : null;
@@ -2727,8 +2746,9 @@ export async function openPopout(user, x, y) {
     : { ...user, roles: inServer ? (user.roles || []) : [] };
   ui.popout = { user: seed, x, y };
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
+  primeMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
-  loadProfile(user.id).then((fresh) => {
+  peekProfile(user).then((fresh) => {
     if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
     ui.popout = { user: { ...ui.popout.user, ...fresh, roles: ui.popout.user.roles || [] }, x, y };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
@@ -2743,6 +2763,7 @@ export async function openPopout(user, x, y) {
     if (!fresh) return;
     ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || [] }, x, y };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
+    primeMedia([fresh.bannerUrl, fresh.avatarUrl]);
   } catch (_) {}
 }
 

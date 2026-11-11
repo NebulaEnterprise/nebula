@@ -669,6 +669,12 @@ img { max-width: 100%; }
 }
 .msg-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; max-width: 100%; }
 .msg-id { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+.msg-name, .friend-name {
+  display: inline-flex; align-items: center; min-width: 0; max-width: 100%;
+  padding: 0; background: none; color: inherit; font: inherit; text-align: left;
+}
+.msg-name:hover, .meta .friend-name:hover { text-decoration: underline; }
+.friend > .friend-name { flex-shrink: 0; }
 .msg-head strong { min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-head time { color: var(--faint); font-size: 12px; flex-shrink: 0; }
 .day-line {
@@ -1492,6 +1498,11 @@ img { max-width: 100%; }
 .look-banner, .preview-banner, .pop-banner {
   position: relative; overflow: hidden; background: var(--brand); flex-shrink: 0;
 }
+.pop-banner img, .look-banner img, .account-banner img {
+  opacity: 0;
+  transition: opacity 140ms linear;
+}
+.pop-banner img.ready, .look-banner img.ready, .account-banner img.ready { opacity: 1; }
 .look-banner { height: 72px; min-height: 72px; max-height: 72px; border-radius: 12px; margin-bottom: 10px; }
 .look-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .btn.brand.look-btn { width: auto; cursor: pointer; }

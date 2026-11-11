@@ -2,7 +2,7 @@
   import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, friendAct, toast } from '../state.svelte.js';
+  import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, peekProfile, friendAct, toast } from '../state.svelte.js';
   import { seenPhrase, presenceDot } from '../seen.js';
   import { api } from '../api.js';
   let q = $state('');
@@ -155,10 +155,10 @@
   {:else}
     <div class="cat">{ui.friendsTab === 'online' ? 'Online' : 'All friends'} — {list.length}</div>
     {#each list as u}
-      <div class="friend">
-        <Avatar user={u} size={40} />
+      <div class="friend" onpointerenter={() => peekProfile(u)}>
+        <button type="button" class="friend-name" title="Profile" onclick={() => openPopout(u)}><Avatar user={u} size={40} /></button>
         <div class="meta">
-          <strong><Name user={u} /></strong>
+          <button type="button" class="friend-name" onclick={() => openPopout(u)}><strong><Name user={u} /></strong></button>
           <span>{u.customStatus || seenPhrase(u, nowClock.t)}</span>
         </div>
         <button class="btn icon" title="Message" onclick={() => openDm(u)}><MessageSquare size={16} /></button>
