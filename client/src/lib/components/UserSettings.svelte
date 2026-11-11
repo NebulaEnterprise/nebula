@@ -16,7 +16,7 @@
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
-  import { fileToDataUrl, shrinkGif } from '../image.js';
+  import { fitProfileFile, PROFILE_BYTE_LIMIT } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
 
@@ -246,18 +246,8 @@
     form[field] = preview;
     paintPicture(field, preview);
     const job = (async () => {
-      const isGif = /image\/gif/i.test(file.type) || /\.gif$/i.test(file.name || '');
-      let body = file;
-      if (isGif && kind !== 'banner') {
-        body = await shrinkGif(file, { max: 160, frames: 12, colors: 32 });
-      } else if (!isGif && file.size > 600 * 1024) {
-        const small = await fileToDataUrl(file, {
-          maxW: kind === 'banner' ? 960 : 512,
-          maxH: kind === 'banner' ? 540 : 512,
-          quality: 0.78,
-        });
-        body = await (await fetch(small)).blob();
-      }
+      if (file.size > PROFILE_BYTE_LIMIT) toast('Resizing to 1 MB…');
+      const body = await fitProfileFile(file, kind);
       const data = await api('/api/upload?slot=' + kind, {
         method: 'POST',
         body,
