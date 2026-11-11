@@ -1517,6 +1517,8 @@ img { max-width: 100%; }
 .drop strong { color: var(--text); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 28px; align-items: start; }
 .grid-2 > * { min-width: 0; }
+.privacy-pick { max-width: 360px; margin-top: 8px; }
+.privacy-pick .select { width: 100%; min-width: 0; }
 .select { position: relative; min-width: 160px; }
 .select-btn {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
