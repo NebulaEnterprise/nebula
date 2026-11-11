@@ -56,8 +56,8 @@
     </div>
     {#if rel !== 'self'}
       <div class="pop-actions">
-        <button class="pop-msg" title="Message" onclick={() => { ui.popout = null; openDm(u); }}><MessageSquare size={18} /></button>
-        <button class="pop-more" title="More" onclick={() => (more = !more)}><MoreHorizontal size={18} /></button>
+        <button class="pop-msg" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="Message" onclick={() => { ui.popout = null; openDm(u); }}><MessageSquare size={18} /></button>
+        <button class="pop-more" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="More" onclick={() => (more = !more)}><MoreHorizontal size={18} /></button>
       </div>
       {#if more}
         <div class="pop-menu">
