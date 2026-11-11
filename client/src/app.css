@@ -712,6 +712,10 @@ img { max-width: 100%; }
 }
 .call-note :global(svg) { color: #3ecf8e; flex-shrink: 0; }
 .call-note time { color: var(--faint); font-weight: 500; font-size: 12px; }
+.privacy-note {
+  justify-content: center; margin: 10px 16px; padding: 8px 12px;
+  border-radius: 8px; background: #1e1f22; color: #dbdee1; text-align: center;
+}
 .call-stage, .call-board {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px; min-height: 0; padding: 16px 16px 12px; flex-shrink: 0;

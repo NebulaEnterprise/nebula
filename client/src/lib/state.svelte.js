@@ -1588,6 +1588,28 @@ export async function loadMembers(quiet) {
   finally { membersBusy = false; }
 }
 
+export function privacyStop(message) {
+  const text = String(message || '');
+  return text.startsWith('They only accept') || text.startsWith('They are not accepting');
+}
+
+export async function showFriendGate(user) {
+  const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
+  if (!same && user && user.id) await openDm(user);
+  const name = user?.displayName || user?.username || 'them';
+  const content = 'You have to become friends with ' + name + ' first.';
+  const last = ui.messages[ui.messages.length - 1];
+  if (last && last.kind === 'notice' && last.content === content) return;
+  ui.messages = [...ui.messages, {
+    id: 'local-gate-' + Date.now(),
+    clientKey: 'local-gate-' + Math.random().toString(36).slice(2),
+    kind: 'notice',
+    roomKey: currentRoom(),
+    content,
+    createdAt: new Date().toISOString(),
+  }];
+}
+
 function stitchLog(list, roomKey) {
   const pending = ui.messages.filter((msg) => msg && String(msg.id || '').startsWith('local-') && (msg.roomKey === roomKey || !msg.roomKey));
   const used = new Set();
@@ -1698,6 +1720,11 @@ export async function sendMessage() {
   try {
     await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
+    if (privacyStop(err.message)) {
+      ui.messages = ui.messages.filter((msg) => msg.id !== tempId);
+      showFriendGate(ui.dmUser);
+      return;
+    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message);
   }
@@ -1807,6 +1834,11 @@ export async function sendFiles(list) {
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
     return true;
   } catch (err) {
+    if (privacyStop(err.message)) {
+      ui.messages = ui.messages.filter((msg) => msg.id !== tempId);
+      showFriendGate(target?.dmUserId ? { id: target.dmUserId, displayName: ui.dmUser?.displayName, username: ui.dmUser?.username } : ui.dmUser);
+      return false;
+    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');
     return false;
@@ -1818,6 +1850,10 @@ export async function sendPoll(poll) {
   try {
     await postMessage({ poll });
   } catch (err) {
+    if (privacyStop(err.message)) {
+      showFriendGate(ui.dmUser);
+      return;
+    }
     toast(err.message);
   }
 }

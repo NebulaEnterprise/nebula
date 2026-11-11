@@ -1264,7 +1264,9 @@
     {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
       <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
     {/if}
-    {#if msg.kind === 'call'}
+    {#if msg.kind === 'notice'}
+      <div class="call-note privacy-note"><span>{msg.content}</span></div>
+    {:else if msg.kind === 'call'}
       <div class="call-note">
         <Phone size={16} />
         <span>
