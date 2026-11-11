@@ -1,8 +1,7 @@
 const { app, BaseWindow, BrowserWindow, WebContentsView, Menu, shell, session, desktopCapturer, ipcMain } = require('electron');
 const path = require('path');
+const { resolveLink, pageUrl, DEFAULT_URL } = require('./link');
 
-const SITE = 'https://www.nebulaspace.lol/';
-const SITE_HOSTS = new Set(['www.nebulaspace.lol', 'nebulaspace.lol']);
 const BAR = 40;
 const ICON = path.join(__dirname, 'build', 'icon.png');
 
@@ -17,6 +16,8 @@ let pickerWindow = null;
 let loadedScript = '';
 let pendingUpdate = false;
 let picking = null;
+let link = { url: DEFAULT_URL, server: '', config: '' };
+let linkCheckedAt = 0;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -24,10 +25,23 @@ if (!gotLock) app.quit();
 function isSiteUrl(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && SITE_HOSTS.has(parsed.hostname);
+    if (parsed.protocol !== 'https:') return false;
+    const allowed = new Set(['www.nebulaspace.lol', 'nebulaspace.lol']);
+    try { allowed.add(new URL(link.url).hostname); } catch (_) {}
+    return allowed.has(parsed.hostname);
   } catch (_) {
     return false;
   }
+}
+
+async function refreshLink(force) {
+  if (!force && Date.now() - linkCheckedAt < 60000) return false;
+  linkCheckedAt = Date.now();
+  const before = link.url + '|' + link.server;
+  try {
+    link = await resolveLink(app.getPath('userData'));
+  } catch (_) {}
+  return before !== link.url + '|' + link.server;
 }
 
 function page() {
@@ -77,7 +91,7 @@ async function currentScript() {
 }
 
 async function remoteScript() {
-  const response = await fetch(SITE + '?desktop=' + Date.now(), { cache: 'no-store' });
+  const response = await fetch(link.url + (link.url.includes('?') ? '&' : '?') + 'desktop=' + Date.now(), { cache: 'no-store' });
   if (!response.ok) return '';
   const html = await response.text();
   const match = html.match(/assets\/index-[A-Za-z0-9_-]+\.js/);
@@ -93,6 +107,12 @@ async function maybeUpdate() {
   const contents = page();
   if (!contents || contents.isDestroyed()) return;
   if (!isSiteUrl(contents.getURL())) return;
+  try {
+    if (new URL(contents.getURL()).hostname !== new URL(link.url).hostname) {
+      contents.loadURL(pageUrl(link));
+      return;
+    }
+  } catch (_) {}
   let remote = '';
   try {
     remote = await remoteScript();
@@ -112,7 +132,7 @@ async function maybeUpdate() {
   }
   pendingUpdate = false;
   loadedScript = '';
-  contents.loadURL(SITE);
+  contents.loadURL(pageUrl(link));
 }
 
 function showError() {
@@ -124,7 +144,7 @@ function showError() {
 function openSite() {
   const contents = page();
   if (!contents || contents.isDestroyed()) return;
-  contents.loadURL(SITE);
+  contents.loadURL(pageUrl(link));
 }
 
 function createWindow() {
@@ -197,7 +217,10 @@ function createWindow() {
 
   layout();
   titleView.webContents.loadFile(path.join(__dirname, 'titlebar.html'));
-  contents.loadFile(path.join(__dirname, 'splash.html')).then(openSite).catch(openSite);
+  contents.loadFile(path.join(__dirname, 'splash.html')).then(async () => {
+    await refreshLink(true);
+    openSite();
+  }).catch(openSite);
 }
 
 function buildMenu() {
@@ -223,7 +246,7 @@ function buildMenu() {
     {
       label: 'Nebula',
       submenu: [
-        { label: 'About Nebula', click: () => shell.openExternal(SITE) },
+        { label: 'About Nebula', click: () => shell.openExternal(link.url) },
         { type: 'separator' },
         { role: 'quit' },
       ],
@@ -305,7 +328,10 @@ function chooseSource(sources) {
   });
 }
 
-ipcMain.on('retry', () => openSite());
+ipcMain.on('retry', async () => {
+  await refreshLink(true);
+  openSite();
+});
 ipcMain.on('win-min', () => { if (mainWindow) mainWindow.minimize(); });
 ipcMain.on('win-max', () => {
   if (!mainWindow) return;
@@ -360,9 +386,11 @@ if (gotLock) {
 
     buildMenu();
     createWindow();
-    setInterval(() => {
+    setInterval(async () => {
       if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
-      maybeUpdate();
+      const moved = await refreshLink(true);
+      if (moved) openSite();
+      else maybeUpdate();
     }, 10 * 60 * 1000);
     setInterval(() => {
       if (pendingUpdate) maybeUpdate();

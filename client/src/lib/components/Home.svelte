@@ -10,7 +10,7 @@
 
   const nav = ['Developers', 'Plus', 'About'];
   const desktop = typeof window !== 'undefined' && (!!window.nebulaDesktop || /Electron/i.test(navigator.userAgent));
-  const downloadUrl = 'https://github.com/NebulaGateway/nebula/releases/latest/download/Nebula.exe';
+  const downloadUrl = 'https://github.com/NebulaEnterprise/nebula/releases/latest/download/Nebula.exe';
   const features = [
     { icon: Zap, title: 'Blazing Fast', text: 'Messages show up as soon as they’re sent, wherever you are.' },
     { icon: Lock, title: 'Private rooms', text: 'Servers and chats stay with the people you let in.' },

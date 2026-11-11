@@ -1,8 +1,8 @@
 {
   "name": "nebula",
   "productName": "Nebula",
-  "version": "1.0.1",
-  "description": "Nebula desktop app. The window loads the live site, so updates ship with the website.",
+  "version": "1.0.2",
+  "description": "Nebula desktop app. On startup it reads the site and server link from GitHub.",
   "main": "main.js",
   "author": "Nebula",
   "private": true,
@@ -23,6 +23,7 @@
     },
     "files": [
       "main.js",
+      "link.js",
       "preload.js",
       "title-preload.js",
       "titlebar.html",

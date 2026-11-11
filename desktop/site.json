@@ -1,0 +1,5 @@
+{
+  "url": "https://nebulaenterprise.github.io/nebula/",
+  "server": "https://scowling-anthill-civil.ngrok-free.dev",
+  "config": "https://raw.githubusercontent.com/NebulaEnterprise/nebula/main/desktop/site.json"
+}
