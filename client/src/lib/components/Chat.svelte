@@ -1107,7 +1107,7 @@
 <div class="chat-col" class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 {#if showIncoming}
   <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
-    <Avatar user={ui.incomingCall.from} size={80} />
+    <Avatar user={ui.incomingCall.from} size={80} dot={false} />
     <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'}</strong>
     <span>Incoming Call...</span>
     <div class="incoming-actions">
@@ -1218,7 +1218,7 @@
       <div class="call-people">
         {#each boardPeople as person (person.id)}
           <div class="person-tile" class:speaking={person.speaking}>
-            <Avatar user={person} size={72} />
+            <Avatar user={person} size={72} dot={false} />
             <span>{person.displayName || person.username}</span>
           </div>
         {/each}
