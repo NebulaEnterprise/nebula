@@ -51,6 +51,7 @@
 {#if u}
   <div class="pop-backdrop"></div>
   <div class="pop profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
+    <div class="pop-frame">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
     </div>
@@ -59,16 +60,6 @@
         <button class="pop-msg" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="Message" onclick={() => { ui.popout = null; openDm(u); }}><MessageSquare size={18} /></button>
         <button class="pop-more" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="More" onclick={() => (more = !more)}><MoreHorizontal size={18} /></button>
       </div>
-      {#if more}
-        <div class="pop-menu">
-          {#if rel === 'friends'}<button type="button" onclick={() => act('remove')}>Remove friend</button>{/if}
-          {#if rel === 'none'}<button type="button" onclick={() => act('request')}>Add friend</button>{/if}
-          {#if rel === 'blocked'}<button type="button" onclick={() => act('unblock')}>Unblock</button>{/if}
-          <button type="button" onclick={() => copyText(u.id, 'user ID')}>Copy user ID</button>
-          <button type="button" class="danger" onclick={() => { more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: u }; }}>Report</button>
-          {#if rel !== 'blocked'}<button type="button" class="danger" onclick={() => act('block')}>Block</button>{/if}
-        </div>
-      {/if}
     {/if}
     <div class="pop-body">
       <div class="profile-hero">
@@ -134,5 +125,16 @@
         </div>
       </div>
     </div>
+    </div>
+    {#if rel !== 'self' && more}
+      <div class="pop-menu">
+        {#if rel === 'friends'}<button type="button" onclick={() => act('remove')}>Remove friend</button>{/if}
+        {#if rel === 'none'}<button type="button" onclick={() => act('request')}>Add friend</button>{/if}
+        {#if rel === 'blocked'}<button type="button" onclick={() => act('unblock')}>Unblock</button>{/if}
+        <button type="button" onclick={() => copyText(u.id, 'user ID')}>Copy user ID</button>
+        <button type="button" class="danger" onclick={() => { more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: u }; }}>Report</button>
+        {#if rel !== 'blocked'}<button type="button" class="danger" onclick={() => act('block')}>Block</button>{/if}
+      </div>
+    {/if}
   </div>
 {/if}

@@ -1570,12 +1570,15 @@ img { max-width: 100%; }
   position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, 0.55);
 }
 .pop {
-  position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); max-height: min(88vh, 760px); overflow: auto;
+  position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); overflow: visible;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--shade-a) 55%, transparent); box-shadow: var(--shadow);
   animation: profile-in 170ms var(--ease);
+}
+.pop-frame {
+  max-height: min(88vh, 760px); overflow: auto; border-radius: inherit;
 }
 .pop-banner { height: 128px; min-height: 128px; max-height: 128px; }
 .pop-add {
@@ -1888,7 +1891,7 @@ img { max-width: 100%; }
   background: #111214; border: 1px solid var(--line); border-radius: 8px; padding: 6px;
   box-shadow: var(--shadow);
 }
-.bell-menu button, .thread-menu button, .pop-menu button, .id-menu button {
+.bell-menu button, .thread-menu button, .id-menu button {
   width: 100%; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--text);
 }
 .bell-menu button:hover, .thread-menu button:hover, .pop-menu button:hover, .id-menu button:hover { background: var(--bg-hover); }
@@ -1936,8 +1939,15 @@ img { max-width: 100%; }
   border: 0 !important; box-shadow: none !important; filter: none;
 }
 .pop-menu {
-  position: absolute; top: 56px; right: 12px; z-index: 4; min-width: 180px;
-  background: #111214; border: 1px solid var(--line); border-radius: 8px; padding: 6px; box-shadow: var(--shadow);
+  position: absolute; top: 8px; left: calc(100% + 8px); right: auto; z-index: 5;
+  width: max-content; min-width: 0; padding: 4px;
+  background: #111214; border: 1px solid var(--line); border-radius: 6px;
+  box-shadow: 0 8px 24px #00000073;
+}
+.pop-menu button {
+  display: block; width: 100%; text-align: left; white-space: nowrap;
+  padding: 4px 8px; border-radius: 4px; color: var(--text);
+  font-size: 13px; font-weight: 500; line-height: 16px;
 }
 .pop-menu button.danger, .thread-menu button.danger { color: #f23f43; }
 .report-reasons { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
@@ -2092,6 +2102,7 @@ img { max-width: 100%; }
   .composer textarea, .field input, .field textarea, .textin, .search { font-size: 16px; }
   .quick-pill, .quick-dock { display: none; }
   .shell.phone-chat .dock { position: fixed; inset: 0; z-index: 28; width: 100%; max-width: none; background: var(--bg-main); }
+  .pop-menu { top: 48px; left: auto; right: 8px; }
   .account-pop, .inbox-pop, .account-switch {
     left: 12px; right: 12px; width: auto; bottom: calc(78px + env(safe-area-inset-bottom));
     max-height: calc(100dvh - 110px);
