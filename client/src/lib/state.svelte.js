@@ -1286,10 +1286,18 @@ function applySocket(packet) {
     if (data.voice) import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data.voice)).catch(() => {});
     return;
   }
+  if (type === 'DISCONNECT') {
+    import('./voice.js').then((mod) => mod.resetVoiceClock()).catch(() => {});
+    return;
+  }
   if (type === 'RESYNC') {
     const looking = ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread';
     if (looking) loadMessages();
     pollActivity();
+    import('./voice.js').then((mod) => {
+      mod.resetVoiceClock();
+      return mod.pokeVoice();
+    }).catch(() => {});
     return;
   }
   if (type === 'MESSAGE_CREATE' || type === 'MESSAGE_UPDATE' || type === 'MESSAGE_DELETE' || type === 'TYPING') {

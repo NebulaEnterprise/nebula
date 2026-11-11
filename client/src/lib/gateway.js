@@ -158,6 +158,7 @@ function open() {
     if (!downSince) downSince = Date.now();
     if (socket === ws) socket = null;
     opening = false;
+    emit({ op: 0, t: 'DISCONNECT', d: {} });
     if (ws._nebulaGen !== generation) return;
     schedule();
   };

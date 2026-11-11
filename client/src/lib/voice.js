@@ -30,6 +30,10 @@ function newerRev(rev) {
   return true;
 }
 
+export function resetVoiceClock() {
+  seenRev = 0;
+}
+
 function paintList(channelId, listed) {
   const mine = String(ui.me?.id || '');
   const here = !!(ui.voice && ui.voice.channelId === channelId);
@@ -736,11 +740,13 @@ export function applyVoiceSnapshot(snap) {
     if ((id.startsWith('dm:') || id.startsWith('group:')) && !call[id]) delete next[id];
   }
   for (const [id, listed] of Object.entries(call)) next[id] = paintList(id, listed);
-  const serverRooms = ui.mode === 'chat' && ui.serverId && snap.servers ? snap.servers[ui.serverId] : null;
-  if (serverRooms) {
+  if (ui.mode === 'chat' && ui.serverId && snap.servers && typeof snap.servers === 'object') {
+    const serverRooms = snap.servers[ui.serverId] || {};
     for (const channel of ui.channels || []) {
       if (channel.type !== 'voice') continue;
-      next[channel.id] = paintList(channel.id, serverRooms[channel.id] || []);
+      const listed = serverRooms[channel.id] || [];
+      if (listed.length) next[channel.id] = paintList(channel.id, listed);
+      else delete next[channel.id];
     }
   }
   ui.voiceRooms = next;
