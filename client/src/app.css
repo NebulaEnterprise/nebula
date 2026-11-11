@@ -126,12 +126,12 @@ img { max-width: 100%; }
 .rail-btn.dm-mark,
 .rail-btn.dm-mark:hover,
 .rail-btn.dm-mark.on {
-  padding: 0; overflow: hidden;
+  padding: 0; overflow: visible;
   background: radial-gradient(circle at 50% 45%, #5b2dff 0%, #2a1060 58%, #14081f 100%);
   box-shadow: 0 0 14px rgba(176, 92, 255, 0.85);
 }
 .rail-btn.dm-mark img {
-  width: 100%; height: 100%; object-fit: contain; pointer-events: none;
+  width: 100%; height: 100%; object-fit: contain; pointer-events: none; border-radius: inherit;
   filter: drop-shadow(0 0 5px rgba(214, 150, 255, 0.95));
 }
 .dm-rail, .dm-rail:hover { width: 40px; height: 40px; border-radius: 50%; padding: 0; overflow: visible; background: transparent; }

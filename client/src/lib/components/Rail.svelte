@@ -13,6 +13,9 @@
 <aside class="rail">
   <button class="rail-btn dm-mark" class:on={ui.mode !== 'chat'} title="Direct messages" onclick={() => { showFriends('online'); phoneBrowse(); }}>
     <img src="./logo.webp?v=3" alt="" />
+    {#if ui.incoming.length}
+      <em class="badge ask">{ui.incoming.length > 99 ? '99+' : ui.incoming.length}</em>
+    {/if}
   </button>
   {#each incoming as dm (dm.other.id)}
     <button class="srv dm-rail" title={dm.other.displayName || dm.other.username} onpointerenter={() => warmDm(dm.other.id)} onclick={() => openDm(dm.other)}>
