@@ -1,6 +1,6 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup } from '../state.svelte.js';
+  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteLink, inviteSlug } from '../format.js';
   import { hasPerm } from '../state.svelte.js';
@@ -129,6 +129,25 @@
 
   function close() { ui.dialog = null; name = ''; extra = ''; when = ''; code = ''; }
 
+  async function sendCallFriend() {
+    const user = ui.dialog?.user;
+    if (!user) return;
+    const rel = relation(user.id);
+    if (rel === 'blocked') {
+      await friendAct('unblock', { userId: user.id });
+      close();
+      return;
+    }
+    if (rel === 'incoming') {
+      await friendAct('accept', { userId: user.id });
+      close();
+      return;
+    }
+    await friendAct('request', { username: user.username });
+    close();
+    toast('Friend request sent');
+  }
+
   async function go(fn) {
     busy = true;
     try { await fn(); }
@@ -137,6 +156,28 @@
   }
 </script>
 
+{#if kind === 'start-call'}
+  {@const person = ui.dialog.user}
+  {@const rel = relation(person?.id)}
+  <div class="overlay" role="presentation" onclick={close}>
+    <div class="call-gate" role="dialog" aria-labelledby="start-call-title" onclick={(e) => e.stopPropagation()}>
+      <div class="call-gate-h">
+        <h3 id="start-call-title">Start Call</h3>
+        <button type="button" class="btn icon" title="Close" onclick={close}><X size={18} /></button>
+      </div>
+      {#if ui.dialog.tone === 'closed'}
+        <p>They are not accepting calls.</p>
+        <button type="button" class="btn call-ok" onclick={close}>Okay</button>
+      {:else}
+        <p>You need to be friends with <strong>{person?.displayName || person?.username || 'them'}</strong> to start a call</p>
+        <button type="button" class="btn call-ok" onclick={close}>Okay</button>
+        <button type="button" class="btn brand" disabled={busy || rel === 'outgoing'} onclick={() => go(sendCallFriend)}>
+          {rel === 'outgoing' ? 'Friend Request Sent' : rel === 'incoming' ? 'Accept Friend Request' : rel === 'blocked' ? 'Unblock' : 'Send Friend Request'}
+        </button>
+      {/if}
+    </div>
+  </div>
+{:else}
 <div class="overlay" role="presentation" onclick={close}>
   <div class="sheet" class:wide-sheet={kind === 'group'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
@@ -408,3 +449,4 @@
     </div>
   </div>
 </div>
+{/if}

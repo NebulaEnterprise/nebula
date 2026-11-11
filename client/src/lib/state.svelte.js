@@ -739,6 +739,8 @@ function pinOpenedDm(user) {
     avatarColor: user.avatarColor || '',
     bannerUrl: user.bannerUrl || '',
     status: user.status || '',
+    canMessage: user.canMessage,
+    canCall: user.canCall,
   };
   const rows = openedDmStore().filter((row) => row && String(row.id) !== String(user.id));
   rows.unshift(slim);
@@ -755,6 +757,12 @@ function mergeOpened(list) {
     extra.push({ id: 'open:' + user.id, other: user, updatedAt: 0, preview: '', lastId: '', unread: 0 });
   }
   return extra.length ? [...(list || []), ...extra] : (list || []);
+}
+
+export function gateCall(person) {
+  if (!person || person.canCall !== false) return false;
+  ui.dialog = { kind: 'start-call', user: person, tone: relation(person.id) === 'friends' ? 'closed' : 'friends' };
+  return true;
 }
 
 export async function openDm(user) {
@@ -1596,7 +1604,7 @@ export async function loadMessages(quiet, live) {
   } catch (err) {
     if (serial !== pulseSerial) return 'skip';
     if (err && err.name === 'AbortError') throw err;
-    if (!quiet) toast(err.message);
+    if (!quiet && !deliveryTone(err.message) && !callTone(err.message)) toast(err.message);
     return 'same';
   } finally {
     if (serial === pulseSerial) {
@@ -1627,6 +1635,31 @@ export async function loadMembers(quiet) {
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
+}
+
+export function deliveryTone(message) {
+  const text = String(message || '');
+  if (text.startsWith('They only accept messages')) return 'friends';
+  if (text === 'You cannot message this person' || /cannot message|blocked/i.test(text)) return 'plain';
+  return '';
+}
+
+export function callTone(message) {
+  const text = String(message || '');
+  if (text.startsWith('They are not accepting')) return 'closed';
+  if (text.startsWith('They only accept calls') || text === 'You cannot call this person' || /cannot call/i.test(text)) return 'friends';
+  return '';
+}
+
+export function showUndelivered(tone) {
+  ui.messages = [...ui.messages, {
+    id: 'local-clyde-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    clientKey: 'local-clyde-' + Math.random().toString(36).slice(2),
+    kind: 'clyde',
+    tone: tone === 'friends' ? 'friends' : 'plain',
+    roomKey: currentRoom(),
+    createdAt: new Date().toISOString(),
+  }];
 }
 
 function stitchLog(list, roomKey) {
@@ -1739,6 +1772,12 @@ export async function sendMessage() {
   try {
     await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      patchLocal(tempId, () => ({ pending: false, failed: false }));
+      showUndelivered(tone);
+      return;
+    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message);
   }
@@ -1848,6 +1887,12 @@ export async function sendFiles(list) {
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
     return true;
   } catch (err) {
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      patchLocal(tempId, () => ({ pending: false, failed: false }));
+      showUndelivered(tone);
+      return false;
+    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');
     return false;
@@ -1859,6 +1904,11 @@ export async function sendPoll(poll) {
   try {
     await postMessage({ poll });
   } catch (err) {
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      showUndelivered(tone);
+      return;
+    }
     toast(err.message);
   }
 }

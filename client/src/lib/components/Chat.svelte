@@ -6,7 +6,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread } from '../state.svelte.js';
+  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct } from '../state.svelte.js';
   import { seenPhrase, presenceDot } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
@@ -16,6 +16,8 @@
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const typingPhrase = $derived(typingLine(ui.typers));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
+  const dmBlocked = $derived(ui.mode === 'dm' && !!ui.dmUser && relation(ui.dmUser.id) === 'blocked');
+  const cantMessage = $derived(ui.mode === 'dm' && !!ui.dmUser && ui.dmUser.canMessage === false && !dmBlocked);
   const emoji = $derived.by(() => {
     const map = new Map();
     for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);
@@ -661,8 +663,17 @@
     editAt = -1;
   }
 
+  async function unblockDm() {
+    if (!ui.dmUser) return;
+    try {
+      await friendAct('unblock', { userId: ui.dmUser.id });
+    } catch (err) {
+      toast(err.message || 'Could not unblock');
+    }
+  }
+
   async function submitComposer() {
-    if (locked) return;
+    if (locked || dmBlocked || cantMessage) return;
     if (ui.editing || !drafts.length) {
       sendMessage();
       return;
@@ -1264,7 +1275,27 @@
     {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
       <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
     {/if}
-    {#if msg.kind === 'call'}
+    {#if msg.kind === 'clyde'}
+      <article class="clyde">
+        <img class="clyde-av" src="./logo.webp?v=3" alt="" />
+        <div class="clyde-body">
+          <div class="clyde-head">
+            <strong>Nebula</strong>
+            <span class="clyde-app">APP</span>
+            <time>{time(msg.createdAt)}</time>
+          </div>
+          {#if msg.tone === 'friends'}
+            <p>Your message could not be delivered. Send a friend request first and start the conversation once they've accepted.</p>
+            <p>Here is the full list of reasons why your message could not be delivered:</p>
+            <a href="https://support.discord.com/hc/en-us/articles/360060145013" target="_blank" rel="noreferrer">https://support.discord.com/hc/en-us/articles/360060145013</a>
+          {:else}
+            <p>Your message could not be delivered.</p>
+            <p>You can see the full list of reasons here: <a href="https://support.discord.com/hc/en-us/articles/360060145013" target="_blank" rel="noreferrer">https://support.discord.com/hc/en-us/articles/360060145013</a></p>
+          {/if}
+          <p class="clyde-only"><Eye size={14} /> Only you can see this · <button type="button" onclick={() => dismissLocal(msg.id)}>Dismiss message</button></p>
+        </div>
+      </article>
+    {:else if msg.kind === 'call'}
       <div class="call-note">
         <Phone size={16} />
         <span>
@@ -1541,6 +1572,16 @@
       {/each}
     </div>
   {/if}
+  {#if dmBlocked}
+    <div class="composer blocked-bar">
+      <span>You cannot send messages to a user you have blocked.</span>
+      <button type="button" onclick={unblockDm}>Unblock</button>
+    </div>
+  {:else if cantMessage}
+    <div class="composer blocked-bar">
+      <span>You can't message this user.</span>
+    </div>
+  {:else}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); submitComposer(); }}>
     <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
       <Plus size={20} />
@@ -1572,6 +1613,7 @@
     <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
     <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple onchange={onFiles} />
   </form>
+  {/if}
   {#if editAt >= 0 && drafts[editAt]}
     <div class="poll-overlay" role="presentation" onclick={() => (editAt = -1)}>
       <div class="poll-sheet modify-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
