@@ -57,7 +57,7 @@
     </div>
     {#if rel !== 'self'}
       <div class="pop-actions">
-        <button class="pop-msg" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="Message" onclick={() => { ui.popout = null; openDm(u); }}><MessageSquare size={18} /></button>
+        <button class="pop-msg" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="Message" onclick={() => { const person = u; ui.popout = null; openDm(person); }}><MessageSquare size={18} /></button>
         <button class="pop-more" style="background:transparent;background-color:transparent;border:0;box-shadow:none" title="More" onclick={() => (more = !more)}><MoreHorizontal size={18} /></button>
       </div>
     {/if}
@@ -127,7 +127,7 @@
         {#if rel === 'none'}<button type="button" onclick={() => act('request')}>Add friend</button>{/if}
         {#if rel === 'blocked'}<button type="button" onclick={() => act('unblock')}>Unblock</button>{/if}
         <button type="button" onclick={() => copyText(u.id, 'user ID')}>Copy user ID</button>
-        <button type="button" class="danger" onclick={() => { more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: u }; }}>Report</button>
+        <button type="button" class="danger" onclick={() => { const person = u; more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: person }; }}>Report</button>
         {#if rel !== 'blocked'}<button type="button" class="danger" onclick={() => act('block')}>Block</button>{/if}
       </div>
     {/if}

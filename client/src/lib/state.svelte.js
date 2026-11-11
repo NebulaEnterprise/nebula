@@ -590,7 +590,7 @@ export async function loadDms() {
     }
     if (serial !== dmSerial) return;
     adoptRemoteSeen(seen, data.seen);
-    const next = data.dms || [];
+    const next = mergeOpened(data.dms || []);
     if (!sameDms(ui.dms, next)) ui.dms = next;
     const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
     setTimeout(() => { for (const id of warmIds) warmDm(id); }, 1200);
@@ -724,8 +724,43 @@ export function closeQuick() {
   ui.quickOpen = false;
 }
 
+function openedDmStore() {
+  try { return JSON.parse(localStorage.getItem(accountKey('nebula-open-dms')) || '[]'); }
+  catch { return []; }
+}
+
+function pinOpenedDm(user) {
+  if (!user || !user.id || (ui.me && String(user.id) === String(ui.me.id))) return;
+  const slim = {
+    id: user.id,
+    username: user.username || '',
+    displayName: user.displayName || user.username || '',
+    avatarUrl: user.avatarUrl || '',
+    avatarColor: user.avatarColor || '',
+    bannerUrl: user.bannerUrl || '',
+    status: user.status || '',
+  };
+  const rows = openedDmStore().filter((row) => row && String(row.id) !== String(user.id));
+  rows.unshift(slim);
+  try { localStorage.setItem(accountKey('nebula-open-dms'), JSON.stringify(rows.slice(0, 40))); } catch (_) {}
+  if ((ui.dms || []).some((row) => row.other && String(row.other.id) === String(user.id))) return;
+  ui.dms = [{ id: 'open:' + user.id, other: slim, updatedAt: Date.now(), preview: '', lastId: '', unread: 0 }, ...(ui.dms || [])];
+}
+
+function mergeOpened(list) {
+  const extra = [];
+  for (const user of openedDmStore()) {
+    if (!user || !user.id) continue;
+    if ((list || []).some((row) => row.other && String(row.other.id) === String(user.id))) continue;
+    extra.push({ id: 'open:' + user.id, other: user, updatedAt: 0, preview: '', lastId: '', unread: 0 });
+  }
+  return extra.length ? [...(list || []), ...extra] : (list || []);
+}
+
 export async function openDm(user) {
+  if (!user || !user.id) return;
   phoneChat();
+  pinOpenedDm(user);
   const entering = !onDmSide();
   ui.readHold = '';
   const prev = currentRoom();
@@ -1502,7 +1537,13 @@ export async function loadMessages(quiet, live) {
     const wait = live
       ? '&after=' + encodeURIComponent(live.after || '') + '&typing=' + encodeURIComponent(live.typing || '') + '&members=' + encodeURIComponent(live.members || '') + '&profiles=' + encodeURIComponent(live.profiles || '') + '&polls=' + encodeURIComponent(live.polls || '') + '&edits=' + encodeURIComponent(live.edits || '') + '&wait=1'
       : '';
-    if (ui.mode === 'dm' && ui.dmUser) {
+    if (ui.mode === 'dm') {
+      if (!ui.dmUser || !ui.dmUser.id) {
+        ui.messages = [];
+        ui.typers = [];
+        ui.chatLoading = false;
+        return;
+      }
       data = await pullLive('dmUserId=' + encodeURIComponent(ui.dmUser.id) + wait, signal);
     } else if (ui.mode === 'group' && ui.group) {
       data = await pullLive('groupId=' + encodeURIComponent(ui.group.id) + wait, signal);
