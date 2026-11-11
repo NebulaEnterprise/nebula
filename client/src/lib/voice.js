@@ -1,5 +1,5 @@
 import { api, getApiBase } from './api.js';
-import { ui, toast, callTone, gateCall } from './state.svelte.js';
+import { ui, toast } from './state.svelte.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -469,22 +469,16 @@ export async function startCall(user) {
   } else {
     return;
   }
-  if (person && ui.me && String(person.id) !== String(ui.me.id)) {
-    if (gateCall(person)) return;
+  await leaveVoice();
+  if (person && ui.me) {
     try {
       const data = await api('/api/calls', { method: 'POST', body: { userId: person.id } });
       ui.outgoingCall = data.call;
     } catch (err) {
-      const tone = callTone(err.message);
-      if (tone) {
-        ui.dialog = { kind: 'start-call', user: person, tone };
-        return;
-      }
       toast(err.message || 'Could not start the call');
       return;
     }
   }
-  await leaveVoice();
   await connectCall(channelId, name, person && person.id ? person : null, ui.outgoingCall && ui.outgoingCall.id);
 }
 

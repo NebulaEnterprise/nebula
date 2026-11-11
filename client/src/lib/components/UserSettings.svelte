@@ -16,7 +16,6 @@
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
-  import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
@@ -127,29 +126,11 @@
     }
   }
 
-  const messageOptions = [
-    { value: 'everyone', label: 'Everyone' },
-    { value: 'servers', label: 'People in my servers and friends' },
-    { value: 'friends', label: 'Friends' },
-  ];
-  const groupOptions = [
-    { value: 'everyone', label: 'Everyone' },
-    { value: 'mutual', label: 'Friends of friends' },
-    { value: 'friends', label: 'Friends' },
-    { value: 'nobody', label: 'Nobody' },
-  ];
-  const callOptions = [
-    { value: 'everyone', label: 'Everyone' },
-    { value: 'servers', label: 'People in my servers and friends' },
-    { value: 'friends', label: 'Friends' },
-    { value: 'nobody', label: 'Nobody' },
-  ];
-
-  async function setPrivacy(body, ok) {
+  async function setLastSeenPrivacy(lastSeenPrivacy) {
     try {
-      const data = await api('/api/me', { method: 'PATCH', body });
-      ui.me = { ...ui.me, ...(data.user || {}), ...body };
-      if (ok) toast(ok);
+      const data = await api('/api/me', { method: 'PATCH', body: { lastSeenPrivacy } });
+      ui.me = { ...ui.me, ...data.user };
+      toast(lastSeenPrivacy === 'nobody' ? 'Last seen hidden' : lastSeenPrivacy === 'contacts' ? 'Last seen shared with contacts' : 'Last seen shown to everyone');
     } catch (err) {
       toast(err.message);
     }
@@ -518,31 +499,11 @@
             <div class="field">
               <label>Last seen</label>
               <div class="row">
-                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'everyone'} onclick={() => setPrivacy({ lastSeenPrivacy: 'everyone' }, 'Last seen shown to everyone')}>Everyone</button>
-                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'nobody'} onclick={() => setPrivacy({ lastSeenPrivacy: 'nobody' }, 'Last seen hidden')}>Nobody</button>
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'everyone'} onclick={() => setLastSeenPrivacy('everyone')}>Everyone</button>
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'contacts'} onclick={() => setLastSeenPrivacy('contacts')}>Contacts</button>
+                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'nobody'} onclick={() => setLastSeenPrivacy('nobody')}>Nobody</button>
               </div>
               <p class="hint">People you hide your last seen from only see “recently”, “within a week”, or “within a month”. You see the same kind of time for them. Sending, reading, or typing still shows you online for 30 seconds.</p>
-            </div>
-            <div class="field">
-              <label>Who can message you</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.dmPrivacy || 'servers'} options={messageOptions} onpick={(value) => setPrivacy({ dmPrivacy: value }, 'Message privacy updated')} />
-              </div>
-              <p class="hint">Friends can always message you. Blocked people never can.</p>
-            </div>
-            <div class="field">
-              <label>Who can add you to group chats</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.groupPrivacy || 'friends'} options={groupOptions} onpick={(value) => setPrivacy({ groupPrivacy: value }, 'Group privacy updated')} />
-              </div>
-              <p class="hint">With Nobody, no one can put you in a group chat, not even friends. You can still make your own.</p>
-            </div>
-            <div class="field">
-              <label>Who can call you</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.callPrivacy || 'everyone'} options={callOptions} onpick={(value) => setPrivacy({ callPrivacy: value }, 'Call privacy updated')} />
-              </div>
-              <p class="hint">Friends can always call you, unless you pick Nobody. Blocked people never can.</p>
             </div>
           {:else if page === 'advanced'}
             <div class="field">

@@ -590,7 +590,7 @@ export async function loadDms() {
     }
     if (serial !== dmSerial) return;
     adoptRemoteSeen(seen, data.seen);
-    const next = mergeOpened(data.dms || []);
+    const next = data.dms || [];
     if (!sameDms(ui.dms, next)) ui.dms = next;
     const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
     setTimeout(() => { for (const id of warmIds) warmDm(id); }, 1200);
@@ -724,50 +724,8 @@ export function closeQuick() {
   ui.quickOpen = false;
 }
 
-function openedDmStore() {
-  try { return JSON.parse(localStorage.getItem(accountKey('nebula-open-dms')) || '[]'); }
-  catch { return []; }
-}
-
-function pinOpenedDm(user) {
-  if (!user || !user.id || (ui.me && String(user.id) === String(ui.me.id))) return;
-  const slim = {
-    id: user.id,
-    username: user.username || '',
-    displayName: user.displayName || user.username || '',
-    avatarUrl: user.avatarUrl || '',
-    avatarColor: user.avatarColor || '',
-    bannerUrl: user.bannerUrl || '',
-    status: user.status || '',
-    canMessage: user.canMessage,
-    canCall: user.canCall,
-  };
-  const rows = openedDmStore().filter((row) => row && String(row.id) !== String(user.id));
-  rows.unshift(slim);
-  try { localStorage.setItem(accountKey('nebula-open-dms'), JSON.stringify(rows.slice(0, 40))); } catch (_) {}
-  if ((ui.dms || []).some((row) => row.other && String(row.other.id) === String(user.id))) return;
-  ui.dms = [{ id: 'open:' + user.id, other: slim, updatedAt: Date.now(), preview: '', lastId: '', unread: 0, opened: true }, ...(ui.dms || [])];
-}
-
-function mergeOpened(list) {
-  const extra = [];
-  for (const user of openedDmStore()) {
-    if (!user || !user.id) continue;
-    if ((list || []).some((row) => row.other && String(row.other.id) === String(user.id))) continue;
-    extra.push({ id: 'open:' + user.id, other: user, updatedAt: 0, preview: '', lastId: '', unread: 0, opened: true });
-  }
-  return extra.length ? [...(list || []), ...extra] : (list || []);
-}
-
-export function gateCall(person) {
-  if (!person || person.canCall !== false) return false;
-  ui.dialog = { kind: 'start-call', user: person, tone: relation(person.id) === 'friends' ? 'closed' : 'friends' };
-  return true;
-}
-
 export async function openDm(user) {
   phoneChat();
-  pinOpenedDm(user);
   const entering = !onDmSide();
   ui.readHold = '';
   const prev = currentRoom();
@@ -1597,7 +1555,7 @@ export async function loadMessages(quiet, live) {
   } catch (err) {
     if (serial !== pulseSerial) return 'skip';
     if (err && err.name === 'AbortError') throw err;
-    if (!quiet && !deliveryTone(err.message) && !callTone(err.message)) toast(err.message);
+    if (!quiet) toast(err.message);
     return 'same';
   } finally {
     if (serial === pulseSerial) {
@@ -1628,31 +1586,6 @@ export async function loadMembers(quiet) {
     } while (membersAgain);
   } catch (_) {}
   finally { membersBusy = false; }
-}
-
-export function deliveryTone(message) {
-  const text = String(message || '');
-  if (text.startsWith('They only accept messages')) return 'friends';
-  if (text === 'You cannot message this person' || /cannot message|blocked/i.test(text)) return 'plain';
-  return '';
-}
-
-export function callTone(message) {
-  const text = String(message || '');
-  if (text.startsWith('They are not accepting')) return 'closed';
-  if (text.startsWith('They only accept calls') || text === 'You cannot call this person' || /cannot call/i.test(text)) return 'friends';
-  return '';
-}
-
-export function showUndelivered(tone) {
-  ui.messages = [...ui.messages, {
-    id: 'local-clyde-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-    clientKey: 'local-clyde-' + Math.random().toString(36).slice(2),
-    kind: 'clyde',
-    tone: tone === 'friends' ? 'friends' : 'plain',
-    roomKey: currentRoom(),
-    createdAt: new Date().toISOString(),
-  }];
 }
 
 function stitchLog(list, roomKey) {
@@ -1765,12 +1698,6 @@ export async function sendMessage() {
   try {
     await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
-    const tone = deliveryTone(err.message);
-    if (tone) {
-      patchLocal(tempId, () => ({ pending: false, failed: false }));
-      showUndelivered(tone);
-      return;
-    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message);
   }
@@ -1880,12 +1807,6 @@ export async function sendFiles(list) {
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
     return true;
   } catch (err) {
-    const tone = deliveryTone(err.message);
-    if (tone) {
-      patchLocal(tempId, () => ({ pending: false, failed: false }));
-      showUndelivered(tone);
-      return false;
-    }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
     toast(err.message || 'Could not send that file');
     return false;
@@ -1897,11 +1818,6 @@ export async function sendPoll(poll) {
   try {
     await postMessage({ poll });
   } catch (err) {
-    const tone = deliveryTone(err.message);
-    if (tone) {
-      showUndelivered(tone);
-      return;
-    }
     toast(err.message);
   }
 }
