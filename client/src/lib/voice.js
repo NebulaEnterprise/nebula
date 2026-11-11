@@ -22,6 +22,10 @@ let seenRev = 0;
 let leaving = false;
 let aloneSince = 0;
 
+function directCall(voice = ui.voice) {
+  return !!(voice && voice.serverId === 'call' && String(voice.channelId || '').startsWith('dm:'));
+}
+
 function newerRev(rev) {
   const n = Number(rev) || 0;
   if (!n) return true;
@@ -337,7 +341,7 @@ async function sync() {
   if (ticket !== syncTicket || !ui.voice || ui.voice.channelId !== voice.channelId) return;
   const fresh = newerRev(data.rev);
   if (fresh && data.joined === false && Date.now() - (voice.joinedAt || 0) > 1500) {
-    const satTooLong = aloneSince && Date.now() - aloneSince >= 3 * 60 * 1000 - 8000;
+    const satTooLong = directCall(voice) && aloneSince && Date.now() - aloneSince >= 3 * 60 * 1000 - 8000;
     publishRoom(voice.channelId, (data.members || []).filter((member) => String(member.id) !== String(ui.me?.id)));
     for (const signal of data.signals || []) {
       try { await handleSignal(signal); } catch (_) {}
@@ -808,6 +812,10 @@ export function isLive(userId) {
 if (typeof window !== 'undefined') {
   setInterval(() => {
     if (!ui.voice || !ui.me) {
+      aloneSince = 0;
+      return;
+    }
+    if (!directCall()) {
       aloneSince = 0;
       return;
     }
