@@ -712,10 +712,56 @@ img { max-width: 100%; }
 }
 .call-note :global(svg) { color: #3ecf8e; flex-shrink: 0; }
 .call-note time { color: var(--faint); font-weight: 500; font-size: 12px; }
-.privacy-note {
-  justify-content: center; margin: 10px 16px; padding: 8px 12px;
-  border-radius: 8px; background: #1e1f22; color: #dbdee1; text-align: center;
+.clyde {
+  display: flex; gap: 16px; align-items: flex-start;
+  margin: 8px 0 4px; padding: 4px 16px 8px;
 }
+.clyde-av {
+  width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: #1e1f22;
+}
+.clyde-head { display: flex; align-items: baseline; gap: 6px; line-height: 22px; }
+.clyde-head strong { font-size: 16px; font-weight: 600; }
+.clyde-app {
+  align-self: center; background: #5865f2; color: #fff; font-size: 10px; font-weight: 700;
+  line-height: 14px; border-radius: 3px; padding: 0 4px; letter-spacing: 0.02em;
+}
+.clyde-head time { color: var(--faint); font-size: 12px; font-weight: 500; margin-left: 2px; }
+.clyde-body p { margin: 4px 0 0; line-height: 1.375; color: var(--text); }
+.clyde-body a { color: #00a8fc; word-break: break-all; }
+.clyde-body a:hover { text-decoration: underline; }
+.clyde-only {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  color: #949ba4; font-size: 12px; font-weight: 500;
+}
+.clyde-only :global(svg) { flex-shrink: 0; }
+.clyde-only button { color: #00a8fc; background: none; font-weight: 500; padding: 0; }
+.clyde-only button:hover { text-decoration: underline; }
+.blocked-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; padding: 8px 16px; border-radius: 8px; background: #383a40;
+  color: #b5bac1; font-size: 14px;
+}
+.blocked-bar span { min-width: 0; }
+.blocked-bar button {
+  flex-shrink: 0; padding: 2px 12px; min-height: 32px; border-radius: 3px;
+  border: 1px solid #4e5058; background: transparent; color: #fff; font-weight: 500;
+}
+.blocked-bar button:hover { background: #4e5058; }
+.call-gate {
+  width: min(440px, 100%); background: #313338; border-radius: 8px; padding: 16px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.24);
+}
+.call-gate-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.call-gate h3 { margin: 0; font-size: 20px; font-weight: 700; line-height: 24px; }
+.call-gate p { margin: 8px 0 16px; color: #dbdee1; font-size: 16px; line-height: 20px; }
+.call-gate strong { color: #fff; font-weight: 700; }
+.call-gate .call-ok {
+  width: 100%; background: #4e5058; color: #fff; border: 0; border-radius: 3px;
+  min-height: 38px; margin-bottom: 8px; font-weight: 500;
+}
+.call-gate .call-ok:hover { background: #6d6f78; }
+.call-gate .btn.brand { border-radius: 3px; min-height: 38px; font-weight: 500; }
+.call-gate .btn.brand:disabled { opacity: 0.6; cursor: default; }
 .call-stage, .call-board {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 14px; min-height: 0; padding: 16px 16px 12px; flex-shrink: 0;

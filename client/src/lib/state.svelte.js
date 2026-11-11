@@ -1588,24 +1588,27 @@ export async function loadMembers(quiet) {
   finally { membersBusy = false; }
 }
 
-export function privacyStop(message) {
+export function deliveryTone(message) {
   const text = String(message || '');
-  return text.startsWith('They only accept') || text.startsWith('They are not accepting');
+  if (text.startsWith('They only accept messages')) return 'friends';
+  if (text === 'You cannot message this person' || /cannot message|blocked/i.test(text)) return 'plain';
+  return '';
 }
 
-export async function showFriendGate(user) {
-  const same = ui.mode === 'dm' && ui.dmUser && user && String(ui.dmUser.id) === String(user.id);
-  if (!same && user && user.id) await openDm(user);
-  const name = user?.displayName || user?.username || 'them';
-  const content = 'You have to become friends with ' + name + ' first.';
-  const last = ui.messages[ui.messages.length - 1];
-  if (last && last.kind === 'notice' && last.content === content) return;
+export function callTone(message) {
+  const text = String(message || '');
+  if (text.startsWith('They are not accepting')) return 'closed';
+  if (text.startsWith('They only accept calls') || text === 'You cannot call this person' || /cannot call/i.test(text)) return 'friends';
+  return '';
+}
+
+export function showUndelivered(tone) {
   ui.messages = [...ui.messages, {
-    id: 'local-gate-' + Date.now(),
-    clientKey: 'local-gate-' + Math.random().toString(36).slice(2),
-    kind: 'notice',
+    id: 'local-clyde-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    clientKey: 'local-clyde-' + Math.random().toString(36).slice(2),
+    kind: 'clyde',
+    tone: tone === 'friends' ? 'friends' : 'plain',
     roomKey: currentRoom(),
-    content,
     createdAt: new Date().toISOString(),
   }];
 }
@@ -1720,9 +1723,10 @@ export async function sendMessage() {
   try {
     await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
-    if (privacyStop(err.message)) {
-      ui.messages = ui.messages.filter((msg) => msg.id !== tempId);
-      showFriendGate(ui.dmUser);
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      patchLocal(tempId, () => ({ pending: false, failed: false }));
+      showUndelivered(tone);
       return;
     }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
@@ -1834,9 +1838,10 @@ export async function sendFiles(list) {
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);
     return true;
   } catch (err) {
-    if (privacyStop(err.message)) {
-      ui.messages = ui.messages.filter((msg) => msg.id !== tempId);
-      showFriendGate(target?.dmUserId ? { id: target.dmUserId, displayName: ui.dmUser?.displayName, username: ui.dmUser?.username } : ui.dmUser);
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      patchLocal(tempId, () => ({ pending: false, failed: false }));
+      showUndelivered(tone);
       return false;
     }
     patchLocal(tempId, () => ({ pending: false, failed: true, error: err.message || 'Could not send' }));
@@ -1850,8 +1855,9 @@ export async function sendPoll(poll) {
   try {
     await postMessage({ poll });
   } catch (err) {
-    if (privacyStop(err.message)) {
-      showFriendGate(ui.dmUser);
+    const tone = deliveryTone(err.message);
+    if (tone) {
+      showUndelivered(tone);
       return;
     }
     toast(err.message);

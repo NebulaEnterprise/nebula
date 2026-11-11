@@ -1,5 +1,5 @@
 import { api, getApiBase } from './api.js';
-import { ui, toast, privacyStop, showFriendGate } from './state.svelte.js';
+import { ui, toast, callTone } from './state.svelte.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -474,8 +474,9 @@ export async function startCall(user) {
       const data = await api('/api/calls', { method: 'POST', body: { userId: person.id } });
       ui.outgoingCall = data.call;
     } catch (err) {
-      if (privacyStop(err.message)) {
-        await showFriendGate(person);
+      const tone = callTone(err.message);
+      if (tone) {
+        ui.dialog = { kind: 'start-call', user: person, tone };
         return;
       }
       toast(err.message || 'Could not start the call');
