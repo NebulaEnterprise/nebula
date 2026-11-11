@@ -11,6 +11,7 @@ let want = null;
 let wantKey = '';
 let retry = 1000;
 let started = false;
+let generation = 0;
 
 export function onGateway(fn) {
   listeners.add(fn);
@@ -73,6 +74,8 @@ function schedule() {
 
 function open() {
   opening = false;
+  const gen = generation;
+  if (gen !== generation) return;
   if (socket && (socket.readyState === 0 || socket.readyState === 1)) return;
   const token = localStorage.getItem('dc_token') || '';
   if (!token) {
@@ -80,8 +83,8 @@ function open() {
     return;
   }
   const url = wsUrl();
-  if (!url) {
-    schedule();
+  if (!url || gen !== generation) {
+    if (gen === generation) schedule();
     return;
   }
   if (!downSince) downSince = Date.now();
@@ -90,7 +93,12 @@ function open() {
     schedule();
     return;
   }
+  if (gen !== generation) {
+    try { ws.close(); } catch (_) {}
+    return;
+  }
   socket = ws;
+  ws._nebulaGen = gen;
   opening = true;
   let beat = 0;
   let acked = true;
@@ -150,6 +158,7 @@ function open() {
     if (!downSince) downSince = Date.now();
     if (socket === ws) socket = null;
     opening = false;
+    if (ws._nebulaGen !== generation) return;
     schedule();
   };
   ws.onerror = () => {};
@@ -160,4 +169,49 @@ export function connectGateway() {
   started = true;
   downSince = Date.now();
   open();
+}
+
+export function reconnectGateway() {
+  generation += 1;
+  sessionId = '';
+  seq = 0;
+  alive = false;
+  wantKey = '';
+  retry = 1000;
+  downSince = Date.now();
+  const current = socket;
+  socket = null;
+  const closed = new Promise((resolve) => {
+    if (!current || current.readyState === 3) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, 1500);
+    current.addEventListener('close', () => {
+      clearTimeout(timer);
+      resolve();
+    }, { once: true });
+    try { current.close(); } catch (_) { resolve(); }
+  });
+  return closed.then(() => new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      listeners.delete(wait);
+      resolve();
+    };
+    const wait = (packet) => {
+      const type = packet && packet.t;
+      if (type === 'READY' || type === 'RESUMED') finish();
+    };
+    const timer = setTimeout(finish, 4000);
+    listeners.add(wait);
+    if (!started) {
+      started = true;
+      downSince = Date.now();
+    }
+    open();
+  }));
 }

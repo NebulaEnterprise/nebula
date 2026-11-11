@@ -1,5 +1,5 @@
 import { api, pinMedia, warmMedia, uploadFile, setUnauthorizedHandler } from './api.js';
-import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, subscribeGateway } from './gateway.js';
+import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
@@ -247,6 +247,7 @@ async function finishLogin(data) {
   ui.auth = 'login';
   ui.booting = false;
   ui.activity = { servers: {}, channels: {}, dms: {} };
+  await reconnectGateway();
   await enterApp();
 }
 
@@ -304,6 +305,7 @@ export async function verify(code) {
   ui.me = data.user;
   ui.addingAccount = false;
   ui.pending = null;
+  await reconnectGateway();
   await enterApp();
 }
 
@@ -358,6 +360,7 @@ export async function switchAccount(id) {
   localStorage.setItem('dc_token', row.token);
   ui.booting = true;
   ui.addingAccount = false;
+  await reconnectGateway();
   try {
     const data = await api('/api/me');
     ui.me = data.user;
@@ -384,6 +387,7 @@ export function addAccount() {
   import('./voice.js').then((mod) => mod.leaveVoice()).catch(() => {});
   resetSession();
   localStorage.removeItem('dc_token');
+  disconnectGateway();
   ui.me = null;
   ui.addingAccount = true;
   ui.auth = 'login';
