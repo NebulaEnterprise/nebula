@@ -104,14 +104,9 @@
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(u, nowClock.t)}</strong></div>
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
-      {#if rel === 'incoming' || rel === 'outgoing'}
+      {#if rel === 'outgoing'}
         <div class="stack">
-          {#if rel === 'incoming'}
-            <button class="btn brand" onclick={() => act('accept')}>Accept request</button>
-            <button class="btn" onclick={() => act('decline')}>Ignore</button>
-          {:else}
-            <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
-          {/if}
+          <button class="btn" onclick={() => act('cancel')}>Cancel request</button>
         </div>
       {/if}
       <div class="pop-meta">
