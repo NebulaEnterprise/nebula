@@ -237,6 +237,27 @@
     }
   }
 
+  function openPicture(kind) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = kind === 'banner' ? 'image/gif,image/png,image/jpeg,image/webp,.gif' : 'image/*';
+    input.style.cssText = 'position:fixed;left:-1000px;top:0;width:1px;height:1px;opacity:0';
+    let settled = false;
+    const close = () => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+    };
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      close();
+      if (file) upload(file, kind);
+    });
+    input.addEventListener('cancel', close);
+    document.body.appendChild(input);
+    input.click();
+  }
+
   async function upload(file, kind, input) {
     const field = kind === 'banner' ? 'bannerUrl' : 'avatarUrl';
     const label = kind === 'banner' ? 'Banner' : 'Profile picture';
@@ -687,9 +708,7 @@
                     {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
                   </div>
                   <div class="look-actions">
-                    <label class="btn brand sm look-btn">Change banner
-                      <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,.gif" onchange={(e) => upload(e.target.files[0], 'banner', e.target)} />
-                    </label>
+                    <button type="button" class="btn brand sm look-btn" onclick={() => openPicture('banner')}>Change banner</button>
                     {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
                   </div>
                 </div>
@@ -707,9 +726,7 @@
               {#if lookOpen === 'avatar'}
                 <div class="look-panel">
                   <div class="look-actions">
-                    <label class="btn brand sm look-btn">Change avatar
-                      <input type="file" accept="image/*" onchange={(e) => upload(e.target.files[0], 'avatar', e.target)} />
-                    </label>
+                    <button type="button" class="btn brand sm look-btn" onclick={() => openPicture('avatar')}>Change avatar</button>
                     {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
                   </div>
                   {#if !form.avatarUrl}
