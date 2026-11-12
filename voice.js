@@ -132,11 +132,21 @@ module.exports = function mountVoice(app, ctx) {
     }
     const to = String(req.body.to || '');
     if (!room.members.has(to)) return res.status(404).json({ error: 'That person left the call' });
+    const kind = String(req.body.kind || '');
+    const payload = req.body && req.body.payload;
+    const iv = payload && String(payload.iv || '');
+    const data = payload && String(payload.data || '');
+    const sealed = payload && payload.v === 1
+      && iv.length >= 8 && iv.length <= 40 && data.length >= 16 && data.length <= 48000
+      && /^[A-Za-z0-9+/]+={0,2}$/.test(iv) && /^[A-Za-z0-9+/]+={0,2}$/.test(data);
+    if ((kind !== 'offer' && kind !== 'answer' && kind !== 'ice') || !sealed) {
+      return res.status(400).json({ error: 'Call setup must be encrypted' });
+    }
     room.signals.push({
       from: req.user.id,
       to,
-      kind: String(req.body.kind || ''),
-      payload: req.body.payload || null,
+      kind,
+      payload: { v: 1, iv, data },
       at: Date.now(),
     });
     if (room.signals.length > 500) room.signals.splice(0, room.signals.length - 500);

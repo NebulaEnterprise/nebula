@@ -1,4 +1,5 @@
 import { api, getApiBase } from './api.js';
+import { openCall, sealCall } from './seal.js';
 import { ui, toast, callTone, gateCall } from './state.svelte.js';
 
 const ICE = [
@@ -21,6 +22,7 @@ let syncTicket = 0;
 let seenRev = 0;
 let leaving = false;
 let aloneSince = 0;
+const callKeyWarned = new Set();
 
 function directCall(voice = ui.voice) {
   return !!(voice && voice.serverId === 'call' && String(voice.channelId || '').startsWith('dm:'));
@@ -121,12 +123,66 @@ function postLeave(voice) {
   if (voice.channelId) send('/api/voice/' + encodeURIComponent(voice.channelId) + '/leave');
 }
 
+const callKeys = new Map();
+
+function rememberCallKey(id, boxKey) {
+  if (id && boxKey) callKeys.set(String(id), boxKey);
+}
+
+function knownCallKey(id) {
+  const wanted = String(id || '');
+  if (!wanted) return '';
+  const lists = [
+    ui.voiceRooms[ui.voice?.channelId] || [],
+    ui.members || [],
+    ui.group?.members || [],
+    ui.friends || [],
+  ];
+  for (const list of lists) {
+    const person = list.find((member) => member && String(member.id) === wanted);
+    if (person?.boxKey) return person.boxKey;
+  }
+  if (ui.dmUser && String(ui.dmUser.id) === wanted && ui.dmUser.boxKey) return ui.dmUser.boxKey;
+  for (const dm of ui.dms || []) {
+    if (dm?.other && String(dm.other.id) === wanted && dm.other.boxKey) return dm.other.boxKey;
+  }
+  if (ui.voice?.person && String(ui.voice.person.id) === wanted && ui.voice.person.boxKey) return ui.voice.person.boxKey;
+  return callKeys.get(wanted) || '';
+}
+
+async function callKey(id) {
+  const known = knownCallKey(id);
+  if (known) {
+    rememberCallKey(id, known);
+    return known;
+  }
+  if (callKeys.has(String(id))) return callKeys.get(String(id)) || '';
+  try {
+    const data = await api('/api/users/' + encodeURIComponent(id));
+    const boxKey = data?.user?.boxKey || '';
+    rememberCallKey(id, boxKey);
+    if (!boxKey) callKeys.set(String(id), '');
+    return boxKey;
+  } catch (_) {
+    return '';
+  }
+}
+
 async function sendSignal(to, kind, payload) {
   const voice = ui.voice;
-  if (!voice) return;
+  if (!voice || !ui.me?.id) return;
+  const boxKey = await callKey(to);
+  if (!boxKey) {
+    if (!callKeyWarned.has(String(to))) {
+      callKeyWarned.add(String(to));
+      toast('They have to open Nebula once before this call can be encrypted.');
+    }
+    throw new Error('missing call key');
+  }
+  const sealed = await sealCall({ kind, payload }, ui.me.id, boxKey);
   await api('/api/voice/' + encodeURIComponent(voice.channelId) + '/signal', {
     method: 'POST',
-    body: { serverId: voice.serverId, to, kind, payload },
+    body: { serverId: voice.serverId, to, kind, payload: sealed },
   });
 }
 
@@ -235,27 +291,37 @@ async function flushIce(id) {
 }
 
 async function handleSignal(signal) {
-  if (!ui.voice || !signal) return;
-  if (signal.kind === 'offer') {
-    await acceptOffer(signal);
+  if (!ui.voice || !signal || !ui.me?.id) return;
+  const boxKey = await callKey(signal.from);
+  if (!boxKey) return;
+  let opened = null;
+  try {
+    opened = await openCall(signal.payload, ui.me.id, boxKey);
+  } catch (_) {
     return;
   }
-  if (signal.kind === 'answer') {
-    const peer = peers.get(signal.from);
+  if (!opened || opened.kind !== signal.kind) return;
+  const plain = { ...signal, payload: opened.payload };
+  if (plain.kind === 'offer') {
+    await acceptOffer(plain);
+    return;
+  }
+  if (plain.kind === 'answer') {
+    const peer = peers.get(plain.from);
     if (!peer) return;
     if (peer.pc.signalingState !== 'have-local-offer') return;
-    await peer.pc.setRemoteDescription(signal.payload);
-    await flushIce(signal.from);
+    await peer.pc.setRemoteDescription(plain.payload);
+    await flushIce(plain.from);
     return;
   }
-  if (signal.kind === 'ice' && signal.payload) {
-    const peer = peers.get(signal.from);
+  if (plain.kind === 'ice' && plain.payload) {
+    const peer = peers.get(plain.from);
     if (peer && peer.pc.remoteDescription) {
-      try { await peer.pc.addIceCandidate(signal.payload); } catch (_) {}
+      try { await peer.pc.addIceCandidate(plain.payload); } catch (_) {}
     } else {
-      const queued = iceQueue.get(signal.from) || [];
-      queued.push(signal.payload);
-      iceQueue.set(signal.from, queued);
+      const queued = iceQueue.get(plain.from) || [];
+      queued.push(plain.payload);
+      iceQueue.set(plain.from, queued);
     }
   }
 }
@@ -285,6 +351,13 @@ async function acceptOffer(signal, attempt = 0) {
 async function offerTo(id) {
   const peer = ensurePeer(id);
   if (peer.offered || peer.pc.signalingState !== 'stable') return;
+  if (!(await callKey(id))) {
+    if (!callKeyWarned.has(String(id))) {
+      callKeyWarned.add(String(id));
+      toast('They have to open Nebula once before this call can be encrypted.');
+    }
+    return;
+  }
   peer.offered = true;
   try {
     const offer = await peer.pc.createOffer();
@@ -302,6 +375,7 @@ async function renegotiate(id, attempt = 0) {
     if (attempt < 6) setTimeout(() => { renegotiate(id, attempt + 1).catch(() => {}); }, 350);
     return;
   }
+  if (!(await callKey(id))) return;
   peer.offered = true;
   try {
     const offer = await peer.pc.createOffer();
@@ -587,6 +661,7 @@ export async function leaveVoice() {
     stopLocal();
     speaking = false;
     aloneSince = 0;
+    callKeyWarned.clear();
     ui.voice = null;
     ui.streamUi = { view: 'auto', watching: false, hideChat: false };
     if (voice) {

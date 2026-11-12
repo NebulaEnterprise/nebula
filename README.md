@@ -31,3 +31,7 @@ Usernames remain in the file, and anyone in a server can see them. Who has a dir
 ### Messages
 
 New message text is encrypted on the device before it reaches the server. The server stores the sealed message, not the words. Files, photos, videos, and polls are not encrypted. A device that can decrypt a chat can still read it.
+
+### Calls
+
+Call audio and screen sharing are encrypted between the people on the call. The setup that connects them is sealed with the same keys as messages, and the server only carries that sealed setup. It cannot read the setup or hear the call. The server still knows who joined a call and when. A phone or computer on the call can still hear it. The network between those devices carries encrypted audio, and the connection address is still visible to ngrok, the router, and the internet provider.

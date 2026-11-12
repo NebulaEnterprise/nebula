@@ -68,6 +68,27 @@ export async function sealText(plain, recipients) {
   return { v: 1, iv: b64(iv), data: b64(data), for: wrap };
 }
 
+async function pairKey(myId, theirBox, usage) {
+  const mine = await ownPrivate(myId);
+  if (!mine || !theirBox) throw new Error('locked');
+  const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(theirBox) }, mine, 256);
+  return crypto.subtle.importKey('raw', secret, 'AES-GCM', false, [usage]);
+}
+
+export async function sealCall(plain, myId, theirBox) {
+  const key = await pairKey(myId, theirBox, 'encrypt');
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(plain)));
+  return { v: 1, iv: b64(iv), data: b64(data) };
+}
+
+export async function openCall(blob, myId, theirBox) {
+  if (!blob || blob.v !== 1 || !blob.iv || !blob.data) throw new Error('locked');
+  const key = await pairKey(myId, theirBox, 'decrypt');
+  const text = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(blob.iv) }, key, raw(blob.data));
+  return JSON.parse(new TextDecoder().decode(text));
+}
+
 export async function openSeal(seal, userId) {
   const slot = seal && seal.for && seal.for[String(userId || '')];
   const mine = await ownPrivate(userId);
