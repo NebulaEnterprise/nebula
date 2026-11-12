@@ -198,6 +198,7 @@
         {:else if kind === 'group'}{groupStep === 1 ? 'Select friends' : 'Customize your group'}
         {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
         {:else if kind === 'leave'}Leave Nebula
+        {:else if kind === 'leave-server'}Leave server
         {:else}Server{/if}
       </h3>
       {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
@@ -437,6 +438,14 @@
             if (url) window.open(url, '_blank', 'noopener,noreferrer');
           }}>Yes</button>
         </div>
+
+      {:else if kind === 'leave-server'}
+        <p class="hint">Leave {ui.serverMeta?.name || 'this server'}? You will need a new invite to come back.</p>
+        <button class="btn danger" onclick={() => go(async () => {
+          await guildAction({ type: 'leave' });
+          close();
+          await openServer('nebula-official');
+        })}>Leave server</button>
 
       {:else if kind === 'delete'}
         <p class="hint">Delete {ui.serverMeta?.name}? This cannot be undone.</p>

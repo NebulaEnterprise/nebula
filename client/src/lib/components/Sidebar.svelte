@@ -45,6 +45,7 @@
     list.push({ act: 'nick', label: 'Change nickname', icon: Pencil });
     list.push({ act: 'mute', label: 'Mute server', icon: BellOff });
     list.push({ act: 'report', label: 'Report a member', icon: Flag });
+    if (ui.serverId !== 'nebula-official' && !ui.serverMeta?.owner) list.push({ act: 'leave-server', label: 'Leave server', icon: LogOut, danger: true });
     if (ui.serverMeta?.owner && ui.serverId !== 'nebula-official') list.push({ act: 'delete', label: 'Delete server', icon: Trash2, danger: true });
     return list;
   });
