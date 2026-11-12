@@ -1639,6 +1639,8 @@ export async function loadMembers(quiet) {
 
 export function deliveryTone(message) {
   const text = String(message || '');
+  if (text.startsWith('They only accept links') || text.startsWith('They are not accepting links') || text === 'You cannot send links to this person') return 'links';
+  if (text.startsWith('They only accept media') || text.startsWith('They are not accepting media') || text === 'You cannot send media to this person') return 'media';
   if (text.startsWith('They only accept messages')) return 'friends';
   if (text === 'You cannot message this person' || /cannot message|blocked/i.test(text)) return 'plain';
   return '';
@@ -1656,7 +1658,7 @@ export function showUndelivered(tone) {
     id: 'local-clyde-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
     clientKey: 'local-clyde-' + Math.random().toString(36).slice(2),
     kind: 'clyde',
-    tone: tone === 'friends' ? 'friends' : 'plain',
+    tone: tone === 'friends' || tone === 'links' || tone === 'media' ? tone : 'plain',
     roomKey: currentRoom(),
     createdAt: new Date().toISOString(),
   }];

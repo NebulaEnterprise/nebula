@@ -144,6 +144,7 @@
     { value: 'friends', label: 'Friends' },
     { value: 'nobody', label: 'Nobody' },
   ];
+  const shareOptions = callOptions;
 
   async function setPrivacy(body, ok) {
     try {
@@ -543,6 +544,20 @@
                 <Select value={ui.me?.callPrivacy || 'everyone'} options={callOptions} onpick={(value) => setPrivacy({ callPrivacy: value }, 'Call privacy updated')} />
               </div>
               <p class="hint">Friends can always call you, unless you pick Nobody. Blocked people never can.</p>
+            </div>
+            <div class="field">
+              <label>Who can send links</label>
+              <div class="privacy-pick">
+                <Select value={ui.me?.linkPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ linkPrivacy: value }, 'Link privacy updated')} />
+              </div>
+              <p class="hint">Friends can always send you links, unless you pick Nobody. Blocked people never can.</p>
+            </div>
+            <div class="field">
+              <label>Who can send media</label>
+              <div class="privacy-pick">
+                <Select value={ui.me?.mediaPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ mediaPrivacy: value }, 'Media privacy updated')} />
+              </div>
+              <p class="hint">Friends can always send you photos, videos, GIFs, and files, unless you pick Nobody. Blocked people never can.</p>
             </div>
           {:else if page === 'advanced'}
             <div class="field">
