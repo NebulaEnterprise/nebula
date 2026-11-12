@@ -255,11 +255,11 @@ async function finishLogin(data) {
   await enterApp();
 }
 
-export async function login(username, password) {
+export async function login(email, password) {
   ui.authError = '';
-  const data = await api('/api/auth/login', { method: 'POST', body: { username, password } });
+  const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
   if (data.mfa) {
-    ui.mfa = { ticket: data.ticket, methods: data.methods || ['totp'], username };
+    ui.mfa = { ticket: data.ticket, methods: data.methods || ['totp'], email };
     ui.auth = 'mfa';
     return;
   }
@@ -286,14 +286,16 @@ export async function loginWithPasskey() {
   await finishLogin(data);
 }
 
-export async function requestCode(username, password) {
+export async function requestCode(email, username, password) {
   ui.authError = '';
-  const data = await api('/api/auth/request-code', { method: 'POST', body: { username, password } });
+  const data = await api('/api/auth/request-code', { method: 'POST', body: { email, username, password } });
   if (data.token) {
     await finishLogin(data);
     return;
   }
-  throw new Error(data.error || 'Could not create the account');
+  ui.pending = { email, username, password };
+  ui.auth = 'verify';
+  ui.authOk = 'Code sent to ' + email;
 }
 
 export async function verify(code) {

@@ -1189,10 +1189,11 @@ for (const u of Object.values(users)) {
     delete u.passwordPlain;
     accountsChanged = true;
   }
-  if (u.email || u.emailSalt || u.emailHash) {
+  if (u.email && String(u.email).includes('@')) {
+    const sealed = emailRecord(u.email);
+    u.emailSalt = sealed.emailSalt;
+    u.emailHash = sealed.emailHash;
     delete u.email;
-    delete u.emailSalt;
-    delete u.emailHash;
     accountsChanged = true;
   }
   if (u.token && !String(u.token).startsWith('sha256$')) {
@@ -1218,10 +1219,20 @@ for (const u of Object.values(users)) {
   }
 }
 if (accountsChanged) saveNow(USERS_FILE, users);
-if (Object.keys(codes).length) {
-  for (const key of Object.keys(codes)) delete codes[key];
-  saveNow(CODES_FILE, codes);
+let codesChanged = false;
+for (const entry of Object.values(codes)) {
+  if (entry && Object.prototype.hasOwnProperty.call(entry, 'passwordPlain')) {
+    delete entry.passwordPlain;
+    codesChanged = true;
+  }
 }
+for (const key of Object.keys(codes)) {
+  if (String(key).includes('@')) {
+    delete codes[key];
+    codesChanged = true;
+  }
+}
+if (codesChanged) saveNow(CODES_FILE, codes);
 
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
@@ -2483,6 +2494,7 @@ function publicUser(u, viewer) {
     uid: u.uid || null,
     username: u.username,
     displayName: u.displayName || u.username,
+    email: '',
     bio: String(u.bio || '').replace(/\s+/g, ' ').trim().slice(0, 29),
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
@@ -2970,18 +2982,55 @@ app.use((req, res, next) => {
 });
 app.use(express.static(FRONTEND_DIR));
 
-app.post('/api/auth/request-code', (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) {
-    return res.status(400).json({ error: 'username and password required' });
+app.post('/api/auth/request-code', async (req, res) => {
+  const { email, username, password } = req.body || {};
+  if (!email || !username || !password) {
+    return res.status(400).json({ error: 'email, username, and password required' });
   }
   const cleanUser = String(username).trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 32);
+  const cleanEmail = String(email).trim().toLowerCase();
   if (cleanUser.length < 1) return res.status(400).json({ error: 'Username required' });
+  if (!cleanEmail.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+  if (Object.values(users).some((u) => emailMatches(cleanEmail, u.emailSalt, u.emailHash))) {
+    return res.status(409).json({ error: 'Email already registered' });
+  }
   if (Object.values(users).some((u) => u.username === cleanUser)) {
     return res.status(409).json({ error: 'Username taken' });
   }
-  res.json(createAccount({ username: cleanUser, passwordHash: hashPassword(password) }, req));
+
+  const entry = {
+    username: cleanUser,
+    passwordHash: hashPassword(password),
+    ...emailRecord(cleanEmail),
+  };
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
+    return res.json(createAccount(entry, req));
+  }
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const codeId = crypto.randomBytes(16).toString('hex');
+  entry.codeId = codeId;
+  codes[codeId] = {
+    username: entry.username,
+    passwordHash: entry.passwordHash,
+    emailSalt: entry.emailSalt,
+    emailHash: entry.emailHash,
+    code,
+    expiresAt: Date.now() + 15 * 60 * 1000,
+  };
+  save(CODES_FILE, codes);
+
+  try {
+    await sendVerificationCode(cleanEmail, code);
+    res.json({ ok: true, message: 'Verification code sent' });
+  } catch (err) {
+    delete codes[codeId];
+    save(CODES_FILE, codes);
+    const msg = (err && err.message) || '';
+    res.status(500).json({ error: msg.includes('not configured') ? msg : 'Failed to send email' });
+  }
 });
 
 function createAccount(entry, req) {
@@ -2993,6 +3042,8 @@ function createAccount(entry, req) {
     id, uid,
     username: entry.username,
     displayName: entry.username,
+    emailSalt: entry.emailSalt,
+    emailHash: entry.emailHash,
     passwordHash: entry.passwordHash,
     bio: '', aboutMe: '', pronouns: '',
     status: 'online',
@@ -3020,15 +3071,30 @@ function createAccount(entry, req) {
 }
 
 app.post('/api/auth/verify', (req, res) => {
-  res.status(400).json({ error: 'Create the account again. Nebula does not use email.' });
+  const { email, code } = req.body || {};
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const found = Object.entries(codes).find(([, row]) => row && emailMatches(cleanEmail, row.emailSalt, row.emailHash));
+  const entry = found && found[1];
+  if (!entry) return res.status(400).json({ error: 'No pending verification' });
+  if (Date.now() > entry.expiresAt) {
+    delete codes[found[0]];
+    save(CODES_FILE, codes);
+    return res.status(400).json({ error: 'Code expired' });
+  }
+  if (String(code).trim() !== entry.code) {
+    return res.status(400).json({ error: 'Invalid code' });
+  }
+  entry.codeId = found[0];
+  res.json(createAccount(entry, req));
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const raw = String((req.body && req.body.username) || '').trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 32);
+  const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
   const password = req.body && req.body.password;
-  const user = Object.values(users).find((u) => u.username === raw);
+  const user = Object.values(users).find((u) => u.username === raw)
+    || Object.values(users).find((u) => emailMatches(raw, u.emailSalt, u.emailHash));
   if (!user || !checkPassword(password || '', user.passwordHash)) {
-    return res.status(400).json({ error: 'That username or password is wrong' });
+    return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
   if (!String(user.passwordHash).startsWith('scrypt$')) {
     user.passwordHash = hashPassword(password || '');
@@ -3857,11 +3923,21 @@ app.post('/api/me/password', auth, (req, res) => {
 });
 
 app.post('/api/me/email', auth, (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const password = String(req.body?.password || '');
+  if (!checkPassword(password, req.user.passwordHash)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  if (!email.includes('@') || email.length > 120) return res.status(400).json({ error: 'Invalid email' });
+  if (Object.values(users).some((u) => u.id !== req.user.id && emailMatches(email, u.emailSalt, u.emailHash))) {
+    return res.status(409).json({ error: 'Email already registered' });
+  }
+  const sealedEmail = emailRecord(email);
+  req.user.emailSalt = sealedEmail.emailSalt;
+  req.user.emailHash = sealedEmail.emailHash;
   delete req.user.email;
-  delete req.user.emailSalt;
-  delete req.user.emailHash;
   save(USERS_FILE, users);
-  res.status(400).json({ error: 'Nebula does not keep an email address' });
+  res.json({ ok: true, user: publicUser(req.user) });
 });
 
 app.get('/api/me/security', auth, (req, res) => {

@@ -1,6 +1,7 @@
 <script>
   import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey } from '../state.svelte.js';
   import Avatar from './Avatar.svelte';
+  let email = $state('');
   let username = $state('');
   let password = $state('');
   let code = $state('');
@@ -23,9 +24,9 @@
     <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
       <p class="sub">Log in and pick up where you left off.</p>
-      <div class="field"><label>Username</label><input bind:value={username} maxlength="32" autocomplete="username" /></div>
+      <div class="field"><label>Email or username</label><input bind:value={email} autocomplete="username" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
-      <button class="btn brand" disabled={busy} onclick={() => run(() => login(username, password))}>Log in</button>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>Log in</button>
       <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Sign in with a passkey</button>
       <p class="auth-switch">New here? <button type="button" onclick={() => (ui.auth = 'register')}>Create an account</button></p>
       {#if ui.addingAccount}
@@ -34,10 +35,11 @@
         <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
       {/if}
     {:else if ui.auth === 'register'}
-      <p class="sub">Create an account with a username. Nebula does not ask for an email.</p>
+      <p class="sub">Create an account. If this server can send email, you’ll get a code. If it can’t, the account opens right away.</p>
+      <div class="field"><label>Email</label><input bind:value={email} type="email" autocomplete="email" /></div>
       <div class="field"><label>Username</label><input bind:value={username} maxlength="32" autocomplete="username" /></div>
       <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="new-password" /></div>
-      <button class="btn brand" disabled={busy} onclick={() => run(() => requestCode(username, password))}>Continue</button>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => requestCode(email, username, password))}>Continue</button>
       <p class="auth-switch">Already have one? <button type="button" onclick={() => (ui.auth = 'login')}>Log in</button></p>
       {#if !ui.addingAccount}
         <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>

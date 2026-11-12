@@ -8,7 +8,7 @@ Updated November 11, 2026.
 
 ### Emails
 
-Nebula does not ask for an email address and does not store one. An account cannot be looked up by an email address. A mail provider still has any verification mail that was sent before this change.
+The address is not written down. Nebula keeps a slow hash and checks it when someone types that address to log in or change it. The Account page says **Not stored**. Someone who already knows an address can still check whether it matches. Gmail still has any address a verification mail was sent to.
 
 ### Passwords
 
@@ -34,6 +34,4 @@ New message text is encrypted on the device before it reaches the server. The se
 
 Call audio and screen sharing are encrypted between the people on the call. The setup that connects them is sealed with the same keys as messages, and the server only carries that sealed setup. It cannot read the setup or hear the call. The server still knows who joined a call and when. A phone or computer on the call can still hear it. The network between those devices carries encrypted audio, and the connection address is still visible to ngrok, the router, and the internet provider.
 
-### Summary
-
-The data people send on Nebula is encrypted. Message text is encrypted on the device, and so are calls and screen sharing, so the server cannot read the words or hear the call. An account is a username and a password hash. Nebula does not keep an email address, a legal name, an IP address, or a device name. The username stays visible so people can find each other. The internet provider still sees the connection. A signed-in device can still open that account.
+### Summary. The data people send on Nebula is encrypted. Message text is encrypted on the device, and so are calls and screen sharing, so the server cannot read the words or hear the call. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. A copy of the server files does not keep email addresses, password text, IP addresses, or computer and browser names. Usernames stay, because people have to be able to find and see each other.

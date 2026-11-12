@@ -37,6 +37,8 @@
   let draftUser = $state('');
   let nameStatus = $state('');
   let nameClean = $state('');
+  let draftEmail = $state('');
+  let emailPassword = $state('');
   let currentPassword = $state('');
   let nextPassword = $state('');
   let confirmPassword = $state('');
@@ -64,6 +66,8 @@
     draftUser = ui.me?.username || '';
     nameClean = cleanName(draftUser);
     nameStatus = nameClean ? 'yours' : 'invalid';
+    draftEmail = ui.me?.email || '';
+    emailPassword = '';
     currentPassword = '';
     nextPassword = '';
     confirmPassword = '';
@@ -81,6 +85,20 @@
       form.username = ui.me?.username || username;
       accountDialog = '';
       toast('Username updated');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      accountBusy = false;
+    }
+  }
+
+  async function saveEmail() {
+    accountBusy = true;
+    try {
+      const data = await api('/api/me/email', { method: 'POST', body: { email: draftEmail, password: emailPassword } });
+      ui.me = { ...ui.me, ...data.user };
+      accountDialog = '';
+      toast('Sign-in email updated');
     } catch (err) {
       toast(err.message);
     } finally {
@@ -454,6 +472,11 @@
               <span>Username</span>
               <strong>{ui.me?.username}</strong>
               <button type="button" class="btn sm" onclick={() => openAccount('username')}>Edit</button>
+            </div>
+            <div class="acct-row">
+              <span>Email</span>
+              <strong>Not stored</strong>
+              <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
             </div>
           </section>
           <div class="acct-rule"></div>
@@ -898,7 +921,7 @@
     <div class="poll-overlay" role="presentation" onclick={() => (accountDialog = '')}>
       <div class="poll-sheet acct-dialog" role="dialog" onclick={(e) => e.stopPropagation()}>
         <div class="row">
-          <h3>{accountDialog === 'username' ? 'Update your username' : 'Update your password'}</h3>
+          <h3>{accountDialog === 'username' ? 'Update your username' : accountDialog === 'email' ? 'Update your email' : 'Update your password'}</h3>
           <button type="button" class="btn icon" onclick={() => (accountDialog = '')}><X size={16} /></button>
         </div>
         {#if accountDialog === 'username'}
@@ -918,6 +941,14 @@
           <div class="modify-actions">
             <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
             <button type="button" class="btn brand" disabled={accountBusy || !nameReady} onclick={saveUsername}>Done</button>
+          </div>
+        {:else if accountDialog === 'email'}
+          <p class="hint">Enter your password to confirm this change.</p>
+          <div class="field"><label>Email</label><input bind:value={draftEmail} maxlength="120" /></div>
+          <div class="field"><label>Password</label><input type={showPw ? 'text' : 'password'} bind:value={emailPassword} /></div>
+          <div class="modify-actions">
+            <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
+            <button type="button" class="btn brand" disabled={accountBusy} onclick={saveEmail}>Done</button>
           </div>
         {:else}
           <p class="hint">Enter your current password and a new password.</p>
