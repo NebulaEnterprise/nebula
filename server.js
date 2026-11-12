@@ -1002,7 +1002,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
-const sealedFiles = new Set([USERS_FILE, DMS_FILE]);
+const sealedFiles = new Set([USERS_FILE, DMS_FILE, FRIENDS_FILE]);
 const reseal = new Set();
 let dataKeyCache = null;
 function dataKey() {
@@ -1174,6 +1174,7 @@ let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
 if (reseal.has(USERS_FILE)) saveNow(USERS_FILE, users);
 if (reseal.has(DMS_FILE)) saveNow(DMS_FILE, dmThreads);
+if (reseal.has(FRIENDS_FILE)) saveNow(FRIENDS_FILE, friendGraph);
 const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
 const CALLS_FILE = path.join(DATA_DIR, 'calls.json');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
@@ -1285,7 +1286,9 @@ const PERM = {
 };
 const ALL_PERMS = Object.values(PERM).reduce((a, b) => a | b, 0);
 
+sealedFiles.add(GUILDS_FILE);
 let guilds = load(GUILDS_FILE, { servers: {} });
+if (reseal.has(GUILDS_FILE)) saveNow(GUILDS_FILE, guilds);
 
 function officialChannels() {
   return [
@@ -1777,12 +1780,40 @@ function slimAuthor(u) {
   };
 }
 
+function cleanLock(lock) {
+  if (!lock || lock.v !== 1 || !lock.for || typeof lock.for !== 'object') return null;
+  const iv = String(lock.iv || '');
+  const metaIv = String(lock.metaIv || '');
+  const meta = String(lock.meta || '');
+  if (iv.length < 8 || iv.length > 40 || metaIv.length < 8 || metaIv.length > 40 || meta.length < 16 || meta.length > 4000) return null;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(iv) || !/^[A-Za-z0-9+/]+={0,2}$/.test(metaIv) || !/^[A-Za-z0-9+/]+={0,2}$/.test(meta)) return null;
+  const wrap = {};
+  for (const id of Object.keys(lock.for).slice(0, 400)) {
+    const slot = lock.for[id] || {};
+    const eph = String(slot.eph || '');
+    const siv = String(slot.iv || '');
+    const ct = String(slot.ct || '');
+    if (eph.length < 80 || eph.length > 220 || siv.length < 8 || siv.length > 40 || ct.length < 16 || ct.length > 200) continue;
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(eph) || !/^[A-Za-z0-9+/]+={0,2}$/.test(siv) || !/^[A-Za-z0-9+/]+={0,2}$/.test(ct)) continue;
+    wrap[String(id).slice(0, 80)] = { eph, iv: siv, ct };
+  }
+  if (!Object.keys(wrap).length) return null;
+  return { v: 1, iv, metaIv, meta, for: wrap };
+}
+
 function readFiles(body) {
   const rows = body && Array.isArray(body.files) ? body.files.slice(0, 10) : [];
   const files = [];
   for (const row of rows) {
     const url = String(row && row.url || '');
     if (!allowedFileUrl(url)) continue;
+    const lock = cleanLock(row && row.lock);
+    if (lock) {
+      const file = { url, name: 'Encrypted file', kind: 'locked', lock };
+      if (row && row.spoiler) file.spoiler = true;
+      files.push(file);
+      continue;
+    }
     const name = String(row && row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
     const image = /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(url);
     const video = /\.(mp4|webm|mov|m4v|ogv|ogg)$/i.test(url);

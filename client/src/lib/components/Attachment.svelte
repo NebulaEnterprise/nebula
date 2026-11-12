@@ -1,16 +1,20 @@
 <script>
-  import { fileUrl, pinnedSrc, resolveMedia } from '../api.js';
+  import { fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
+  import { openFile } from '../seal.js';
+  import { ui } from '../state.svelte.js';
 
   let { file } = $props();
   let src = $state('');
   let poster = $state('');
   let open = $state(false);
   let revealed = $state(false);
+  let unlockedName = $state('');
+  let unlockedMime = $state('');
 
-  const name = $derived(file?.name || 'File');
-  const video = $derived(file?.kind === 'video' || /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|$)/i.test(file?.url || file?.name || ''));
-  const image = $derived(!video && (file?.kind === 'image' || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(file?.url || file?.name || '')));
-  const gif = $derived(/\.gif(\?|$)/i.test(file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
+  const name = $derived(unlockedName || file?.name || 'File');
+  const video = $derived(file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|$)/i.test(unlockedName || file?.url || file?.name || ''));
+  const image = $derived(!video && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
+  const gif = $derived(/gif/i.test(unlockedMime) || /\.gif(\?|$)/i.test(unlockedName || file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
   const progress = $derived(Math.max(0, Math.min(100, Number(file?.progress) || 0)));
   const spoiler = $derived(!!file?.spoiler && !revealed);
   const label = $derived(file?.alt || name);
@@ -21,9 +25,38 @@
     return pinnedSrc(url) || (navigator.serviceWorker?.controller ? fileUrl(url) : '');
   }
 
+  async function unlock(url, lock) {
+    const full = /^https?:/i.test(url) ? url : getApiBase() + url;
+    const headers = { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' };
+    const res = await fetch(full, { headers });
+    if (!res.ok) throw new Error('locked');
+    const opened = await openFile(lock, new Uint8Array(await res.arrayBuffer()), ui.me?.id);
+    const mime = String(opened.meta?.mime || '');
+    const blob = new Blob([opened.bytes], { type: mime || 'application/octet-stream' });
+    unlockedName = String(opened.meta?.name || 'Encrypted file');
+    unlockedMime = mime;
+    return URL.createObjectURL(blob);
+  }
+
   $effect(() => {
     const url = file?.url || '';
+    const lock = file?.lock;
     const posterUrl = file?.poster || '';
+    if (lock && url && !String(url).startsWith('blob:')) {
+      let stop = false;
+      let made = '';
+      unlock(url, lock).then((next) => {
+        if (stop) URL.revokeObjectURL(next);
+        else {
+          made = next;
+          src = next;
+        }
+      }).catch(() => { if (!stop) src = ''; });
+      return () => {
+        stop = true;
+        if (made) URL.revokeObjectURL(made);
+      };
+    }
     let stop = false;
     const apply = () => {
       if (stop) return;
@@ -60,6 +93,8 @@
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
   {:else if image}
     {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
+  {:else if file?.lock && !src}
+    <span class="file-chip">Encrypted file</span>
   {:else}
     <a class="file-chip" href={src || fileUrl(file?.url)} target="_blank" rel="noreferrer">{name}</a>
   {/if}

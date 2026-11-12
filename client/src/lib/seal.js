@@ -89,6 +89,46 @@ export async function openCall(blob, myId, theirBox) {
   return JSON.parse(new TextDecoder().decode(text));
 }
 
+export async function sealFile(bytes, meta, recipients) {
+  const people = [];
+  const seen = new Set();
+  for (const person of recipients || []) {
+    if (!person?.id || !person.boxKey || seen.has(String(person.id))) continue;
+    seen.add(String(person.id));
+    people.push({ id: String(person.id), boxKey: person.boxKey });
+  }
+  if (!people.length) throw new Error('Nobody in this chat can open an encrypted file yet');
+  const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+  const rawKey = new Uint8Array(await crypto.subtle.exportKey('raw', key));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const body = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, body);
+  const metaIv = crypto.getRandomValues(new Uint8Array(12));
+  const metaCt = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: metaIv }, key, new TextEncoder().encode(JSON.stringify(meta || {})));
+  const wrap = {};
+  for (const person of people) wrap[person.id] = await wrapFor(rawKey, person.boxKey);
+  return {
+    bytes: new Uint8Array(data),
+    lock: { v: 1, iv: b64(iv), metaIv: b64(metaIv), meta: b64(metaCt), for: wrap },
+  };
+}
+
+export async function openFile(lock, bytes, userId) {
+  const slot = lock && lock.for && lock.for[String(userId || '')];
+  const mine = await ownPrivate(userId);
+  if (!slot || !mine || !lock.iv || !lock.metaIv || !lock.meta) throw new Error('locked');
+  const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(slot.eph) }, mine, 256);
+  const wrapKey = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
+  const messageKey = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(slot.iv) }, wrapKey, raw(slot.ct));
+  const key = await crypto.subtle.importKey('raw', messageKey, 'AES-GCM', false, ['decrypt']);
+  const body = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.iv) }, key, body);
+  const metaRaw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.metaIv) }, key, raw(lock.meta));
+  let meta = {};
+  try { meta = JSON.parse(new TextDecoder().decode(metaRaw)); } catch (_) {}
+  return { bytes: new Uint8Array(plain), meta };
+}
+
 export async function openSeal(seal, userId) {
   const slot = seal && seal.for && seal.for[String(userId || '')];
   const mine = await ownPrivate(userId);

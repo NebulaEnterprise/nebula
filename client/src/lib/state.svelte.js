@@ -1,9 +1,9 @@
 import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandler } from './api.js';
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
-import { fileKind, packUpload } from './media.js';
+import { fileKind } from './media.js';
 import { PERM } from './format.js';
-import { ensureBox, openSeal, sealText } from './seal.js';
+import { ensureBox, openSeal, sealFile, sealText } from './seal.js';
 
 export const nowClock = $state({ t: Date.now() });
 if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
@@ -2011,31 +2011,20 @@ export async function sendFiles(list) {
     const report = (index, n) => {
       patchLocal(tempId, (msg) => ({ files: msg.files.map((row, at) => at === index ? { ...row, progress: Math.max(1, n) } : row) }));
     };
+    const people = peopleFor(target);
     for (let i = 0; i < files.length; i++) {
       const blob = files[i].file;
-      const head = new Uint8Array(await blob.slice(0, 6).arrayBuffer());
-      const gif = /image\/gif/i.test(blob.type || '') || /\.gif$/i.test(files[i].name || '') || (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46);
-      if (gif) {
-        const data = await uploadFile(blob, (n) => report(i, n), files[i].name || 'animation.gif');
-        if (!data.url) throw new Error('The file did not upload');
-        pinMedia(data.url, blob);
-        saved.push({ url: data.url, name: files[i].name || 'animation.gif', alt: files[i].alt, spoiler: files[i].spoiler });
-        report(i, 100);
-        continue;
-      }
-      const packed = await packUpload(blob);
-      let poster = '';
-      if (packed.poster) {
-        const preview = await uploadFile(packed.poster, (n) => report(i, Math.round(n * 0.2)), packed.posterName);
-        poster = preview.url || '';
-        if (poster) pinMedia(poster, packed.poster);
-      }
-      const data = await uploadFile(packed.body, (n) => report(i, poster ? 20 + Math.round(n * 0.8) : n), packed.name);
+      if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
+      report(i, 5);
+      const sealed = await sealFile(new Uint8Array(await blob.arrayBuffer()), {
+        name: files[i].name || 'file',
+        mime: blob.type || '',
+        alt: files[i].alt || '',
+      }, people);
+      const body = new Blob([sealed.bytes], { type: 'application/octet-stream' });
+      const data = await uploadFile(body, (n) => report(i, Math.max(5, n)), 'sealed.bin');
       if (!data.url) throw new Error('The file did not upload');
-      pinMedia(data.url, packed.body);
-      const row = { url: data.url, name: files[i].name || data.name || packed.name || 'file', alt: files[i].alt, spoiler: files[i].spoiler };
-      if (poster) row.poster = poster;
-      saved.push(row);
+      saved.push({ url: data.url, name: 'Encrypted file', lock: sealed.lock, spoiler: files[i].spoiler });
       report(i, 100);
     }
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);

@@ -28,7 +28,11 @@ Usernames remain in the file and anyone in a server can see them.
 
 ### Messages
 
-messages are encrypted on the device before it reaches the server. The server stores the sealed message, not the words. Files, photos, videos, and polls are not encrypted. 
+Messages are encrypted on the device before they reach the server. The server stores the sealed message, not the words. New photos, videos, and files are encrypted on the device before they are uploaded. Polls are not encrypted. Older files that were uploaded before this change stay readable.
+
+### Friends, direct messages, and servers
+
+The friend list, the direct-message list, and server membership are encrypted on disk. The running server can still read them so it can deliver chats. Anyone with the `.data-key` file next to `server.js` can read them too.
 
 ### Calls
 
