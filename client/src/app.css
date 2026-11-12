@@ -1990,11 +1990,18 @@ img { max-width: 100%; }
 .group-actions .btn.brand { width: auto; }
 .group-icon { display: grid; place-items: center; margin: 8px auto; cursor: pointer; position: relative; }
 .group-icon input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.pop-actions { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; gap: 8px; }
-.pop-msg, .pop-more, .pop-msg:hover, .pop-more:hover, .pop-msg:focus, .pop-more:focus {
-  width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; color: #fff;
-  background: transparent !important; background-color: transparent !important;
-  border: 0 !important; box-shadow: none !important; filter: none;
+.pop-actions { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; align-items: center; gap: 8px; }
+.pop-msg, .pop-more {
+  border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; padding: 0;
+  background: rgba(12, 8, 24, 0.62);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 0 1px rgba(176, 150, 255, 0.35), 0 0 16px rgba(124, 92, 246, 0.55);
+}
+.pop-msg { width: 36px; height: 36px; }
+.pop-more { width: 30px; height: 30px; }
+.pop-msg:hover, .pop-more:hover, .pop-msg:focus-visible, .pop-more:focus-visible {
+  background: rgba(22, 14, 40, 0.78);
+  box-shadow: 0 0 0 1px rgba(196, 176, 255, 0.5), 0 0 20px rgba(140, 110, 255, 0.7);
 }
 .pop-menu {
   position: absolute; top: 8px; left: calc(100% + 8px); right: auto; z-index: 5;
