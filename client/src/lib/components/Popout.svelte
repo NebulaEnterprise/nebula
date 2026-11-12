@@ -8,7 +8,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { api, fileUrl, uploadFile } from '../api.js';
-  import { ui, nowClock, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
+  import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia } from '../state.svelte.js';
   import { profileSeen } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
@@ -83,6 +83,7 @@
       if (!uploaded.url) throw new Error('The photo did not upload');
       const data = await api('/api/me/' + kind, { method: 'POST', body: { url: uploaded.url } });
       if (data.user) {
+        touchProfileMedia();
         ui.me = { ...ui.me, ...data.user };
         if (ui.popout?.user?.id === data.user.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...data.user } };
       }
@@ -94,16 +95,32 @@
     }
   }
 
+  function withoutMedia(list, id) {
+    return (Array.isArray(list) ? list : []).filter((row) => row && String(row.id) !== String(id));
+  }
+
   async function removeMedia(kind, id) {
     if (rel !== 'self' || !id) return;
+    touchProfileMedia();
+    const previousMe = ui.me;
+    const previousPopout = ui.popout;
+    ui.me = { ...ui.me, [kind]: withoutMedia(ui.me?.[kind], id) };
+    if (ui.popout?.user && String(ui.popout.user.id) === String(ui.me.id)) {
+      ui.popout = { ...ui.popout, user: { ...ui.popout.user, [kind]: withoutMedia(ui.popout.user[kind], id) } };
+    }
+    if (kind === 'stories') storyAt = -1;
     try {
       const data = await api('/api/me/' + kind + '/' + encodeURIComponent(id), { method: 'DELETE' });
+      touchProfileMedia();
       if (data.user) {
-        ui.me = { ...ui.me, ...data.user };
-        if (ui.popout?.user?.id === data.user.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...data.user } };
+        ui.me = { ...ui.me, ...data.user, [kind]: withoutMedia(data.user[kind], id) };
+        if (ui.popout?.user?.id === data.user.id) {
+          ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...data.user, [kind]: withoutMedia(data.user[kind], id) } };
+        }
       }
-      if (kind === 'stories' && storyAt >= stories.length - 1) storyAt = stories.length > 1 ? 0 : -1;
     } catch (err) {
+      ui.me = previousMe;
+      ui.popout = previousPopout;
       toast(err.message || 'Could not remove that');
     }
   }
@@ -223,9 +240,12 @@
             </button>
           {/if}
           {#each stories as story, index (story.id)}
-            <button type="button" class="ig-story" onclick={() => (storyAt = index)}>
-              {#if isVideo(story)}<video src={fileUrl(story.url)} muted playsinline autoplay loop></video>{:else}<Photo url={story.url} />{/if}
-            </button>
+            <div class="ig-story-wrap">
+              <button type="button" class="ig-story" onclick={() => (storyAt = index)}>
+                {#if isVideo(story)}<video src={fileUrl(story.url)} muted playsinline autoplay loop></video>{:else}<Photo url={story.url} />{/if}
+              </button>
+              <button type="button" class="ig-x" title="Remove story" onclick={() => removeMedia('stories', story.id)}><X size={12} /></button>
+            </div>
           {/each}
         </div>
         {/if}
@@ -250,7 +270,7 @@
             <button type="button" class="ig-close" title="Close" onclick={() => (storyAt = -1)}><X size={16} /></button>
             {#if storyAt > 0}<button type="button" class="ig-nav prev" title="Previous story" onclick={() => (storyAt -= 1)}></button>{/if}
             {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" title="Next story" onclick={() => (storyAt += 1)}></button>{/if}
-            {#if rel === 'self'}<button type="button" class="ig-remove" onclick={() => removeMedia('stories', stories[storyAt].id)}>Remove story</button>{/if}
+            {#if rel === 'self'}<button type="button" class="ig-remove" onclick={(event) => { event.stopPropagation(); removeMedia('stories', stories[storyAt].id); }}>Remove story</button>{/if}
           </div>
         {/if}
       </div>

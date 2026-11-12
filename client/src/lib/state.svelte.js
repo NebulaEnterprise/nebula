@@ -2956,18 +2956,15 @@ export async function loadProfile(id) {
 }
 
 const profileLoads = new Map();
+let profileRevision = 0;
 
-function keptMedia(local, incoming, limit) {
-  const now = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-  const next = Array.isArray(incoming) ? incoming.filter((row) => row && row.url) : [];
-  const ids = new Set(next.map((row) => row.id));
-  const extra = (Array.isArray(local) ? local : []).filter((row) => {
-    if (!row || !row.url || !row.id || ids.has(row.id)) return false;
-    if (row.createdAt && now - Number(row.createdAt) > day) return false;
-    return true;
-  });
-  return [...next, ...extra].slice(-limit);
+export function touchProfileMedia() {
+  profileRevision += 1;
+}
+
+function mediaList(incoming, local) {
+  if (Array.isArray(incoming)) return incoming;
+  return Array.isArray(local) ? local : [];
 }
 
 export function peekProfile(user) {
@@ -2993,17 +2990,19 @@ export async function openPopout(user, x, y) {
     ? { ...user, ...known, roles: known.roles || [] }
     : { ...user, roles: inServer ? (user.roles || []) : [] };
   if (ui.me && String(ui.me.id) === String(user.id)) {
-    seed.gallery = keptMedia(ui.me.gallery, seed.gallery, 18);
-    seed.stories = keptMedia(ui.me.stories, seed.stories, 8);
+    seed.gallery = mediaList(ui.me.gallery, seed.gallery);
+    seed.stories = mediaList(ui.me.stories, seed.stories);
   }
   ui.popout = { user: seed, x, y };
+  const opened = profileRevision;
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   primeMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
   peekProfile(user).then((fresh) => {
+    if (opened !== profileRevision) return;
     if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
-    const gallery = keptMedia(ui.popout.user.gallery, fresh.gallery, 18);
-    const stories = keptMedia(ui.popout.user.stories, fresh.stories, 8);
+    const gallery = mediaList(fresh.gallery, ui.popout.user.gallery);
+    const stories = mediaList(fresh.stories, ui.popout.user.stories);
     ui.popout = { user: { ...ui.popout.user, ...fresh, gallery, stories, roles: ui.popout.user.roles || [] }, x, y };
     if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
@@ -3016,8 +3015,9 @@ export async function openPopout(user, x, y) {
     const fresh = (data.members || []).find((m) => m.id === user.id);
     ui.badgeDefs = data.badges || ui.badgeDefs;
     if (!fresh) return;
-    const gallery = keptMedia(ui.popout?.user?.gallery, fresh.gallery, 18);
-    const stories = keptMedia(ui.popout?.user?.stories, fresh.stories, 8);
+    if (opened !== profileRevision) return;
+    const gallery = mediaList(fresh.gallery, ui.popout?.user?.gallery);
+    const stories = mediaList(fresh.stories, ui.popout?.user?.stories);
     ui.popout = { user: { ...seed, ...fresh, gallery, stories, roles: fresh.roles || [] }, x, y };
     if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);

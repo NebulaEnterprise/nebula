@@ -4001,7 +4001,8 @@ app.post('/api/me/gallery', auth, (req, res) => {
 });
 
 app.delete('/api/me/gallery/:id', auth, (req, res) => {
-  req.user.gallery = liveGallery(req.user.gallery).filter((row) => row.id !== req.params.id);
+  const id = String(req.params.id || '');
+  req.user.gallery = liveGallery(req.user.gallery).filter((row) => String(row.id) !== id);
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
@@ -4014,7 +4015,8 @@ app.post('/api/me/stories', auth, (req, res) => {
 });
 
 app.delete('/api/me/stories/:id', auth, (req, res) => {
-  req.user.stories = liveStories(req.user.stories).filter((row) => row.id !== req.params.id);
+  const id = String(req.params.id || '');
+  req.user.stories = liveStories(req.user.stories).filter((row) => String(row.id) !== id);
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
