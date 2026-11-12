@@ -687,7 +687,7 @@ img { max-width: 100%; }
   margin: 10px 16px; color: var(--muted); font-size: 13px; font-weight: 600;
 }
 .blocked-fold :global(svg) { flex-shrink: 0; color: var(--faint); }
-.blocked-fold button { color: #00a8fc; font-weight: 650; padding: 0; }
+.blocked-fold button { color: var(--brand); font-weight: 650; padding: 0; }
 .blocked-fold button:hover { text-decoration: underline; }
 .incoming-call {
   position: absolute; left: 50%; top: 64px; transform: translateX(-50%); z-index: 40;
