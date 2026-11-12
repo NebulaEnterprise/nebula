@@ -682,6 +682,13 @@ img { max-width: 100%; }
   color: var(--faint); font-size: 12px; font-weight: 700;
 }
 .day-line::before, .day-line::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+.blocked-fold {
+  display: flex; align-items: center; gap: 8px;
+  margin: 10px 16px; color: var(--muted); font-size: 13px; font-weight: 600;
+}
+.blocked-fold :global(svg) { flex-shrink: 0; color: var(--faint); }
+.blocked-fold button { color: #00a8fc; font-weight: 650; padding: 0; }
+.blocked-fold button:hover { text-decoration: underline; }
 .incoming-call {
   position: absolute; left: 50%; top: 64px; transform: translateX(-50%); z-index: 40;
   width: 248px; padding: 22px 16px 18px; border-radius: 8px;

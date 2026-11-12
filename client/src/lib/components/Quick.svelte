@@ -1,8 +1,8 @@
 <script>
-  import { MessageSquare, X, ChevronLeft, ExternalLink, Phone } from '@lucide/svelte';
+  import { MessageSquare, X, ChevronLeft, ExternalLink, Phone, EyeOff } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone } from '../state.svelte.js';
+  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone, relation } from '../state.svelte.js';
   import { api } from '../api.js';
   import { formatContent, emojiScale } from '../format.js';
   import { startCall } from '../voice.js';
@@ -132,6 +132,40 @@
   }
 
   let openId = '';
+  let shownBlocked = $state({});
+
+  function quickBlocked(msg) {
+    if (!msg || msg.kind === 'clyde') return false;
+    const id = msg.author?.id;
+    if (!id || (ui.me && String(id) === String(ui.me.id))) return false;
+    return relation(id) === 'blocked';
+  }
+
+  function toggleQuickBlocked(key) {
+    shownBlocked = { ...shownBlocked, [key]: !shownBlocked[key] };
+  }
+
+  const quickRows = $derived.by(() => {
+    const list = messages || [];
+    const open = shownBlocked;
+    const out = [];
+    let i = 0;
+    while (i < list.length) {
+      if (!quickBlocked(list[i])) {
+        out.push({ kind: 'msg', key: list[i].id, msg: list[i] });
+        i += 1;
+        continue;
+      }
+      const start = i;
+      while (i < list.length && quickBlocked(list[i])) i += 1;
+      const key = 'blocked-' + list[start].id;
+      out.push({ kind: 'blocked', key, count: i - start, open: !!open[key] });
+      if (open[key]) {
+        for (let j = start; j < i; j += 1) out.push({ kind: 'msg', key: list[j].id, msg: list[j] });
+      }
+    }
+    return out;
+  });
 
   $effect(() => {
     const id = (ui.quickOpen && ui.quickUser?.id) || '';
@@ -139,6 +173,7 @@
       openId = id;
       draft = '';
       follow = true;
+      shownBlocked = {};
       messages = [];
       person = null;
       loading = true;
@@ -294,7 +329,14 @@
           {:else if !messages.length}
             <p class="quick-empty">This is the start of your conversation.</p>
           {/if}
-          {#each messages as msg (msg.id)}
+          {#each quickRows as row (row.key)}
+            {#if row.kind === 'blocked'}
+              <button type="button" class="qbubble notice blocked-fold" onclick={() => toggleQuickBlocked(row.key)}>
+                <EyeOff size={14} />
+                {row.count} blocked {row.count === 1 ? 'message' : 'messages'} — {row.open ? 'Hide' : 'Show'}
+              </button>
+            {:else}
+            {@const msg = row.msg}
             {@const mine = msg.author?.id === ui.me?.id}
             {@const text = textOf(msg)}
             <div class="qbubble" class:mine class:theirs={!mine} class:notice={msg.kind === 'clyde'}>
@@ -309,6 +351,7 @@
               {#if !text && !msg.files?.length && msg.poll?.question}<p>{msg.poll.question}</p>{/if}
               <time>{time(msg.createdAt)}</time>
             </div>
+            {/if}
           {/each}
         </div>
         {#if quickTyping}

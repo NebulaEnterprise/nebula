@@ -17,6 +17,53 @@
   const typingPhrase = $derived(typingLine(ui.typers));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const dmBlocked = $derived(ui.mode === 'dm' && !!ui.dmUser && relation(ui.dmUser.id) === 'blocked');
+  let shownBlocked = $state({});
+
+  function authorBlocked(msg) {
+    if (!msg || msg.kind === 'clyde' || msg.kind === 'call') return false;
+    const id = msg.author?.id || msg.authorId;
+    if (!id || (ui.me && String(id) === String(ui.me.id))) return false;
+    return relation(id) === 'blocked';
+  }
+
+  function toggleBlocked(key) {
+    shownBlocked = { ...shownBlocked, [key]: !shownBlocked[key] };
+  }
+
+  const chatRows = $derived.by(() => {
+    const list = ui.messages || [];
+    const open = shownBlocked;
+    const out = [];
+    let i = 0;
+    while (i < list.length) {
+      if (!authorBlocked(list[i])) {
+        const msg = list[i];
+        out.push({ kind: 'msg', key: msg.clientKey || msg.id, msg, index: i });
+        i += 1;
+        continue;
+      }
+      const start = i;
+      while (i < list.length && authorBlocked(list[i])) i += 1;
+      const first = list[start];
+      const key = 'blocked-' + (first.clientKey || first.id);
+      out.push({ kind: 'blocked', key, count: i - start, open: !!open[key] });
+      if (open[key]) {
+        for (let j = start; j < i; j += 1) {
+          const msg = list[j];
+          out.push({ kind: 'msg', key: msg.clientKey || msg.id, msg, index: j });
+        }
+      }
+    }
+    return out;
+  });
+
+  let blockedRoom = '';
+  $effect(() => {
+    const room = [ui.mode, ui.dmUser?.id || '', ui.group?.id || '', ui.thread?.id || '', ui.channelId || ''].join(':');
+    if (blockedRoom === room) return;
+    blockedRoom = room;
+    shownBlocked = {};
+  });
   const emoji = $derived.by(() => {
     const map = new Map();
     for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);
@@ -1281,7 +1328,16 @@
       <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
-  {#each ui.messages as msg, index (msg.clientKey || msg.id)}
+  {#each chatRows as row (row.key)}
+    {#if row.kind === 'blocked'}
+      <div class="blocked-fold">
+        <EyeOff size={16} />
+        <span>{row.count} blocked {row.count === 1 ? 'message' : 'messages'}</span>
+        <button type="button" onclick={() => toggleBlocked(row.key)}>{row.open ? 'Hide' : 'Show'}</button>
+      </div>
+    {:else}
+    {@const msg = row.msg}
+    {@const index = row.index}
     {#if dayKey(msg.createdAt) && dayKey(msg.createdAt) !== dayKey(ui.messages[index - 1]?.createdAt)}
       <div class="day-line"><span>{dayLabel(msg.createdAt)}</span></div>
     {/if}
@@ -1389,6 +1445,7 @@
         {/if}
       </div>
     </article>
+    {/if}
     {/if}
   {/each}
 </div>
