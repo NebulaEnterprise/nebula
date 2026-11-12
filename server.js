@@ -4776,6 +4776,36 @@ app.post('/api/servers/:id/invites', auth, (req, res) => {
   res.json({ ok: true, slug: code, vanity: false });
 });
 
+app.get('/api/invites/:code', auth, (req, res) => {
+  ensureGuilds();
+  const code = cleanSlug(req.params.code);
+  const found = findByInvite(code);
+  if (!found) return res.status(404).json({ error: 'Invite not found' });
+  hydrateGuild(found);
+  const ids = Object.keys(found.members || {});
+  let online = 0;
+  for (const id of ids) {
+    const status = effectiveStatus(users[id]);
+    if (status === 'online' || status === 'idle' || status === 'dnd') online += 1;
+  }
+  const member = !!(found.members && found.members[req.user.id]);
+  res.json({
+    ok: true,
+    invite: {
+      code,
+      name: found.name || 'Server',
+      icon: found.icon || (found.name || 'S').charAt(0).toUpperCase(),
+      iconUrl: found.iconUrl || '',
+      bannerUrl: found.bannerUrl || '',
+      color: found.color || '#7c5cff',
+      members: ids.length,
+      online,
+      joined: member,
+      serverId: member ? found.id : '',
+    },
+  });
+});
+
 app.post('/api/invites/:code/join', auth, (req, res) => {
   ensureGuilds();
   const code = cleanSlug(req.params.code);

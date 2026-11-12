@@ -142,6 +142,14 @@ export function inviteLink(slug) {
   return url.toString();
 }
 
+export function inviteSlugs(input) {
+  const text = String(input || '');
+  const found = new Set();
+  for (const match of text.matchAll(/[?&]invite=([a-z0-9_-]+)/gi)) found.add(match[1].toLowerCase());
+  for (const match of text.matchAll(/invite\/([a-z0-9_-]+)/gi)) found.add(match[1].toLowerCase());
+  return [...found];
+}
+
 export function inviteSlug(input) {
   const text = String(input || '').trim();
   if (!text) return '';

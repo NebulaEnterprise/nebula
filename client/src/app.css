@@ -1148,6 +1148,29 @@ img { max-width: 100%; }
   border-radius: 10px; background: #101117; border: 1px solid var(--line); font-weight: 650;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.invite-card {
+  width: min(432px, 100%); margin-top: 8px; padding: 0 0 16px; border-radius: 8px;
+  background: #111214; border: 1px solid rgba(255, 255, 255, 0.06); overflow: hidden;
+}
+.invite-banner { height: 92px; position: relative; overflow: hidden; }
+.invite-face {
+  width: 52px; height: 52px; margin: -28px 0 0 16px; border-radius: 16px; position: relative;
+  display: grid; place-items: center; overflow: hidden; border: 4px solid #111214;
+  font-size: 22px; font-weight: 700; color: #fff;
+}
+.invite-face img { width: 100%; height: 100%; object-fit: cover; }
+.invite-copy { padding: 8px 16px 0; text-align: left; }
+.invite-copy strong { display: block; font-size: 16px; color: #f2f3f5; }
+.invite-copy p { display: flex; align-items: center; gap: 12px; margin: 6px 0 0; color: #b5bac1; font-size: 13px; }
+.invite-copy i { width: 8px; height: 8px; margin-right: -6px; border-radius: 50%; background: #80848e; }
+.invite-copy i.on { background: #23a559; }
+.invite-join {
+  display: block; width: calc(100% - 32px); margin: 14px 16px 0; padding: 10px 12px;
+  border: 0; border-radius: 4px; background: #248046; color: #fff; font-weight: 600; font-size: 15px;
+}
+.invite-join:hover { background: #1a6334; }
+.invite-join:disabled { opacity: 0.7; }
+.invite-missing { margin: 6px 0 0; color: #949ba4; font-size: 13px; }
 .poll-card {
   width: min(420px, 100%); margin-top: 8px; padding: 12px; border-radius: 12px;
   background: #101117; border: 1px solid var(--line);

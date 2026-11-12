@@ -10,7 +10,8 @@
   import { seenPhrase, presenceDot } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
-  import { formatContent, emojiScale, PERM } from '../format.js';
+  import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
+  import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
@@ -1417,6 +1418,9 @@
           <p class="msg-locked">Encrypted message</p>
         {:else if msg.content}
           <div class="msg-content" class:jumbo={emojiScale(msg.content) === 'jumbo'} class:jumbo-mid={emojiScale(msg.content) === 'jumbo-mid'} class:jumbo-sm={emojiScale(msg.content) === 'jumbo-sm'}>{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
+          {#each inviteSlugs(msg.content) as slug (slug)}
+            <InviteCard {slug} />
+          {/each}
         {/if}
         {#if msg.files?.length}
           <div class="msg-files">
