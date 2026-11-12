@@ -58,31 +58,42 @@
     return [...names];
   }
 
+  function firstStyle(people, key) {
+    for (const person of people) {
+      const value = person && person[key];
+      if (Array.isArray(value) ? value.length : value) return value;
+    }
+    return key === 'nameColors' ? [] : '';
+  }
+
   function liveAuthor(author) {
     if (!author) return author;
     const member = ui.members.find((m) => m.id === author.id);
     const mine = author.id === ui.me?.id ? ui.me : null;
     const dm = ui.dmUser && ui.dmUser.id === author.id ? ui.dmUser : null;
-    const live = mine || member || dm;
-    const effect = live ? (live.nameEffect || '') : (author.nameEffect || '');
-    const colors = live && live.nameColors && live.nameColors.length
-      ? live.nameColors
-      : (author.nameColors || []);
+    const chain = [mine, member, dm, author];
     return {
       ...author,
       username: mine?.username || author.username || member?.username,
       displayName: member?.nick || mine?.displayName || author.displayName || member?.displayName,
-      nameEffect: effect,
-      nameColors: colors,
+      nameEffect: firstStyle(chain, 'nameEffect'),
+      nameFont: firstStyle(chain, 'nameFont'),
+      nameColors: firstStyle(chain, 'nameColors'),
       avatarUrl: mine?.avatarUrl || author.avatarUrl || member?.avatarUrl,
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
       staff: member?.staff || mine?.staff || author.staff || '',
       developer: !!(member?.developer || mine?.developer || author.developer),
-      showcase: live?.showcase || author.showcase || null,
-      showcaseBadge: live?.showcaseBadge || author.showcaseBadge || '',
-      badges: live?.badges || author.badges,
+      showcase: mine?.showcase || member?.showcase || dm?.showcase || author.showcase || null,
+      showcaseBadge: mine?.showcaseBadge || member?.showcaseBadge || dm?.showcaseBadge || author.showcaseBadge || '',
+      badges: mine?.badges || author.badges || member?.badges,
       roleIcon: member?.roleIcon || '',
     };
+  }
+
+  function nameInk(author) {
+    const live = liveAuthor(author);
+    if (live?.nameEffect) return '';
+    return 'white';
   }
 
   let menu = $state(null);
@@ -1344,7 +1355,7 @@
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}><strong><Name user={liveAuthor(msg.author)} color={msg.author?.accentColor || 'white'} /></strong></button><NameExtras user={liveAuthor(msg.author)} /></span>
+          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}><strong><Name user={liveAuthor(msg.author)} color={nameInk(msg.author)} /></strong></button><NameExtras user={liveAuthor(msg.author)} /></span>
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

@@ -1280,7 +1280,7 @@ function applySocketMessage(type, data) {
   if (localIdx >= 0) {
     const prev = ui.messages[localIdx];
     const next = ui.messages.slice();
-    next[localIdx] = { ...message, clientKey: prev.clientKey || prev.id, pending: false, failed: false };
+    next[localIdx] = { ...carryLook(prev, message), clientKey: prev.clientKey || prev.id, pending: false, failed: false };
     ui.messages = next.filter((msg, i) => i === localIdx || msg.id !== message.id);
     if (mine) {
       if (message.author && message.author.id) ui.typers = ui.typers.filter((row) => String(row.id) !== String(message.author.id));
@@ -1454,8 +1454,8 @@ function adoptMe(members) {
   if (!mine) return;
   const displayName = mine.displayName || '';
   const username = mine.username || ui.me.username || '';
-  const nameEffect = mine.nameEffect || '';
-  const nameFont = mine.nameFont || '';
+  const nameEffect = mine.nameEffect || ui.me.nameEffect || '';
+  const nameFont = mine.nameFont || ui.me.nameFont || '';
   const profileStyle = mine.profileStyle || 'gradient';
   const same = displayName === (ui.me.displayName || '')
     && username === (ui.me.username || '')
@@ -1509,8 +1509,8 @@ function applyMemberNames(members) {
     const username = member.username || msg.author.username;
     const displayName = member.nick || member.displayName || msg.author.displayName;
     const avatarUrl = member.avatarUrl || msg.author.avatarUrl || '';
-    const nameEffect = member.nameEffect || '';
-    const nameFont = member.nameFont || '';
+    const nameEffect = member.nameEffect || msg.author.nameEffect || '';
+    const nameFont = member.nameFont || msg.author.nameFont || '';
     const nameColors = member.nameColors && member.nameColors.length ? member.nameColors : (msg.author.nameColors || []);
     const sameColors = nameColors.join(',') === (msg.author.nameColors || []).join(',');
     if (username === msg.author.username && displayName === msg.author.displayName && avatarUrl === (msg.author.avatarUrl || '') && nameEffect === (msg.author.nameEffect || '') && nameFont === (msg.author.nameFont || '') && sameColors) return msg;
@@ -1669,14 +1669,48 @@ function stitchLog(list, roomKey) {
   const used = new Set();
   const stitched = list.map((msg) => {
     const saved = ui.messages.find((row) => row && row.clientKey && row.id === msg.id);
-    if (saved) return { ...msg, clientKey: saved.clientKey };
+    if (saved) return { ...carryLook(saved, msg), clientKey: saved.clientKey };
     const local = pending.find((row) => !used.has(row.clientKey) && row.author && msg.author && row.author.id === msg.author.id && String(row.content || '') === String(msg.content || ''));
     if (!local) return msg;
     used.add(local.clientKey);
-    return { ...msg, clientKey: local.clientKey };
+    return { ...carryLook(local, msg), clientKey: local.clientKey };
   });
   const leftover = pending.filter((row) => row.clientKey && !used.has(row.clientKey) && !stitched.some((msg) => msg.id === row.id));
   return leftover.length ? [...stitched, ...leftover] : stitched;
+}
+
+function messageAuthor(user) {
+  if (!user) return user;
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName || user.username,
+    avatarUrl: user.avatarUrl || '',
+    avatarColor: user.avatarColor || '',
+    nameEffect: user.nameEffect || '',
+    nameFont: user.nameFont || '',
+    nameColors: user.nameColors || [],
+    badges: user.badges,
+    staff: user.staff || '',
+    developer: !!user.developer,
+    showcase: user.showcase || null,
+    showcaseBadge: user.showcaseBadge || '',
+  };
+}
+
+function carryLook(prev, message) {
+  const before = prev && prev.author;
+  const after = message && message.author;
+  if (!before || !after) return message;
+  return {
+    ...message,
+    author: {
+      ...after,
+      nameEffect: after.nameEffect || before.nameEffect || '',
+      nameFont: after.nameFont || before.nameFont || '',
+      nameColors: after.nameColors && after.nameColors.length ? after.nameColors : (before.nameColors || []),
+    },
+  };
 }
 
 function settleSent(tempId, message) {
@@ -1687,7 +1721,7 @@ function settleSent(tempId, message) {
   } else {
     const prev = next[idx];
     const key = prev.clientKey || tempId || prev.id;
-    next[idx] = { ...message, clientKey: key, pending: false, failed: false };
+    next[idx] = { ...carryLook(prev, message), clientKey: key, pending: false, failed: false };
     ui.messages = next.filter((msg, i) => i === idx || (msg.id !== message.id && msg.id !== tempId && msg.clientKey !== key));
   }
   rememberLog(currentRoom(), ui.messages);
@@ -1766,7 +1800,7 @@ export async function sendMessage() {
     pending: true,
     roomKey,
     createdAt: new Date().toISOString(),
-    author: ui.me,
+    author: messageAuthor(ui.me),
     content,
     reply: replies[0] || null,
     replies,
@@ -1848,7 +1882,7 @@ export async function sendFiles(list) {
     pending: true,
     roomKey,
     createdAt: new Date().toISOString(),
-    author: ui.me,
+    author: messageAuthor(ui.me),
     content,
     reply: replies[0] || null,
     replies,
