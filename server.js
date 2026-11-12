@@ -464,6 +464,12 @@ function matchTotp(secret, code, lastCounter = 0) {
   return 0;
 }
 
+function sealToken(token) {
+  const text = String(token || '');
+  if (!text || text.startsWith('sha256$')) return text;
+  return 'sha256$' + crypto.createHash('sha256').update(text).digest('hex');
+}
+
 function deviceLabel(ua) {
   const s = String(ua || '');
   if (!s) return 'Unknown device';
@@ -487,14 +493,16 @@ function deviceLabel(ua) {
 function ensureSessions(user) {
   if (!user) return [];
   if (!Array.isArray(user.sessions)) user.sessions = [];
+  if (user.token) user.token = sealToken(user.token);
+  for (const row of user.sessions) {
+    if (row && row.token) row.token = sealToken(row.token);
+  }
   if (user.token && !user.sessions.some((row) => row.token === user.token)) {
     user.sessions.unshift({
       id: 'legacy-' + String(user.id || '').slice(0, 8),
       token: user.token,
       createdAt: user.createdAt || new Date().toISOString(),
       lastSeen: Number(user.lastSeen) || Date.now(),
-      label: 'Saved session',
-      ua: '',
     });
   }
   return user.sessions;
@@ -511,31 +519,24 @@ function openSession(user, req) {
   const token = crypto.randomBytes(32).toString('hex');
   const session = {
     id: crypto.randomBytes(8).toString('hex'),
-    token,
+    token: sealToken(token),
     createdAt: new Date().toISOString(),
     lastSeen: Date.now(),
-    label: deviceLabel(req && req.headers && req.headers['user-agent']),
-    ua: String((req && req.headers && req.headers['user-agent']) || '').slice(0, 180),
   };
   user.sessions.push(session);
   if (user.sessions.length > 24) user.sessions.splice(0, user.sessions.length - 24);
-  user.token = token;
+  user.token = session.token;
   user.status = 'online';
   user.lastSeen = Date.now();
-  return session;
+  return { id: session.id, token, createdAt: session.createdAt, lastSeen: session.lastSeen };
 }
 
 function findSession(users, token) {
   if (!token) return null;
+  const sealed = sealToken(token);
   for (const user of Object.values(users || {})) {
     ensureSessions(user);
-    const session = user.sessions.find((row) => row.token === token);
-    if (session) return { user, session };
-  }
-  for (const user of Object.values(users || {})) {
-    if (!user || user.token !== token) continue;
-    ensureSessions(user);
-    const session = user.sessions.find((row) => row.token === token);
+    const session = user.sessions.find((row) => row.token === sealed);
     if (session) return { user, session };
   }
   return null;
@@ -554,7 +555,7 @@ function summary(user, currentId) {
   ensureSessions(user);
   const sessions = user.sessions.map((row) => ({
     id: row.id,
-    label: row.label || 'Unknown device',
+    label: 'Signed-in session',
     createdAt: row.createdAt,
     lastSeen: Number(row.lastSeen) || null,
     current: row.id === currentId,
@@ -827,7 +828,7 @@ function registrationOptions(user, req) {
       rp: { name: 'Nebula', id: rpId },
       user: {
         id: b64url(Buffer.from(user.id)),
-        name: user.email || user.username,
+        name: user.username,
         displayName: user.displayName || user.username,
       },
       pubKeyCredParams: [
@@ -864,7 +865,7 @@ function registerPasskey(user, body, req) {
     publicKey: b64url(cose.spki),
     alg: cose.alg,
     signCount: parsed.signCount,
-    name: deviceLabel(req && req.headers && req.headers['user-agent']),
+    name: 'Passkey',
     createdAt: new Date().toISOString(),
     lastUsed: Date.now(),
   });
@@ -946,6 +947,7 @@ return {
   hotp,
   matchTotp,
   deviceLabel,
+  sealToken,
   ensureSessions,
   sessionCount,
   openSession,
@@ -1180,18 +1182,57 @@ let groups = load(GROUPS_FILE, {});
 let threads = load(THREADS_FILE, {});
 let reads = load(READS_FILE, {});
 
-let strippedSecrets = false;
+let accountsChanged = false;
 for (const u of Object.values(users)) {
-  if (u && Object.prototype.hasOwnProperty.call(u, 'passwordPlain')) {
+  if (!u) continue;
+  if (Object.prototype.hasOwnProperty.call(u, 'passwordPlain')) {
     delete u.passwordPlain;
-    strippedSecrets = true;
+    accountsChanged = true;
+  }
+  if (u.email && String(u.email).includes('@')) {
+    const sealed = emailRecord(u.email);
+    u.emailSalt = sealed.emailSalt;
+    u.emailHash = sealed.emailHash;
+    delete u.email;
+    accountsChanged = true;
+  }
+  if (u.token && !String(u.token).startsWith('sha256$')) {
+    u.token = security.sealToken(u.token);
+    accountsChanged = true;
+  }
+  for (const row of u.sessions || []) {
+    if (!row) continue;
+    if ('label' in row || 'ua' in row) {
+      delete row.label;
+      delete row.ua;
+      accountsChanged = true;
+    }
+    if (row.token && !String(row.token).startsWith('sha256$')) {
+      row.token = security.sealToken(row.token);
+      accountsChanged = true;
+    }
+  }
+  for (const row of u.passkeys || []) {
+    if (!row || !row.name || row.name === 'Passkey') continue;
+    row.name = 'Passkey';
+    accountsChanged = true;
   }
 }
-if (strippedSecrets) save(USERS_FILE, users);
+if (accountsChanged) saveNow(USERS_FILE, users);
+let codesChanged = false;
 for (const entry of Object.values(codes)) {
-  if (entry && Object.prototype.hasOwnProperty.call(entry, 'passwordPlain')) delete entry.passwordPlain;
+  if (entry && Object.prototype.hasOwnProperty.call(entry, 'passwordPlain')) {
+    delete entry.passwordPlain;
+    codesChanged = true;
+  }
 }
-save(CODES_FILE, codes);
+for (const key of Object.keys(codes)) {
+  if (String(key).includes('@')) {
+    delete codes[key];
+    codesChanged = true;
+  }
+}
+if (codesChanged) saveNow(CODES_FILE, codes);
 
 const GMAIL_USER = process.env.GMAIL_USER || '';
 const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD || '';
@@ -1657,7 +1698,47 @@ const transporter = nodemailer.createTransport({
 });
 
 function hashPassword(pw) {
-  return crypto.createHash('sha256').update(pw + 'discord-salt-v1').digest('hex');
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(String(pw), salt, 32, { N: 16384, r: 8, p: 1 });
+  return 'scrypt$' + salt.toString('base64') + '$' + hash.toString('base64');
+}
+
+function checkPassword(pw, stored) {
+  const text = String(stored || '');
+  if (text.startsWith('scrypt$')) {
+    const parts = text.split('$');
+    try {
+      const salt = Buffer.from(parts[1], 'base64');
+      const expected = Buffer.from(parts[2], 'base64');
+      const hash = crypto.scryptSync(String(pw), salt, expected.length, { N: 16384, r: 8, p: 1 });
+      return expected.length === hash.length && crypto.timingSafeEqual(hash, expected);
+    } catch (_) {
+      return false;
+    }
+  }
+  const old = crypto.createHash('sha256').update(String(pw) + 'discord-salt-v1').digest('hex');
+  return text.length === old.length && crypto.timingSafeEqual(Buffer.from(text), Buffer.from(old));
+}
+
+function hashEmail(email, salt) {
+  return crypto.scryptSync(String(email).trim().toLowerCase(), salt, 32, { N: 4096, r: 8, p: 1 }).toString('base64');
+}
+
+function emailRecord(email) {
+  const salt = crypto.randomBytes(16);
+  return { emailSalt: salt.toString('base64'), emailHash: hashEmail(email, salt) };
+}
+
+function emailMatches(email, saltB64, hashB64) {
+  try {
+    const salt = Buffer.from(String(saltB64 || ''), 'base64');
+    const expected = Buffer.from(String(hashB64 || ''), 'base64');
+    if (!salt.length || expected.length !== 32) return false;
+    const hash = crypto.scryptSync(String(email).trim().toLowerCase(), salt, 32, { N: 4096, r: 8, p: 1 });
+    return crypto.timingSafeEqual(hash, expected);
+  } catch (_) {
+    return false;
+  }
 }
 
 function makeToken() {
@@ -2413,7 +2494,7 @@ function publicUser(u, viewer) {
     uid: u.uid || null,
     username: u.username,
     displayName: u.displayName || u.username,
-    email: u.email,
+    email: '',
     bio: String(u.bio || '').replace(/\s+/g, ' ').trim().slice(0, 29),
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
@@ -2912,7 +2993,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   if (!cleanEmail.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
-  if (Object.values(users).some((u) => u.email === cleanEmail)) {
+  if (Object.values(users).some((u) => emailMatches(cleanEmail, u.emailSalt, u.emailHash))) {
     return res.status(409).json({ error: 'Email already registered' });
   }
   if (Object.values(users).some((u) => u.username === cleanUser)) {
@@ -2922,14 +3003,20 @@ app.post('/api/auth/request-code', async (req, res) => {
   const entry = {
     username: cleanUser,
     passwordHash: hashPassword(password),
+    ...emailRecord(cleanEmail),
   };
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    return res.json(createAccount(cleanEmail, entry, req));
+    return res.json(createAccount(entry, req));
   }
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  codes[cleanEmail] = {
-    ...entry,
+  const codeId = crypto.randomBytes(16).toString('hex');
+  entry.codeId = codeId;
+  codes[codeId] = {
+    username: entry.username,
+    passwordHash: entry.passwordHash,
+    emailSalt: entry.emailSalt,
+    emailHash: entry.emailHash,
     code,
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
@@ -2939,14 +3026,14 @@ app.post('/api/auth/request-code', async (req, res) => {
     await sendVerificationCode(cleanEmail, code);
     res.json({ ok: true, message: 'Verification code sent' });
   } catch (err) {
-    delete codes[cleanEmail];
+    delete codes[codeId];
     save(CODES_FILE, codes);
     const msg = (err && err.message) || '';
     res.status(500).json({ error: msg.includes('not configured') ? msg : 'Failed to send email' });
   }
 });
 
-function createAccount(cleanEmail, entry, req) {
+function createAccount(entry, req) {
   const id = uuidv4();
   const uid = nextUid();
   const badges = [];
@@ -2955,7 +3042,8 @@ function createAccount(cleanEmail, entry, req) {
     id, uid,
     username: entry.username,
     displayName: entry.username,
-    email: cleanEmail,
+    emailSalt: entry.emailSalt,
+    emailHash: entry.emailHash,
     passwordHash: entry.passwordHash,
     bio: '', aboutMe: '', pronouns: '',
     status: 'online',
@@ -2972,7 +3060,7 @@ function createAccount(cleanEmail, entry, req) {
     token: '',
     createdAt: new Date().toISOString(),
   };
-  delete codes[cleanEmail];
+  if (entry.codeId) delete codes[entry.codeId];
   const session = security.openSession(users[id], req);
   saveNow(USERS_FILE, users);
   save(CODES_FILE, codes);
@@ -2985,25 +3073,32 @@ function createAccount(cleanEmail, entry, req) {
 app.post('/api/auth/verify', (req, res) => {
   const { email, code } = req.body || {};
   const cleanEmail = String(email || '').trim().toLowerCase();
-  const entry = codes[cleanEmail];
+  const found = Object.entries(codes).find(([, row]) => row && emailMatches(cleanEmail, row.emailSalt, row.emailHash));
+  const entry = found && found[1];
   if (!entry) return res.status(400).json({ error: 'No pending verification' });
   if (Date.now() > entry.expiresAt) {
-    delete codes[cleanEmail];
+    delete codes[found[0]];
     save(CODES_FILE, codes);
     return res.status(400).json({ error: 'Code expired' });
   }
   if (String(code).trim() !== entry.code) {
     return res.status(400).json({ error: 'Invalid code' });
   }
-  res.json(createAccount(cleanEmail, entry, req));
+  entry.codeId = found[0];
+  res.json(createAccount(entry, req));
 });
 
 app.post('/api/auth/login', (req, res) => {
   const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
   const password = req.body && req.body.password;
-  const user = Object.values(users).find((u) => u.email === raw || u.username === raw);
-  if (!user || user.passwordHash !== hashPassword(password || '')) {
+  const user = Object.values(users).find((u) => u.username === raw)
+    || Object.values(users).find((u) => emailMatches(raw, u.emailSalt, u.emailHash));
+  if (!user || !checkPassword(password || '', user.passwordHash)) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
+  }
+  if (!String(user.passwordHash).startsWith('scrypt$')) {
+    user.passwordHash = hashPassword(password || '');
+    save(USERS_FILE, users);
   }
   if (user.totp && user.totp.enabled) {
     const ticket = security.mfaTicket(user.id);
@@ -3496,11 +3591,6 @@ function auth(req, res, next) {
   if (!found) return res.status(401).json({ error: 'Invalid session' });
   req.user = found.user;
   req.session = found.session;
-  if (found.session.label === 'Saved session' && !found.session.ua) {
-    found.session.label = security.deviceLabel(req.headers['user-agent']);
-    found.session.ua = String(req.headers['user-agent'] || '').slice(0, 180);
-    save(USERS_FILE, users);
-  }
   next();
 }
 
@@ -3822,7 +3912,7 @@ app.post('/api/me/password', auth, (req, res) => {
   const current = String(req.body?.current || '');
   const next = String(req.body?.next || '');
   const confirm = String(req.body?.confirm || '');
-  if (req.user.passwordHash !== hashPassword(current)) {
+  if (!checkPassword(current, req.user.passwordHash)) {
     return res.status(400).json({ error: 'Current password is wrong' });
   }
   if (next.length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
@@ -3835,14 +3925,17 @@ app.post('/api/me/password', auth, (req, res) => {
 app.post('/api/me/email', auth, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
-  if (req.user.passwordHash !== hashPassword(password)) {
+  if (!checkPassword(password, req.user.passwordHash)) {
     return res.status(400).json({ error: 'Password is wrong' });
   }
   if (!email.includes('@') || email.length > 120) return res.status(400).json({ error: 'Invalid email' });
-  if (Object.values(users).some((u) => u.id !== req.user.id && u.email === email)) {
+  if (Object.values(users).some((u) => u.id !== req.user.id && emailMatches(email, u.emailSalt, u.emailHash))) {
     return res.status(409).json({ error: 'Email already registered' });
   }
-  req.user.email = email;
+  const sealedEmail = emailRecord(email);
+  req.user.emailSalt = sealedEmail.emailSalt;
+  req.user.emailHash = sealedEmail.emailHash;
+  delete req.user.email;
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
@@ -3864,7 +3957,7 @@ app.delete('/api/me/sessions/:id', auth, (req, res) => {
 });
 
 function passwordMatches(user, password) {
-  return user.passwordHash === hashPassword(password || '');
+  return checkPassword(password || '', user && user.passwordHash);
 }
 
 app.post('/api/me/mfa/setup', auth, (req, res) => {

@@ -31,7 +31,6 @@
   const reasonLabel = { harassment: 'Harassment or bullying', hate: 'Hate speech or slurs', sexual: 'Sexual content', child: 'Child safety', threats: 'Threats or violence', 'self-harm': 'Self-harm or suicide', spam: 'Spam or scams', illegal: 'Something illegal', other: 'Something else' };
   let devOn = $state(developerMode());
   let viewing = $state(null);
-  let showEmail = $state(false);
   let accountDialog = $state('');
   let accountBusy = $state(false);
   let showPw = $state(false);
@@ -47,12 +46,6 @@
   let lookOpen = $state('');
   let accentSlot = $state(0);
   let nameSlot = $state(0);
-
-  function maskEmail(email) {
-    const [name, host] = String(email || '').split('@');
-    if (!host) return 'Add an email';
-    return `${'•'.repeat(Math.min(8, Math.max(4, name.length)))}@${host}`;
-  }
 
   function cleanName(value) {
     return String(value || '').trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 32);
@@ -105,8 +98,7 @@
       const data = await api('/api/me/email', { method: 'POST', body: { email: draftEmail, password: emailPassword } });
       ui.me = { ...ui.me, ...data.user };
       accountDialog = '';
-      showEmail = true;
-      toast('Email updated');
+      toast('Sign-in email updated');
     } catch (err) {
       toast(err.message);
     } finally {
@@ -483,8 +475,7 @@
             </div>
             <div class="acct-row">
               <span>Email</span>
-              <strong>{showEmail ? (ui.me?.email || '—') : maskEmail(ui.me?.email)}</strong>
-              <button type="button" class="btn ghost sm" onclick={() => (showEmail = !showEmail)}>{showEmail ? 'Hide' : 'Reveal'}</button>
+              <strong>Not stored</strong>
               <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
             </div>
           </section>

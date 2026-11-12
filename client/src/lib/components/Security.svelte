@@ -145,7 +145,7 @@
       }
       ui.me = { ...ui.me, ...data.user };
       info = data;
-      toast('Logged that device out');
+      toast('Logged that session out');
     } catch (err) {
       toast(err.message);
     } finally {
@@ -228,7 +228,7 @@
         <div class="device-row">
           <MonitorSmartphone size={16} />
           <div>
-            <strong>{row.label}{row.current ? ' · This device' : ''}</strong>
+            <strong>{row.current ? 'This session' : 'Signed-in session'}</strong>
             <span>{ago(row.lastSeen)}</span>
           </div>
           <button type="button" class="btn sm" disabled={busy} onclick={() => removeSession(row)}>Log out</button>
