@@ -131,12 +131,22 @@ export function inviteLink(slug) {
   const clean = String(slug || '').trim();
   if (!clean) return '';
   if (/^https?:\/\//i.test(clean)) return clean;
-  return window.location.origin + '/invite/' + clean.replace(/^\/+|\/+$/g, '').replace(/^invite\//, '');
+  const code = clean.replace(/^\/+|\/+$/g, '').replace(/^invite\//i, '');
+  const url = new URL(window.location.href);
+  url.hash = '';
+  if (url.pathname.endsWith('/index.html')) url.pathname = url.pathname.slice(0, -'index.html'.length);
+  const backend = url.searchParams.get('backend');
+  url.search = '';
+  if (backend) url.searchParams.set('backend', backend);
+  url.searchParams.set('invite', code);
+  return url.toString();
 }
 
 export function inviteSlug(input) {
   const text = String(input || '').trim();
   if (!text) return '';
+  const query = text.match(/[?&]invite=([a-z0-9_-]+)/i);
+  if (query) return query[1].toLowerCase();
   const found = text.match(/invite\/([a-z0-9_-]+)/i);
   if (found) return found[1].toLowerCase();
   const tail = text.split(/[/?#]/).filter(Boolean).pop() || '';

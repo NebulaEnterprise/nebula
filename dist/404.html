@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Nebula</title>
+<script>
+  (function () {
+    var match = (location.pathname || '').match(/\/invite\/([A-Za-z0-9_-]+)/);
+    var root = (location.pathname || '').indexOf('/nebula/') === 0 ? '/nebula/' : '/';
+    if (match) location.replace(root + '?invite=' + encodeURIComponent(match[1].toLowerCase()));
+    else location.replace(root);
+  })();
+</script>

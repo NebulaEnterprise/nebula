@@ -485,7 +485,9 @@ export async function consumeInvite() {
   if (!slug || !ui.me) return;
   try {
     const data = await api('/api/invites/' + encodeURIComponent(slug) + '/join', { method: 'POST', body: {} });
-    history.replaceState(null, '', '/');
+    const clean = new URL(window.location.href);
+    clean.searchParams.delete('invite');
+    history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
     if (data.pending) toast('Request sent. An owner has to accept you.');
     else if (data.server) {
       await openServer(data.server.id);
