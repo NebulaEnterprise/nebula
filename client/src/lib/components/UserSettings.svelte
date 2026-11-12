@@ -550,6 +550,13 @@
               </div>
               <p class="hint">Friends can always send you photos, videos, GIFs, and files, unless you pick Nobody. Blocked people never can.</p>
             </div>
+            <div class="field">
+              <label>Who can see your stories</label>
+              <div class="privacy-pick">
+                <Select value={ui.me?.storyPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ storyPrivacy: value }, 'Story privacy updated')} />
+              </div>
+              <p class="hint">Stories stay on your profile for 24 hours. Friends can always see them, unless you pick Nobody. Blocked people never can.</p>
+            </div>
           {:else if page === 'advanced'}
             <div class="field">
               <div class="look-line">

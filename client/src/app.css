@@ -1992,9 +1992,8 @@ img { max-width: 100%; }
 .group-icon input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .pop-spin {
   position: relative; transform-style: preserve-3d; transition: transform 560ms var(--ease);
-  cursor: grab; touch-action: pan-y;
+  cursor: pointer;
 }
-.pop-spin.dragging { transition: none; cursor: grabbing; }
 .pop-face { border-radius: 18px; transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
 .pop-back {
   position: absolute; inset: 0; transform: rotateY(180deg); overflow: auto;

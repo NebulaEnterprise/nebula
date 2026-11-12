@@ -24,9 +24,7 @@
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');
   let more = $state(false);
   let turned = $state(false);
-  let dragging = $state(false);
-  let spin = $state(0);
-  let drag = null;
+  let faceFor = '';
   let busy = $state('');
   let storyAt = $state(-1);
   let photoInput = $state(null);
@@ -43,40 +41,17 @@
 
   const photos = $derived(Array.isArray(u?.gallery) ? u.gallery : []);
   const stories = $derived(Array.isArray(u?.stories) ? u.stories : []);
-  const cardTurn = $derived(dragging ? spin : (turned ? 180 : 0));
-
   $effect(() => {
-    u?.id;
+    const id = u?.id || '';
+    if (id === faceFor) return;
+    faceFor = id;
     turned = false;
     storyAt = -1;
   });
 
-  function onDown(event) {
-    if (event.button != null && event.button !== 0) return;
+  function flipCard(event) {
     if (event.target.closest('button, a, input, label, video')) return;
-    drag = { x: event.clientX, y: event.clientY, base: turned ? 180 : 0, moved: false };
-    dragging = true;
-    spin = drag.base;
-  }
-
-  function onMove(event) {
-    if (!drag) return;
-    const dx = event.clientX - drag.x;
-    const dy = event.clientY - drag.y;
-    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) drag.moved = true;
-    if (Math.abs(dx) > Math.abs(dy)) spin = drag.base + dx * 0.55;
-  }
-
-  function onUp() {
-    if (!drag) return;
-    const moved = drag.moved;
-    const dx = spin - drag.base;
-    drag = null;
-    dragging = false;
-    if (Math.abs(dx) > 40) {
-      const next = ((spin % 360) + 360) % 360;
-      turned = next > 90 && next < 270;
-    } else if (!moved) turned = !turned;
+    turned = !turned;
   }
 
   async function addMedia(kind, file) {
@@ -132,7 +107,7 @@
 {#if u}
   <div class="pop-backdrop"></div>
   <div class="pop profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
-    <div class="pop-spin" class:dragging class:show-back={turned} style="transform: rotateY({cardTurn}deg)" onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp}>
+    <div class="pop-spin" class:show-back={turned} style="transform: rotateY({turned ? 180 : 0}deg)" onclick={flipCard}>
     <div class="pop-face">
     <div class="pop-frame">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">

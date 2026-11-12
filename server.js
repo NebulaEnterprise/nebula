@@ -2303,6 +2303,10 @@ function mediaPrivacyOf(u) {
   return pickPrivacy(u && u.mediaPrivacy, ['everyone', 'servers', 'friends', 'nobody'], 'everyone');
 }
 
+function storyPrivacyOf(u) {
+  return pickPrivacy(u && u.storyPrivacy, ['everyone', 'servers', 'friends', 'nobody'], 'everyone');
+}
+
 function messageHasLink(content) {
   const text = String(content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/gi, ' ');
   if (/(?:https?:\/\/|www\.)\S+/i.test(text)) return true;
@@ -2565,6 +2569,7 @@ function publicUser(u, viewer) {
     callPrivacy: self ? callPrivacyOf(u) : undefined,
     linkPrivacy: self ? linkPrivacyOf(u) : undefined,
     mediaPrivacy: self ? mediaPrivacyOf(u) : undefined,
+    storyPrivacy: self ? storyPrivacyOf(u) : undefined,
     canMessage: self || !viewer ? undefined : canMessage(viewer, u),
     canCall: self || !viewer ? undefined : canCall(viewer, u),
     canSendLinks: self || !viewer ? undefined : allowsShare(viewer, u, linkPrivacyOf(u)),
@@ -2579,7 +2584,7 @@ function publicUser(u, viewer) {
     bannerPath: u.bannerPath || '',
     bannerUrl: publishedMedia(u, 'banner'),
     gallery: liveGallery(u.gallery),
-    stories: liveStories(u.stories),
+    stories: self || !viewer || allowsShare(viewer, u, storyPrivacyOf(u)) ? liveStories(u.stories) : [],
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameFont: cleanNameFont(u.nameFont),
@@ -3889,6 +3894,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (req.body && ['everyone', 'servers', 'friends', 'nobody'].includes(req.body.callPrivacy)) req.user.callPrivacy = req.body.callPrivacy;
   if (req.body && ['everyone', 'servers', 'friends', 'nobody'].includes(req.body.linkPrivacy)) req.user.linkPrivacy = req.body.linkPrivacy;
   if (req.body && ['everyone', 'servers', 'friends', 'nobody'].includes(req.body.mediaPrivacy)) req.user.mediaPrivacy = req.body.mediaPrivacy;
+  if (req.body && ['everyone', 'servers', 'friends', 'nobody'].includes(req.body.storyPrivacy)) req.user.storyPrivacy = req.body.storyPrivacy;
   if (req.body && ['everyone', 'contacts', 'nobody'].includes(req.body.lastSeenPrivacy)) {
     presenceChanged = presenceChanged || req.user.lastSeenPrivacy !== req.body.lastSeenPrivacy;
     req.user.lastSeenPrivacy = req.body.lastSeenPrivacy;
