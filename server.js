@@ -1000,10 +1000,66 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
+const sealedFiles = new Set([USERS_FILE, DMS_FILE]);
+const reseal = new Set();
+let dataKeyCache = null;
+function dataKey() {
+  if (dataKeyCache) return dataKeyCache;
+  const keyFile = path.join(__dirname, '.data-key');
+  try {
+    if (fs.existsSync(keyFile)) {
+      const buf = Buffer.from(String(fs.readFileSync(keyFile, 'utf8')).trim(), 'base64');
+      if (buf.length === 32) {
+        dataKeyCache = buf;
+        return buf;
+      }
+    }
+  } catch (_) {}
+  const created = crypto.randomBytes(32);
+  fs.writeFileSync(keyFile, created.toString('base64') + '\n', { mode: 0o600 });
+  dataKeyCache = created;
+  return created;
+}
+function isSealedFile(buf) {
+  return Buffer.isBuffer(buf) && buf.length >= 32 && buf.subarray(0, 4).toString('utf8') === 'NEB1';
+}
+function sealJson(data) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', dataKey(), iv);
+  const enc = Buffer.concat([cipher.update(JSON.stringify(data), 'utf8'), cipher.final()]);
+  return Buffer.concat([Buffer.from('NEB1'), iv, cipher.getAuthTag(), enc]);
+}
+function openSealed(buf) {
+  const iv = buf.subarray(4, 16);
+  const tag = buf.subarray(16, 32);
+  const enc = buf.subarray(32);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', dataKey(), iv);
+  decipher.setAuthTag(tag);
+  return JSON.parse(Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8'));
+}
+function fileBody(file, data) {
+  return sealedFiles.has(file) ? sealJson(data) : JSON.stringify(data);
+}
 function load(file, fallback) {
   try {
-    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch (e) {}
+    if (!fs.existsSync(file)) return fallback;
+    const buf = fs.readFileSync(file);
+    if (sealedFiles.has(file)) {
+      if (isSealedFile(buf)) return openSealed(buf);
+      const text = buf.toString('utf8').trim();
+      if (text.startsWith('{') || text.startsWith('[')) {
+        reseal.add(file);
+        return JSON.parse(text);
+      }
+    } else {
+      return JSON.parse(buf.toString('utf8'));
+    }
+  } catch (err) {
+    if (sealedFiles.has(file) && fs.existsSync(file)) {
+      console.log('Could not open ' + path.basename(file) + '. Keep .data-key next to server.js. The file was not replaced.');
+      process.exit(1);
+    }
+  }
   return fallback;
 }
 const dirtyFiles = new Map();
@@ -1017,8 +1073,9 @@ function save(file, data) {
 function saveNow(file, data) {
   dirtyFiles.set(file, data);
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.writeFileSync(tmp, fileBody(file, data));
   fs.renameSync(tmp, file);
+  dirtyFiles.delete(file);
 }
 async function flushSaves() {
   const batch = [...dirtyFiles.entries()];
@@ -1027,7 +1084,7 @@ async function flushSaves() {
   for (const [file, payload] of batch) {
     const tmp = file + '.tmp';
     try {
-      await fs.promises.writeFile(tmp, JSON.stringify(payload));
+      await fs.promises.writeFile(tmp, fileBody(file, payload));
       await fs.promises.rename(tmp, file);
     } catch (_) {}
   }
@@ -1113,6 +1170,8 @@ function wakeGuild(g) {
 let codes = load(CODES_FILE, {});
 let friendGraph = load(FRIENDS_FILE, {});
 let dmThreads = load(DMS_FILE, {});
+if (reseal.has(USERS_FILE)) saveNow(USERS_FILE, users);
+if (reseal.has(DMS_FILE)) saveNow(DMS_FILE, dmThreads);
 const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
 const CALLS_FILE = path.join(DATA_DIR, 'calls.json');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
