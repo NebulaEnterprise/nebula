@@ -12,7 +12,7 @@
 
   function direct(value) {
     if (!value) return '';
-    if (value.startsWith('blob:') || value.startsWith('data:')) return value;
+    if (value.startsWith('blob:') || value.startsWith('data:') || value.startsWith('http://') || value.startsWith('https://')) return value;
     const pinned = pinnedSrc(value) || pinnedSrc(url);
     if (pinned) return pinned;
     if (navigator.serviceWorker?.controller) return fileUrl(value);

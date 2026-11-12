@@ -7,7 +7,7 @@
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
-  import { api, uploadFile } from '../api.js';
+  import { api, fileUrl, uploadFile } from '../api.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
   import { profileSeen } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
@@ -54,9 +54,16 @@
     turned = !turned;
   }
 
+  function isVideo(item) {
+    return !!item && (item.kind === 'video' || /\.(mp4|webm|mov)(\?|#|$)/i.test(String(item.url || '')));
+  }
+
   async function addMedia(kind, file) {
     if (!file || rel !== 'self') return;
-    if (!String(file.type || '').startsWith('image/')) return toast('Choose a photo');
+    const type = String(file.type || '');
+    const video = type.startsWith('video/');
+    if (!type.startsWith('image/') && !video) return toast('Choose a photo or video');
+    if (video && file.size > 25 * 1024 * 1024) return toast('Videos can be up to 25 MB');
     busy = kind;
     try {
       const uploaded = await uploadFile(file, null, file.name || 'photo.jpg', '/api/upload?slot=photo');
@@ -68,7 +75,7 @@
       }
       toast(kind === 'stories' ? 'Story added' : 'Photo added');
     } catch (err) {
-      toast(err.message || 'Could not add that photo');
+      toast(err.message || 'Could not add that');
     } finally {
       busy = '';
     }
@@ -204,7 +211,7 @@
           {/if}
           {#each stories as story, index (story.id)}
             <button type="button" class="ig-story" onclick={() => (storyAt = index)}>
-              <Photo url={story.url} />
+              {#if isVideo(story)}<video src={fileUrl(story.url)} muted playsinline autoplay loop></video>{:else}<Photo url={story.url} />{/if}
             </button>
           {/each}
         </div>
@@ -215,7 +222,7 @@
           {/if}
           {#each photos as photo (photo.id)}
             <div class="ig-cell">
-              <Photo url={photo.url} fill />
+              {#if isVideo(photo)}<video src={fileUrl(photo.url)} muted playsinline autoplay loop></video>{:else}<Photo url={photo.url} fill />{/if}
               {#if rel === 'self'}<button type="button" class="ig-x" title="Remove" onclick={() => removeMedia('gallery', photo.id)}><X size={12} /></button>{/if}
             </div>
           {/each}
@@ -223,7 +230,7 @@
         </div>
         {#if storyAt >= 0 && stories[storyAt]}
           <div class="ig-view">
-            <Photo url={stories[storyAt].url} fill />
+            {#if isVideo(stories[storyAt])}<video src={fileUrl(stories[storyAt].url)} controls autoplay playsinline></video>{:else}<Photo url={stories[storyAt].url} fill />{/if}
             <button type="button" class="ig-close" title="Close" onclick={() => (storyAt = -1)}><X size={16} /></button>
             {#if storyAt > 0}<button type="button" class="ig-nav prev" onclick={() => (storyAt -= 1)}></button>{/if}
             {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" onclick={() => (storyAt += 1)}></button>{/if}
@@ -231,8 +238,8 @@
           </div>
         {/if}
       </div>
-      <input bind:this={photoInput} class="ig-file" type="file" accept="image/*" onchange={(event) => { addMedia('gallery', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
-      <input bind:this={storyInput} class="ig-file" type="file" accept="image/*" onchange={(event) => { addMedia('stories', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
+      <input bind:this={photoInput} class="ig-file" type="file" accept="image/*,video/*" onchange={(event) => { addMedia('gallery', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
+      <input bind:this={storyInput} class="ig-file" type="file" accept="image/*,video/*" onchange={(event) => { addMedia('stories', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
     </div>
     </div>
     {#if rel !== 'self' && more}

@@ -286,6 +286,9 @@ export function resolveMedia(url) {
   url = bannerGif(url);
   const full = fileUrl(url);
   if (!full.includes('/uploads/') && !full.includes('/files/')) return Promise.resolve(full);
+  try {
+    if (/^https?:\/\//i.test(full) && new URL(full).host !== new URL(getApiBase()).host) return Promise.resolve(full);
+  } catch (_) {}
   rememberMedia(url);
   if (mediaCache.has(full)) return mediaCache.get(full);
   const pending = (async () => {
@@ -329,7 +332,11 @@ export function startTunnelProxy() {
   if (!('serviceWorker' in navigator)) return;
   const script = new URL('sw.js', document.baseURI);
   const scope = new URL('./', document.baseURI);
-  navigator.serviceWorker.register(script.href, { scope: scope.href }).catch(() => {});
+  const tell = (worker) => worker && worker.postMessage({ type: 'nebula-api', origin: getApiBase() });
+  navigator.serviceWorker.register(script.href, { scope: scope.href }).then((reg) => {
+    tell(reg.active || navigator.serviceWorker.controller);
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => tell(navigator.serviceWorker.controller));
 }
 
 export function uploadFile(file, onProgress, name, path) {

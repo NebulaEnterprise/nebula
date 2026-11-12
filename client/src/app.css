@@ -2006,7 +2006,9 @@ img { max-width: 100%; }
 .ig-av { width: 76px; height: 76px; border-radius: 50%; padding: 0; background: #2a2a2e; flex: 0 0 auto; }
 .ig-av.live { padding: 3px; background: linear-gradient(135deg, #f9ce34, #ee2a7b 55%, #6228d7); }
 .ig-av > span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #1a1a1e; border: 2px solid #0b0b0d; font-size: 28px; font-weight: 700; }
-.ig-av img, .ig-story img, .ig-cell img { width: 100%; height: 100%; object-fit: cover; }
+.ig-av img, .ig-story img, .ig-cell img, .ig-story video, .ig-cell video, .ig-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ig-story video, .ig-cell video { pointer-events: none; }
+.ig-view video { position: absolute; inset: 0; object-fit: contain; background: #000; }
 .ig-id { min-width: 0; }
 .ig-id strong { display: block; font-size: 16px; }
 .ig-id em { display: block; color: #b5b5b8; font-style: normal; font-size: 13px; }

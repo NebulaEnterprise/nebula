@@ -2525,7 +2525,7 @@ function liveGallery(list) {
   for (const row of Array.isArray(list) ? list : []) {
     const url = String(row && row.url || '');
     if (!allowedFileUrl(url)) continue;
-    out.push({ id: String(row.id || '').slice(0, 40), url });
+    out.push({ id: String(row.id || '').slice(0, 40), url, kind: /\.(mp4|webm|mov)$/i.test(url) ? 'video' : 'image' });
   }
   return out.slice(-18);
 }
@@ -2538,7 +2538,7 @@ function liveStories(list) {
     const url = String(row && row.url || '');
     const createdAt = Number(row && row.createdAt) || 0;
     if (!allowedFileUrl(url) || !createdAt || now - createdAt > day) continue;
-    out.push({ id: String(row.id || '').slice(0, 40), url, createdAt });
+    out.push({ id: String(row.id || '').slice(0, 40), url, createdAt, kind: /\.(mp4|webm|mov)$/i.test(url) ? 'video' : 'image' });
   }
   return out.slice(-8);
 }
@@ -3644,6 +3644,14 @@ function sniffImage(buf) {
   return '';
 }
 
+function sniffVideo(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 12) return '';
+  if (buf[0] === 0x1a && buf[1] === 0x45 && buf[2] === 0xdf && buf[3] === 0xa3) return '.webm';
+  if (buf.slice(4, 8).toString('ascii') !== 'ftyp') return '';
+  const brand = buf.slice(8, 12).toString('ascii');
+  return brand.startsWith('qt') ? '.mov' : '.mp4';
+}
+
 function auth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -3770,8 +3778,12 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
     }
     return res.json({ ok: true, url, name: safe });
   }
-  const ext = sniffImage(req.body);
-  if (!ext) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
+  const imageExt = sniffImage(req.body);
+  const videoExt = imageExt ? '' : sniffVideo(req.body);
+  const ext = imageExt || videoExt;
+  if (!ext) return res.status(400).json({ error: 'Use a photo or video' });
+  if (videoExt && req.body.length > 25 * 1024 * 1024) return res.status(413).json({ error: 'Videos can be up to 25 MB' });
+  if (videoExt && (slot === 'avatar' || slot === 'banner')) return res.status(400).json({ error: 'Use a PNG, JPG, WEBP, or GIF' });
   if (slot === 'avatar' || slot === 'banner') {
     try {
       const saved = await saveProfileFile(req.user, slot, req.body, ext);
@@ -3827,7 +3839,9 @@ app.use('/uploads', allowMedia, (req, res, next) => {
   acceptRanges: true,
   setHeaders(res, filePath) {
     if (filePath.endsWith('.m4a')) res.setHeader('Content-Type', 'audio/mp4');
-    else if (filePath.endsWith('.webm')) res.setHeader('Content-Type', 'audio/webm');
+    else if (filePath.endsWith('.webm')) res.setHeader('Content-Type', /song-/i.test(filePath) ? 'audio/webm' : 'video/webm');
+    else if (filePath.endsWith('.mp4')) res.setHeader('Content-Type', 'video/mp4');
+    else if (filePath.endsWith('.mov')) res.setHeader('Content-Type', 'video/quicktime');
     else if (filePath.endsWith('.mp3')) res.setHeader('Content-Type', 'audio/mpeg');
     else if (filePath.endsWith('.opus')) res.setHeader('Content-Type', 'audio/opus');
   },
@@ -3972,7 +3986,7 @@ app.patch('/api/me', auth, (req, res) => {
 
 function addProfileMedia(user, key, url, limit) {
   if (!allowedFileUrl(url)) return 'Choose a photo';
-  const row = { id: crypto.randomBytes(6).toString('hex'), url, createdAt: Date.now() };
+  const row = { id: crypto.randomBytes(6).toString('hex'), url, createdAt: Date.now(), kind: /\.(mp4|webm|mov)$/i.test(url) ? 'video' : 'image' };
   const current = key === 'stories' ? liveStories(user.stories) : liveGallery(user.gallery);
   if (current.length >= limit) return key === 'stories' ? 'You can keep 8 stories' : 'You can keep 18 photos';
   user[key] = [...current, row];
