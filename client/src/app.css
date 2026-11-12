@@ -2026,6 +2026,7 @@ img { max-width: 100%; }
 .ig-story.add span, .ig-add span { font-size: 11px; color: #c9c9cc; }
 .ig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
 .ig-cell { position: relative; aspect-ratio: 1; background: #161618; overflow: hidden; }
+.ig-open { position: absolute; inset: 0; padding: 0; background: transparent; }
 .ig-add { aspect-ratio: 1; width: auto; height: auto; border-radius: 0; border: 1px dashed #3a3a40; }
 .ig-x, .ig-close {
   position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;

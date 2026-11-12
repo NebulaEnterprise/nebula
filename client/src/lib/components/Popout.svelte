@@ -27,6 +27,7 @@
   let faceFor = '';
   let busy = $state('');
   let storyAt = $state(-1);
+  let photoAt = $state(-1);
   let photoInput = $state(null);
   let storyInput = $state(null);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
@@ -47,6 +48,7 @@
     faceFor = id;
     turned = false;
     storyAt = -1;
+    photoAt = -1;
   });
 
   function flipCard(event) {
@@ -65,6 +67,19 @@
     }
     if (storyAt < stories.length - 1) storyAt += 1;
     else storyAt = -1;
+  }
+
+  function stepPost(event) {
+    if (event.target.closest('button, video')) return;
+    event.stopPropagation();
+    const box = event.currentTarget.getBoundingClientRect();
+    const back = event.clientX - box.left < box.width * 0.33;
+    if (back) {
+      if (photoAt > 0) photoAt -= 1;
+      return;
+    }
+    if (photoAt < photos.length - 1) photoAt += 1;
+    else photoAt = -1;
   }
 
   function isVideo(item) {
@@ -109,6 +124,7 @@
       ui.popout = { ...ui.popout, user: { ...ui.popout.user, [kind]: withoutMedia(ui.popout.user[kind], id) } };
     }
     if (kind === 'stories') storyAt = -1;
+    if (kind === 'gallery') photoAt = -1;
     try {
       const data = await api('/api/me/' + kind + '/' + encodeURIComponent(id), { method: 'DELETE' });
       touchProfileMedia();
@@ -227,7 +243,7 @@
           </button>
           <div class="ig-id">
             <strong>@{u.username}</strong>
-            <p>{photos.length} photos · {stories.length} {stories.length === 1 ? 'story' : 'stories'}</p>
+            <p>{photos.length} {photos.length === 1 ? 'photo' : 'photos'} · {stories.length} {stories.length === 1 ? 'story' : 'stories'}</p>
           </div>
         </header>
         {#if u.aboutMe}<p class="ig-bio">{u.aboutMe}</p>{/if}
@@ -253,9 +269,11 @@
           {#if rel === 'self'}
             <button type="button" class="ig-add" onclick={() => photoInput?.click()}>{busy === 'gallery' ? '…' : '+'}<span>Photo</span></button>
           {/if}
-          {#each photos as photo (photo.id)}
+          {#each photos as photo, index (photo.id)}
             <div class="ig-cell">
-              {#if isVideo(photo)}<video src={fileUrl(photo.url)} muted playsinline autoplay loop></video>{:else}<Photo url={photo.url} fill />{/if}
+              <button type="button" class="ig-open" title="View post" onclick={() => (photoAt = index)}>
+                {#if isVideo(photo)}<video src={fileUrl(photo.url)} muted playsinline autoplay loop></video>{:else}<Photo url={photo.url} fill />{/if}
+              </button>
               {#if rel === 'self'}<button type="button" class="ig-x" title="Remove" onclick={() => removeMedia('gallery', photo.id)}><X size={12} /></button>{/if}
             </div>
           {/each}
@@ -271,6 +289,20 @@
             {#if storyAt > 0}<button type="button" class="ig-nav prev" title="Previous story" onclick={() => (storyAt -= 1)}></button>{/if}
             {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" title="Next story" onclick={() => (storyAt += 1)}></button>{/if}
             {#if rel === 'self'}<button type="button" class="ig-remove" onclick={(event) => { event.stopPropagation(); removeMedia('stories', stories[storyAt].id); }}>Remove story</button>{/if}
+          </div>
+        {/if}
+        {#if photoAt >= 0 && photos[photoAt]}
+          <div class="ig-view" onclick={stepPost}>
+            {#if isVideo(photos[photoAt])}<video src={fileUrl(photos[photoAt].url)} controls autoplay playsinline></video>{:else}<Photo url={photos[photoAt].url} fill />{/if}
+            {#if photos.length > 1}
+              <div class="ig-bars">
+                {#each photos as photo, index (photo.id)}<i class:on={index <= photoAt}></i>{/each}
+              </div>
+            {/if}
+            <button type="button" class="ig-close" title="Close" onclick={() => (photoAt = -1)}><X size={16} /></button>
+            {#if photoAt > 0}<button type="button" class="ig-nav prev" title="Previous post" onclick={() => (photoAt -= 1)}></button>{/if}
+            {#if photoAt < photos.length - 1}<button type="button" class="ig-nav next" title="Next post" onclick={() => (photoAt += 1)}></button>{/if}
+            {#if rel === 'self'}<button type="button" class="ig-remove" onclick={(event) => { event.stopPropagation(); removeMedia('gallery', photos[photoAt].id); }}>Remove post</button>{/if}
           </div>
         {/if}
       </div>
