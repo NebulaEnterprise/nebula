@@ -3,6 +3,7 @@ import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGatewa
 import { getPasskey } from './webauthn.js';
 import { fileKind, packUpload } from './media.js';
 import { PERM } from './format.js';
+import { ensureBox, openSeal, sealText } from './seal.js';
 
 export const nowClock = $state({ t: Date.now() });
 if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
@@ -207,6 +208,7 @@ export async function boot() {
     const data = await api('/api/me');
     ui.me = data.user;
     rememberAccount(data.user, token);
+    publishBox().catch(() => {});
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     primeMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     await enterApp();
@@ -219,6 +221,7 @@ export async function boot() {
 }
 
 async function enterApp() {
+  publishBox().catch(() => {});
   try {
     const ch = await api('/api/channels');
     ui.channels = ch.channels || [];
@@ -1248,7 +1251,7 @@ function noteTypingEvent(data) {
   acceptTypers(rows);
 }
 
-function applySocketMessage(type, data) {
+async function applySocketMessage(type, data) {
   if (type === 'TYPING') {
     noteTypingEvent(data);
     return;
@@ -1261,7 +1264,7 @@ function applySocketMessage(type, data) {
     rememberLog(logKey, ui.messages);
     return;
   }
-  const message = data.message;
+  const message = await revealMessage(data.message);
   if (!message || !message.id) return;
   const idx = ui.messages.findIndex((msg) => msg && msg.id === message.id);
   if (type === 'MESSAGE_UPDATE') {
@@ -1583,7 +1586,7 @@ export async function loadMessages(quiet, live) {
     }
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
-    const list = data.messages;
+    const list = await revealList(data.messages);
     paintNames(list);
     const newest = list[list.length - 1];
     if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
@@ -1727,6 +1730,90 @@ function settleSent(tempId, message) {
   rememberLog(currentRoom(), ui.messages);
 }
 
+function looksLikeLink(content) {
+  const text = String(content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/gi, ' ');
+  if (/(?:https?:\/\/|www\.)\S+/i.test(text)) return true;
+  return /(?:^|[\s(])(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
+}
+
+function shareProblem(content, files, people) {
+  const link = looksLikeLink(content);
+  const media = (files && files.length) || /\[\[(?:gif|sticker):/i.test(String(content || ''));
+  for (const person of people || []) {
+    if (!person || !ui.me || String(person.id) === String(ui.me.id)) continue;
+    if (media && person.canSendMedia === false) return 'They are not accepting media';
+    if (link && person.canSendLinks === false) return 'They are not accepting links';
+  }
+  return '';
+}
+
+function peopleFor(where) {
+  if (where && Array.isArray(where.people) && where.people.length) {
+    const picked = where.people.filter((person) => person && person.boxKey);
+    if (ui.me?.boxKey && !picked.some((person) => String(person.id) === String(ui.me.id))) picked.unshift({ id: ui.me.id, boxKey: ui.me.boxKey });
+    return picked;
+  }
+  const people = [];
+  const add = (person) => {
+    if (!person?.id || !person.boxKey || people.some((row) => String(row.id) === String(person.id))) return;
+    people.push({ id: person.id, boxKey: person.boxKey, canSendLinks: person.canSendLinks, canSendMedia: person.canSendMedia, displayName: person.displayName, username: person.username });
+  };
+  add(ui.me);
+  if (where.mode === 'dm') {
+    const other = ui.dmUser && String(ui.dmUser.id) === String(where.dmUserId)
+      ? ui.dmUser
+      : (ui.dms || []).map((dm) => dm && dm.other).find((person) => person && String(person.id) === String(where.dmUserId));
+    if (!other?.boxKey) {
+      const name = other?.displayName || other?.username || 'They';
+      throw new Error(name + ' has to open Nebula once before this message can be encrypted.');
+    }
+    add(other);
+  } else if (where.mode === 'group') {
+    for (const member of ui.group?.members || []) add(member);
+  } else {
+    if (!(ui.members || []).length) throw new Error('Wait a moment and try again.');
+    for (const member of ui.members || []) add(member);
+  }
+  if (!people.some((person) => ui.me && String(person.id) === String(ui.me.id))) throw new Error('Open Nebula again so this device can encrypt messages.');
+  return people;
+}
+
+export async function publishBox() {
+  if (!ui.me?.id) return;
+  const pub = await ensureBox(ui.me.id);
+  if (ui.me.boxKey === pub) return;
+  ui.me = { ...ui.me, boxKey: pub };
+  const data = await api('/api/me', { method: 'PATCH', body: { boxKey: pub } });
+  if (data.user) ui.me = { ...ui.me, ...data.user, boxKey: data.user.boxKey || pub };
+}
+
+async function revealMessage(message) {
+  if (!message || !message.seal || !ui.me?.id) return message;
+  try {
+    const text = await openSeal(message.seal, ui.me.id);
+    return { ...message, content: text, locked: false };
+  } catch (_) {
+    return { ...message, content: '', locked: true };
+  }
+}
+
+async function revealList(list) {
+  const opened = [];
+  for (const msg of list || []) opened.push(await revealMessage(msg));
+  const byId = new Map(opened.map((msg) => [msg && msg.id, msg]));
+  return opened.map((msg) => {
+    if (!msg || (!msg.replies && !msg.reply)) return msg;
+    const fix = (reply) => {
+      const src = reply && byId.get(reply.id);
+      if (!src || src.locked || !src.content) return reply;
+      const text = String(src.content).replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim().slice(0, 140);
+      return text ? { ...reply, preview: text } : reply;
+    };
+    const replies = (msg.replies || []).map(fix);
+    return { ...msg, replies, reply: replies[0] || null };
+  });
+}
+
 async function postMessage(payload, target) {
   const content = String(payload.content || '').trim();
   const files = payload.files || [];
@@ -1734,9 +1821,17 @@ async function postMessage(payload, target) {
   if (!content && !files.length && !poll) return;
   const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' };
   const typingToken = stopTyping(false);
-  const body = { content, typingToken };
+  const body = { typingToken };
+  if (content) {
+    await publishBox();
+    const people = peopleFor(where);
+    const blocked = shareProblem(content, files, people);
+    if (blocked) throw new Error(blocked);
+    body.seal = await sealText(content, people);
+  }
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
+  if (payload.forwardName) body.forwardName = payload.forwardName;
   const replies = (Array.isArray(payload.replies) ? payload.replies : (payload.reply ? [payload.reply] : []))
     .filter((row) => row && row.id)
     .slice(0, 5);
@@ -1759,7 +1854,7 @@ async function postMessage(payload, target) {
   );
   if (sameRoom && data.message) {
     lastSentId = data.message.id;
-    settleSent(payload.replaceId, data.message);
+    settleSent(payload.replaceId, await revealMessage(data.message));
     paintNames(ui.messages);
   } else if (data.message) {
     lastSentId = data.message.id;
@@ -1778,8 +1873,11 @@ export async function sendMessage() {
     ui.composer = '';
     ui.editing = null;
     try {
-      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { content } });
-      if (data.message) ui.messages = ui.messages.map((msg) => msg.id === id ? data.message : msg);
+      await publishBox();
+      const seal = await sealText(content, peopleFor({ mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' }));
+      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { seal } });
+      const opened = data.message ? await revealMessage(data.message) : null;
+      if (opened) ui.messages = ui.messages.map((msg) => msg.id === id ? opened : msg);
       dropLive();
     } catch (err) {
       ui.composer = previous;
@@ -1836,6 +1934,26 @@ export async function removeMessage(messageId) {
 }
 
 export async function forwardMessage(messageId, target) {
+  const src = ui.messages.find((msg) => msg.id === messageId);
+  if (src && (src.seal || src.content)) {
+    if (src.locked || !src.content) throw new Error('This message is encrypted and this device cannot open it.');
+    let people = null;
+    let where = null;
+    if (target.userId) {
+      if (!target.boxKey) throw new Error((target.name || 'They') + ' has to open Nebula once before this message can be encrypted.');
+      people = [{ id: ui.me.id, boxKey: ui.me.boxKey, canSendLinks: true, canSendMedia: true }, { id: target.userId, boxKey: target.boxKey, canSendLinks: target.canSendLinks, canSendMedia: target.canSendMedia }];
+      where = { mode: 'dm', dmUserId: target.userId, channelId: '', groupId: '', threadId: '', people };
+    } else if (target.channelId) {
+      const data = await api('/api/members?serverId=' + encodeURIComponent(target.serverId || ''));
+      people = (data.members || []).filter((member) => member && member.boxKey);
+      where = { mode: 'chat', channelId: target.channelId, dmUserId: '', groupId: '', threadId: '', people };
+    }
+    if (where) {
+      await postMessage({ content: src.content, files: src.files || [], forwardName: src.author?.displayName || src.author?.username || '' }, where);
+      if (target.userId) loadDms();
+      return;
+    }
+  }
   await api('/api/messages/' + encodeURIComponent(messageId) + '/forward', { method: 'POST', body: target });
   dropLive();
   if (target.userId) loadDms();

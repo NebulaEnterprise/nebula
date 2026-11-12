@@ -677,6 +677,7 @@ img { max-width: 100%; }
 .friend > .friend-name { flex-shrink: 0; }
 .msg-head strong { min-width: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-head time { color: var(--faint); font-size: 12px; flex-shrink: 0; }
+.msg-locked { margin: 2px 0 0; color: var(--faint); font-style: italic; }
 .day-line {
   display: flex; align-items: center; gap: 12px; margin: 18px 16px 8px;
   color: var(--faint); font-size: 12px; font-weight: 700;

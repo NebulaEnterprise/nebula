@@ -1413,7 +1413,9 @@
         {#if msg.forward}
           <p class="forward-tag">Forwarded from {msg.forward.name}</p>
         {/if}
-        {#if msg.content}
+        {#if msg.locked}
+          <p class="msg-locked">Encrypted message</p>
+        {:else if msg.content}
           <div class="msg-content" class:jumbo={emojiScale(msg.content) === 'jumbo'} class:jumbo-mid={emojiScale(msg.content) === 'jumbo-mid'} class:jumbo-sm={emojiScale(msg.content) === 'jumbo-sm'}>{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
         {/if}
         {#if msg.files?.length}
@@ -1721,7 +1723,7 @@
         {/if}
         <p class="label">Direct messages</p>
         {#each forwardTargets.dms as dm}
-          <button type="button" class="forward-row" disabled={forwardBusy} onclick={() => sendForward({ userId: dm.id })}>{dm.name}</button>
+          <button type="button" class="forward-row" disabled={forwardBusy} onclick={() => sendForward({ userId: dm.id, boxKey: dm.boxKey, name: dm.name, canSendLinks: dm.canSendLinks, canSendMedia: dm.canSendMedia })}>{dm.name}</button>
         {:else}
           <p class="hint">No direct messages yet.</p>
         {/each}

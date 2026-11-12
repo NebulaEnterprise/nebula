@@ -1788,8 +1788,8 @@ function readReplies(body, roomId) {
     const author = slimAuthor(live || src.author) || { displayName: 'Someone' };
     if (live) author.avatarUrl = publishedMedia(live, 'avatar');
     const name = author.displayName || author.username || 'Someone';
-    const text = String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
-    const preview = text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message'));
+    const text = src.seal ? '' : String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+    const preview = src.seal ? 'Encrypted message' : (text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message')));
     out.push({ id: src.id, name, preview, authorId: author.id || src.authorId || '', author });
   }
   return out;
@@ -1820,16 +1820,40 @@ function cleanReactionEmoji(user, emoji) {
   return [...text].slice(0, 8).join('');
 }
 
+function readSeal(body) {
+  const seal = body && body.seal;
+  if (!seal || Number(seal.v) !== 1) return null;
+  const iv = String(seal.iv || '');
+  const data = String(seal.data || '');
+  const wrap = seal.for && typeof seal.for === 'object' ? seal.for : null;
+  if (!/^[A-Za-z0-9+/]{16,40}={0,2}$/.test(iv) || !/^[A-Za-z0-9+/]{16,20000}={0,2}$/.test(data) || !wrap) return { error: 'Bad message' };
+  const ids = Object.keys(wrap);
+  if (!ids.length || ids.length > 400) return { error: 'Bad message' };
+  const clean = {};
+  for (const id of ids) {
+    const row = wrap[id];
+    if (!row || typeof row !== 'object') return { error: 'Bad message' };
+    const eph = String(row.eph || '');
+    const rowIv = String(row.iv || '');
+    const ct = String(row.ct || '');
+    if (!cleanBoxKey(eph) || !/^[A-Za-z0-9+/]{16,40}={0,2}$/.test(rowIv) || !/^[A-Za-z0-9+/]{16,200}={0,2}$/.test(ct)) return { error: 'Bad message' };
+    clean[String(id).slice(0, 80)] = { eph, iv: rowIv, ct };
+  }
+  return { v: 1, iv, data, for: clean };
+}
+
 function messageExtras(body) {
-  const content = String(body && body.content || '').trim().slice(0, 2000);
+  const seal = body && body.seal ? readSeal(body) : null;
+  if (seal && seal.error) return seal;
+  const content = seal ? '' : String(body && body.content || '').trim().slice(0, 2000);
   const files = readFiles(body);
   let poll = null;
   if (body && body.poll) {
     poll = readPoll(body);
     if (!poll) return { error: 'Add a question and at least two answers' };
   }
-  if (!content && !files.length && !poll) return { error: 'Empty message' };
-  return { content, files, poll };
+  if (!content && !seal && !files.length && !poll) return { error: 'Empty message' };
+  return { content, files, poll, seal: seal || null };
 }
 
 function presentMessage(msg, viewerId) {
@@ -1851,6 +1875,7 @@ function presentMessage(msg, viewerId) {
   out.reply = replies[0] || null;
   if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
   out.reactions = publicReactions(msg, viewerId);
+  if (out.seal) out.content = '';
   return out;
 }
 
@@ -2363,6 +2388,7 @@ function publicUser(u, viewer) {
     nameEffect: cleanNameEffect(u.nameEffect),
     nameFont: cleanNameFont(u.nameFont),
     nameColors: cleanNameColors(u.nameColors),
+    boxKey: cleanBoxKey(u.boxKey),
     profileStyle: cleanProfileStyle(u.profileStyle),
     profileColors: profileShades(u.profileColors),
     songUrl: cleanSongUrl(u.songUrl),
@@ -2391,6 +2417,12 @@ unpackImages();
 
 function cleanNameEffect(value) {
   return ['plain', 'glow', 'gradient', 'rainbow', 'glitch', 'sparkle'].includes(value) ? value : '';
+}
+
+function cleanBoxKey(value) {
+  const text = String(value || '').trim();
+  if (!/^[A-Za-z0-9+/]{80,220}={0,2}$/.test(text)) return '';
+  return text;
 }
 
 function cleanNameFont(value) {
@@ -3611,7 +3643,7 @@ app.get('/api/username-available', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, aliases, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart, songAutoplay,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart, songAutoplay, boxKey,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -3688,6 +3720,11 @@ app.patch('/api/me', auth, (req, res) => {
     }
   }
   if (showcaseBadge !== undefined) req.user.showcaseBadge = showcaseBadge ? String(showcaseBadge) : '';
+  if (boxKey !== undefined) {
+    const next = cleanBoxKey(boxKey);
+    if (String(boxKey || '').trim() && !next) return res.status(400).json({ error: 'Bad encryption key' });
+    if (next) req.user.boxKey = next;
+  }
   if (nameEffect !== undefined) req.user.nameEffect = cleanNameEffect(nameEffect);
   if (nameFont !== undefined) req.user.nameFont = cleanNameFont(nameFont);
   if (nameColors !== undefined) req.user.nameColors = cleanNameColors(nameColors);
@@ -4559,10 +4596,11 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
     channelId: found.channel.id,
     authorId: req.user.id,
     author: slimAuthor(req.user),
-    content: extra.content,
+    content: extra.seal ? '' : extra.content,
+    seal: extra.seal || undefined,
     files: extra.files,
     poll: extra.poll,
-    mentions: parseMentions(found.guild, req.user, extra.content),
+    mentions: extra.seal ? null : parseMentions(found.guild, req.user, extra.content),
     replies: readReplies(req.body, found.channel.id),
     reply: readReply(req.body, found.channel.id),
     createdAt: new Date().toISOString(),
@@ -5282,7 +5320,7 @@ function sendDmList(req, res) {
         id: t.id,
         other: publicUser(users[otherId], req.user),
         updatedAt: Math.max(Number(t.updatedAt) || 0, last && last.createdAt ? Date.parse(last.createdAt) || 0 : 0),
-        preview: last ? dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '') : '',
+        preview: last ? (last.seal ? 'Encrypted message' : dmPreview(last.content || (last.poll && last.poll.question) || (last.files && last.files[0] && last.files[0].name) || '')) : '',
         lastId: last ? last.id : '',
         lastFrom: last ? last.authorId : '',
         unread: note ? note.unread : 0,
@@ -5356,7 +5394,8 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
     channelId,
     authorId: req.user.id,
     author: slimAuthor(req.user),
-    content: extra.content,
+    content: extra.seal ? '' : extra.content,
+    seal: extra.seal || undefined,
     files: extra.files,
     poll: extra.poll,
     replies: readReplies(req.body, channelId),
@@ -5382,7 +5421,8 @@ function appendRoomMessage(roomId, req) {
     channelId: roomId,
     authorId: req.user.id,
     author: slimAuthor(req.user),
-    content: extra.content,
+    content: extra.seal ? '' : extra.content,
+    seal: extra.seal || undefined,
     files: extra.files,
     poll: extra.poll,
     replies: readReplies(req.body, roomId),
@@ -5414,7 +5454,7 @@ function publicGroup(group, viewer) {
     createdAt: group.createdAt,
     updatedAt: group.updatedAt || Date.parse(group.createdAt) || 0,
     lastId: last ? last.id : '',
-    preview: last ? dmPreview(last.content || '') : '',
+    preview: last ? (last.seal ? 'Encrypted message' : dmPreview(last.content || '')) : '',
   };
 }
 
@@ -5821,7 +5861,8 @@ app.get('/api/forward-targets', auth, (req, res) => {
     const other = users[id];
     if (!other || seen.has(String(id)) || String(id) === String(req.user.id)) return;
     seen.add(String(id));
-    dms.push({ id: other.id, name: other.displayName || other.username });
+    const pub = publicUser(other, req.user);
+    dms.push({ id: pub.id, name: pub.displayName || pub.username, boxKey: pub.boxKey || '', canSendLinks: pub.canSendLinks, canSendMedia: pub.canSendMedia });
   };
   for (const thread of Object.values(dmThreads)) {
     if (!thread || (String(thread.a) !== String(req.user.id) && String(thread.b) !== String(req.user.id))) continue;
@@ -5864,11 +5905,15 @@ app.patch('/api/messages/:id', auth, (req, res) => {
   const found = locateMessage(req.params.id);
   if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
   if (String(found.msg.authorId) !== String(req.user.id)) return res.status(403).json({ error: 'You can only edit your own messages' });
-  const content = String(req.body && req.body.content || '').trim().slice(0, 2000);
-  if (!content && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
+  const seal = req.body && req.body.seal ? readSeal(req.body) : null;
+  if (seal && seal.error) return res.status(400).json({ error: seal.error });
+  const content = seal ? '' : String(req.body && req.body.content || '').trim().slice(0, 2000);
+  if (!content && !seal && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
   found.msg.content = content;
+  if (seal) found.msg.seal = seal;
+  else delete found.msg.seal;
   found.msg.editedAt = new Date().toISOString();
-  if (!String(found.roomId).startsWith('dm:')) {
+  if (!seal && !String(found.roomId).startsWith('dm:')) {
     const channel = findChannel(found.roomId, '');
     if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
   }
@@ -5894,6 +5939,7 @@ app.post('/api/messages/:id/forward', auth, (req, res) => {
   if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
   const src = found.msg;
   const name = (src.author && (src.author.displayName || src.author.username)) || 'Someone';
+  if (src.seal) return res.status(400).json({ error: 'That message is encrypted' });
   const text = String(src.content || '').trim().slice(0, 2000);
   const preview = text.replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim().slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : 'Message');
   const copiedFiles = readFiles({ files: src.files || [] });
