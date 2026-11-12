@@ -12,7 +12,7 @@ The address is not written down. Nebula keeps a slow hash and checks it when som
 
 ### Passwords
 
-The password itself is not stored. New passwords use a slow hash. 
+The password itself is not stored. passwords use a slow hash. 
 
 ### IP addresses
 
