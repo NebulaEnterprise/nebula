@@ -190,7 +190,6 @@
           </button>
           <div class="ig-id">
             <strong>@{u.username}</strong>
-            <em>{u.displayName || u.username}</em>
             <p>{photos.length} photos · {stories.length} {stories.length === 1 ? 'story' : 'stories'}</p>
           </div>
         </header>
