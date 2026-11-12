@@ -2985,6 +2985,7 @@ export async function openPopout(user, x, y) {
   peekProfile(user).then((fresh) => {
     if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
     ui.popout = { user: { ...ui.popout.user, ...fresh, roles: ui.popout.user.roles || [] }, x, y };
+    if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery: fresh.gallery || [], stories: fresh.stories || [] };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
     if (ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
   }).catch(() => {});

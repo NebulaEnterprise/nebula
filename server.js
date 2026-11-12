@@ -2516,6 +2516,29 @@ function peersOfRoom(roomId, selfId) {
   return [];
 }
 
+function liveGallery(list) {
+  const out = [];
+  for (const row of Array.isArray(list) ? list : []) {
+    const url = String(row && row.url || '');
+    if (!allowedFileUrl(url)) continue;
+    out.push({ id: String(row.id || '').slice(0, 40), url });
+  }
+  return out.slice(-18);
+}
+
+function liveStories(list) {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const out = [];
+  for (const row of Array.isArray(list) ? list : []) {
+    const url = String(row && row.url || '');
+    const createdAt = Number(row && row.createdAt) || 0;
+    if (!allowedFileUrl(url) || !createdAt || now - createdAt > day) continue;
+    out.push({ id: String(row.id || '').slice(0, 40), url, createdAt });
+  }
+  return out.slice(-8);
+}
+
 function publicUser(u, viewer) {
   if (!u) return null;
   const seen = seenFor(u, viewer || u);
@@ -2555,6 +2578,8 @@ function publicUser(u, viewer) {
     avatarUrl: publishedMedia(u, 'avatar'),
     bannerPath: u.bannerPath || '',
     bannerUrl: publishedMedia(u, 'banner'),
+    gallery: liveGallery(u.gallery),
+    stories: liveStories(u.stories),
     serverTag: u.serverTag || '',
     nameEffect: cleanNameEffect(u.nameEffect),
     nameFont: cleanNameFont(u.nameFont),
@@ -3936,6 +3961,41 @@ app.patch('/api/me', auth, (req, res) => {
   save(USERS_FILE, users);
   touchProfiles();
   if (presenceChanged) pushPresence(req.user);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+function addProfileMedia(user, key, url, limit) {
+  if (!allowedFileUrl(url)) return 'Choose a photo';
+  const row = { id: crypto.randomBytes(6).toString('hex'), url, createdAt: Date.now() };
+  const current = key === 'stories' ? liveStories(user.stories) : liveGallery(user.gallery);
+  if (current.length >= limit) return key === 'stories' ? 'You can keep 8 stories' : 'You can keep 18 photos';
+  user[key] = [...current, row];
+  return '';
+}
+
+app.post('/api/me/gallery', auth, (req, res) => {
+  const problem = addProfileMedia(req.user, 'gallery', String(req.body?.url || ''), 18);
+  if (problem) return res.status(400).json({ error: problem });
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.delete('/api/me/gallery/:id', auth, (req, res) => {
+  req.user.gallery = liveGallery(req.user.gallery).filter((row) => row.id !== req.params.id);
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.post('/api/me/stories', auth, (req, res) => {
+  const problem = addProfileMedia(req.user, 'stories', String(req.body?.url || ''), 8);
+  if (problem) return res.status(400).json({ error: problem });
+  save(USERS_FILE, users);
+  res.json({ ok: true, user: publicUser(req.user) });
+});
+
+app.delete('/api/me/stories/:id', auth, (req, res) => {
+  req.user.stories = liveStories(req.user.stories).filter((row) => row.id !== req.params.id);
+  save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
 

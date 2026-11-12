@@ -1,5 +1,5 @@
 <script>
-  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal } from '@lucide/svelte';
+  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -7,6 +7,7 @@
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
+  import { api, uploadFile } from '../api.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText } from '../state.svelte.js';
   import { profileSeen } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
@@ -22,6 +23,14 @@
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');
   let more = $state(false);
+  let turned = $state(false);
+  let dragging = $state(false);
+  let spin = $state(0);
+  let drag = null;
+  let busy = $state('');
+  let storyAt = $state(-1);
+  let photoInput = $state(null);
+  let storyInput = $state(null);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
 
@@ -30,6 +39,78 @@
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '—';
     return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  const photos = $derived(Array.isArray(u?.gallery) ? u.gallery : []);
+  const stories = $derived(Array.isArray(u?.stories) ? u.stories : []);
+  const cardTurn = $derived(dragging ? spin : (turned ? 180 : 0));
+
+  $effect(() => {
+    u?.id;
+    turned = false;
+    storyAt = -1;
+  });
+
+  function onDown(event) {
+    if (event.button != null && event.button !== 0) return;
+    if (event.target.closest('button, a, input, label, video')) return;
+    drag = { x: event.clientX, y: event.clientY, base: turned ? 180 : 0, moved: false };
+    dragging = true;
+    spin = drag.base;
+  }
+
+  function onMove(event) {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) drag.moved = true;
+    if (Math.abs(dx) > Math.abs(dy)) spin = drag.base + dx * 0.55;
+  }
+
+  function onUp() {
+    if (!drag) return;
+    const moved = drag.moved;
+    const dx = spin - drag.base;
+    drag = null;
+    dragging = false;
+    if (Math.abs(dx) > 40) {
+      const next = ((spin % 360) + 360) % 360;
+      turned = next > 90 && next < 270;
+    } else if (!moved) turned = !turned;
+  }
+
+  async function addMedia(kind, file) {
+    if (!file || rel !== 'self') return;
+    if (!String(file.type || '').startsWith('image/')) return toast('Choose a photo');
+    busy = kind;
+    try {
+      const uploaded = await uploadFile(file, null, file.name || 'photo.jpg', '/api/upload?slot=photo');
+      if (!uploaded.url) throw new Error('The photo did not upload');
+      const data = await api('/api/me/' + kind, { method: 'POST', body: { url: uploaded.url } });
+      if (data.user) {
+        ui.me = { ...ui.me, ...data.user };
+        if (ui.popout?.user?.id === data.user.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...data.user } };
+      }
+      toast(kind === 'stories' ? 'Story added' : 'Photo added');
+    } catch (err) {
+      toast(err.message || 'Could not add that photo');
+    } finally {
+      busy = '';
+    }
+  }
+
+  async function removeMedia(kind, id) {
+    if (rel !== 'self' || !id) return;
+    try {
+      const data = await api('/api/me/' + kind + '/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (data.user) {
+        ui.me = { ...ui.me, ...data.user };
+        if (ui.popout?.user?.id === data.user.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...data.user } };
+      }
+      if (kind === 'stories' && storyAt >= stories.length - 1) storyAt = stories.length > 1 ? 0 : -1;
+    } catch (err) {
+      toast(err.message || 'Could not remove that');
+    }
   }
 
   $effect(() => {
@@ -51,6 +132,8 @@
 {#if u}
   <div class="pop-backdrop"></div>
   <div class="pop profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
+    <div class="pop-spin" class:dragging class:show-back={turned} style="transform: rotateY({cardTurn}deg)" onpointerdown={onDown} onpointermove={onMove} onpointerup={onUp} onpointercancel={onUp}>
+    <div class="pop-face">
     <div class="pop-frame">
     <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
       {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
@@ -121,6 +204,61 @@
           <strong>{u.uid != null ? `#${u.uid}` : '—'}</strong>
         </div>
       </div>
+    </div>
+    </div>
+    </div>
+    <div class="pop-face pop-back">
+      <div class="ig">
+        <header class="ig-head">
+          <button type="button" class="ig-av" class:live={stories.length} onclick={() => stories.length && (storyAt = 0)}>
+            <span>{#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}</span>
+          </button>
+          <div class="ig-id">
+            <strong>@{u.username}</strong>
+            <em>{u.displayName || u.username}</em>
+            <p>{photos.length} photos · {stories.length} {stories.length === 1 ? 'story' : 'stories'}</p>
+          </div>
+        </header>
+        {#if u.aboutMe}<p class="ig-bio">{u.aboutMe}</p>{/if}
+        {#if rel === 'self' || stories.length}
+        <div class="ig-stories">
+          {#if rel === 'self'}
+            <button type="button" class="ig-story add" onclick={() => storyInput?.click()}>
+              <Plus size={16} />
+              <span>Story</span>
+            </button>
+          {/if}
+          {#each stories as story, index (story.id)}
+            <button type="button" class="ig-story" onclick={() => (storyAt = index)}>
+              <Photo url={story.url} />
+            </button>
+          {/each}
+        </div>
+        {/if}
+        <div class="ig-grid">
+          {#if rel === 'self'}
+            <button type="button" class="ig-add" onclick={() => photoInput?.click()}>{busy === 'gallery' ? '…' : '+'}<span>Photo</span></button>
+          {/if}
+          {#each photos as photo (photo.id)}
+            <div class="ig-cell">
+              <Photo url={photo.url} fill />
+              {#if rel === 'self'}<button type="button" class="ig-x" title="Remove" onclick={() => removeMedia('gallery', photo.id)}><X size={12} /></button>{/if}
+            </div>
+          {/each}
+          {#if !photos.length && rel !== 'self'}<p class="ig-empty">No photos yet</p>{/if}
+        </div>
+        {#if storyAt >= 0 && stories[storyAt]}
+          <div class="ig-view">
+            <Photo url={stories[storyAt].url} fill />
+            <button type="button" class="ig-close" title="Close" onclick={() => (storyAt = -1)}><X size={16} /></button>
+            {#if storyAt > 0}<button type="button" class="ig-nav prev" onclick={() => (storyAt -= 1)}></button>{/if}
+            {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" onclick={() => (storyAt += 1)}></button>{/if}
+            {#if rel === 'self'}<button type="button" class="ig-remove" onclick={() => removeMedia('stories', stories[storyAt].id)}>Remove story</button>{/if}
+          </div>
+        {/if}
+      </div>
+      <input bind:this={photoInput} class="ig-file" type="file" accept="image/*" onchange={(event) => { addMedia('gallery', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
+      <input bind:this={storyInput} class="ig-file" type="file" accept="image/*" onchange={(event) => { addMedia('stories', event.currentTarget.files?.[0]); event.currentTarget.value = ''; }} />
     </div>
     </div>
     {#if rel !== 'self' && more}

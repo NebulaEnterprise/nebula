@@ -1626,7 +1626,7 @@ img { max-width: 100%; }
   position: fixed; inset: 0; z-index: 39; background: rgba(0, 0, 0, 0.55);
 }
 .pop {
-  position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); overflow: visible;
+  position: fixed; z-index: 40; width: min(400px, calc(100vw - 32px)); overflow: visible; perspective: 1400px;
   left: 50%; top: 50%; transform: translate(-50%, -50%);
   --shade-a: #7c3aed; --shade-b: #c084fc;
   border-radius: 18px;
@@ -1990,6 +1990,51 @@ img { max-width: 100%; }
 .group-actions .btn.brand { width: auto; }
 .group-icon { display: grid; place-items: center; margin: 8px auto; cursor: pointer; position: relative; }
 .group-icon input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.pop-spin {
+  position: relative; transform-style: preserve-3d; transition: transform 560ms var(--ease);
+  cursor: grab; touch-action: pan-y;
+}
+.pop-spin.dragging { transition: none; cursor: grabbing; }
+.pop-face { border-radius: 18px; transform-style: preserve-3d; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.pop-back {
+  position: absolute; inset: 0; transform: rotateY(180deg); overflow: auto;
+  background: #0b0b0d; color: #f5f5f5; border-radius: 18px; pointer-events: none;
+}
+.pop-spin.show-back .pop-back { pointer-events: auto; }
+.pop-spin.show-back > .pop-face:first-child { pointer-events: none; }
+.ig { min-height: 100%; padding: 16px 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.ig-head { display: flex; align-items: center; gap: 14px; text-align: left; }
+.ig-av { width: 76px; height: 76px; border-radius: 50%; padding: 0; background: #2a2a2e; flex: 0 0 auto; }
+.ig-av.live { padding: 3px; background: linear-gradient(135deg, #f9ce34, #ee2a7b 55%, #6228d7); }
+.ig-av > span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #1a1a1e; border: 2px solid #0b0b0d; font-size: 28px; font-weight: 700; }
+.ig-av img, .ig-story img, .ig-cell img { width: 100%; height: 100%; object-fit: cover; }
+.ig-id { min-width: 0; }
+.ig-id strong { display: block; font-size: 16px; }
+.ig-id em { display: block; color: #b5b5b8; font-style: normal; font-size: 13px; }
+.ig-id p, .ig-bio { margin: 4px 0 0; color: #d6d6d8; font-size: 13px; }
+.ig-bio { text-align: left; }
+.ig-stories { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
+.ig-story, .ig-add {
+  width: 72px; height: 72px; border-radius: 12px; overflow: hidden; flex: 0 0 auto;
+  background: #161618; color: #fff; display: grid; place-items: center; position: relative;
+}
+.ig-story { border-radius: 50%; padding: 2px; background: linear-gradient(135deg, #f9ce34, #ee2a7b, #6228d7); }
+.ig-story.add { border-radius: 50%; background: #1c1c20; border: 1px dashed #3a3a40; font-size: 11px; gap: 2px; }
+.ig-story.add span, .ig-add span { font-size: 11px; color: #c9c9cc; }
+.ig-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.ig-cell { position: relative; aspect-ratio: 1; background: #161618; overflow: hidden; }
+.ig-add { aspect-ratio: 1; width: auto; height: auto; border-radius: 0; border: 1px dashed #3a3a40; }
+.ig-x, .ig-close {
+  position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: rgba(0, 0, 0, 0.62); color: #fff;
+}
+.ig-empty { grid-column: 1 / -1; color: #8e8e93; padding: 24px 0; }
+.ig-view { position: absolute; inset: 0; background: #000; z-index: 4; }
+.ig-nav { position: absolute; top: 0; bottom: 48px; width: 36%; background: transparent; }
+.ig-nav.prev { left: 0; }
+.ig-nav.next { right: 0; }
+.ig-remove { position: absolute; left: 12px; bottom: 12px; color: #fff; font-size: 13px; background: rgba(0, 0, 0, 0.45); border-radius: 999px; padding: 6px 10px; }
+.ig-file { display: none; }
 .pop-actions { position: absolute; top: 12px; right: 12px; z-index: 3; display: flex; align-items: center; gap: 8px; }
 .pop-msg, .pop-more {
   border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; padding: 0;
