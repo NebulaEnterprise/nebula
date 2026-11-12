@@ -2,7 +2,7 @@
   import { MessageSquare, X, ChevronLeft, ExternalLink, Phone } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, openQuick, closeQuick, openDm, loadDms, toast } from '../state.svelte.js';
+  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone } from '../state.svelte.js';
   import { api } from '../api.js';
   import { formatContent, emojiScale } from '../format.js';
   import { startCall } from '../voice.js';
@@ -82,11 +82,17 @@
     const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages' + query);
     if (mine !== serial || !ui.quickUser || String(ui.quickUser.id) !== String(id)) return;
     const incoming = data.messages || [];
+    const locals = messages.filter((msg) => String(msg.id || '').startsWith('local-'));
+    const withLocal = (rows) => {
+      if (!locals.length) return rows;
+      const seen = new Set(rows.map((msg) => msg.id));
+      return [...rows, ...locals.filter((msg) => !seen.has(msg.id))];
+    };
     if (full || !after || data.mode !== 'delta') {
-      messages = incoming;
+      messages = withLocal(incoming);
     } else if (incoming.length) {
       const seen = new Set(messages.map((msg) => msg.id));
-      messages = [...messages, ...incoming.filter((msg) => msg && !seen.has(msg.id))];
+      messages = withLocal([...messages.filter((msg) => !String(msg.id || '').startsWith('local-')), ...incoming.filter((msg) => msg && !seen.has(msg.id))]);
     }
     if (data.other) person = data.other;
     loading = false;
@@ -159,19 +165,44 @@
     log.scrollTop = log.scrollHeight;
   });
 
+  function undeliveredText(tone) {
+    if (tone === 'friends') return 'Your message could not be delivered. Send a friend request first and start the conversation once they\'ve accepted.';
+    if (tone === 'links') return 'Your message could not be delivered. They are not accepting links from you.';
+    if (tone === 'media') return 'Your message could not be delivered. They are not accepting photos, videos, or files from you.';
+    return 'Your message could not be delivered.';
+  }
+
   async function send() {
     const content = draft.trim();
     const user = who;
-    if (!content || !user?.id || sending || user.canMessage === false) return;
+    if (!content || !user?.id || sending) return;
     sending = true;
     draft = '';
     const typingToken = stopQuick(user.id, false);
+    const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
+    messages = [...messages, {
+      id: tempId,
+      createdAt: new Date().toISOString(),
+      author: ui.me,
+      content,
+    }];
+    follow = true;
     try {
       const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content, typingToken } });
-      if (data.message) messages = [...messages.filter((msg) => msg.id !== data.message.id), data.message];
-      follow = true;
+      if (data.message) messages = [...messages.filter((msg) => msg.id !== tempId && msg.id !== data.message.id), data.message];
       loadDms();
     } catch (err) {
+      const tone = deliveryTone(err.message);
+      if (tone) {
+        messages = [...messages, {
+          id: 'local-clyde-' + Date.now(),
+          kind: 'clyde',
+          createdAt: new Date().toISOString(),
+          content: undeliveredText(tone),
+        }];
+        return;
+      }
+      messages = messages.filter((msg) => msg.id !== tempId);
       draft = content;
       toast(err.message || 'Could not send');
     } finally {
@@ -266,7 +297,7 @@
           {#each messages as msg (msg.id)}
             {@const mine = msg.author?.id === ui.me?.id}
             {@const text = textOf(msg)}
-            <div class="qbubble" class:mine class:theirs={!mine}>
+            <div class="qbubble" class:mine class:theirs={!mine} class:notice={msg.kind === 'clyde'}>
               {#if text}<div class="quick-text" class:jumbo={emojiScale(text) === 'jumbo'} class:jumbo-mid={emojiScale(text) === 'jumbo-mid'} class:jumbo-sm={emojiScale(text) === 'jumbo-sm'}>{@html formatContent(text, emoji, stickers, names)}</div>{/if}
               {#if msg.files?.length}
                 <div class="quick-files">
@@ -283,14 +314,10 @@
         {#if quickTyping}
           <p class="quick-typing"><span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span> <strong>{who.displayName || who.username}</strong> is typing...</p>
         {/if}
-        {#if who?.canMessage === false}
-          <div class="quick-compose blocked-bar"><span>You can't message this user.</span></div>
-        {:else}
         <form class="quick-compose" onsubmit={(event) => { event.preventDefault(); send(); }}>
           <input bind:value={draft} maxlength="2000" placeholder={'Message @' + (who?.username || '')} onkeydown={onKey} oninput={() => markQuick(ui.quickUser?.id)} />
           <button class="send" type="submit" disabled={sending || !draft.trim()}>Send</button>
         </form>
-        {/if}
       {:else}
         <div class="quick-list">
           {#each rows as dm (dm.id)}

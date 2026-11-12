@@ -17,7 +17,6 @@
   const typingPhrase = $derived(typingLine(ui.typers));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const dmBlocked = $derived(ui.mode === 'dm' && !!ui.dmUser && relation(ui.dmUser.id) === 'blocked');
-  const cantMessage = $derived(ui.mode === 'dm' && !!ui.dmUser && ui.dmUser.canMessage === false && !dmBlocked);
   const emoji = $derived.by(() => {
     const map = new Map();
     for (const row of ui.emoji || []) if (row?.name) map.set(row.name, row);
@@ -684,7 +683,7 @@
   }
 
   async function submitComposer() {
-    if (locked || dmBlocked || cantMessage) return;
+    if (locked || dmBlocked) return;
     if (ui.editing || !drafts.length) {
       sendMessage();
       return;
@@ -1591,10 +1590,6 @@
     <div class="composer blocked-bar">
       <span>You cannot send messages to a user you have blocked.</span>
       <button type="button" onclick={unblockDm}>Unblock</button>
-    </div>
-  {:else if cantMessage}
-    <div class="composer blocked-bar">
-      <span>You can't message this user.</span>
     </div>
   {:else}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); submitComposer(); }}>
