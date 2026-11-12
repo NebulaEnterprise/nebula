@@ -201,7 +201,7 @@
           </div>
         </header>
         {#if u.aboutMe}<p class="ig-bio">{u.aboutMe}</p>{/if}
-        {#if rel === 'self' || stories.length}
+        {#if rel === 'self'}
         <div class="ig-stories">
           {#if rel === 'self'}
             <button type="button" class="ig-story add" onclick={() => storyInput?.click()}>
