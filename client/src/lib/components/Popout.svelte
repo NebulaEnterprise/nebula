@@ -50,8 +50,21 @@
   });
 
   function flipCard(event) {
-    if (event.target.closest('button, a, input, label, video')) return;
+    if (event.target.closest('button, a, input, label, video, .ig-view')) return;
     turned = !turned;
+  }
+
+  function stepStory(event) {
+    if (event.target.closest('button, video')) return;
+    event.stopPropagation();
+    const box = event.currentTarget.getBoundingClientRect();
+    const back = event.clientX - box.left < box.width * 0.33;
+    if (back) {
+      if (storyAt > 0) storyAt -= 1;
+      return;
+    }
+    if (storyAt < stories.length - 1) storyAt += 1;
+    else storyAt = -1;
   }
 
   function isVideo(item) {
@@ -229,11 +242,14 @@
           {#if !photos.length && rel !== 'self'}<p class="ig-empty">No photos yet</p>{/if}
         </div>
         {#if storyAt >= 0 && stories[storyAt]}
-          <div class="ig-view">
+          <div class="ig-view" onclick={stepStory}>
             {#if isVideo(stories[storyAt])}<video src={fileUrl(stories[storyAt].url)} controls autoplay playsinline></video>{:else}<Photo url={stories[storyAt].url} fill />{/if}
+            <div class="ig-bars">
+              {#each stories as story, index (story.id)}<i class:on={index <= storyAt}></i>{/each}
+            </div>
             <button type="button" class="ig-close" title="Close" onclick={() => (storyAt = -1)}><X size={16} /></button>
-            {#if storyAt > 0}<button type="button" class="ig-nav prev" onclick={() => (storyAt -= 1)}></button>{/if}
-            {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" onclick={() => (storyAt += 1)}></button>{/if}
+            {#if storyAt > 0}<button type="button" class="ig-nav prev" title="Previous story" onclick={() => (storyAt -= 1)}></button>{/if}
+            {#if storyAt < stories.length - 1}<button type="button" class="ig-nav next" title="Next story" onclick={() => (storyAt += 1)}></button>{/if}
             {#if rel === 'self'}<button type="button" class="ig-remove" onclick={() => removeMedia('stories', stories[storyAt].id)}>Remove story</button>{/if}
           </div>
         {/if}

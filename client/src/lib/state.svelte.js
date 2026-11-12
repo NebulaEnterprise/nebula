@@ -2957,11 +2957,25 @@ export async function loadProfile(id) {
 
 const profileLoads = new Map();
 
+function keptMedia(local, incoming, limit) {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const next = Array.isArray(incoming) ? incoming.filter((row) => row && row.url) : [];
+  const ids = new Set(next.map((row) => row.id));
+  const extra = (Array.isArray(local) ? local : []).filter((row) => {
+    if (!row || !row.url || !row.id || ids.has(row.id)) return false;
+    if (row.createdAt && now - Number(row.createdAt) > day) return false;
+    return true;
+  });
+  return [...next, ...extra].slice(-limit);
+}
+
 export function peekProfile(user) {
   if (!user || !user.id) return Promise.resolve(null);
   primeMedia([user.bannerUrl, user.avatarUrl]);
   if (profileLoads.has(user.id)) return profileLoads.get(user.id);
   const job = loadProfile(user.id).then((fresh) => {
+    profileLoads.delete(user.id);
     if (fresh) primeMedia([fresh.bannerUrl, fresh.avatarUrl]);
     return fresh;
   }).catch(() => {
@@ -2978,14 +2992,20 @@ export async function openPopout(user, x, y) {
   const seed = known
     ? { ...user, ...known, roles: known.roles || [] }
     : { ...user, roles: inServer ? (user.roles || []) : [] };
+  if (ui.me && String(ui.me.id) === String(user.id)) {
+    seed.gallery = keptMedia(ui.me.gallery, seed.gallery, 18);
+    seed.stories = keptMedia(ui.me.stories, seed.stories, 8);
+  }
   ui.popout = { user: seed, x, y };
   warmMedia([seed.bannerUrl, seed.avatarUrl]);
   primeMedia([seed.bannerUrl, seed.avatarUrl]);
   loadFriends().catch(() => {});
   peekProfile(user).then((fresh) => {
     if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
-    ui.popout = { user: { ...ui.popout.user, ...fresh, roles: ui.popout.user.roles || [] }, x, y };
-    if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery: fresh.gallery || [], stories: fresh.stories || [] };
+    const gallery = keptMedia(ui.popout.user.gallery, fresh.gallery, 18);
+    const stories = keptMedia(ui.popout.user.stories, fresh.stories, 8);
+    ui.popout = { user: { ...ui.popout.user, ...fresh, gallery, stories, roles: ui.popout.user.roles || [] }, x, y };
+    if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
     if (ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
   }).catch(() => {});
@@ -2996,7 +3016,10 @@ export async function openPopout(user, x, y) {
     const fresh = (data.members || []).find((m) => m.id === user.id);
     ui.badgeDefs = data.badges || ui.badgeDefs;
     if (!fresh) return;
-    ui.popout = { user: { ...seed, ...fresh, roles: fresh.roles || [] }, x, y };
+    const gallery = keptMedia(ui.popout?.user?.gallery, fresh.gallery, 18);
+    const stories = keptMedia(ui.popout?.user?.stories, fresh.stories, 8);
+    ui.popout = { user: { ...seed, ...fresh, gallery, stories, roles: fresh.roles || [] }, x, y };
+    if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
     primeMedia([fresh.bannerUrl, fresh.avatarUrl]);
   } catch (_) {}
