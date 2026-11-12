@@ -28,7 +28,7 @@ Usernames remain in the file and anyone in a server can see them.
 
 ### Messages
 
-Messages are encrypted on the device before they reach the server. The server stores the sealed message, not the words. New photos, videos, and files are encrypted on the device before they are uploaded. Polls are not encrypted. Older files that were uploaded before this change stay readable.
+Messages are encrypted on the device before they reach the server. The server stores the sealed message, not the words. New photos, videos, and files sent in a chat are encrypted on the device before they are uploaded. Profile pictures and server icons stay visible. Polls are not encrypted. Older files that were uploaded before this change stay readable.
 
 ### Friends, direct messages, and servers
 
@@ -38,4 +38,6 @@ The friend list, the direct-message list, and server membership are encrypted on
 
 Call audio and screen sharing are encrypted between the people on the call. The setup that connects them is sealed with the same keys as messages, and the server only carries that sealed setup. It cannot read the setup or hear the call. The server still knows who joined a call and when. The network between those devices carries encrypted audio, and the connection address is still visible to ngrok, the router, and the internet provider.
 
-### Summary. The data people send on Nebula is encrypted. Message text is encrypted on the device, and so are calls and screen sharing, so the server cannot read the words or hear the call. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. A copy of the server files does not keep email addresses, password text, IP addresses, or computer and browser names. Usernames stay, because people have to be able to find and see each other.
+### Summary
+
+Messages, calls, screen sharing, and new photos, videos, and files are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted on disk. The running server can still read those lists so it can deliver chats. Usernames stay visible so people can find each other.
