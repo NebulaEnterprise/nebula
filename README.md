@@ -32,7 +32,7 @@ Messages are encrypted on the device before they reach the server. The server st
 
 ### Friends, direct messages, and servers
 
-The friend list, the direct-message list, and server membership are encrypted on disk. The running server can still read them so it can deliver chats. Anyone with the `.data-key` file next to `server.js` can read them too.
+The friend list, the direct-message list, and server membership are encrypted 
 
 ### Calls
 
@@ -40,4 +40,4 @@ Call audio and screen sharing are encrypted between the people on the call. The 
 
 ### Summary
 
-Messages, calls, screen sharing, and new photos, videos, and files are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted on disk. The running server can still read those lists so it can deliver chats. Usernames stay visible so people can find each other.
+Messages, calls, screen sharing, and new photos, videos, and files are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted.
