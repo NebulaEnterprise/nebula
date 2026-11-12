@@ -721,10 +721,6 @@ img { max-width: 100%; }
 }
 .clyde-head { display: flex; align-items: baseline; gap: 6px; line-height: 22px; }
 .clyde-head strong { font-size: 16px; font-weight: 600; }
-.clyde-app {
-  align-self: center; background: #5865f2; color: #fff; font-size: 10px; font-weight: 700;
-  line-height: 14px; border-radius: 3px; padding: 0 4px; letter-spacing: 0.02em;
-}
 .clyde-head time { color: var(--faint); font-size: 12px; font-weight: 500; margin-left: 2px; }
 .clyde-body p { margin: 4px 0 0; line-height: 1.375; color: var(--text); }
 .clyde-body a { color: #00a8fc; word-break: break-all; }

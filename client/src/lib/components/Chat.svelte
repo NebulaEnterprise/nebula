@@ -1291,20 +1291,16 @@
         <div class="clyde-body">
           <div class="clyde-head">
             <strong>Nebula</strong>
-            <span class="clyde-app">APP</span>
             <time>{time(msg.createdAt)}</time>
           </div>
           {#if msg.tone === 'friends'}
             <p>Your message could not be delivered. Send a friend request first and start the conversation once they've accepted.</p>
-            <p>Here is the full list of reasons why your message could not be delivered:</p>
-            <a href="https://support.discord.com/hc/en-us/articles/360060145013" target="_blank" rel="noreferrer">https://support.discord.com/hc/en-us/articles/360060145013</a>
           {:else if msg.tone === 'links'}
             <p>Your message could not be delivered. They are not accepting links from you.</p>
           {:else if msg.tone === 'media'}
             <p>Your message could not be delivered. They are not accepting photos, videos, or files from you.</p>
           {:else}
             <p>Your message could not be delivered.</p>
-            <p>You can see the full list of reasons here: <a href="https://support.discord.com/hc/en-us/articles/360060145013" target="_blank" rel="noreferrer">https://support.discord.com/hc/en-us/articles/360060145013</a></p>
           {/if}
           <p class="clyde-only"><Eye size={14} /> Only you can see this · <button type="button" onclick={() => dismissLocal(msg.id)}>Dismiss message</button></p>
         </div>
