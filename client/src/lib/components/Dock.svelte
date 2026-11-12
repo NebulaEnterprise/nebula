@@ -331,7 +331,9 @@
             {#if (person.aliases || []).length}
               <div class="profile-row alias-row"><span><Tags size={14} /> Aliases</span><strong class="alias-names">@{person.aliases.join(', @')}</strong></div>
             {/if}
-            <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns || '—'}</strong></div>
+            {#if String(person.pronouns || '').trim()}
+              <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{person.pronouns}</strong></div>
+            {/if}
           </section>
           <section class="profile-panel">
             <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(person, nowClock.t)}</strong></div>

@@ -894,7 +894,9 @@
                     <strong class="alias-names">@{form.aliases.filter((name) => String(name || '').trim()).join(', @')}</strong>
                   </div>
                 {/if}
-                <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns || '—'}</strong></div>
+                {#if String(form.pronouns || '').trim()}
+                  <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{form.pronouns}</strong></div>
+                {/if}
               </section>
               <section class="profile-panel">
                 <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(ui.me, nowClock.t)}</strong></div>

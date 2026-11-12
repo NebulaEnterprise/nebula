@@ -98,7 +98,9 @@
             <strong class="alias-names">@{u.aliases.join(', @')}</strong>
           </div>
         {/if}
-        <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns || '—'}</strong></div>
+        {#if String(u.pronouns || '').trim()}
+          <div class="profile-row"><span><Smile size={14} /> Pronouns</span><strong>{u.pronouns}</strong></div>
+        {/if}
       </section>
       <section class="profile-panel">
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(u, nowClock.t)}</strong></div>
