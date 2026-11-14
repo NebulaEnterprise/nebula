@@ -41,3 +41,7 @@ Call audio and screen sharing are encrypted between the people on the call. The 
 ### Summary
 
 Messages, calls, screen sharing, and new photos, videos, and files are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted.
+
+<img width="1911" height="1080" alt="r2-1794477087019-uzrgmbheg3wios2p1ahq-t" src="https://github.com/user-attachments/assets/434bf1a0-2857-435b-a4ec-3bae2c8a57c2" />
+
+<img width="1452" height="918" alt="image" src="https://github.com/user-attachments/assets/89a3b6a3-eb2b-4905-9d0d-d278a05c9c56" />
