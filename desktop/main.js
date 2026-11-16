@@ -104,36 +104,7 @@ function scriptName(value) {
 }
 
 async function maybeUpdate() {
-  const contents = page();
-  if (!contents || contents.isDestroyed()) return;
-  if (!isSiteUrl(contents.getURL())) return;
-  try {
-    if (new URL(contents.getURL()).hostname !== new URL(link.url).hostname) {
-      contents.loadURL(pageUrl(link));
-      return;
-    }
-  } catch (_) {}
-  let remote = '';
-  try {
-    remote = await remoteScript();
-  } catch (_) {
-    return;
-  }
-  const remoteName = scriptName(remote);
-  if (!remoteName) return;
-  const localName = scriptName(loadedScript || await currentScript());
-  if (!localName || localName === remoteName) {
-    pendingUpdate = false;
-    return;
-  }
-  if (loadedScript === 'tried:' + remoteName) return;
-  if (await inCall()) {
-    pendingUpdate = true;
-    return;
-  }
-  pendingUpdate = false;
-  loadedScript = 'tried:' + remoteName;
-  contents.loadURL(pageUrl(link));
+  /* Do not reload the window while someone is using it. */
 }
 
 function showError() {
@@ -209,7 +180,6 @@ function createWindow() {
   mainWindow.on('unmaximize', sendChromeState);
   mainWindow.on('enter-full-screen', () => { barHeight = 0; layout(); });
   mainWindow.on('leave-full-screen', () => { barHeight = BAR; layout(); });
-  mainWindow.on('focus', () => { maybeUpdate(); });
   mainWindow.on('closed', () => {
     mainWindow = null;
     titleView = null;
@@ -387,15 +357,6 @@ if (gotLock) {
 
     buildMenu();
     createWindow();
-    setInterval(async () => {
-      if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
-      const moved = await refreshLink(true);
-      if (moved) openSite();
-      else maybeUpdate();
-    }, 10 * 60 * 1000);
-    setInterval(() => {
-      if (pendingUpdate) maybeUpdate();
-    }, 15000);
   });
 }
 

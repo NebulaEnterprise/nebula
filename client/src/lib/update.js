@@ -24,35 +24,5 @@ function reloadFresh() {
 }
 
 export function watchForUpdates() {
-  const current = runningBuild();
-  const dirty = new URL(location.href);
-  if (dirty.searchParams.has('_nebula')) {
-    dirty.searchParams.delete('_nebula');
-    const search = dirty.searchParams.toString();
-    history.replaceState(null, '', dirty.pathname + (search ? '?' + search : '') + dirty.hash);
-  }
-  if (!current) return;
-
-  let checking = false;
-  const check = async () => {
-    if (checking) return;
-    if (sessionStorage.getItem('nebula-reloaded') === '1') return;
-    checking = true;
-    try {
-      const url = new URL('index.html', document.baseURI);
-      url.searchParams.set('_check', String(Date.now()));
-      const res = await fetch(url.href, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } });
-      if (!res.ok) return;
-      const next = publishedBuild(await res.text());
-      if (!next || next === current) return;
-      sessionStorage.setItem('nebula-reloaded', '1');
-      reloadFresh();
-    } catch (_) {
-      /* keep the page up when the check cannot reach GitHub */
-    } finally {
-      checking = false;
-    }
-  };
-
-  setInterval(check, 120000);
+  /* Leave the open page alone. A new version loads the next time Nebula is opened. */
 }
