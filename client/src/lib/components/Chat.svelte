@@ -1469,10 +1469,10 @@
         {/if}
       </div>
       {#if ui.mode === 'dm'}
+        <time class="bubble-when">{clock(msg.createdAt)}{msg.editedAt ? ' · edited' : ''}</time>
         {#if mineMsg(msg) && !msg.pending && !msg.failed}
           <span class="ticks" aria-label="Sent"><Check size={13} /><Check size={13} /></span>
         {/if}
-        <time class="bubble-when">{clock(msg.createdAt)}{msg.editedAt ? ' · edited' : ''}</time>
       {/if}
     </article>
     {/if}
