@@ -28,7 +28,7 @@ Usernames remain in the file and anyone in a server can see them.
 
 ### Messages
 
-Messages are saved, and the saved copy is scrambled. Opening the message file shows nothing a person can read. People in the chat still see the messages. Photos and videos sent in a direct message or channel are saved scrambled, and people in that chat can still see them. Profile pictures and server icons stay visible.
+Messages are saved, and the saved copy is scrambled. Opening that copy shows nothing a person can read. People in the chat still see the messages. Photos and videos sent in a direct message or channel are saved scrambled in Cloudflare when the server has Cloudflare keys, and people in that chat can still see them. Profile pictures and server icons stay visible.
 
 ### Friends, direct messages, and servers
 

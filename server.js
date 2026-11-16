@@ -1081,9 +1081,11 @@ function save(file, data) {
 function saveNow(file, data) {
   dirtyFiles.set(file, data);
   const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, fileBody(file, data));
+  const body = fileBody(file, data);
+  fs.writeFileSync(tmp, body);
   fs.renameSync(tmp, file);
   dirtyFiles.delete(file);
+  if (file === MESSAGES_FILE) shipMessages(body);
 }
 async function flushSaves() {
   const batch = [...dirtyFiles.entries()];
@@ -1092,8 +1094,10 @@ async function flushSaves() {
   for (const [file, payload] of batch) {
     const tmp = file + '.tmp';
     try {
-      await fs.promises.writeFile(tmp, fileBody(file, payload));
+      const body = fileBody(file, payload);
+      await fs.promises.writeFile(tmp, body);
       await fs.promises.rename(tmp, file);
+      if (file === MESSAGES_FILE) shipMessages(body);
     } catch (_) {}
   }
   if (dirtyFiles.size) {
@@ -2220,6 +2224,90 @@ async function r2Put(cfg, key, body, type) {
   }
 }
 
+async function r2Get(cfg, key) {
+  const host = new URL(cfg.endpoint).host;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256hex(Buffer.alloc(0));
+  const encodedKey = key.split('/').map((part) => encodeURIComponent(part)).join('/');
+  const canonicalUri = '/' + cfg.bucket + '/' + encodedKey;
+  const headers = {
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const names = Object.keys(headers).sort();
+  const canonicalHeaders = names.map((name) => name + ':' + String(headers[name]).trim() + '\n').join('');
+  const signedHeaders = names.join(';');
+  const canonicalRequest = ['GET', canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = dateStamp + '/auto/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256hex(canonicalRequest)].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac('AWS4' + cfg.secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const authorization = 'AWS4-HMAC-SHA256 Credential=' + cfg.accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  const res = await fetch(cfg.endpoint + canonicalUri, {
+    method: 'GET',
+    headers: {
+      Authorization: authorization,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error('R2 ' + res.status + ' ' + detail.slice(0, 180));
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+function shipMessages(body) {
+  const cfg = r2Config();
+  if (!cfg || !body) return;
+  const bytes = Buffer.isBuffer(body) ? body : Buffer.from(body);
+  r2Put(cfg, 'sealed/messages.bin', bytes, 'application/octet-stream')
+    .then(() => { try { fs.unlinkSync(MESSAGES_FILE); } catch (_) {} })
+    .catch((err) => console.log('Could not store messages in the cloud. ' + (err.message || err)));
+}
+
+async function pullCloud() {
+  const cfg = r2Config();
+  if (!cfg) return;
+  try {
+    if (fs.existsSync(MESSAGES_FILE)) {
+      const buf = fs.readFileSync(MESSAGES_FILE);
+      const body = isSealedFile(buf) ? buf : sealJson(messages);
+      await r2Put(cfg, 'sealed/messages.bin', body, 'application/octet-stream');
+      fs.unlinkSync(MESSAGES_FILE);
+    } else {
+      const remote = await r2Get(cfg, 'sealed/messages.bin');
+      if (remote && isSealedFile(remote)) {
+        const data = openSealed(remote);
+        if (data && typeof data === 'object') messages = data;
+      }
+    }
+  } catch (err) {
+    console.log('Cloud messages stayed on this PC. ' + (err.message || err));
+  }
+  if (!fs.existsSync(UPLOAD_DIR)) return;
+  for (const name of fs.readdirSync(UPLOAD_DIR)) {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) continue;
+    const full = path.join(UPLOAD_DIR, name);
+    let buf;
+    try {
+      if (!fs.statSync(full).isFile()) continue;
+      buf = fs.readFileSync(full);
+    } catch (_) { continue; }
+    if (!isSealedFile(buf)) continue;
+    try {
+      await r2Put(cfg, 'sealed/uploads/' + name, buf, 'application/octet-stream');
+      fs.unlinkSync(full);
+    } catch (_) {
+      console.log('Cloud file stayed on this PC: ' + name);
+    }
+  }
+}
+
 function mediaType(name) {
   if (/\.gif$/i.test(name)) return 'image/gif';
   if (/\.png$/i.test(name)) return 'image/png';
@@ -2262,6 +2350,14 @@ async function storeUpload(buf, ext, scramble) {
   const stored = uuidv4() + ext;
   const body = scramble ? sealBytes(buf) : buf;
   const cfg = r2Config();
+  if (scramble && cfg) {
+    try {
+      await r2Put(cfg, 'sealed/uploads/' + stored, body, 'application/octet-stream');
+      return '/uploads/' + stored;
+    } catch (err) {
+      console.log('Cloud file store failed, kept on this PC. ' + (err.message || err));
+    }
+  }
   if (!cfg || scramble) {
     fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
     return '/uploads/' + stored;
@@ -3958,21 +4054,32 @@ function sendBytes(req, res, buf, type) {
   return res.end(slice);
 }
 
-app.use('/uploads', allowMedia, (req, res, next) => {
+app.use('/uploads', allowMedia, async (req, res, next) => {
   const full = safeUploadPath(req);
-  if (!full || !fs.existsSync(full)) return next();
-  let stored;
+  const name = full ? path.basename(full) : '';
+  if (full && fs.existsSync(full)) {
+    let stored;
+    try {
+      const stat = fs.statSync(full);
+      if (!stat.isFile()) return next();
+      stored = fs.readFileSync(full);
+    } catch (_) {
+      return next();
+    }
+    if (!isSealedFile(stored)) return next();
+    let plain;
+    try { plain = openSealedBytes(stored); } catch (_) { return res.status(404).end(); }
+    return sendBytes(req, res, plain, mediaType(full));
+  }
+  const cfg = r2Config();
+  if (!cfg || !name) return next();
   try {
-    const stat = fs.statSync(full);
-    if (!stat.isFile()) return next();
-    stored = fs.readFileSync(full);
+    const remote = await r2Get(cfg, 'sealed/uploads/' + name);
+    if (!remote || !isSealedFile(remote)) return next();
+    return sendBytes(req, res, openSealedBytes(remote), mediaType(name));
   } catch (_) {
     return next();
   }
-  if (!isSealedFile(stored)) return next();
-  let plain;
-  try { plain = openSealedBytes(stored); } catch (_) { return res.status(404).end(); }
-  return sendBytes(req, res, plain, mediaType(full));
 }, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=604800, immutable');
   next();
@@ -7268,7 +7375,7 @@ function listen() {
     console.log('  Frontend folder: ' + FRONTEND_DIR);
     console.log('  Users: ' + Object.keys(users).length);
     console.log('  Email: ' + GMAIL_USER);
-    console.log(r2Config() ? '  Pictures: Cloudflare R2' : '  Pictures: this PC (.env has no Cloudflare keys)');
+    console.log(r2Config() ? '  Scrambled chats: Cloudflare R2' : '  Scrambled chats: this PC (.env has no Cloudflare keys)');
     publishExistingMedia().catch((err) => console.log('  Cloudflare sync skipped: ' + (err.message || err)));
     console.log('  Checking GitHub for updates every 30s.');
     setInterval(() => { pullUpdates().catch(() => {}); }, 30000);
@@ -7286,4 +7393,6 @@ function listen() {
 }
 
 console.log('Nebula starting');
-setTimeout(listen, Number(process.env.NEBULA_RESTART_DELAY || 0));
+setTimeout(() => {
+  pullCloud().catch((err) => console.log('Cloud store skipped: ' + (err.message || err))).finally(listen);
+}, Number(process.env.NEBULA_RESTART_DELAY || 0));
