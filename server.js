@@ -1025,19 +1025,25 @@ function dataKey() {
 function isSealedFile(buf) {
   return Buffer.isBuffer(buf) && buf.length >= 32 && buf.subarray(0, 4).toString('utf8') === 'NEB1';
 }
-function sealJson(data) {
+function sealBytes(buf) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', dataKey(), iv);
-  const enc = Buffer.concat([cipher.update(JSON.stringify(data), 'utf8'), cipher.final()]);
+  const enc = Buffer.concat([cipher.update(buf), cipher.final()]);
   return Buffer.concat([Buffer.from('NEB1'), iv, cipher.getAuthTag(), enc]);
 }
-function openSealed(buf) {
+function openSealedBytes(buf) {
   const iv = buf.subarray(4, 16);
   const tag = buf.subarray(16, 32);
   const enc = buf.subarray(32);
   const decipher = crypto.createDecipheriv('aes-256-gcm', dataKey(), iv);
   decipher.setAuthTag(tag);
-  return JSON.parse(Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8'));
+  return Buffer.concat([decipher.update(enc), decipher.final()]);
+}
+function sealJson(data) {
+  return sealBytes(Buffer.from(JSON.stringify(data), 'utf8'));
+}
+function openSealed(buf) {
+  return JSON.parse(openSealedBytes(buf).toString('utf8'));
 }
 function fileBody(file, data) {
   return sealedFiles.has(file) ? sealJson(data) : JSON.stringify(data);
@@ -1692,7 +1698,47 @@ function requireGuild(req, res, perm, channel) {
   return g;
 }
 
+function uploadName(url) {
+  const match = String(url || '').match(/\/uploads\/([A-Za-z0-9._-]+)$/);
+  return match ? match[1] : '';
+}
+
+function sealChatUploads() {
+  const visible = new Set();
+  const keep = (url) => {
+    const name = uploadName(url);
+    if (name) visible.add(name);
+  };
+  for (const user of Object.values(users)) {
+    if (!user) continue;
+    keep(user.avatarUrl);
+    keep(user.bannerUrl);
+    keep(user.songFile);
+    for (const row of [...(user.gallery || []), ...(user.stories || [])]) keep(row && row.url);
+  }
+  for (const server of Object.values((guilds && guilds.servers) || {})) keep(server && server.iconUrl);
+  for (const group of Object.values(groups || {})) keep(group && group.iconUrl);
+  const chat = new Set();
+  for (const list of Object.values(messages)) {
+    if (!Array.isArray(list)) continue;
+    for (const msg of list) {
+      for (const file of (msg && msg.files) || []) {
+        const name = uploadName(file && file.url) || uploadName(file && file.poster);
+        if (name && !visible.has(name) && !name.startsWith('song-')) chat.add(name);
+      }
+    }
+  }
+  for (const name of chat) {
+    const full = path.join(UPLOAD_DIR, name);
+    if (!fs.existsSync(full)) continue;
+    const buf = fs.readFileSync(full);
+    if (!buf.length || isSealedFile(buf)) continue;
+    fs.writeFileSync(full, sealBytes(buf));
+  }
+}
+
 ensureGuilds();
+sealChatUploads();
 
 const BADGE_DEFS = {
   early: { id: 'early', label: 'Early Supporter', color: '#d7c6ff', icon: 'moon' },
@@ -2212,11 +2258,12 @@ async function saveProfileFile(user, slot, buf, ext) {
   return { path: user[pathKey], url };
 }
 
-async function storeUpload(buf, ext) {
+async function storeUpload(buf, ext, scramble) {
   const stored = uuidv4() + ext;
+  const body = scramble ? sealBytes(buf) : buf;
   const cfg = r2Config();
-  if (!cfg) {
-    fs.writeFileSync(path.join(UPLOAD_DIR, stored), buf);
+  if (!cfg || scramble) {
+    fs.writeFileSync(path.join(UPLOAD_DIR, stored), body);
     return '/uploads/' + stored;
   }
   const key = 'uploads/' + stored;
@@ -3816,7 +3863,7 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
     if (blocked.has(ext)) return res.status(400).json({ error: 'That file type is blocked' });
     let url = '';
     try {
-      url = await storeUpload(body, ext);
+      url = await storeUpload(body, ext, String(req.query.chat || '') === '1');
     } catch (err) {
       return res.status(502).json({ error: 'Cloudflare rejected that file. ' + (err.message || 'Upload failed') });
     }
@@ -3874,7 +3921,59 @@ app.use('/files', allowMedia, (req, res, next) => {
   res.sendFile(file);
 }, express.static(FILES_DIR, { maxAge: '365d', immutable: true, acceptRanges: true }));
 
+function safeUploadPath(req) {
+  const rel = decodeURIComponent(String(req.path || '').split('?')[0]).replace(/^\/+/, '');
+  if (!rel || rel.includes('..') || rel.includes('/') || rel.includes('\\')) return '';
+  if (!/^[A-Za-z0-9._-]+$/.test(rel)) return '';
+  const full = path.resolve(UPLOAD_DIR, rel);
+  if (full !== UPLOAD_DIR && !full.startsWith(UPLOAD_DIR + path.sep)) return '';
+  return full;
+}
+
+function sendBytes(req, res, buf, type) {
+  const total = buf.length;
+  res.set('Content-Type', type);
+  res.set('Accept-Ranges', 'bytes');
+  res.set('Cache-Control', 'private, max-age=604800');
+  const header = String(req.headers.range || '');
+  const match = header.match(/bytes=(\d*)-(\d*)/);
+  if (!match) {
+    res.set('Content-Length', String(total));
+    if (req.method === 'HEAD') return res.end();
+    return res.end(buf);
+  }
+  let start = match[1] ? Number(match[1]) : 0;
+  let end = match[2] ? Number(match[2]) : total - 1;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= total) {
+    res.status(416);
+    res.set('Content-Range', 'bytes */' + total);
+    return res.end();
+  }
+  end = Math.min(end, total - 1);
+  const slice = buf.subarray(start, end + 1);
+  res.status(206);
+  res.set('Content-Range', 'bytes ' + start + '-' + end + '/' + total);
+  res.set('Content-Length', String(slice.length));
+  if (req.method === 'HEAD') return res.end();
+  return res.end(slice);
+}
+
 app.use('/uploads', allowMedia, (req, res, next) => {
+  const full = safeUploadPath(req);
+  if (!full || !fs.existsSync(full)) return next();
+  let stored;
+  try {
+    const stat = fs.statSync(full);
+    if (!stat.isFile()) return next();
+    stored = fs.readFileSync(full);
+  } catch (_) {
+    return next();
+  }
+  if (!isSealedFile(stored)) return next();
+  let plain;
+  try { plain = openSealedBytes(stored); } catch (_) { return res.status(404).end(); }
+  return sendBytes(req, res, plain, mediaType(full));
+}, (req, res, next) => {
   res.set('Cache-Control', 'public, max-age=604800, immutable');
   next();
 }, express.static(UPLOAD_DIR, {

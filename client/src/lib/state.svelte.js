@@ -2195,7 +2195,8 @@ export async function sendFiles(list) {
       const blob = files[i].file;
       if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
       report(i, 5);
-      const data = await uploadFile(blob, (n) => report(i, Math.max(5, n)), files[i].name || blob.name || 'file');
+      const label = files[i].name || blob.name || 'file';
+      const data = await uploadFile(blob, (n) => report(i, Math.max(5, n)), label, '/api/upload?slot=file&chat=1&name=' + encodeURIComponent(label));
       if (!data.url) throw new Error('The file did not upload');
       saved.push({
         url: data.url,
