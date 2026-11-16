@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal } from '@lucide/svelte';
+  import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal, UserPlus, Users, Search } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, peekProfile, friendAct, toast } from '../state.svelte.js';
@@ -17,6 +17,10 @@
     window.addEventListener('click', close);
     return () => window.removeEventListener('click', close);
   });
+
+  const onlineFriends = $derived((ui.friends || []).filter((u) => presenceDot(u, nowClock.t) !== 'offline'));
+  const offlineFriends = $derived((ui.friends || []).filter((u) => presenceDot(u, nowClock.t) === 'offline'));
+  const showSide = $derived(ui.mode === 'friends' && (ui.friendsTab === 'all' || ui.friendsTab === 'online' || ui.friendsTab === 'suggested'));
 
   const list = $derived.by(() => {
     let rows = ui.friendsTab === 'blocked' ? ui.blocked : ui.friendsTab === 'suggested' ? ui.suggested : ui.friends;
@@ -62,24 +66,33 @@
   }
 </script>
 
-<div class="friends-bar">
-  <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
-  <div class="tabs">
-    <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'online'} onclick={() => showFriends('online')}>Online</button>
-    <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'all'} onclick={() => showFriends('all')}>All</button>
-    <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'pending'} onclick={() => showFriends('pending')}>
+<div class="pal">
+<div class="pal-main">
+  <header class="pal-top">
+    <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
+    <div>
+      <h1><Users size={22} /> Friends</h1>
+      <p>Manage your friends and see what they are up to.</p>
+    </div>
+    <button type="button" class="hub-create" onclick={showAddFriend}><UserPlus size={16} /> Add friend</button>
+  </header>
+  <div class="pal-pills">
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'all'} onclick={() => showFriends('all')}><Users size={14} /> All friends</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'online'} onclick={() => showFriends('online')}>Online</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'pending'} onclick={() => showFriends('pending')}>
       Pending
-      {#if ui.incoming.length}<em class="tab-count">{ui.incoming.length > 99 ? '99+' : ui.incoming.length}</em>{/if}
+      {#if ui.incoming.length}<em>{ui.incoming.length > 99 ? '99+' : ui.incoming.length}</em>{/if}
     </button>
-    <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'blocked'} onclick={() => showFriends('blocked')}>Blocked</button>
-    <button class="tab" class:on={ui.mode === 'friends' && ui.friendsTab === 'suggested'} onclick={() => showFriends('suggested')}>Suggested</button>
-    <button class="tab add" class:on={ui.mode === 'add'} onclick={showAddFriend}>Add friend</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'blocked'} onclick={() => showFriends('blocked')}>Blocked</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'suggested'} onclick={() => showFriends('suggested')}>Suggested</button>
+    <button type="button" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}>Find</button>
   </div>
   {#if ui.mode === 'friends' && ui.friendsTab !== 'pending'}
-    <input class="search" placeholder={ui.friendsTab === 'find' ? 'Find a username' : 'Search'} bind:value={q} oninput={() => { if (ui.friendsTab === 'find') findPeople(); }} />
+    <label class="hub-search">
+      <Search size={16} />
+      <input placeholder={ui.friendsTab === 'find' ? 'Find a username' : 'Search friends...'} bind:value={q} oninput={() => { if (ui.friendsTab === 'find') findPeople(); }} />
+    </label>
   {/if}
-</div>
-
 <div class="friends-body">
   {#if ui.mode === 'add'}
     <div class="add-box">
@@ -185,4 +198,38 @@
       </div>
     {/if}
   {/if}
+</div>
+</div>
+{#if showSide}
+  <aside class="pal-side">
+    <div class="pal-block">
+      <h2><i class="on"></i> Online — {onlineFriends.length}</h2>
+      {#each onlineFriends.slice(0, 8) as u (u.id)}
+        <button type="button" class="pal-person" onclick={() => openDm(u)}>
+          <Avatar user={u} size={36} />
+          <span><strong><Name user={u} /></strong><small>{seenPhrase(u, nowClock.t)}</small></span>
+        </button>
+      {:else}
+        <p class="hint">Nobody is online.</p>
+      {/each}
+    </div>
+    <div class="pal-block">
+      <h2><i></i> Offline — {offlineFriends.length}</h2>
+      {#each offlineFriends.slice(0, 6) as u (u.id)}
+        <button type="button" class="pal-person" onclick={() => openDm(u)}>
+          <Avatar user={u} size={36} />
+          <span><strong><Name user={u} /></strong><small>{seenPhrase(u, nowClock.t)}</small></span>
+        </button>
+      {:else}
+        <p class="hint">No one offline.</p>
+      {/each}
+    </div>
+    <div class="pal-invite">
+      <img src="./look/ring.png" alt="" />
+      <strong>Add more friends</strong>
+      <p>Grow your community on Nebula.</p>
+      <button type="button" onclick={() => showFriends('find')}>Invite friends</button>
+    </div>
+  </aside>
+{/if}
 </div>

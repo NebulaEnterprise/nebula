@@ -3,6 +3,7 @@ import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGatewa
 import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM } from './format.js';
+import { rememberServer } from './serverface.js';
 import { ensureBox, openSeal, sealFile, sealText } from './seal.js';
 
 export const nowClock = $state({ t: Date.now() });
@@ -671,7 +672,7 @@ export async function loadDms() {
 }
 
 function onDmSide() {
-  return ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'dm' || ui.mode === 'group' || !!ui.quickOpen;
+  return ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'messages' || ui.mode === 'servers' || ui.mode === 'discover' || !!ui.quickOpen;
 }
 
 function refreshVoiceList() {
@@ -696,6 +697,45 @@ export function showFriends(tab) {
     loadGroups();
     refreshVoiceList();
   }
+  phoneChat();
+}
+
+export function showMessages() {
+  leaveChat();
+  ui.readHold = '';
+  ui.mode = 'messages';
+  ui.dmUser = null;
+  ui.group = null;
+  ui.thread = null;
+  ui.dock = '';
+  ui.menuOpen = false;
+  applyTheme();
+  phoneBrowse();
+}
+
+export function showServers() {
+  leaveChat();
+  ui.readHold = '';
+  ui.mode = 'servers';
+  ui.dmUser = null;
+  ui.group = null;
+  ui.thread = null;
+  ui.dock = '';
+  ui.menuOpen = false;
+  applyTheme();
+  phoneChat();
+}
+
+export function showDiscover() {
+  leaveChat();
+  ui.readHold = '';
+  ui.mode = 'discover';
+  ui.dmUser = null;
+  ui.group = null;
+  ui.thread = null;
+  ui.dock = '';
+  ui.menuOpen = false;
+  applyTheme();
   phoneChat();
 }
 
@@ -942,6 +982,7 @@ export async function openServer(id, opts = {}) {
     showCached(known ? 'ch:' + known : '');
   }
   if (voiceLeave) import('./voice.js').then((mod) => mod.leaveVoice()).catch(() => {});
+  rememberServer(ui.serverId);
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
   ui.channels = data.channels || [];
   if (data.servers) ui.servers = data.servers;

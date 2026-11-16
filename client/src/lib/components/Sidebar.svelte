@@ -1,6 +1,6 @@
 <script>
   import {
-    ChevronDown, Hash, Volume2, Plus, Users, UserPlus, Settings, LogOut, Check, Search, X, Inbox as InboxIcon, MessageSquare,
+    ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Check, Search, X, Inbox as InboxIcon, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
     Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight, Monitor,
   } from '@lucide/svelte';
@@ -16,14 +16,36 @@
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity, phoneChat } from '../state.svelte.js';
+  import { serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
-  const requestCount = $derived((ui.incoming || []).length);
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
   const inboxBadge = $derived(mentionCount + (ui.incoming || []).length + (ui.missedCalls || []).length);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   function countLabel(n) { return n > 99 ? '99+' : String(n); }
+  let dmQuery = $state('');
+  const serverRow = $derived((ui.servers || []).find((server) => server.id === ui.serverId) || {});
+  const face = $derived(serverFace({
+    ...serverRow,
+    ...(ui.serverMeta || {}),
+    icon: ui.serverMeta?.icon || serverRow.icon,
+    iconUrl: ui.serverMeta?.iconUrl || serverRow.iconUrl,
+    color: ui.serverMeta?.color || serverRow.color,
+    name: ui.serverMeta?.name || serverRow.name,
+  }));
+
+  function dmWhen(ts) {
+    const n = Number(ts) || 0;
+    if (!n) return '';
+    const d = new Date(n);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const yest = new Date(now);
+    yest.setDate(now.getDate() - 1);
+    if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday: 'short' });
+  }
 
   function channelsIn(cat, type) {
     return ui.channels.filter((c) => c.type === type && (c.categoryId || '') === cat.id);
@@ -167,8 +189,14 @@
   }
 </script>
 
-<aside class="side">
+<aside class="side" class:with-hero={ui.mode === 'chat'} class:inbox-side={ui.mode !== 'chat'}>
   {#if ui.mode === 'chat'}
+    <div class="srv-hero">
+      <img src="./look/sky.png" alt="" />
+      <span class="srv-hero-face" style="--srv:{face.color}">
+        {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
+      </span>
+    </div>
     <div class="side-head">
       <div class="side-title">
         <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
@@ -262,24 +290,22 @@
       {/each}
     </div>
   {:else}
-    <div class="side-head">
-      <span>Direct messages</span>
+    <div class="msg-head">
+      <span>Messages</span>
+      <button type="button" title="New group" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /></button>
     </div>
+    <label class="msg-search">
+      <Search size={15} />
+      <input placeholder="Search DMs..." bind:value={dmQuery} />
+    </label>
     <div class="scroll">
-      <button class="nav-item" class:on={ui.mode === 'friends' && ui.friendsTab !== 'find'} onclick={() => { showFriends('online'); phoneChat(); }}>
-        <Users size={16} />
-        <span>Friends</span>
-        {#if requestCount}<em class="pill-count" title="Friend requests">{countLabel(requestCount)}</em>{/if}
-      </button>
-      <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => { showFriends('find'); phoneChat(); }}><Search size={16} /> Find people</button>
-      <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
-      <div class="cat"><span>direct messages</span></div>
       {#each ui.groups || [] as group (group.id)}
-        {#if !chatClosed('group:' + group.id, group.lastId)}
-          <div class="dm-item" role="button" tabindex="0" class:on={ui.group?.id === group.id} onclick={() => openGroup(group)} onkeydown={(e) => { if (e.key === 'Enter') openGroup(group); }}>
+        {#if !chatClosed('group:' + group.id, group.lastId) && (!dmQuery.trim() || (group.name || '').toLowerCase().includes(dmQuery.trim().toLowerCase()))}
+          <div class="dm-item msg-row" role="button" tabindex="0" class:on={ui.group?.id === group.id} onclick={() => openGroup(group)} onkeydown={(e) => { if (e.key === 'Enter') openGroup(group); }}>
             <span class="group-mark">{(group.name || 'G').slice(0, 1)}</span>
             <span class="dm-copy">
-              <span class="ch-name">{group.name}</span>
+              <span class="msg-top"><span class="ch-name">{group.name}</span></span>
+              <span class="msg-preview">Group</span>
             </span>
             <button class="dm-x" title="Close" onclick={(e) => { e.stopPropagation(); closeConversation('group:' + group.id, group.lastId); }}><X size={14} /></button>
           </div>
@@ -290,15 +316,19 @@
         if (pin) return pin;
         return (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0);
       }) as dm (dm.id)}
-        {#if dm.other && (!chatClosed('dm:' + dm.other.id, dm.lastId) || ui.activity.dms[dm.other.id])}
+        {#if dm.other && (!dmQuery.trim() || ((dm.other.displayName || '') + ' ' + (dm.other.username || '')).toLowerCase().includes(dmQuery.trim().toLowerCase())) && (!chatClosed('dm:' + dm.other.id, dm.lastId) || ui.activity.dms[dm.other.id])}
           {@const note = ui.activity.dms[dm.other?.id]}
-          <div class="dm-item" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
-            <Avatar user={dm.other} size={28} />
+          <div class="dm-item msg-row" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
+            <Avatar user={dm.other} size={42} />
             <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other) || !!(ui.dmTyping && ui.dmTyping[dm.other.id])}>
-              <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
-              {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="dm-share">is typing...</span>
-              {:else if dmSharing(dm.other)}<span class="dm-share">Sharing their screen</span>
-              {:else if partnerInCall(dm.other)}<span class="dm-share">In a call</span>{/if}
+              <span class="msg-top">
+                <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>
+                <time>{dmWhen(dm.updatedAt)}</time>
+              </span>
+              {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="msg-preview">is typing...</span>
+              {:else if dmSharing(dm.other)}<span class="msg-preview">Sharing their screen</span>
+              {:else if partnerInCall(dm.other)}<span class="msg-preview">In a call</span>
+              {:else}<span class="msg-preview">{dm.preview || 'No messages yet'}</span>{/if}
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}

@@ -9,6 +9,9 @@
   import Chat from './lib/components/Chat.svelte';
   import Members from './lib/components/Members.svelte';
   import Friends from './lib/components/Friends.svelte';
+  import ServersHome from './lib/components/ServersHome.svelte';
+  import Discover from './lib/components/Discover.svelte';
+  import DmSide from './lib/components/DmSide.svelte';
   import Popout from './lib/components/Popout.svelte';
   import UserSettings from './lib/components/UserSettings.svelte';
   import ServerSettings from './lib/components/ServerSettings.svelte';
@@ -135,16 +138,28 @@
     <Home />
   {/if}
 {:else}
-  <div class="shell" class:phone-browse={ui.phone === 'browse'} class:phone-chat={ui.phone === 'chat'} class:phone-people={ui.phone === 'people'}>
+  <div class="shell" class:directory={ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'servers' || ui.mode === 'discover'} class:phone-browse={ui.phone === 'browse'} class:phone-chat={ui.phone === 'chat'} class:phone-people={ui.phone === 'people'}>
     <Rail />
     <Sidebar />
     <main class="main">
       {#if ui.mode === 'friends' || ui.mode === 'add'}
         <Friends />
+      {:else if ui.mode === 'servers'}
+        <ServersHome />
+      {:else if ui.mode === 'discover'}
+        <Discover />
+      {:else if ui.mode === 'messages'}
+        <div class="pick-chat">
+          <strong>Pick a conversation</strong>
+          <p>Choose someone from Messages, or add a friend and say hi.</p>
+        </div>
       {:else}
         <Chat />
       {/if}
     </main>
+    {#if ui.mode === 'dm' && ui.dmUser}
+      <DmSide />
+    {/if}
     {#if (ui.mode === 'chat' || ui.mode === 'thread') && ui.showMembers !== false}
       <Members />
     {/if}
