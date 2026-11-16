@@ -107,7 +107,7 @@ The setup messages that connect the two browsers (the offer, the answer, and the
 
 The server still knows who joined a call and when. The network path between the two devices is still visible to ngrok, the router, and the internet provider. Nebula does not write IP addresses into its own files. A session row stores the label **Signed-in session**, a time, and a SHA-256 of the login token. It does not store a computer name or a browser string.
 
-## What the server can open
+## What we can see
 
 After the disk seal is open, the running server can see:
 
@@ -132,11 +132,7 @@ Three cases still reveal chats:
 - A server listed in Discover can be read by joining the published link. The key is part of that listing on purpose.
 - The page in the browser is what locks and unlocks chats. Replacing the published website replaces that page, so the new page can ask for the secret. A hash pinned to the old script does not stop the person who publishes the site.
 
-## Account page
 
-Email is masked until the eye button. Edit still changes it.
-
-Recovery is one row, the same shape as Logged in. Opening it asks for the account password. Show secret checks that password, returns the wrapped copy, and the browser decrypts it. Passphrase and Recovery code are the two ways to replace it. Saving checks the password, wraps the vault with the new secret, and stores a new password-wrapped copy.
 
 <img width="1911" height="1080" alt="r2-1794477087019-uzrgmbheg3wios2p1ahq-t" src="https://github.com/user-attachments/assets/434bf1a0-2857-435b-a4ec-3bae2c8a57c2" />
 
