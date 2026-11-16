@@ -1,5 +1,5 @@
 <script>
-  import { Compass, MessageSquare, Settings, Sparkles, Users } from '@lucide/svelte';
+  import { Compass, MessageSquare, Settings, Users } from '@lucide/svelte';
   import { ui, openServer, showFriends, openDm, phoneBrowse } from '../state.svelte.js';
 
   const onChats = $derived(ui.mode === 'dm' || ui.mode === 'group');
@@ -56,7 +56,7 @@
 
 <aside class="rail">
   <button class="rail-logo" title="Nebula" onclick={chats}>
-    <Sparkles size={22} />
+    <img src="./logo.webp?v=3" alt="" />
   </button>
   <button class="rail-tab" class:on={onChats} title="Chats" onclick={chats}>
     <MessageSquare size={22} />
