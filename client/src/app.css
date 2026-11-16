@@ -113,29 +113,34 @@ img { max-width: 100%; }
 .shell { height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden; }
 .rail {
   --bg-rail: #0e0d12;
-  width: 76px; background: #0e0d12; display: flex; flex-direction: column;
-  align-items: center; gap: 8px; padding: 16px 0 14px; flex-shrink: 0;
+  width: 72px; background: #0e0d12; display: flex; flex-direction: column;
+  align-items: center; gap: 10px; padding: 14px 0 12px; flex-shrink: 0; overflow: hidden;
 }
-.rail-logo, .rail-tab {
-  width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center;
-  color: #b7a8c9; background: transparent; position: relative;
+.rail-logo, .rail-tab, .rail-srv {
+  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+  flex-shrink: 0; color: #b7a8c9; background: transparent; position: relative;
 }
 .rail-logo { margin-bottom: 6px; padding: 0; overflow: hidden; background: #1b1722; }
 .rail-logo img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .rail-logo:hover, .rail-tab:hover { color: #f4f0ff; background: rgba(255, 255, 255, 0.04); }
 .rail-tab.on { color: #f7f4ff; background: #2a2433; }
 .rail-tab.on:hover { background: #322b3d; }
-.rail-line { width: 28px; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.22); margin: 6px 0; }
+.rail-line { width: 32px; height: 1px; flex-shrink: 0; background: rgba(255, 255, 255, 0.16); }
 .rail-servers {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
+  flex: 1; width: 100%; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  overflow-x: hidden; overflow-y: auto; scrollbar-width: none; padding: 2px 0 6px;
 }
-.rail-servers::-webkit-scrollbar { display: none; }
+.rail-servers::-webkit-scrollbar { width: 0; height: 0; }
 .rail-srv {
-  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; position: relative;
-  background: color-mix(in srgb, var(--srv, #a78bfa) 48%, #1b1722); color: #fff; font-weight: 700;
+  background: color-mix(in srgb, var(--srv, #7c6af7) 55%, #241c33);
+  color: #fff; font-size: 15px; font-weight: 700; border: 2px solid transparent;
 }
-.rail-srv.on { box-shadow: 0 0 0 2px #eadfff; }
+.rail-srv:hover { filter: brightness(1.12); }
+.rail-srv.on { border-color: #f3e9ff; border-radius: 12px; }
+.rail-join {
+  background: transparent; color: #b7a8c9; border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+.rail-join:hover { color: #fff; background: rgba(255, 255, 255, 0.05); filter: none; }
 .rail-spacer { flex: 1; width: 100%; }
 .rail-gear, .rail-gear:hover { background: transparent; }
 .rail-gear:hover { background: rgba(255, 255, 255, 0.04); }

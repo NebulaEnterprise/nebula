@@ -64,11 +64,15 @@
     <Users size={22} />
     {#if peopleUnread}<em class="rail-count">{count(peopleUnread)}</em>{/if}
   </button>
-  <hr class="rail-line" />
+  <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
+    <Compass size={22} />
+  </button>
+  <div class="rail-line"></div>
   <div class="rail-servers">
     {#each ui.servers as server (server.id)}
       {@const note = ui.activity.servers[server.id]}
       <button
+        type="button"
         class="rail-srv"
         class:on={ui.mode === 'chat' && ui.serverId === server.id}
         title={server.name}
@@ -79,13 +83,10 @@
         {#if note?.mentions}<em class="rail-count">{count(note.mentions)}</em>{/if}
       </button>
     {/each}
-    <button class="rail-tab" title="Join a server" onclick={() => (ui.dialog = { kind: 'add-server' })}>
-      <Plus size={20} />
+    <button type="button" class="rail-srv rail-join" title="Join a server" onclick={() => (ui.dialog = { kind: 'add-server' })}>
+      <Plus size={18} />
     </button>
   </div>
-  <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
-    <Compass size={22} />
-  </button>
   <div class="rail-spacer"></div>
   <button class="rail-tab rail-gear" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
     <Settings size={22} />
