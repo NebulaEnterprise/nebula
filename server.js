@@ -1522,13 +1522,26 @@ function cleanSlug(value) {
 }
 
 function inviteCode() {
-  for (let i = 0; i < 6; i += 1) {
-    const code = crypto.randomBytes(4).toString('hex');
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  for (let i = 0; i < 8; i += 1) {
+    const bytes = crypto.randomBytes(9);
+    let code = '';
+    for (let n = 0; n < bytes.length; n += 1) code += alphabet[bytes[n] % alphabet.length];
+    const want = code.toLowerCase();
+    if (RESERVED_LINKS.has(want)) continue;
     const taken = Object.values(guilds.servers || {}).some((g) =>
-      (g.vanity && String(g.vanity).toLowerCase() === code) || (g.invites && g.invites[code]));
+      (g.vanity && String(g.vanity).toLowerCase() === want) ||
+      (g.invites && Object.keys(g.invites).some((item) => String(item).toLowerCase() === want)));
     if (!taken) return code;
   }
   return crypto.randomBytes(6).toString('hex');
+}
+
+function inviteRecordKey(g, key) {
+  if (!g || !g.invites || !key) return '';
+  if (g.invites[key]) return key;
+  const want = String(key).toLowerCase();
+  return Object.keys(g.invites).find((code) => String(code).toLowerCase() === want) || '';
 }
 
 function findByInvite(slug) {
@@ -1538,7 +1551,7 @@ function findByInvite(slug) {
     if (g.vanity && String(g.vanity).toLowerCase() === key) return g;
   }
   for (const g of Object.values(guilds.servers || {})) {
-    if (g.invites && g.invites[key]) return g;
+    if (inviteRecordKey(g, key)) return g;
   }
   return null;
 }
@@ -4877,7 +4890,8 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
       return res.json({ ok: true, pending: true, server: publicServer(found, req.user) });
     }
     found.members[req.user.id] = { roles: ['everyone'], joinedAt: new Date().toISOString(), onboarded: !found.onboarding.enabled };
-    if (found.invites && found.invites[code]) found.invites[code].uses = (found.invites[code].uses || 0) + 1;
+    const inviteKey = inviteRecordKey(found, code);
+    if (inviteKey) found.invites[inviteKey].uses = (found.invites[inviteKey].uses || 0) + 1;
     audit(found, req.user, 'joined the server');
     saveGuilds();
     wakeGuild(found);

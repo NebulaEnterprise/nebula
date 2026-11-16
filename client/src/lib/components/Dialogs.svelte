@@ -250,7 +250,7 @@
           toast('Server created. Invite link copied.');
           await openServer(data.server.id);
         })}>Create</button>
-        <div class="field" style="margin-top:18px"><label>Join with an invite link</label><input bind:value={code} maxlength="120" placeholder="https://…/invite/nebula" /></div>
+        <div class="field" style="margin-top:18px"><label>Join with an invite link</label><input bind:value={code} maxlength="120" placeholder="https://nebulaapp.space/nebula" /></div>
         <button class="btn" disabled={busy} onclick={() => go(async () => {
           const slug = inviteSlug(code);
           if (!slug) throw new Error('Paste an invite link');

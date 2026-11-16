@@ -2,7 +2,7 @@ import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandle
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
-import { PERM } from './format.js';
+import { PERM, inviteCodeFromUrl, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
 import { ensureBox, localKeys, openSeal, saveKeys, sealFile, sealText } from './seal.js';
 
@@ -419,10 +419,7 @@ export async function cancelAdd() {
 }
 
 function pendingInvite() {
-  const path = window.location.pathname || '';
-  const match = path.match(/\/invite\/([a-z0-9_-]+)/i);
-  if (match) return match[1].toLowerCase();
-  return (new URLSearchParams(window.location.search).get('invite') || '').toLowerCase();
+  return (inviteCodeFromUrl(window.location.href) || '').toLowerCase();
 }
 
 export async function openSharedLink() {
@@ -1859,10 +1856,7 @@ function looksLikeLink(content) {
 }
 
 function withoutInvites(content) {
-  return String(content || '')
-    .replace(/https?:\/\/\S*[?&]invite=[a-z0-9_-]+/gi, ' ')
-    .replace(/https?:\/\/\S*\/invite\/[a-z0-9_-]+/gi, ' ')
-    .replace(/(?:^|[\s(])invite\/[a-z0-9_-]+/gi, ' ');
+  return stripInviteText(content);
 }
 
 function shareProblem(content, files, people, where) {

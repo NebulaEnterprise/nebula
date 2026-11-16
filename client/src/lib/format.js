@@ -73,7 +73,8 @@ export function formatContent(text, emoji, stickers, namesList) {
     } catch (_) {
       return url;
     }
-    links.push(href);
+    const code = inviteCodeFromUrl(href);
+    links.push(code ? inviteLink(code) : href);
     return '\u0000URL' + (links.length - 1) + '\u0000' + url.slice(body.length);
   });
   let html = escapeHtml(raw);
@@ -127,38 +128,75 @@ export function visibleBadges(user) {
 
 export const TAG_ICONS = ['⚡', '💜', '💎', '🔥', '🌸', '💧', '💙', '🍃', '❤️', '💖', '⭐', '👑', '💀', '👻', '🌙', '☀️', '✨', '🍄', '🐾', '🎵', '🎮', '⚔️', '🛡️', '🐱', '🐰', '☁️', '🌈', '❄️', '🎃', '🦋', '🐟', '🪐', '🍀', '♥', '★', '☆', '♡', '✦'];
 
+export const SITE_ORIGIN = 'https://nebulaapp.space';
+
+const INVITE_SKIP = new Set(['api', 'assets', 'files', 'uploads', 'index', 'index.html', 'sw', 'sw.js', 'look', 'invite', 'favicon.png', 'favicon.svg', 'icons.svg', 'logo.webp', 'space.jpg', 'voice.js', 'server.js', '404.html']);
+
+function inviteHost(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/\.$/, '');
+  return host === 'nebulaapp.space' || host === 'www.nebulaapp.space' || host === 'nebulaspace.lol' || host === 'www.nebulaspace.lol';
+}
+
+export function inviteCodeFromUrl(input) {
+  const text = String(input || '').trim();
+  if (!text) return '';
+  const query = text.match(/[?&]invite=([A-Za-z0-9_-]+)/i);
+  if (query) return query[1];
+  const nested = text.match(/\/invite\/([A-Za-z0-9_-]+)/i);
+  if (nested) return nested[1];
+  try {
+    const parsed = new URL(text, SITE_ORIGIN);
+    if (!inviteHost(parsed.hostname)) return '';
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    if (parts.length !== 1) return '';
+    const code = parts[0];
+    if (!/^[A-Za-z0-9_-]{2,32}$/.test(code) || code.includes('.')) return '';
+    if (INVITE_SKIP.has(code.toLowerCase())) return '';
+    return code;
+  } catch (_) {
+    return '';
+  }
+}
+
 export function inviteLink(slug) {
-  const clean = String(slug || '').trim();
-  if (!clean) return '';
-  if (/^https?:\/\//i.test(clean)) return clean;
-  const code = clean.replace(/^\/+|\/+$/g, '').replace(/^invite\//i, '');
-  const url = new URL(window.location.href);
-  url.hash = '';
-  if (url.pathname.endsWith('/index.html')) url.pathname = url.pathname.slice(0, -'index.html'.length);
-  const backend = url.searchParams.get('backend');
-  url.search = '';
-  if (backend) url.searchParams.set('backend', backend);
-  url.searchParams.set('invite', code);
-  return url.toString();
+  const raw = String(slug || '').trim();
+  if (!raw) return '';
+  const picked = inviteCodeFromUrl(raw) || raw.replace(/^\/+|\/+$/g, '').replace(/^invite\//i, '').split(/[?#]/)[0];
+  const code = String(picked || '').replace(/[^A-Za-z0-9_-]/g, '');
+  if (!code) return '';
+  return SITE_ORIGIN + '/' + code;
 }
 
 export function inviteSlugs(input) {
   const text = String(input || '');
   const found = new Set();
-  for (const match of text.matchAll(/[?&]invite=([a-z0-9_-]+)/gi)) found.add(match[1].toLowerCase());
-  for (const match of text.matchAll(/invite\/([a-z0-9_-]+)/gi)) found.add(match[1].toLowerCase());
+  for (const match of text.matchAll(/https?:\/\/[^\s]+/gi)) {
+    const body = match[0].replace(/[.,!?;:'"]+$/g, '');
+    const code = inviteCodeFromUrl(body);
+    if (code) found.add(code.toLowerCase());
+  }
+  for (const match of text.matchAll(/(?:^|[\s(])invite\/([A-Za-z0-9_-]+)/gi)) found.add(match[1].toLowerCase());
   return [...found];
 }
 
 export function inviteSlug(input) {
+  const fromUrl = inviteCodeFromUrl(input);
+  if (fromUrl) return fromUrl.toLowerCase();
   const text = String(input || '').trim();
-  if (!text) return '';
-  const query = text.match(/[?&]invite=([a-z0-9_-]+)/i);
-  if (query) return query[1].toLowerCase();
-  const found = text.match(/invite\/([a-z0-9_-]+)/i);
-  if (found) return found[1].toLowerCase();
+  if (!text || /\s/.test(text) || /^https?:\/\//i.test(text)) return '';
   const tail = text.split(/[/?#]/).filter(Boolean).pop() || '';
-  return tail.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const code = tail.replace(/[^A-Za-z0-9_-]/gi, '');
+  if (!/^[A-Za-z0-9_-]{2,32}$/.test(code)) return '';
+  return code.toLowerCase();
+}
+
+export function stripInviteText(content) {
+  return String(content || '')
+    .replace(/https?:\/\/[^\s]+/gi, (url) => {
+      const body = url.replace(/[.,!?;:'"]+$/g, '');
+      return inviteCodeFromUrl(body) ? ' ' : url;
+    })
+    .replace(/(?:^|[\s(])invite\/[A-Za-z0-9_-]+/gi, ' ');
 }
 
 export function initial(name) {
