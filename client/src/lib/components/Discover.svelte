@@ -1,7 +1,23 @@
 <script>
   import { ChevronLeft, Compass, Flame, Gamepad2, GraduationCap, LayoutGrid, Music, Plus, Search, Star, Users } from '@lucide/svelte';
-  import { ui, openServer } from '../state.svelte.js';
+  import { ui, openServer, keepServerKey } from '../state.svelte.js';
   import { memberLine, serverFace } from '../serverface.js';
+  import { api } from '../api.js';
+
+  let listed = $state([]);
+
+  $effect(() => {
+    api('/api/discover').then((data) => { listed = data.servers || []; }).catch(() => {});
+  });
+
+  async function joinListed(server) {
+    if (server.roomKey) keepServerKey(server.id, server.roomKey);
+    const mine = (ui.servers || []).some((row) => row.id === server.id);
+    if (!mine && server.slug) {
+      await api('/api/invites/' + encodeURIComponent(server.slug) + '/join', { method: 'POST', body: {} });
+    }
+    await openServer(server.id);
+  }
 
   let q = $state('');
   let cat = $state('all');
@@ -23,7 +39,8 @@
 
   const list = $derived.by(() => {
     const query = q.trim().toLowerCase();
-    return (ui.servers || []).filter((server) => {
+    const source = listed.length ? listed : (ui.servers || []);
+    return source.filter((server) => {
       const text = blob(server);
       if (query && !text.includes(query) && !(server.name || '').toLowerCase().includes(query)) return false;
       if (cat === 'all') return true;
@@ -81,7 +98,7 @@
               </span>
               <strong>{server.name}</strong>
               <small>{memberLine(server) || 'A server you are in'}</small>
-              <button type="button" onclick={() => openServer(server.id)}>Open</button>
+              <button type="button" onclick={() => joinListed(server)}>{(ui.servers || []).some((row) => row.id === server.id) ? 'Open' : 'Join'}</button>
             </article>
           {/each}
         </div>
@@ -99,7 +116,7 @@
       <div class="hub-label"><Flame size={15} /> Trending servers</div>
       {#each list.slice(0, 5) as server, i (server.id)}
         {@const face = serverFace(server)}
-        <button type="button" onclick={() => openServer(server.id)}>
+        <button type="button" onclick={() => joinListed(server)}>
           <span class="hub-mini" style="--srv:{face.color}">
             {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
           </span>

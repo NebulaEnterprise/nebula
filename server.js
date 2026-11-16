@@ -1478,6 +1478,9 @@ function hydrateGuild(g) {
   if (g.bannerUrl == null) g.bannerUrl = '';
   if (!g.lockedUntil) g.lockedUntil = 0;
   if (g.showLobby == null) g.showLobby = false;
+  if (g.discover == null) g.discover = true;
+  if (g.discover && !g.roomKey) g.roomKey = crypto.randomBytes(32).toString('base64');
+  if (g.discover === false) g.roomKey = '';
   (g.channels || []).forEach((c) => { if (c.categoryId == null) c.categoryId = ''; });
   if (!Array.isArray(g.roles)) g.roles = [];
   if (!g.roles.some((r) => r.id === 'here')) g.roles.push(hereRole());
@@ -1645,14 +1648,29 @@ function visibleChannels(g, user) {
   return (g.channels || []).filter((c) => can(g, user, PERM.VIEW, c));
 }
 
+function serverSlug(g) {
+  if (!g) return '';
+  if (g.id === OFFICIAL_ID) return 'nebula';
+  if (g.vanity) return String(g.vanity);
+  const code = g.invites && Object.keys(g.invites)[0];
+  return code || '';
+}
+
 function publicServer(g, user) {
+  const listed = g.discover !== false;
   return {
     id: g.id,
     name: g.name,
     icon: g.icon || (g.name || 'S').charAt(0).toUpperCase(),
     color: g.color || '#7c5cff',
-    owner: isOwner(g, user),
-    permissions: basePerms(g, user),
+    iconUrl: g.iconUrl || '',
+    about: g.about || '',
+    owner: user ? isOwner(g, user) : false,
+    permissions: user ? basePerms(g, user) : 0,
+    discover: listed,
+    slug: serverSlug(g),
+    roomKey: listed ? (g.roomKey || '') : '',
+    memberCount: memberCount(g),
   };
 }
 
@@ -1878,6 +1896,12 @@ function readFiles(body) {
       files.push(file);
       continue;
     }
+    if (row && row.enc) {
+      const file = { url, name: 'file', kind: 'file', enc: 1 };
+      if (row.spoiler) file.spoiler = true;
+      files.push(file);
+      continue;
+    }
     const name = String(row && row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
     const image = /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(url);
     const video = /\.(mp4|webm|mov|m4v|ogv|ogg)$/i.test(url);
@@ -2078,7 +2102,8 @@ function readSeal(body) {
 }
 
 function messageExtras(body) {
-  const content = String(body && body.content || '').trim().slice(0, 2000);
+  let content = String(body && body.content || '').trim();
+  content = content.startsWith('NEB2.') ? content.slice(0, 16000) : content.slice(0, 2000);
   const files = readFiles(body);
   let poll = null;
   if (body && body.poll) {
@@ -2087,6 +2112,21 @@ function messageExtras(body) {
   }
   if (!content && !files.length && !poll) return { error: 'Empty message' };
   return { content, files, poll, seal: null };
+}
+
+function readWraps(body) {
+  const src = body && body.wraps;
+  if (!src || typeof src !== 'object') return null;
+  const out = {};
+  for (const [id, row] of Object.entries(src)) {
+    if (!row || typeof row !== 'object') continue;
+    const eph = String(row.eph || '');
+    const iv = String(row.iv || '');
+    const ct = String(row.ct || '');
+    if (eph.length < 40 || eph.length > 400 || iv.length < 8 || iv.length > 80 || ct.length < 16 || ct.length > 800) continue;
+    out[String(id).slice(0, 80)] = { eph, iv, ct };
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function presentMessage(msg, viewerId) {
@@ -2492,6 +2532,7 @@ function shareBlockReason(kind, mode) {
 }
 
 function contentShareBlock(sender, targets, content, files) {
+  if (String(content || '').startsWith('NEB2.')) content = '';
   const link = messageHasLink(content);
   const media = messageHasMedia(content, files);
   if (!link && !media) return '';
@@ -2763,6 +2804,8 @@ function publicUser(u, viewer) {
     tagChoices: tagChoices(u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
+    vaultPub: u.vaultPub || '',
+    recovery: self ? (u.recovery || '') : undefined,
     mfa: !!(u.totp && u.totp.enabled),
     passkeyCount: Array.isArray(u.passkeys) ? u.passkeys.length : 0,
     sessionCount: security.sessionCount(u),
@@ -3248,10 +3291,13 @@ app.post('/api/auth/request-code', async (req, res) => {
     return res.status(409).json({ error: 'Username taken' });
   }
 
+  const vault = cleanVault(req.body || {});
+  if (!vault) return res.status(400).json({ error: 'Choose a recovery code or a passphrase' });
   const entry = {
     username: cleanUser,
     passwordHash: hashPassword(password),
     ...emailRecord(cleanEmail),
+    vault,
   };
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     return res.json(createAccount(entry, req));
@@ -3265,6 +3311,7 @@ app.post('/api/auth/request-code', async (req, res) => {
     passwordHash: entry.passwordHash,
     emailSalt: entry.emailSalt,
     emailHash: entry.emailHash,
+    vault: entry.vault,
     code,
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
@@ -3280,6 +3327,52 @@ app.post('/api/auth/request-code', async (req, res) => {
     res.status(500).json({ error: msg.includes('not configured') ? msg : 'Failed to send email' });
   }
 });
+
+const authHolds = new Map();
+
+function cleanVault(body) {
+  const wrapped = String(body.wrapped || '');
+  const salt = String(body.salt || '');
+  const check = String(body.check || '').toLowerCase();
+  const pub = String(body.pub || '');
+  const kind = body.kind === 'code' ? 'code' : (body.kind === 'pass' ? 'pass' : '');
+  if (!kind) return null;
+  if (wrapped.length < 40 || wrapped.length > 20000) return null;
+  if (salt.length < 8 || salt.length > 80) return null;
+  if (!/^[a-f0-9]{64}$/.test(check)) return null;
+  if (pub.length < 40 || pub.length > 400) return null;
+  return { wrapped, salt, check, pub, kind };
+}
+
+function holdAuth(userId) {
+  const ticket = crypto.randomBytes(24).toString('hex');
+  authHolds.set(ticket, { userId, exp: Date.now() + 15 * 60 * 1000 });
+  return ticket;
+}
+
+function peekHold(ticket) {
+  const row = authHolds.get(String(ticket || ''));
+  if (!row || row.exp < Date.now()) return null;
+  return row;
+}
+
+function vaultGate(user) {
+  if (!user.vault || !user.vault.wrapped || !user.vault.check) {
+    return { ok: true, setup: true, ticket: holdAuth(user.id) };
+  }
+  return {
+    ok: true,
+    locked: true,
+    ticket: holdAuth(user.id),
+    vault: { wrapped: user.vault.wrapped, salt: user.vault.salt },
+  };
+}
+
+function sessionFor(user, req) {
+  const session = security.openSession(user, req);
+  saveNow(USERS_FILE, users);
+  return { ok: true, token: session.token, user: publicUser(user) };
+}
 
 function createAccount(entry, req) {
   const id = uuidv4();
@@ -3308,6 +3401,11 @@ function createAccount(entry, req) {
     token: '',
     createdAt: new Date().toISOString(),
   };
+  if (entry.vault) {
+    users[id].vault = { wrapped: entry.vault.wrapped, salt: entry.vault.salt, check: entry.vault.check };
+    users[id].vaultPub = entry.vault.pub;
+    users[id].recovery = entry.vault.kind;
+  }
   if (entry.codeId) delete codes[entry.codeId];
   const session = security.openSession(users[id], req);
   saveNow(USERS_FILE, users);
@@ -3357,9 +3455,7 @@ app.post('/api/auth/login', (req, res) => {
       methods: ['totp', ...((user.passkeys || []).length ? ['passkey'] : [])],
     });
   }
-  const session = security.openSession(user, req);
-  saveNow(USERS_FILE, users);
-  res.json({ ok: true, token: session.token, user: publicUser(user) });
+  res.json(vaultGate(user));
 });
 
 app.post('/api/auth/mfa', (req, res) => {
@@ -3370,9 +3466,7 @@ app.post('/api/auth/mfa', (req, res) => {
     return res.status(400).json({ error: row ? 'That code is wrong' : 'That code expired. Log in again.' });
   }
   security.dropChallenge(ticket);
-  const session = security.openSession(user, req);
-  saveNow(USERS_FILE, users);
-  res.json({ ok: true, token: session.token, user: publicUser(user) });
+  res.json(vaultGate(user));
 });
 
 app.post('/api/auth/passkey/options', (req, res) => {
@@ -3388,12 +3482,47 @@ app.post('/api/auth/passkey/options', (req, res) => {
 app.post('/api/auth/passkey/verify', (req, res) => {
   try {
     const user = security.loginPasskey(users, req.body || {});
-    const session = security.openSession(user, req);
-    saveNow(USERS_FILE, users);
-    res.json({ ok: true, token: session.token, user: publicUser(user) });
+    res.json(vaultGate(user));
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message || 'Passkey was rejected' });
   }
+});
+
+app.post('/api/auth/unlock', (req, res) => {
+  const row = peekHold(req.body && req.body.ticket);
+  const user = row && users[row.userId];
+  const check = String(req.body && req.body.check || '').toLowerCase();
+  if (!user || !user.vault || user.vault.check !== check) {
+    return res.status(400).json({ error: 'That recovery code or passphrase is wrong' });
+  }
+  authHolds.delete(String(req.body.ticket));
+  res.json(sessionFor(user, req));
+});
+
+app.post('/api/auth/setup', (req, res) => {
+  const row = peekHold(req.body && req.body.ticket);
+  const user = row && users[row.userId];
+  const vault = cleanVault(req.body || {});
+  if (!user) return res.status(400).json({ error: 'That sign-in expired. Log in again.' });
+  if (!vault) return res.status(400).json({ error: 'Choose a recovery code or a passphrase' });
+  user.vault = { wrapped: vault.wrapped, salt: vault.salt, check: vault.check };
+  user.vaultPub = vault.pub;
+  user.recovery = vault.kind;
+  authHolds.delete(String(req.body.ticket));
+  res.json(sessionFor(user, req));
+});
+
+app.post('/api/me/recovery', auth, (req, res) => {
+  const vault = cleanVault(req.body || {});
+  if (!vault) return res.status(400).json({ error: 'Choose a recovery code or a passphrase' });
+  if (req.user.vault && req.user.vault.check && String(req.body.previous || '').toLowerCase() !== req.user.vault.check) {
+    return res.status(400).json({ error: 'Enter the recovery code or passphrase you use now' });
+  }
+  req.user.vault = { wrapped: vault.wrapped, salt: vault.salt, check: vault.check };
+  if (vault.pub) req.user.vaultPub = vault.pub;
+  req.user.recovery = vault.kind;
+  save(USERS_FILE, users);
+  res.json({ ok: true, recovery: vault.kind, user: publicUser(req.user) });
 });
 
 app.post('/api/auth/logout', auth, (req, res) => {
@@ -3847,6 +3976,9 @@ function auth(req, res, next) {
   if (!found) return res.status(401).json({ error: 'Invalid session' });
   req.user = found.user;
   req.session = found.session;
+  if (!req.user.vault || !req.user.vault.check) {
+    return res.status(401).json({ error: 'Sign in with your recovery code or passphrase' });
+  }
   next();
 }
 
@@ -4415,6 +4547,14 @@ app.get('/api/members', auth, (req, res) => {
   res.json({ ok: true, members: list, badges: BADGE_DEFS, server: g.name, roles: g.roles });
 });
 
+app.get('/api/discover', auth, (req, res) => {
+  ensureGuilds();
+  const list = Object.values(guilds.servers)
+    .filter((g) => g && g.discover !== false && g.roomKey)
+    .map((g) => publicServer(g, req.user));
+  res.json({ ok: true, servers: list });
+});
+
 app.get('/api/servers', auth, (req, res) => {
   ensureGuilds();
   const list = Object.values(guilds.servers)
@@ -4438,7 +4578,15 @@ app.post('/api/servers', auth, (req, res) => {
     channels: [{ id: uuidv4(), name: 'general', type: 'text', topic: 'Welcome to ' + name, overwrites: [] }],
     members: { [req.user.id]: { roles: ['everyone', 'owner'], joinedAt: new Date().toISOString() } },
     invites: {},
+    discover: req.body?.discover === false ? false : true,
   };
+  if (g.discover) {
+    const roomKey = String(req.body?.roomKey || '');
+    if (!/^[A-Za-z0-9+/]{42,44}={0,2}$/.test(roomKey)) {
+      return res.status(400).json({ error: 'This server needs a key from your browser' });
+    }
+    g.roomKey = roomKey;
+  }
   const code = inviteCode();
   g.invites[code] = { code, inviterId: req.user.id, createdAt: new Date().toISOString(), uses: 0 };
   guilds.servers[id] = g;
@@ -5838,6 +5986,7 @@ function dmInbox(userId, seen, seeded) {
 }
 
 function dmPreview(content) {
+  if (String(content || '').startsWith('NEB2.')) return 'Encrypted message';
   return String(content || '')
     .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
     .replace(/\[\[sticker:([^\]]+)\]\]/g, '$1')
@@ -5917,6 +6066,7 @@ app.get('/api/dms/:userId/messages', auth, (req, res) => {
   res.json({
     ok: true,
     mode,
+    wraps: (dmThreads[key] && dmThreads[key].wraps) || null,
     messages: slice.map((msg) => presentMessage(msg, req.user.id)),
     other: publicUser(users[otherId], req.user),
   });
@@ -5946,6 +6096,8 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   } else {
     dmThreads[key].updatedAt = Date.now();
   }
+  const wraps = readWraps(req.body);
+  if (wraps && !dmThreads[key].wraps) dmThreads[key].wraps = wraps;
   save(DMS_FILE, dmThreads);
 
   if (!messages[channelId]) messages[channelId] = [];
@@ -6152,6 +6304,8 @@ app.post('/api/groups/:id/messages', auth, (req, res) => {
   if (shareBlock) return res.status(403).json({ error: shareBlock });
   const made = appendRoomMessage('group:' + group.id, req);
   if (made.error) return res.status(400).json({ error: made.error });
+  const wraps = readWraps(req.body);
+  if (wraps && !group.wraps) group.wraps = wraps;
   group.updatedAt = Date.now();
   save(GROUPS_FILE, groups);
   res.json({ ok: true, message: presentMessage(made.message, req.user.id) });
@@ -6164,7 +6318,7 @@ app.get('/api/groups/:id/messages', auth, (req, res) => {
   }
   const list = messages['group:' + group.id] || [];
   noteBrief(req.user, peersOfRoom('group:' + group.id, req.user.id));
-  res.json({ ok: true, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), group: publicGroup(group, req.user) });
+  res.json({ ok: true, wraps: group.wraps || null, messages: list.slice(-100).map((msg) => presentMessage(msg, req.user.id)), group: publicGroup(group, req.user) });
 });
 
 app.post('/api/groups/:id/members', auth, (req, res) => {
@@ -6464,12 +6618,17 @@ app.post('/api/messages/:id/reactions', auth, (req, res) => {
 app.patch('/api/messages/:id', auth, (req, res) => {
   const found = locateMessage(req.params.id);
   if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
-  if (String(found.msg.authorId) !== String(req.user.id)) return res.status(403).json({ error: 'You can only edit your own messages' });
-  const content = String(req.body && req.body.content || '').trim().slice(0, 2000);
+  let content = String(req.body && req.body.content || '').trim();
+  content = content.startsWith('NEB2.') ? content.slice(0, 16000) : content.slice(0, 2000);
+  const packing = !!(req.body && req.body.reseal) && content.startsWith('NEB2.');
+  if (!packing && String(found.msg.authorId) !== String(req.user.id)) return res.status(403).json({ error: 'You can only edit your own messages' });
+  if (packing && String(found.msg.content || '').startsWith('NEB2.')) {
+    return res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
+  }
   if (!content && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
   found.msg.content = content;
   delete found.msg.seal;
-  found.msg.editedAt = new Date().toISOString();
+  if (!packing) found.msg.editedAt = new Date().toISOString();
   if (!String(found.roomId).startsWith('dm:')) {
     const channel = findChannel(found.roomId, '');
     if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
@@ -6607,6 +6766,9 @@ function settingsView(g, user) {
     onboarding: g.onboarding,
     lockedUntil: g.lockedUntil || 0,
     official: g.id === OFFICIAL_ID,
+    discover: g.discover !== false,
+    slug: serverSlug(g),
+    roomKey: g.discover !== false ? (g.roomKey || '') : '',
     myNick: (g.members[user.id] && g.members[user.id].nick) || '',
   };
   if (!manage) return base;
@@ -6727,6 +6889,18 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     }
     if (b.about != null) g.about = clip(b.about, 2000);
     if (b.showLobby != null) g.showLobby = !!b.showLobby;
+    if (b.discover != null) {
+      g.discover = !!b.discover;
+      if (g.discover) {
+        const roomKey = String(b.roomKey || g.roomKey || '');
+        if (!/^[A-Za-z0-9+/]{40,80}={0,2}$/.test(roomKey)) {
+          return res.status(400).json({ error: 'Open this server on a device that already has the key, then list it' });
+        }
+        g.roomKey = roomKey;
+      } else {
+        g.roomKey = '';
+      }
+    }
     if (b.color != null) g.color = clip(b.color, 20);
     if (b.theme && typeof b.theme === 'object') {
       g.theme = { accent: clip(b.theme.accent, 20) || g.theme.accent, tint: clip(b.theme.tint, 20) };
@@ -7356,7 +7530,62 @@ async function pullUpdates() {
   }
 }
 
+function neb2Pack(key, payload) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(payload), cipher.final()]);
+  return Buffer.concat([iv, enc, cipher.getAuthTag()]);
+}
+
+function sealListedHistory() {
+  ensureGuilds();
+  let changed = false;
+  for (const g of Object.values(guilds.servers || {})) {
+    hydrateGuild(g);
+    if (!g.roomKey) continue;
+    const key = Buffer.from(g.roomKey, 'base64');
+    if (key.length !== 32) continue;
+    for (const channel of g.channels || []) {
+      const list = messages[channel.id];
+      if (!Array.isArray(list)) continue;
+      for (const msg of list) {
+        if (!msg) continue;
+        if (msg.content && !String(msg.content).startsWith('NEB2.')) {
+          msg.content = 'NEB2.' + neb2Pack(key, Buffer.from(String(msg.content), 'utf8')).toString('base64');
+          changed = true;
+        }
+        for (const file of msg.files || []) {
+          if (!file || file.enc || file.lock) continue;
+          const stored = uploadName(file.url);
+          if (!stored) continue;
+          const full = path.join(UPLOAD_DIR, stored);
+          if (!fs.existsSync(full)) continue;
+          try {
+            let bytes = fs.readFileSync(full);
+            if (isSealedFile(bytes)) bytes = openSealedBytes(bytes);
+            if (bytes.slice(0, 4).toString() !== 'NEB2') {
+              const header = Buffer.from(JSON.stringify({ name: file.name || 'file', type: '' }));
+              const len = Buffer.alloc(4);
+              len.writeUInt32BE(header.length, 0);
+              const packed = neb2Pack(key, Buffer.concat([len, header, bytes]));
+              fs.writeFileSync(full, Buffer.concat([Buffer.from('NEB2'), packed]));
+            }
+            file.enc = 1;
+            file.name = 'file';
+            file.kind = 'file';
+            delete file.alt;
+            changed = true;
+          } catch (_) {}
+        }
+      }
+    }
+  }
+  if (changed) save(MESSAGES_FILE, messages);
+  saveGuilds();
+}
+
 function listen() {
+  try { sealListedHistory(); } catch (err) { console.log('Room seal skipped: ' + (err.message || err)); }
   httpServer = app.listen(PORT, '0.0.0.0', () => {
     hub = attachGateway(httpServer, {
       identify(token) {

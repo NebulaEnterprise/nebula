@@ -12,7 +12,7 @@
     var old = path.match(/\/invite\/([A-Za-z0-9_-]+)/);
     if (old) code = old[1];
     else if (parts.length === 1 && /^[A-Za-z0-9_-]{2,32}$/.test(parts[0]) && !skip[parts[0].toLowerCase()] && parts[0].indexOf('.') === -1) code = parts[0];
-    if (code) location.replace(root + '?invite=' + encodeURIComponent(code));
+    if (code) location.replace(root + '?invite=' + encodeURIComponent(code) + location.hash);
     else location.replace(root);
   })();
 </script>

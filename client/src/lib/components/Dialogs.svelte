@@ -1,8 +1,9 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct } from '../state.svelte.js';
+  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
-  import { PERM, inviteLink, inviteSlug } from '../format.js';
+  import { PERM, inviteSlug } from '../format.js';
+  import { keyInLink, newRoomKey } from '../vault.js';
   import { hasPerm } from '../state.svelte.js';
 
   let name = $state('');
@@ -243,8 +244,10 @@
       {:else if kind === 'add-server'}
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" placeholder="A name people will remember" /></div>
         <button class="btn brand" disabled={busy} onclick={() => go(async () => {
-          const data = await api('/api/servers', { method: 'POST', body: { name } });
-          const link = inviteLink(data.slug || data.invite);
+          const roomKey = newRoomKey();
+          const data = await api('/api/servers', { method: 'POST', body: { name, discover: true, roomKey } });
+          if (data.server) keepServerKey(data.server.id, roomKey);
+          const link = serverInvite(data.slug || data.invite, data.server?.id);
           try { await navigator.clipboard.writeText(link); } catch (_) {}
           close();
           toast('Server created. Invite link copied.');
@@ -255,6 +258,8 @@
           const slug = inviteSlug(code);
           if (!slug) throw new Error('Paste an invite link');
           const data = await api('/api/invites/' + encodeURIComponent(slug) + '/join', { method: 'POST', body: {} });
+          const secret = keyInLink(code);
+          if (secret && data.server) keepServerKey(data.server.id, secret);
           if (data.pending) { toast('Request sent. An owner has to accept you.'); return; }
           close();
           await openServer(data.server.id);
@@ -263,19 +268,19 @@
       {:else if kind === 'invite'}
         {#if vanity}
           <p class="hint">Share this link. Anyone with it can join.</p>
-          <div class="row"><code>{inviteLink(vanity)}</code></div>
+          <div class="row"><code>{serverInvite(vanity)}</code></div>
           <button class="btn brand" style="width:auto;margin-top:12px" onclick={() => go(async () => {
-            try { await navigator.clipboard.writeText(inviteLink(vanity)); } catch (_) {}
+            try { await navigator.clipboard.writeText(serverInvite(vanity)); } catch (_) {}
             toast('Invite link copied');
           })}>Copy link</button>
         {:else}
           <p class="hint">This server has fewer than 5 members, so each invite is a random link.</p>
           {#each invites as inv}
-            <div class="row"><code>{inviteLink(inv.slug || inv.code)}</code><span class="hint">{inv.uses || 0} uses</span></div>
+            <div class="row"><code>{serverInvite(inv.slug || inv.code)}</code><span class="hint">{inv.uses || 0} uses</span></div>
           {:else}<p class="hint">No links yet.</p>{/each}
           <button class="btn brand" style="width:auto;margin-top:12px" onclick={() => go(async () => {
             const data = await api('/api/servers/' + ui.serverId + '/invites', { method: 'POST', body: {} });
-            const link = inviteLink(data.slug);
+            const link = serverInvite(data.slug);
             try { await navigator.clipboard.writeText(link); } catch (_) {}
             toast('Invite link copied');
             await loadInvites();
@@ -286,7 +291,7 @@
         <p class="hint">Copies an invite link you can send anywhere.</p>
         <button class="btn brand" style="width:auto" onclick={() => go(async () => {
           const data = await api('/api/servers/' + ui.serverId + '/invites', { method: 'POST', body: {} });
-          const link = inviteLink(data.slug);
+          const link = serverInvite(data.slug);
           const text = 'Join ' + (ui.serverMeta?.name || 'my server') + ' on Nebula: ' + link;
           try { await navigator.clipboard.writeText(text); } catch (_) {}
           toast('Copied');

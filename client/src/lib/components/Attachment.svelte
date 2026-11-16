@@ -2,6 +2,7 @@
   import { fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
   import { openFile } from '../seal.js';
   import { ui } from '../state.svelte.js';
+  import { loadVault, openPackedFile } from '../vault.js';
 
   let { file } = $props();
   let src = $state('');
@@ -30,7 +31,21 @@
     const headers = { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' };
     const res = await fetch(full, { headers });
     if (!res.ok) throw new Error('locked');
-    const opened = await openFile(lock, new Uint8Array(await res.arrayBuffer()), ui.me?.id);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (file?.enc) {
+      const vault = loadVault(ui.me?.id);
+      const serverKey = vault?.servers?.[ui.serverId] || '';
+      const dmId = ui.dmUser ? [ui.me.id, ui.dmUser.id].sort().join(':') : '';
+      const groupId = ui.group?.id || '';
+      const master = ui.mode === 'dm' ? vault?.dms?.[dmId] : (ui.mode === 'group' ? vault?.groups?.[groupId] : serverKey);
+      if (!master) throw new Error('locked');
+      const opened = await openPackedFile(master, bytes);
+      const blob = new Blob([opened.bytes], { type: opened.type || 'application/octet-stream' });
+      unlockedName = opened.name || 'file';
+      unlockedMime = opened.type || '';
+      return URL.createObjectURL(blob);
+    }
+    const opened = await openFile(lock, bytes, ui.me?.id);
     const mime = String(opened.meta?.mime || '');
     const blob = new Blob([opened.bytes], { type: mime || 'application/octet-stream' });
     unlockedName = String(opened.meta?.name || 'Encrypted file');
@@ -42,7 +57,7 @@
     const url = file?.url || '';
     const lock = file?.lock;
     const posterUrl = file?.poster || '';
-    if (lock && url && !String(url).startsWith('blob:')) {
+    if ((lock || file?.enc) && url && !String(url).startsWith('blob:')) {
       let stop = false;
       let made = '';
       unlock(url, lock).then((next) => {
@@ -93,7 +108,7 @@
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
   {:else if image}
     {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
-  {:else if file?.lock && !src}
+  {:else if (file?.lock || file?.enc) && !src}
     <span class="file-chip">Encrypted file</span>
   {:else}
     <a class="file-chip" href={src || fileUrl(file?.url)} target="_blank" rel="noreferrer">{name}</a>

@@ -2,9 +2,13 @@ import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandle
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
-import { PERM, inviteCodeFromUrl, stripInviteText } from './format.js';
+import { PERM, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
+import {
+  createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, newRoomKey,
+  openText, openVault, rememberSecret, rememberVault, sealFile, sealText, unwrapKey, vaultCheck, wrapKeyFor, wrapVault,
+} from './vault.js';
 
 export const nowClock = $state({ t: Date.now() });
 if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
@@ -17,6 +21,7 @@ export const ui = $state({
   authError: '',
   authOk: '',
   pending: null,
+  pendingVault: null,
   mode: 'friends',
   friendsTab: 'online',
   friends: [],
@@ -171,7 +176,10 @@ export function logout() {
   const id = ui.me?.id;
   api('/api/auth/logout', { method: 'POST', body: {} }).catch(() => {});
   import('./voice.js').then((mod) => mod.leaveVoice());
-  if (id) writeAccounts(savedAccounts().filter((row) => row.id !== id));
+  if (id) {
+    writeAccounts(savedAccounts().filter((row) => row.id !== id));
+    forgetVault(id);
+  }
   localStorage.removeItem('dc_token');
   disconnectGateway();
   ui.me = null;
@@ -215,6 +223,12 @@ export async function boot() {
   }
   try {
     const data = await api('/api/me');
+    if (!loadVault(data.user.id)) {
+      localStorage.removeItem('dc_token');
+      ui.me = null;
+      ui.booting = false;
+      return;
+    }
     ui.me = takeMe(data.user);
     rememberAccount(data.user, token);
     publishBox().catch(() => {});
@@ -235,6 +249,7 @@ async function enterApp() {
     const ch = await api('/api/channels');
     ui.channels = ch.channels || [];
     ui.servers = ch.servers || [];
+    for (const server of ui.servers) if (server.roomKey) keepServerKey(server.id, server.roomKey);
   } catch (_) {}
   await Promise.all([
     loadFriends(),
@@ -264,6 +279,26 @@ async function finishLogin(data) {
   await enterApp();
 }
 
+let holdTicket = '';
+let holdVault = null;
+
+function keepUnlock(data) {
+  if (data.setup) {
+    holdTicket = data.ticket;
+    ui.auth = 'setup';
+    ui.authOk = 'Choose a recovery code or a passphrase. You need it every time you sign in.';
+    return true;
+  }
+  if (data.locked) {
+    holdTicket = data.ticket;
+    holdVault = data.vault;
+    ui.auth = 'locked';
+    ui.authOk = '';
+    return true;
+  }
+  return false;
+}
+
 export async function login(email, password) {
   ui.authError = '';
   const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
@@ -272,12 +307,55 @@ export async function login(email, password) {
     ui.auth = 'mfa';
     return;
   }
+  if (keepUnlock(data)) return;
   await finishLogin(data);
+}
+
+export async function unlockAccount(secret) {
+  const vault = await openVault(holdVault?.wrapped, holdVault?.salt, secret);
+  if (!vault) throw new Error('That recovery code or passphrase is wrong');
+  const check = await vaultCheck(vault);
+  const data = await api('/api/auth/unlock', { method: 'POST', body: { ticket: holdTicket, check } });
+  const local = loadVault(data.user.id);
+  if (local) {
+    vault.servers = { ...vault.servers, ...local.servers };
+    vault.dms = { ...vault.dms, ...local.dms };
+    vault.groups = { ...vault.groups, ...local.groups };
+  }
+  rememberVault(data.user.id, vault);
+  rememberSecret(data.user.id, secret);
+  await finishLogin(data);
+  pushVault().catch(() => {});
+}
+
+export async function finishSetup(secret, kind) {
+  const made = await createVault(secret);
+  const data = await api('/api/auth/setup', {
+    method: 'POST',
+    body: { ticket: holdTicket, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind },
+  });
+  rememberVault(data.user.id, made.vault);
+  rememberSecret(data.user.id, secret);
+  await finishLogin(data);
+}
+
+export async function saveRecovery(secret, kind) {
+  const vault = loadVault(ui.me?.id);
+  const previous = vault ? await vaultCheck(vault) : '';
+  const packed = await wrapVault(vault, secret);
+  const check = await vaultCheck(vault);
+  const data = await api('/api/me/recovery', {
+    method: 'POST',
+    body: { ...packed, check, pub: vault.pub, kind, previous },
+  });
+  rememberSecret(ui.me.id, secret);
+  if (data.user) ui.me = takeMe({ ...ui.me, ...data.user });
 }
 
 export async function submitMfa(code) {
   ui.authError = '';
   const data = await api('/api/auth/mfa', { method: 'POST', body: { ticket: ui.mfa?.ticket, code } });
+  if (keepUnlock(data)) return;
   await finishLogin(data);
 }
 
@@ -292,13 +370,21 @@ export async function loginWithPasskey() {
     method: 'POST',
     body: { challengeId: start.challengeId, credential },
   });
+  if (keepUnlock(data)) return;
   await finishLogin(data);
 }
 
-export async function requestCode(email, username, password) {
+export async function requestCode(email, username, password, secret, kind) {
   ui.authError = '';
-  const data = await api('/api/auth/request-code', { method: 'POST', body: { email, username, password } });
+  const made = await createVault(secret);
+  ui.pendingVault = { vault: made.vault, secret, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind };
+  const data = await api('/api/auth/request-code', {
+    method: 'POST',
+    body: { email, username, password, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind },
+  });
   if (data.token) {
+    rememberVault(data.user.id, made.vault);
+    rememberSecret(data.user.id, secret);
     await finishLogin(data);
     return;
   }
@@ -309,10 +395,25 @@ export async function requestCode(email, username, password) {
 
 export async function verify(code) {
   ui.authError = '';
+  const made = ui.pendingVault;
   const data = await api('/api/auth/verify', {
     method: 'POST',
-    body: { email: ui.pending.email, code, username: ui.pending.username, password: ui.pending.password },
+    body: {
+      email: ui.pending.email,
+      code,
+      username: ui.pending.username,
+      password: ui.pending.password,
+      wrapped: made?.wrapped,
+      salt: made?.salt,
+      check: made?.check,
+      pub: made?.pub,
+      kind: made?.kind,
+    },
   });
+  if (made) {
+    rememberVault(data.user.id, made.vault);
+    rememberSecret(data.user.id, made.secret);
+  }
   rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
   ui.me = takeMe(data.user);
@@ -488,9 +589,11 @@ export function markUnread(message) {
 
 export async function consumeInvite() {
   const slug = pendingInvite();
+  const secret = keyInLink(window.location.href);
   if (!slug || !ui.me) return;
   try {
     const data = await api('/api/invites/' + encodeURIComponent(slug) + '/join', { method: 'POST', body: {} });
+    if (secret && data.server) keepServerKey(data.server.id, secret);
     const clean = new URL(window.location.href);
     clean.searchParams.delete('invite');
     history.replaceState(null, '', clean.pathname + clean.search + clean.hash);
@@ -1056,6 +1159,8 @@ export async function openServer(id, opts = {}) {
   const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
   ui.channels = data.channels || [];
   if (data.servers) ui.servers = data.servers;
+  for (const server of data.servers || []) if (server.roomKey) keepServerKey(server.id, server.roomKey);
+  if (data.server?.roomKey) keepServerKey(data.server.id, data.server.roomKey);
   ui.serverPerms = data.permissions || 0;
   ui.roles = data.roles || [];
   ui.categories = data.categories || [];
@@ -1972,10 +2077,124 @@ async function syncBox() {
   if (data.user) ui.me = takeMe({ ...ui.me, ...data.user, boxKey: nextPub });
 }
 
+function liveVault() {
+  return ui.me?.id ? loadVault(ui.me.id) : null;
+}
+
+async function pushVault() {
+  const vault = liveVault();
+  const secret = ui.me?.id ? loadSecret(ui.me.id) : '';
+  if (!vault || !secret) return;
+  const packed = await wrapVault(vault, secret);
+  const check = await vaultCheck(vault);
+  await api('/api/me/recovery', {
+    method: 'POST',
+    body: { ...packed, check, pub: vault.pub, kind: ui.me.recovery || 'pass', previous: check },
+  });
+}
+
+export function keepServerKey(serverId, roomKey) {
+  const vault = liveVault();
+  if (!vault || !serverId || !roomKey || vault.servers[serverId] === roomKey) return;
+  vault.servers[serverId] = roomKey;
+  rememberVault(ui.me.id, vault);
+  pushVault().catch(() => {});
+}
+
+export function serverInvite(slug, serverId) {
+  const id = serverId || ui.serverId;
+  const listed = ui.settings && ui.settings.id === id && ui.settings.discover ? ui.settings.roomKey : '';
+  const saved = liveVault()?.servers?.[id] || '';
+  return inviteLink(slug, listed || saved);
+}
+
+async function keepWrap(bucket, id, pack) {
+  const vault = liveVault();
+  if (!vault || !pack || vault[bucket][id]) return vault?.[bucket]?.[id] || '';
+  try {
+    vault[bucket][id] = await unwrapKey(pack, vault.priv);
+    rememberVault(ui.me.id, vault);
+    pushVault().catch(() => {});
+  } catch (_) {}
+  return vault[bucket][id] || '';
+}
+
+async function roomMaster(where) {
+  const vault = liveVault();
+  if (!vault) throw new Error('Sign in with your recovery code or passphrase');
+  const mode = where?.mode || ui.mode;
+  if (mode === 'dm') {
+    const otherId = where?.dmUserId || ui.dmUser?.id || '';
+    const id = [ui.me.id, otherId].sort().join(':');
+    if (vault.dms[id]) return vault.dms[id];
+    const other = ui.dmUser && String(ui.dmUser.id) === String(otherId) ? ui.dmUser : null;
+    const data = await api('/api/dms/' + encodeURIComponent(otherId) + '/messages');
+    if (data.wraps && data.wraps[ui.me.id]) {
+      const key = await keepWrap('dms', id, data.wraps[ui.me.id]);
+      if (key) return key;
+    }
+    const pub = other?.vaultPub || data.other?.vaultPub || '';
+    if (!pub) throw new Error('They need to set a recovery code before this chat can be encrypted');
+    const key = newRoomKey();
+    const wraps = {};
+    wraps[ui.me.id] = await wrapKeyFor(key, vault.pub);
+    wraps[otherId] = await wrapKeyFor(key, pub);
+    vault.dms[id] = key;
+    rememberVault(ui.me.id, vault);
+    pushVault().catch(() => {});
+    return { key, wraps };
+  }
+  if (mode === 'group') {
+    const groupId = where?.groupId || ui.group?.id || '';
+    if (vault.groups[groupId]) return vault.groups[groupId];
+    const data = await api('/api/groups/' + encodeURIComponent(groupId) + '/messages');
+    if (data.wraps && data.wraps[ui.me.id]) {
+      const key = await keepWrap('groups', groupId, data.wraps[ui.me.id]);
+      if (key) return key;
+    }
+    const members = data.group?.members || ui.group?.members || [];
+    const key = newRoomKey();
+    const wraps = {};
+    wraps[ui.me.id] = await wrapKeyFor(key, vault.pub);
+    for (const member of members) {
+      if (member?.vaultPub && member.id !== ui.me.id) wraps[member.id] = await wrapKeyFor(key, member.vaultPub);
+    }
+    vault.groups[groupId] = key;
+    rememberVault(ui.me.id, vault);
+    pushVault().catch(() => {});
+    return { key, wraps };
+  }
+  const serverId = where?.serverId || ui.serverId;
+  if (vault.servers[serverId]) return vault.servers[serverId];
+  const known = (ui.servers || []).find((server) => server.id === serverId);
+  if (known?.roomKey) {
+    keepServerKey(serverId, known.roomKey);
+    return known.roomKey;
+  }
+  throw new Error('Open the invite link that contains this server’s key');
+}
+
+function masterOf(value) {
+  return value && typeof value === 'object' ? value.key : value;
+}
+
 async function revealMessage(message) {
   if (!message) return message;
   if (message.seal && !String(message.content || '').trim()) return null;
-  return { ...message, locked: false };
+  let content = message.content || '';
+  if (!isSealedText(content)) return { ...message, locked: false };
+  try {
+    const channel = String(message.channelId || '');
+    let where = null;
+    if (channel.startsWith('dm:')) where = { mode: 'dm', dmUserId: channel.slice(3).split(':').find((id) => id !== ui.me?.id) || '' };
+    else if (channel.startsWith('group:')) where = { mode: 'group', groupId: channel.slice(6) };
+    else where = { mode: 'chat', serverId: ui.serverId };
+    const key = masterOf(await roomMaster(where));
+    content = await openText(key, content);
+    return { ...message, content, locked: false };
+  } catch (_) {
+    return { ...message, content: '', locked: true };
+  }
 }
 
 async function revealList(list) {
@@ -2009,7 +2228,11 @@ async function postMessage(payload, target) {
   if (content) {
     const blocked = shareProblem(content, files, peopleFor(where), where);
     if (blocked) throw new Error(blocked);
-    body.content = content;
+  }
+  if (content || files.some((file) => file && file.enc)) {
+    const packed = await roomMaster(where);
+    if (content) body.content = await sealText(masterOf(packed), content);
+    if (packed && packed.wraps) body.wraps = packed.wraps;
   }
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
@@ -2055,7 +2278,8 @@ export async function sendMessage() {
     ui.composer = '';
     ui.editing = null;
     try {
-      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { content } });
+      const packed = await roomMaster();
+      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { content: await sealText(masterOf(packed), content) } });
       const opened = data.message ? await revealMessage(data.message) : null;
       if (opened) ui.messages = ui.messages.map((msg) => msg.id === id ? opened : msg);
       dropLive();
@@ -2196,14 +2420,16 @@ export async function sendFiles(list) {
       if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
       report(i, 5);
       const label = files[i].name || blob.name || 'file';
-      const data = await uploadFile(blob, (n) => report(i, Math.max(5, n)), label, '/api/upload?slot=file&chat=1&name=' + encodeURIComponent(label));
+      const packed = await roomMaster(target);
+      const sealed = await sealFile(masterOf(packed), await blob.arrayBuffer(), label, blob.type || '');
+      const data = await uploadFile(new Blob([sealed], { type: 'application/octet-stream' }), (n) => report(i, Math.max(5, n)), 'file', '/api/upload?slot=file&chat=1&name=file');
       if (!data.url) throw new Error('The file did not upload');
       saved.push({
         url: data.url,
-        name: files[i].name || blob.name || 'file',
-        alt: files[i].alt || '',
+        name: 'file',
+        enc: 1,
         spoiler: files[i].spoiler,
-        kind: fileKind(blob),
+        kind: 'file',
       });
       report(i, 100);
     }

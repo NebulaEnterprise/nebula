@@ -158,13 +158,15 @@ export function inviteCodeFromUrl(input) {
   }
 }
 
-export function inviteLink(slug) {
+export function inviteLink(slug, key) {
   const raw = String(slug || '').trim();
   if (!raw) return '';
   const picked = inviteCodeFromUrl(raw) || raw.replace(/^\/+|\/+$/g, '').replace(/^invite\//i, '').split(/[?#]/)[0];
   const code = String(picked || '').replace(/[^A-Za-z0-9_-]/g, '');
   if (!code) return '';
-  return SITE_ORIGIN + '/' + code;
+  const base = SITE_ORIGIN + '/' + code;
+  const secret = String(key || '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return secret ? base + '#k=' + secret : base;
 }
 
 export function inviteSlugs(input) {

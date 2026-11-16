@@ -1,6 +1,7 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery } from '../state.svelte.js';
+  import { recoveryCode } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -20,6 +21,19 @@
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
+  let recoverMethod = $state('pass');
+  let recoverSecret = $state('');
+  let recoverCode = $state('');
+  let recoverSaved = $state(false);
+
+  async function saveUnlock() {
+    const secret = recoverMethod === 'code' ? recoverCode : recoverSecret.trim();
+    if (recoverMethod === 'code' && !recoverSaved) throw new Error('Save the recovery code first');
+    if (recoverMethod === 'pass' && secret.length < 8) throw new Error('Use a passphrase of at least 8 characters');
+    await saveRecovery(secret, recoverMethod);
+    recoverSecret = '';
+    toast(recoverMethod === 'code' ? 'Recovery code saved. The old one no longer works.' : 'Passphrase saved. The old one no longer works.');
+  }
 
   function toggleSound() {
     sound = !sound;
@@ -478,6 +492,27 @@
               <strong>Not stored</strong>
               <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
             </div>
+          </section>
+          <div class="acct-rule"></div>
+          <section class="acct-section">
+            <h3>Recovery</h3>
+            <p class="hint">You enter this with your email and password. Without it, the account does not open and the messages stay scrambled.</p>
+            <p class="hint">{ui.me?.recovery === 'code' ? 'A recovery code is set.' : ui.me?.recovery === 'pass' ? 'A passphrase is set.' : 'Nothing is set yet.'}</p>
+            <div class="field">
+              <label>Method</label>
+              <select bind:value={recoverMethod} onchange={() => { recoverCode = recoverMethod === 'code' ? recoveryCode() : ''; recoverSaved = false; }}>
+                <option value="pass">Passphrase</option>
+                <option value="code">Recovery code</option>
+              </select>
+            </div>
+            {#if recoverMethod === 'pass'}
+              <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" /></div>
+            {:else}
+              <div class="field"><label>New recovery code</label><input value={recoverCode} readonly /></div>
+              <label class="check"><input type="checkbox" bind:checked={recoverSaved} /> I saved this code</label>
+              <button class="btn" type="button" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
+            {/if}
+            <button class="btn brand" style="width:auto" onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
           </section>
           <div class="acct-rule"></div>
         {/if}

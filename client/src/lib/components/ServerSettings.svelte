@@ -5,7 +5,8 @@
   } from '@lucide/svelte';
   import Select from './Select.svelte';
   import ColorWheel from './ColorWheel.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite } from '../state.svelte.js';
+  import { newRoomKey } from '../vault.js';
   import { ROLE_FLAGS, PERM, TAG_ICONS, inviteLink } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api } from '../api.js';
@@ -36,6 +37,7 @@
   let tint = $state(ui.settings?.theme?.tint || '');
   let about = $state(ui.settings?.about || '');
   let showLobby = $state(!!ui.settings?.showLobby);
+  let discover = $state(ui.settings?.discover !== false);
   let iconUrl = $state('');
   let bannerUrl = $state('');
   let assetName = $state('');
@@ -132,7 +134,8 @@
             {:else}
               <input bind:value={vanity} maxlength="20" placeholder="your-server" />
             {/if}
-            <p class="hint">{inviteLink(s.official ? 'nebula' : vanity) || 'Pick 2 or more letters. This becomes the invite link.'}</p>
+            <p class="hint">{serverInvite(s.official ? 'nebula' : vanity) || 'Pick 2 or more letters. This becomes the invite link.'}</p>
+            <p class="hint">The secret after # is the server key. Anyone with the full link can read the history.</p>
           </div>
           <div class="field">
             <label>Server tag</label>
@@ -190,6 +193,17 @@
 
       {:else if ui.settingsPage === 'lobby'}
         <p class="hint">A short note shown above the message box.</p>
+        <label class="check"><input type="checkbox" bind:checked={discover} /> Appear in Discover</label>
+        <p class="hint">This is on by default. Turning it on publishes the invite, including the secret, so anyone can join and read the history. Nebula is a public server, so its link can be listed. The link is no longer only nebulaapp.space/nebula.</p>
+        <p class="hint">{serverInvite(s.slug || (s.official ? 'nebula' : vanity))}</p>
+        <button class="btn brand" style="width:auto" onclick={() => run(async () => {
+          let roomKey = s.roomKey || '';
+          if (discover && !roomKey) roomKey = newRoomKey();
+          if (discover && roomKey) keepServerKey(ui.serverId, roomKey);
+          await guildAction({ type: 'settings', discover, roomKey });
+          await reloadSettings();
+          discover = ui.settings?.discover !== false;
+        })}>Save discovery</button>
         <label class="check"><input type="checkbox" bind:checked={showLobby} /> Show the lobby</label>
         <div class="field"><label>About</label><textarea bind:value={about} maxlength="2000" rows="5"></textarea></div>
         <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', about, showLobby }))}>Save</button>
