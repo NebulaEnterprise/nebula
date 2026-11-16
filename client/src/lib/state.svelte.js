@@ -823,6 +823,7 @@ export async function openDm(user) {
   parkStream();
   ui.mode = 'dm';
   ui.dmUser = user;
+  ui.dock = 'profile';
   if (user && user.id) {
     loadProfile(user.id).then((fresh) => {
       if (fresh && ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };

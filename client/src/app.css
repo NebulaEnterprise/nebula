@@ -978,6 +978,17 @@ img { max-width: 100%; }
 .call-controls .join-back:hover { background: #1a6334; }
 .voice-tool.on { color: #fff; background: #da373c; }
 .dock.profile-dock { background: transparent; }
+@media (min-width: 901px) {
+  .main:has(.profile-dock) { background: transparent; border-radius: 0; overflow: visible; }
+  .chat-frame:has(.profile-dock) { gap: 12px; }
+  .chat-frame:has(.profile-dock) > .chat-col {
+    background: #160e26; border-radius: 22px; overflow: hidden;
+  }
+  .dock.profile-dock {
+    width: 320px; border: 0; border-radius: 22px; overflow: hidden; flex-shrink: 0;
+  }
+  .dock.profile-dock .dock-profile.profile-card { border-radius: 22px; overflow: hidden; }
+}
 .dock.profile-dock .dock-body { flex: 1; min-height: 0; padding: 0; gap: 0; }
 .dock-profile.profile-card {
   border: 0; border-radius: 0; box-shadow: none; flex: 1; min-height: 100%;
