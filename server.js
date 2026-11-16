@@ -1097,7 +1097,9 @@ async function flushSaves() {
 }
 
 let users = load(USERS_FILE, {});
-let messages = load(MESSAGES_FILE, {});
+let messages = {};
+try { fs.unlinkSync(MESSAGES_FILE); } catch (_) {}
+function rememberMessages() {}
 const pulseWaiters = new Set();
 let profileRev = 1;
 let alertRev = 1;
@@ -2027,17 +2029,15 @@ function readSeal(body) {
 }
 
 function messageExtras(body) {
-  const seal = body && body.seal ? readSeal(body) : null;
-  if (seal && seal.error) return seal;
-  const content = seal ? '' : String(body && body.content || '').trim().slice(0, 2000);
+  const content = String(body && body.content || '').trim().slice(0, 2000);
   const files = readFiles(body);
   let poll = null;
   if (body && body.poll) {
     poll = readPoll(body);
     if (!poll) return { error: 'Add a question and at least two answers' };
   }
-  if (!content && !seal && !files.length && !poll) return { error: 'Empty message' };
-  return { content, files, poll, seal: seal || null };
+  if (!content && !files.length && !poll) return { error: 'Empty message' };
+  return { content, files, poll, seal: null };
 }
 
 function presentMessage(msg, viewerId) {
@@ -2059,7 +2059,7 @@ function presentMessage(msg, viewerId) {
   out.reply = replies[0] || null;
   if (msg && msg.poll) out.poll = publicPoll(msg.poll, viewerId);
   out.reactions = publicReactions(msg, viewerId);
-  if (out.seal) out.content = '';
+  delete out.seal;
   return out;
 }
 
@@ -2086,7 +2086,7 @@ function unpackImages() {
       }
     }
   }
-  if (msgChanged) save(MESSAGES_FILE, messages);
+  if (msgChanged) rememberMessages();
 }
 
 function isR2Url(url) {
@@ -4363,7 +4363,7 @@ function finishCall(row, missed) {
       } else if (row.status === 'missed') {
         msg.callMissed = true;
       }
-      save(MESSAGES_FILE, messages);
+      rememberMessages();
       publishUpdate(row.channelId, msg);
     }
   }
@@ -4498,7 +4498,7 @@ app.post('/api/calls', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   });
   saveCalls();
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishCreate(channelId, messages[channelId][messages[channelId].length - 1]);
   touchAlerts();
   res.json({ ok: true, call: callView(row) });
@@ -4962,7 +4962,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   };
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
   publishCreate(found.channel.id, msg);
   touchAlerts();
@@ -5759,7 +5759,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   };
   messages[channelId].push(msg);
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   publishCreate(channelId, msg);
   noteBrief(req.user, [otherId]);
@@ -5786,7 +5786,7 @@ function appendRoomMessage(roomId, req) {
   };
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   silenceTyping(roomId, req.user.id, req.body && req.body.typingToken);
   publishCreate(roomId, msg);
   noteBrief(req.user, peersOfRoom(roomId, req.user.id));
@@ -5931,7 +5931,7 @@ app.post('/api/groups', auth, (req, res) => {
     createdAt: new Date().toISOString(),
     system: true,
   }];
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   res.json({ ok: true, group: publicGroup(group, req.user) });
 });
 
@@ -6100,7 +6100,7 @@ app.post('/api/threads/:id/action', auth, (req, res) => {
   } else if (type === 'delete') {
     if (!mine && !manage) return res.status(403).json({ error: 'You cannot delete this thread' });
     delete messages['thread:' + thread.id];
-    save(MESSAGES_FILE, messages);
+    rememberMessages();
     delete threads[thread.id];
     save(THREADS_FILE, threads);
     return res.json({ ok: true, deleted: true });
@@ -6117,7 +6117,7 @@ app.post('/api/messages/:id/pin', auth, (req, res) => {
   const on = !(req.body && req.body.on === false);
   found.msg.pinned = on;
   found.msg.pinnedAt = on ? new Date().toISOString() : '';
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
@@ -6251,7 +6251,7 @@ app.post('/api/messages/:id/reactions', auth, (req, res) => {
   if (mine >= 0) row.users.splice(mine, 1);
   else row.users.push(String(req.user.id));
   msg.reactions = msg.reactions.filter((item) => item && item.users && item.users.length);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishUpdate(found.roomId, msg);
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -6260,19 +6260,16 @@ app.patch('/api/messages/:id', auth, (req, res) => {
   const found = locateMessage(req.params.id);
   if (!found || !canSeeRoom(req.user, found.roomId)) return res.status(404).json({ error: 'Message not found' });
   if (String(found.msg.authorId) !== String(req.user.id)) return res.status(403).json({ error: 'You can only edit your own messages' });
-  const seal = req.body && req.body.seal ? readSeal(req.body) : null;
-  if (seal && seal.error) return res.status(400).json({ error: seal.error });
-  const content = seal ? '' : String(req.body && req.body.content || '').trim().slice(0, 2000);
-  if (!content && !seal && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
+  const content = String(req.body && req.body.content || '').trim().slice(0, 2000);
+  if (!content && !(found.msg.files || []).length && !found.msg.poll) return res.status(400).json({ error: 'Message is empty' });
   found.msg.content = content;
-  if (seal) found.msg.seal = seal;
-  else delete found.msg.seal;
+  delete found.msg.seal;
   found.msg.editedAt = new Date().toISOString();
-  if (!seal && !String(found.roomId).startsWith('dm:')) {
+  if (!String(found.roomId).startsWith('dm:')) {
     const channel = findChannel(found.roomId, '');
     if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
   }
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
@@ -6284,7 +6281,7 @@ app.delete('/api/messages/:id', auth, (req, res) => {
   const manage = channel && (isOwner(channel.guild, req.user) || can(channel.guild, req.user, PERM.MANAGE_CHANNELS));
   if (String(found.msg.authorId) !== String(req.user.id) && !manage) return res.status(403).json({ error: 'You can only delete your own messages' });
   found.list.splice(found.index, 1);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishDelete(found.roomId, req.params.id);
   res.json({ ok: true });
 });
@@ -6344,7 +6341,7 @@ app.post('/api/messages/:id/forward', auth, (req, res) => {
   };
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
-  save(MESSAGES_FILE, messages);
+  rememberMessages();
   publishCreate(roomId, msg);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
@@ -6370,7 +6367,7 @@ app.post('/api/polls/:messageId/vote', auth, (req, res) => {
       if (!msg.poll.votes[id]) msg.poll.votes[id] = [];
       msg.poll.votes[id].push(req.user.id);
     }
-    save(MESSAGES_FILE, messages);
+    rememberMessages();
     publishUpdate(msg.channelId, msg);
     return res.json({ ok: true, poll: publicPoll(msg.poll, req.user.id) });
   }

@@ -4,7 +4,7 @@ import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM, inviteCodeFromUrl, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
-import { ensureBox, localKeys, openSeal, saveKeys, sealFile, sealText } from './seal.js';
+import { ensureBox, localKeys, saveKeys } from './seal.js';
 
 export const nowClock = $state({ t: Date.now() });
 if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
@@ -1873,32 +1873,26 @@ function shareProblem(content, files, people, where) {
 
 function peopleFor(where) {
   if (where && Array.isArray(where.people) && where.people.length) {
-    const picked = where.people.filter((person) => person && person.boxKey);
-    if (ui.me?.boxKey && !picked.some((person) => String(person.id) === String(ui.me.id))) picked.unshift({ id: ui.me.id, boxKey: ui.me.boxKey });
+    const picked = where.people.filter(Boolean);
+    if (ui.me && !picked.some((person) => String(person.id) === String(ui.me.id))) picked.unshift(ui.me);
     return picked;
   }
   const people = [];
   const add = (person) => {
-    if (!person?.id || !person.boxKey || people.some((row) => String(row.id) === String(person.id))) return;
-    people.push({ id: person.id, boxKey: person.boxKey, canSendLinks: person.canSendLinks, canSendMedia: person.canSendMedia, displayName: person.displayName, username: person.username });
+    if (!person?.id || people.some((row) => String(row.id) === String(person.id))) return;
+    people.push(person);
   };
   add(ui.me);
   if (where.mode === 'dm') {
     const other = ui.dmUser && String(ui.dmUser.id) === String(where.dmUserId)
       ? ui.dmUser
       : (ui.dms || []).map((dm) => dm && dm.other).find((person) => person && String(person.id) === String(where.dmUserId));
-    if (!other?.boxKey) {
-      const name = other?.displayName || other?.username || 'They';
-      throw new Error(name + ' has to open Nebula once before this message can be encrypted.');
-    }
     add(other);
   } else if (where.mode === 'group') {
     for (const member of ui.group?.members || []) add(member);
   } else {
-    if (!(ui.members || []).length) throw new Error('Wait a moment and try again.');
     for (const member of ui.members || []) add(member);
   }
-  if (!people.some((person) => ui.me && String(person.id) === String(ui.me.id))) throw new Error('Open Nebula again so this device can encrypt messages.');
   return people;
 }
 
@@ -1979,18 +1973,17 @@ async function syncBox() {
 }
 
 async function revealMessage(message) {
-  if (!message || !message.seal || !ui.me?.id) return message;
-  try {
-    const text = await openSeal(message.seal, ui.me.id);
-    return { ...message, content: text, locked: false };
-  } catch (_) {
-    return { ...message, content: '', locked: true };
-  }
+  if (!message) return message;
+  if (message.seal && !String(message.content || '').trim()) return null;
+  return { ...message, locked: false };
 }
 
 async function revealList(list) {
   const opened = [];
-  for (const msg of list || []) opened.push(await revealMessage(msg));
+  for (const msg of list || []) {
+    const next = await revealMessage(msg);
+    if (next) opened.push(next);
+  }
   const byId = new Map(opened.map((msg) => [msg && msg.id, msg]));
   return opened.map((msg) => {
     if (!msg || (!msg.replies && !msg.reply)) return msg;
@@ -2014,11 +2007,9 @@ async function postMessage(payload, target) {
   const typingToken = stopTyping(false);
   const body = { typingToken };
   if (content) {
-    await publishBox();
-    const people = peopleFor(where);
-    const blocked = shareProblem(content, files, people, where);
+    const blocked = shareProblem(content, files, peopleFor(where), where);
     if (blocked) throw new Error(blocked);
-    body.seal = await sealText(content, people);
+    body.content = content;
   }
   if (files.length) body.files = files;
   if (poll) body.poll = poll;
@@ -2064,9 +2055,7 @@ export async function sendMessage() {
     ui.composer = '';
     ui.editing = null;
     try {
-      await publishBox();
-      const seal = await sealText(content, peopleFor({ mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' }));
-      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { seal } });
+      const data = await api('/api/messages/' + encodeURIComponent(id), { method: 'PATCH', body: { content } });
       const opened = data.message ? await revealMessage(data.message) : null;
       if (opened) ui.messages = ui.messages.map((msg) => msg.id === id ? opened : msg);
       dropLive();
@@ -2128,17 +2117,15 @@ export async function removeMessage(messageId) {
 
 export async function forwardMessage(messageId, target) {
   const src = ui.messages.find((msg) => msg.id === messageId);
-  if (src && (src.seal || src.content)) {
-    if (src.locked || !src.content) throw new Error('This message is encrypted and this device cannot open it.');
+  if (src && src.content) {
     let people = null;
     let where = null;
     if (target.userId) {
-      if (!target.boxKey) throw new Error((target.name || 'They') + ' has to open Nebula once before this message can be encrypted.');
-      people = [{ id: ui.me.id, boxKey: ui.me.boxKey, canSendLinks: true, canSendMedia: true }, { id: target.userId, boxKey: target.boxKey, canSendLinks: target.canSendLinks, canSendMedia: target.canSendMedia }];
+      people = [{ id: ui.me.id, canSendLinks: true, canSendMedia: true }, { id: target.userId, canSendLinks: target.canSendLinks, canSendMedia: target.canSendMedia }];
       where = { mode: 'dm', dmUserId: target.userId, channelId: '', groupId: '', threadId: '', people };
     } else if (target.channelId) {
       const data = await api('/api/members?serverId=' + encodeURIComponent(target.serverId || ''));
-      people = (data.members || []).filter((member) => member && member.boxKey);
+      people = data.members || [];
       where = { mode: 'chat', channelId: target.channelId, dmUserId: '', groupId: '', threadId: '', people };
     }
     if (where) {
@@ -2204,20 +2191,19 @@ export async function sendFiles(list) {
     const report = (index, n) => {
       patchLocal(tempId, (msg) => ({ files: msg.files.map((row, at) => at === index ? { ...row, progress: Math.max(1, n) } : row) }));
     };
-    const people = peopleFor(target);
     for (let i = 0; i < files.length; i++) {
       const blob = files[i].file;
       if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
       report(i, 5);
-      const sealed = await sealFile(new Uint8Array(await blob.arrayBuffer()), {
-        name: files[i].name || 'file',
-        mime: blob.type || '',
-        alt: files[i].alt || '',
-      }, people);
-      const body = new Blob([sealed.bytes], { type: 'application/octet-stream' });
-      const data = await uploadFile(body, (n) => report(i, Math.max(5, n)), 'sealed.bin');
+      const data = await uploadFile(blob, (n) => report(i, Math.max(5, n)), files[i].name || blob.name || 'file');
       if (!data.url) throw new Error('The file did not upload');
-      saved.push({ url: data.url, name: 'Encrypted file', lock: sealed.lock, spoiler: files[i].spoiler });
+      saved.push({
+        url: data.url,
+        name: files[i].name || blob.name || 'file',
+        alt: files[i].alt || '',
+        spoiler: files[i].spoiler,
+        kind: fileKind(blob),
+      });
       report(i, 100);
     }
     await postMessage({ content, files: saved, replies, replaceId: tempId }, target);

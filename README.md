@@ -28,7 +28,7 @@ Usernames remain in the file and anyone in a server can see them.
 
 ### Messages
 
-Messages are encrypted on the device before they reach the server. The server stores the sealed message, not the words. New photos, videos, and files sent in a chat are encrypted on the device before they are uploaded. Profile pictures and server icons stay visible. Polls are not encrypted. Older files that were uploaded before this change stay readable.
+Messages are not saved. People in the chat can read them while the server is running, and they are gone when it stops. Photos and files sent in a chat stay visible to the people who can open that chat. Profile pictures and server icons stay visible.
 
 ### Friends, direct messages, and servers
 
@@ -40,7 +40,7 @@ Call audio and screen sharing are encrypted between the people on the call. The 
 
 ### Summary
 
-Messages, calls, screen sharing, and new photos, videos, and files are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted.
+Messages are not saved. Calls and screen sharing are encrypted on the device. Emails and passwords are not stored in a form that can be read. IP addresses and device details are not kept. The friend list, direct-message list, and server membership are encrypted.
 
 <img width="1911" height="1080" alt="r2-1794477087019-uzrgmbheg3wios2p1ahq-t" src="https://github.com/user-attachments/assets/434bf1a0-2857-435b-a4ec-3bae2c8a57c2" />
 

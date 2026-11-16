@@ -2,8 +2,7 @@
   import { MessageSquare, X, ChevronLeft, ExternalLink, Phone, EyeOff } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone, relation, publishBox } from '../state.svelte.js';
-  import { openSeal, sealText } from '../seal.js';
+  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone, relation } from '../state.svelte.js';
   import { api } from '../api.js';
   import { formatContent, emojiScale } from '../format.js';
   import { startCall } from '../voice.js';
@@ -201,14 +200,8 @@
     log.scrollTop = log.scrollHeight;
   });
 
-  async function revealQuick(list) {
-    const out = [];
-    for (const msg of list || []) {
-      if (!msg?.seal || !ui.me?.id) { out.push(msg); continue; }
-      try { out.push({ ...msg, content: await openSeal(msg.seal, ui.me.id), locked: false }); }
-      catch { out.push({ ...msg, content: '', locked: true }); }
-    }
-    return out;
+  function revealQuick(list) {
+    return (list || []).filter((msg) => msg && !(msg.seal && !String(msg.content || '').trim()));
   }
 
   function undeliveredText(tone) {
@@ -234,11 +227,8 @@
     }];
     follow = true;
     try {
-      await publishBox();
-      if (!user.boxKey || !ui.me?.boxKey) throw new Error((user.displayName || user.username || 'They') + ' has to open Nebula once before this message can be encrypted.');
-      const seal = await sealText(content, [{ id: ui.me.id, boxKey: ui.me.boxKey }, { id: user.id, boxKey: user.boxKey }]);
-      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { seal, typingToken } });
-      const opened = data.message ? (await revealQuick([data.message]))[0] : null;
+      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content, typingToken } });
+      const opened = data.message ? revealQuick([data.message])[0] : null;
       if (opened) messages = [...messages.filter((msg) => msg.id !== tempId && msg.id !== opened.id), opened];
       loadDms();
     } catch (err) {
