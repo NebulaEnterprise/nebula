@@ -271,18 +271,6 @@
         <span>Friends</span>
         {#if requestCount}<em class="pill-count" title="Friend requests">{countLabel(requestCount)}</em>{/if}
       </button>
-      {#if ui.mode === 'friends'}
-        <hr class="side-rule" />
-        {#each ui.servers as server (server.id)}
-          <button type="button" class="nav-item" onclick={() => openServer(server.id)}>
-            <i class="srv-mark" style="--srv:{server.color || '#a78bfa'}">{(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}</i>
-            <span class="ch-name">{server.name}</span>
-          </button>
-        {/each}
-        <button type="button" class="nav-item" onclick={() => (ui.dialog = { kind: 'add-server' })}>
-          <Plus size={16} /> Join a server
-        </button>
-      {/if}
       <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => { showFriends('find'); phoneChat(); }}><Search size={16} /> Find people</button>
       <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
       <div class="cat"><span>direct messages</span></div>

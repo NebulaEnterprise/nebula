@@ -125,6 +125,17 @@ img { max-width: 100%; }
 .rail-logo:hover, .rail-tab:hover { color: #f4f0ff; background: rgba(255, 255, 255, 0.04); }
 .rail-tab.on { color: #f7f4ff; background: #2a2433; }
 .rail-tab.on:hover { background: #322b3d; }
+.rail-line { width: 28px; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.22); margin: 6px 0; }
+.rail-servers {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
+}
+.rail-servers::-webkit-scrollbar { display: none; }
+.rail-srv {
+  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; position: relative;
+  background: color-mix(in srgb, var(--srv, #a78bfa) 48%, #1b1722); color: #fff; font-weight: 700;
+}
+.rail-srv.on { box-shadow: 0 0 0 2px #eadfff; }
 .rail-spacer { flex: 1; width: 100%; }
 .rail-gear, .rail-gear:hover { background: transparent; }
 .rail-gear:hover { background: rgba(255, 255, 255, 0.04); }

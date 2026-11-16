@@ -1,5 +1,5 @@
 <script>
-  import { Compass, MessageSquare, Settings, Users } from '@lucide/svelte';
+  import { Compass, MessageSquare, Plus, Settings, Users } from '@lucide/svelte';
   import { ui, openServer, showFriends, openDm, phoneBrowse } from '../state.svelte.js';
 
   const onChats = $derived(ui.mode === 'dm' || ui.mode === 'group');
@@ -7,7 +7,6 @@
   const onServers = $derived(ui.mode === 'chat' || ui.mode === 'thread');
   const chatUnread = $derived((ui.dms || []).reduce((sum, dm) => sum + (Number(ui.activity.dms[dm.other?.id]?.unread) || 0), 0));
   const peopleUnread = $derived((ui.incoming || []).length);
-  const serverUnread = $derived(Object.values(ui.activity.servers || {}).reduce((sum, row) => sum + (Number(row?.mentions) || (row?.unread ? 1 : 0)), 0));
 
   function latestDm() {
     return [...(ui.dms || [])]
@@ -65,6 +64,25 @@
     <Users size={22} />
     {#if peopleUnread}<em class="rail-count">{count(peopleUnread)}</em>{/if}
   </button>
+  <hr class="rail-line" />
+  <div class="rail-servers">
+    {#each ui.servers as server (server.id)}
+      {@const note = ui.activity.servers[server.id]}
+      <button
+        class="rail-srv"
+        class:on={ui.mode === 'chat' && ui.serverId === server.id}
+        title={server.name}
+        style="--srv:{server.color || '#a78bfa'}"
+        onclick={() => openServer(server.id)}
+      >
+        {(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}
+        {#if note?.mentions}<em class="rail-count">{count(note.mentions)}</em>{/if}
+      </button>
+    {/each}
+    <button class="rail-tab" title="Join a server" onclick={() => (ui.dialog = { kind: 'add-server' })}>
+      <Plus size={20} />
+    </button>
+  </div>
   <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
     <Compass size={22} />
     {#if serverUnread}<em class="rail-count">{count(serverUnread)}</em>{/if}
