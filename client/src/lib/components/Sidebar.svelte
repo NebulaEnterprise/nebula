@@ -170,11 +170,14 @@
 <aside class="side">
   {#if ui.mode === 'chat'}
     <div class="side-head">
-      <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
-        <span>{ui.serverMeta?.name || 'Server'}</span>
-        {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
-        <ChevronDown size={16} />
-      </button>
+      <div class="side-title">
+        <button class="title" onclick={() => { ui.serverPick = false; ui.menuOpen = !ui.menuOpen; }} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
+          <span>{ui.serverMeta?.name || 'Server'}</span>
+          {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
+          <ChevronDown size={14} />
+        </button>
+        <button type="button" class="side-kicker" class:on={ui.serverPick} onclick={() => { ui.menuOpen = false; ui.serverPick = !ui.serverPick; }}>your servers</button>
+      </div>
     </div>
     {#if ui.menuOpen}
       <div class="menu">
@@ -187,6 +190,19 @@
       </div>
     {/if}
     <div class="scroll">
+      {#if ui.serverPick}
+        <div class="server-pick">
+          {#each ui.servers as server (server.id)}
+            <button type="button" class:on={server.id === ui.serverId} style="--srv:{server.color || '#a78bfa'}" onclick={() => { ui.serverPick = false; openServer(server.id); }}>
+              <i>{(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}</i>
+              <span>{server.name}</span>
+            </button>
+          {/each}
+          <button type="button" class="add" onclick={() => { ui.serverPick = false; ui.dialog = { kind: 'add-server' }; }}>
+            <Plus size={16} /> Add a server
+          </button>
+        </div>
+      {/if}
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}

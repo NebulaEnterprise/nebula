@@ -59,6 +59,7 @@ export const ui = $state({
   members: [],
   badgeDefs: {},
   menuOpen: false,
+  serverPick: false,
   phone: 'browse',
   picker: '',
   attachOpen: false,

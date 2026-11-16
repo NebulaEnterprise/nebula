@@ -112,40 +112,27 @@ img { max-width: 100%; }
 
 .shell { height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden; }
 .rail {
-  --bg-rail: #100e14;
-  width: 72px; background: #100e14; display: flex; flex-direction: column;
-  align-items: center; gap: 12px; padding: 14px 0 12px; flex-shrink: 0;
+  --bg-rail: #0e0d12;
+  width: 76px; background: #0e0d12; display: flex; flex-direction: column;
+  align-items: center; gap: 8px; padding: 16px 0 14px; flex-shrink: 0;
 }
-.rail-btn, .srv {
-  width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
-  background: #1b1722; color: #efeaf8; font-weight: 650; position: relative;
-  border: 1.5px solid transparent;
-  transition: border-radius var(--med) var(--ease), background-color var(--med) var(--ease), color var(--fast) var(--ease), transform var(--fast) var(--ease), box-shadow var(--med) var(--ease);
+.rail-logo, .rail-tab {
+  width: 48px; height: 48px; border-radius: 16px; display: grid; place-items: center;
+  color: #b7a8c9; background: transparent; position: relative;
 }
-.rail-btn:hover, .srv:hover { border-radius: 14px; background: #262033; color: #fff; }
-.srv { background: color-mix(in srgb, var(--srv, #a78bfa) 18%, #1b1722); }
-.srv.on, .rail-btn.on {
-  border-radius: 14px; color: #fff; border-color: #eadfff;
-  box-shadow: 0 0 0 1px rgba(234, 223, 255, 0.35), 0 0 16px rgba(167, 139, 250, 0.45);
-}
-.srv.on { background: color-mix(in srgb, var(--srv, #a78bfa) 30%, #1b1722); }
-.srv img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
-.rail-btn.dm-mark,
-.rail-btn.dm-mark:hover {
-  padding: 0; overflow: hidden; background: #1b1722; box-shadow: none; border-color: transparent;
-}
-.rail-btn.dm-mark.on {
-  background: #1b1722; border-color: #eadfff;
-  box-shadow: 0 0 0 1px rgba(234, 223, 255, 0.35), 0 0 16px rgba(167, 139, 250, 0.45);
-}
-.rail-btn.dm-mark img {
-  width: 100%; height: 100%; object-fit: cover; pointer-events: none; border-radius: inherit;
-}
+.rail-logo { color: #d8c6ff; margin-bottom: 6px; }
+.rail-logo:hover, .rail-tab:hover { color: #f4f0ff; background: rgba(255, 255, 255, 0.04); }
+.rail-tab.on { color: #f7f4ff; background: #2a2433; }
+.rail-tab.on:hover { background: #322b3d; }
 .rail-spacer { flex: 1; width: 100%; }
-.rail-add, .rail-gear { color: #b7aec4; background: transparent; }
-.rail-add:hover, .rail-gear:hover { background: #262033; color: #fff; box-shadow: none; border-color: transparent; }
-.dm-rail, .dm-rail:hover { width: 40px; height: 40px; border-radius: 50%; padding: 0; overflow: visible; background: transparent; border-color: transparent; box-shadow: none; }
-.dm-rail .avatar, .dm-rail:hover .avatar { width: 40px; height: 40px; border-radius: 50%; }
+.rail-gear, .rail-gear:hover { background: transparent; }
+.rail-gear:hover { background: rgba(255, 255, 255, 0.04); }
+.rail-count {
+  position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: #7c5cbf; color: #fff; font-size: 10px; font-weight: 700;
+  font-style: normal; display: grid; place-items: center; line-height: 1;
+  box-shadow: 0 0 0 2px var(--bg-rail);
+}
 .dm-rail .badge {
   left: auto; top: auto; right: -3px; bottom: -2px; z-index: 3;
   display: flex; align-items: center; justify-content: center;
@@ -165,10 +152,29 @@ img { max-width: 100%; }
   height: auto; min-height: 58px; display: flex; align-items: center; gap: 8px; padding: 16px 14px 4px;
   font-weight: 650; border-bottom: 0; flex-shrink: 0; background: none;
 }
+.side-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
 .side-head button.title {
-  flex: 1; text-align: left; font-weight: 650; font-size: 16px; letter-spacing: -0.01em;
+  width: 100%; text-align: left; font-weight: 650; font-size: 16px; letter-spacing: -0.01em;
   display: flex; align-items: center; gap: 6px; min-width: 0; color: #f4f1f8;
 }
+.side-kicker {
+  margin: 0; padding: 0; color: #8e8798; font-size: 12px; font-weight: 500; text-align: left;
+}
+.side-kicker.on, .side-kicker:hover { color: #d8c6ff; }
+.server-pick { display: flex; flex-direction: column; gap: 2px; margin: 0 4px 8px; }
+.server-pick button {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: 12px; color: #efeaf8; text-align: left; font-weight: 600;
+}
+.server-pick button.on { background: #2a2433; }
+.server-pick button:hover { background: rgba(255, 255, 255, 0.05); }
+.server-pick i {
+  width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0;
+  background: color-mix(in srgb, var(--srv, #a78bfa) 32%, #1b1722); color: #fff;
+  font-style: normal; font-size: 14px; font-weight: 700;
+}
+.server-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.server-pick .add { color: #b7a8c9; font-weight: 600; }
 .side-head button.title svg { width: 14px; height: 14px; color: #9a93a6; flex-shrink: 0; }
 .side-head .title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted-pill { font-size: 11px; color: var(--faint); font-weight: 600; }
