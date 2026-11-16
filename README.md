@@ -120,10 +120,7 @@ After the disk seal is open, the running server can see:
 - Who is friends with whom, who is in a direct message, and who belongs to a server.
 - That a message exists, who sent it, and when. The body is `NEB2.` ciphertext unless the server also has the room key.
 - The room key of every server that is still listed in Discover, and therefore the history of those servers.
-- Who is in a call right now. That list lives in memory until the call ends. The saved note in the thread is ciphertext, The saved note is hidden. The live call is not.
-The note in the thread is NEB2. ciphertext. Nebula cannot read whether it was missed, declined, or how long it lasted. The audio and the connection setup are sealed too, so Nebula cannot hear the call.
-While the call is happening, the running server still has the live list in memory. That list has the account ids, so Nebula can see who is ringing and who is sitting in the room. 
-It needs those ids to show the incoming call and to hand each person the sealed setup. When the call ends, or the server restarts, that list is gone.
+- Who is currently in a call. While a call is active, the running server temporarily holds a list of participating account IDs in memory. This allows Nebula to route incoming calls and deliver encrypted connection setup messages. The list is not written to disk and disappears when the call ends or the server restarts. The saved call record in the message thread is encrypted with `NEB2.` ciphertext. Nebula cannot read whether a call was missed, declined, or how long it lasted. Call audio, screen sharing, and connection setup messages are also encrypted. Nebula cannot access the audio or shared screen, but it can see who is currently ringing or participating in a call.
 
 The running server cannot turn these back into words or pixels:
 
