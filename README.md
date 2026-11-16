@@ -101,6 +101,8 @@ Files can be up to 25 MB. When Cloudflare R2 is configured, the sealed upload is
 
 ## Calls
 
+A direct or group call leaves its record in that same thread. The browser seals a short note, `[[call:ring]]`, then replaces it with the length, a miss, or a decline. Nebula stores that note as `NEB2.` ciphertext beside the other messages. There is no separate call log of names. A ring that is still going is kept only in memory so the other person can pick up, and it is gone when the process stops.
+
 Call audio and a shared screen go from one browser to the other with WebRTC. The media is encrypted by the peer connection. The server does not receive the audio or the screen.
 
 The setup messages that connect the two browsers (the offer, the answer, and the network candidates) are sealed first. Each side derives an AES-GCM key from an ECDH exchange with the other person’s call key, encrypts the setup, and posts only that blob. The server holds it in memory long enough to hand it over. It does not open it, and it does not write it into the message history.
@@ -118,7 +120,7 @@ After the disk seal is open, the running server can see:
 - Who is friends with whom, who is in a direct message, and who belongs to a server.
 - That a message exists, who sent it, and when. The body is `NEB2.` ciphertext unless the server also has the room key.
 - The room key of every server that is still listed in Discover, and therefore the history of those servers.
-- Who is in a call.
+- Who is in a call right now. That list lives in memory until the call ends. The saved note in the thread is ciphertext.
 
 The running server cannot turn these back into words or pixels:
 

@@ -1,6 +1,6 @@
 import { api, getApiBase } from './api.js';
 import { openCall, sealCall } from './seal.js';
-import { ui, toast, callTone, gateCall } from './state.svelte.js';
+import { ui, toast, callTone, gateCall, postCallNote, sealCallStart, writeCallNote } from './state.svelte.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -427,6 +427,7 @@ async function sync() {
   const members = fresh ? paintList(voice.channelId, data.members || []) : (ui.voiceRooms[voice.channelId] || []);
   if (fresh) publishRoom(voice.channelId, members);
   const others = members.filter((member) => String(member.id) !== String(ui.me?.id));
+  if (others.length && ui.voice) ui.voice.answered = true;
   const live = new Set(others.map((member) => String(member.id)));
   if (fresh) {
     for (const id of [...peers.keys()]) {
@@ -488,7 +489,15 @@ async function dropOutgoing(missed) {
   } catch (_) {}
 }
 
-async function connectCall(channelId, name, person, callId) {
+function noteWhere(channelId) {
+  const channel = String(channelId || '');
+  if (channel.startsWith('group:')) return { mode: 'group', groupId: channel.slice(6) };
+  if (!channel.startsWith('dm:') || !ui.me) return null;
+  const other = channel.slice(3).split(':').find((id) => id && id !== String(ui.me.id));
+  return other ? { mode: 'dm', dmUserId: other } : null;
+}
+
+async function connectCall(channelId, name, person, callId, callMessageId) {
   if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -517,6 +526,8 @@ async function connectCall(channelId, name, person, callId) {
     name,
     person: person || null,
     callId: callId || null,
+    callMessageId: callMessageId || '',
+    answered: false,
     muted: false,
     deafened: false,
     speakingSent: false,
@@ -545,8 +556,15 @@ export async function startCall(user) {
   }
   if (person && ui.me && String(person.id) !== String(ui.me.id)) {
     if (gateCall(person)) return;
+    let sealed = null;
     try {
-      const data = await api('/api/calls', { method: 'POST', body: { userId: person.id } });
+      sealed = await sealCallStart({ mode: 'dm', dmUserId: person.id });
+    } catch (err) {
+      toast(err.message || 'Set a recovery code before starting a call');
+      return;
+    }
+    try {
+      const data = await api('/api/calls', { method: 'POST', body: { userId: person.id, content: sealed.content, wraps: sealed.wraps } });
       ui.outgoingCall = data.call;
     } catch (err) {
       const tone = callTone(err.message);
@@ -558,8 +576,20 @@ export async function startCall(user) {
       return;
     }
   }
+  const kept = ui.outgoingCall;
+  let callMessageId = kept && kept.messageId;
+  ui.outgoingCall = null;
+  if (!person && ui.mode === 'group' && ui.group) {
+    try {
+      callMessageId = await postCallNote({ mode: 'group', groupId: ui.group.id }, '[[call:ring]]');
+    } catch (err) {
+      toast(err.message || 'Could not save the call');
+      return;
+    }
+  }
   await leaveVoice();
-  await connectCall(channelId, name, person && person.id ? person : null, ui.outgoingCall && ui.outgoingCall.id);
+  ui.outgoingCall = kept;
+  await connectCall(channelId, name, person && person.id ? person : null, kept && kept.id, callMessageId);
 }
 
 export async function joinOpenCall() {
@@ -653,8 +683,11 @@ export async function leaveVoice() {
   leaving = true;
   roomTicket += 1;
   syncTicket += 1;
-  const voice = ui.voice;
-  try {
+    const voice = ui.voice;
+    const answered = !!(voice && voice.answered);
+    const callMessageId = voice && voice.callMessageId;
+    const noteChannel = voice && voice.channelId;
+    try {
     if (poll) clearInterval(poll);
     poll = null;
     closeAll();
@@ -671,7 +704,12 @@ export async function leaveVoice() {
     if (voice && voice.callId) {
       try { await api('/api/calls/' + encodeURIComponent(voice.callId) + '/end', { method: 'POST', body: {} }); } catch (_) {}
     }
-    await dropOutgoing(true);
+    await dropOutgoing(!answered);
+    const where = noteWhere(noteChannel);
+    if (where && callMessageId) {
+      const seconds = answered ? Math.max(1, Math.round((Date.now() - (voice.joinedAt || Date.now())) / 1000)) : 0;
+      writeCallNote(where, seconds ? '[[call:' + seconds + ']]' : '[[call:missed]]', callMessageId).catch(() => {});
+    }
     if (!voice) return;
     try {
       await api('/api/voice/leave', {

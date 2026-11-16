@@ -631,8 +631,14 @@ const dmSnippets = new Map();
 
 function lineOf(msg) {
   if (!msg || msg.failed || msg.kind === 'clyde') return '';
+  if (msg.kind === 'call') {
+    if (msg.callMissed || msg.callToken === 'missed') return String(msg.authorId || msg.author?.id || '') === String(ui.me?.id) ? 'Call not answered' : 'Missed call';
+    if (msg.callDeclined || msg.callToken === 'declined') return 'Call declined';
+    if (Number(msg.callSeconds) > 0) return 'Call ended';
+    return 'Call';
+  }
   if (msg.locked) return 'Encrypted message';
-  const text = String(msg.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+  const text = String(msg.content || '').replace(/\[\[(?:gif|sticker|call):[^\]]+\]\]/g, '').trim();
   if (text) return text.slice(0, 140);
   if (msg.files && msg.files.length) return msg.files[0].name || 'Attachment';
   if (msg.poll) return msg.poll.question || 'Poll';
@@ -1316,6 +1322,9 @@ function warmRoom(key, path) {
     try {
       const data = await api(path);
       if (!roomLogs.has(key)) roomLogs.set(key, data.messages || []);
+      for (const msg of (data.messages || []).slice(-15)) {
+        if (msg && (msg.kind === 'call' || isSealedText(msg.content))) revealMessage(msg).catch(() => {});
+      }
     } catch (_) {
       warmSeen.delete(key);
     }
@@ -1330,8 +1339,8 @@ export function markAllRead() {
   saveSeen(map);
   ui.activity = { servers: {}, channels: {}, dms: {} };
   ui.mentions = [];
+  dismissCalls((ui.missedCalls || []).map((call) => call.id));
   ui.missedCalls = [];
-  api('/api/calls/read', { method: 'POST', body: {} }).catch(() => {});
   pollActivity();
   loadDms();
 }
@@ -1479,6 +1488,7 @@ async function applySocketMessage(type, data) {
     noteTypingEvent(data);
     return;
   }
+  if (data && data.message) revealMessage(data.message).catch(() => {});
   if (!viewingRoom(data.roomId)) return;
   const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
   const logKey = currentRoom();
@@ -2182,11 +2192,113 @@ function masterOf(value) {
   return value && typeof value === 'object' ? value.key : value;
 }
 
+const CALL_NOTE = /^\[\[call:(ring|missed|declined|\d{1,6})\]\]$/;
+const closedCallNotes = new Set();
+
+function dismissedCalls() {
+  try { return new Set(JSON.parse(localStorage.getItem(accountKey('nebula-call-seen')) || '[]')); }
+  catch { return new Set(); }
+}
+
+function dismissCalls(ids) {
+  const set = dismissedCalls();
+  for (const id of ids || []) if (id) set.add(String(id));
+  try { localStorage.setItem(accountKey('nebula-call-seen'), JSON.stringify([...set].slice(-200))); } catch (_) {}
+}
+
+const seenCallNotes = [];
+
+function rememberCall(message) {
+  if (!message || message.kind !== 'call' || !message.id) return;
+  const idx = seenCallNotes.findIndex((row) => row.id === message.id);
+  if (idx >= 0) seenCallNotes[idx] = message;
+  else seenCallNotes.push(message);
+  refreshMissed();
+}
+
+function refreshMissed() {
+  const hidden = dismissedCalls();
+  const now = Date.now();
+  ui.missedCalls = seenCallNotes.filter((msg) => {
+    if (!msg || hidden.has(String(msg.id))) return false;
+    if (String(msg.authorId || msg.author?.id || '') === String(ui.me?.id || '')) return false;
+    if (msg.callMissed || msg.callToken === 'missed') return true;
+    return msg.callToken === 'ring' && now - Date.parse(msg.createdAt || '') > 30000;
+  }).slice(-20).reverse().map((msg) => ({
+    id: msg.id,
+    at: msg.createdAt,
+    from: msg.author,
+    channelId: msg.channelId,
+  }));
+}
+
+function decorateCall(message, content) {
+  const match = String(content || '').match(CALL_NOTE);
+  if (!match) return null;
+  const token = match[1];
+  const next = {
+    ...message,
+    content: '',
+    kind: 'call',
+    callToken: token,
+    callSeconds: /^\d+$/.test(token) ? Number(token) : 0,
+    callMissed: token === 'missed',
+    callDeclined: token === 'declined',
+    locked: false,
+  };
+  rememberCall(next);
+  return next;
+}
+
+function callWhere(channelId) {
+  const channel = String(channelId || '');
+  if (channel.startsWith('dm:')) {
+    const other = channel.slice(3).split(':').find((id) => id && id !== String(ui.me?.id || ''));
+    return other ? { mode: 'dm', dmUserId: other } : null;
+  }
+  if (channel.startsWith('group:')) return { mode: 'group', groupId: channel.slice(6) };
+  return null;
+}
+
+export async function postCallNote(where, text) {
+  const packed = await roomMaster(where);
+  const body = { content: await sealText(masterOf(packed), text) };
+  if (packed && packed.wraps) body.wraps = packed.wraps;
+  const data = where.mode === 'group'
+    ? await api('/api/groups/' + encodeURIComponent(where.groupId) + '/messages', { method: 'POST', body })
+    : await api('/api/dms/' + encodeURIComponent(where.dmUserId) + '/messages', { method: 'POST', body });
+  return (data.message && data.message.id) || '';
+}
+
+export async function writeCallNote(where, text, messageId) {
+  if (!messageId || closedCallNotes.has(messageId)) return;
+  closedCallNotes.add(messageId);
+  try {
+    const packed = await roomMaster(where);
+    const content = await sealText(masterOf(packed), text);
+    await api('/api/messages/' + encodeURIComponent(messageId), { method: 'PATCH', body: { content } });
+  } catch (err) {
+    closedCallNotes.delete(messageId);
+    throw err;
+  }
+}
+
+export async function sealCallStart(where) {
+  const packed = await roomMaster(where);
+  return {
+    content: await sealText(masterOf(packed), '[[call:ring]]'),
+    wraps: packed && packed.wraps,
+  };
+}
+
 async function revealMessage(message) {
   if (!message) return message;
   if (message.seal && !String(message.content || '').trim()) return null;
   let content = message.content || '';
-  if (!isSealedText(content)) return { ...message, locked: false };
+  if (!isSealedText(content)) {
+    if (message.kind === 'call') rememberCall(message);
+    return { ...message, locked: false };
+  }
   try {
     const channel = String(message.channelId || '');
     let where = null;
@@ -2195,7 +2307,7 @@ async function revealMessage(message) {
     else where = { mode: 'chat', serverId: ui.serverId };
     const key = masterOf(await roomMaster(where));
     content = await openText(key, content);
-    return { ...message, content, locked: false };
+    return decorateCall(message, content) || { ...message, content, locked: false };
   } catch (_) {
     return { ...message, content: '', locked: true };
   }
@@ -3070,7 +3182,12 @@ export async function pollActivity() {
     const calls = data.calls || {};
     const ringing = (calls.incoming || []).filter((call) => !call.at || Date.now() - Number(call.at) < 22000);
     ui.incomingCall = ringing[0] || null;
-    ui.missedCalls = calls.missed || [];
+    refreshMissed();
+    for (const row of calls.outgoing || []) {
+      if (row.status !== 'declined' || !row.messageId) continue;
+      const where = callWhere(row.channelId);
+      if (where) writeCallNote(where, '[[call:declined]]', row.messageId).catch(() => {});
+    }
     const firstChannels = localStorage.getItem(accountKey('nebula-channel-baseline')) !== '1';
     if (firstChannels && data.heads) {
       const map = seenMap();

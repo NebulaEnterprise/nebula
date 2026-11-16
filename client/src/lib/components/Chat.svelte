@@ -950,11 +950,21 @@
     if (ui.mode === 'dm') return String(ui.dmUser?.id || '') !== fromId;
     return false;
   });
+  function callFace(msg) {
+    if (!msg || msg.kind !== 'call') return '';
+    const token = msg.callToken || '';
+    const age = nowClock.t - Date.parse(msg.createdAt || '');
+    if (token === 'missed' || msg.callMissed || (token === 'ring' && age > 30000)) return 'missed';
+    if (token === 'declined' || msg.callDeclined) return 'declined';
+    if (Number(msg.callSeconds) > 0) return 'done';
+    return 'live';
+  }
+
   const liveCallMessage = $derived.by(() => {
     if (ui.mode !== 'dm' || !partnerInCall(ui.dmUser)) return '';
     for (let i = ui.messages.length - 1; i >= 0; i -= 1) {
       const msg = ui.messages[i];
-      if (msg?.kind === 'call' && !msg.callSeconds && !msg.callMissed) return msg.id;
+      if (callFace(msg) === 'live') return msg.id;
     }
     return '';
   });
@@ -1384,10 +1394,12 @@
       <div class="call-note">
         <Phone size={16} />
         <span>
-          {#if msg.callMissed && String(msg.authorId) !== String(ui.me?.id)}
+          {#if callFace(msg) === 'missed' && String(msg.authorId) !== String(ui.me?.id)}
             You missed a call from <Name user={liveAuthor(msg.author)} />.
-          {:else if msg.callMissed}
+          {:else if callFace(msg) === 'missed'}
             Your call wasn't answered.
+          {:else if callFace(msg) === 'declined'}
+            The call was declined.
           {:else}
             <Name user={liveAuthor(msg.author)} /> started a call{msg.callSeconds ? ' that lasted ' + callLength(msg.callSeconds) : ''}.
             {#if msg.id === liveCallMessage}<button type="button" class="join-link" onclick={joinOpenCall}>Join the call</button>{/if}
