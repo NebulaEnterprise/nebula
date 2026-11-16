@@ -186,15 +186,7 @@
         {/each}
       </div>
     {/if}
-    {#if ui.bannerUrl}
-      <div class="banner-strip" style="background-image:linear-gradient(rgba(12,13,17,0.2), rgba(12,13,17,0.72)), url('{ui.bannerUrl}')"></div>
-    {/if}
     <div class="scroll">
-      {#if hasPerm(PERM.INVITE)}
-        <button class="invite-btn" onclick={() => (ui.dialog = { kind: 'invite' })}>
-          <Link size={16} /> Invite people
-        </button>
-      {/if}
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
@@ -204,7 +196,7 @@
           {#if cat.name}<div class="cat" oncontextmenu={(e) => openIdMenu(e, [{ label: 'Category ID', value: cat.id }])}><span>{cat.name}</span></div>{/if}
           {#if texts.length || !cat.id}
             <div class="cat">
-              <span>{cat.name ? 'Text' : 'Text channels'}</span>
+              <span>{cat.name ? 'text' : 'text channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
               {/if}
@@ -213,14 +205,16 @@
               {@const note = ui.activity.channels[ch.id]}
               <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Channel ID', value: ch.id }])}>
                 <button class="channel-hit" onpointerenter={() => warmChannel(ch.id)} onclick={() => pickChannel(ch)}>
-                  <Hash size={16} />
+                  {#if String(ch.name || '').toLowerCase() === 'general'}
+                    <MessageSquare size={16} />
+                  {:else}
+                    <Hash size={16} />
+                  {/if}
                   <span class="ch-name">{ch.name}</span>
-                  {#if note && ui.channelId !== ch.id}
-                    {#if note.mentions}
-                      <em class="pill-count">{note.mentions > 99 ? '99+' : note.mentions}</em>
-                    {:else if note.unread}
-                      <i class="pill-dot"></i>
-                    {/if}
+                  {#if note?.mentions}
+                    <em class="pill-count">{note.mentions > 99 ? '99+' : note.mentions}</em>
+                  {:else if note?.unread && ui.channelId !== ch.id}
+                    <i class="pill-dot"></i>
                   {/if}
                 </button>
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
@@ -234,7 +228,7 @@
           {/if}
           {#if voices.length || (!cat.id && hasPerm(PERM.MANAGE_CHANNELS))}
             <div class="cat">
-              <span>{cat.name ? 'Voice' : 'Voice channels'}</span>
+              <span>{cat.name ? 'voice' : 'voice channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
               {/if}
@@ -277,7 +271,7 @@
       </button>
       <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => { showFriends('find'); phoneChat(); }}><Search size={16} /> Find people</button>
       <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
-      <div class="cat"><span>Direct messages</span></div>
+      <div class="cat"><span>direct messages</span></div>
       {#each ui.groups || [] as group (group.id)}
         {#if !chatClosed('group:' + group.id, group.lastId)}
           <div class="dm-item" role="button" tabindex="0" class:on={ui.group?.id === group.id} onclick={() => openGroup(group)} onkeydown={(e) => { if (e.key === 'Enter') openGroup(group); }}>
