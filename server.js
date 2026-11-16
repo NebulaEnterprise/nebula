@@ -1002,7 +1002,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
-const sealedFiles = new Set([USERS_FILE, DMS_FILE, FRIENDS_FILE]);
+const sealedFiles = new Set([USERS_FILE, DMS_FILE, FRIENDS_FILE, MESSAGES_FILE]);
 const reseal = new Set();
 let dataKeyCache = null;
 function dataKey() {
@@ -1097,9 +1097,7 @@ async function flushSaves() {
 }
 
 let users = load(USERS_FILE, {});
-let messages = {};
-try { fs.unlinkSync(MESSAGES_FILE); } catch (_) {}
-function rememberMessages() {}
+let messages = load(MESSAGES_FILE, {});
 const pulseWaiters = new Set();
 let profileRev = 1;
 let alertRev = 1;
@@ -1177,6 +1175,7 @@ let dmThreads = load(DMS_FILE, {});
 if (reseal.has(USERS_FILE)) saveNow(USERS_FILE, users);
 if (reseal.has(DMS_FILE)) saveNow(DMS_FILE, dmThreads);
 if (reseal.has(FRIENDS_FILE)) saveNow(FRIENDS_FILE, friendGraph);
+if (reseal.has(MESSAGES_FILE)) saveNow(MESSAGES_FILE, messages);
 const GROUPS_FILE = path.join(DATA_DIR, 'groups.json');
 const CALLS_FILE = path.join(DATA_DIR, 'calls.json');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.json');
@@ -2086,7 +2085,7 @@ function unpackImages() {
       }
     }
   }
-  if (msgChanged) rememberMessages();
+  if (msgChanged) save(MESSAGES_FILE, messages);
 }
 
 function isR2Url(url) {
@@ -4363,7 +4362,7 @@ function finishCall(row, missed) {
       } else if (row.status === 'missed') {
         msg.callMissed = true;
       }
-      rememberMessages();
+      save(MESSAGES_FILE, messages);
       publishUpdate(row.channelId, msg);
     }
   }
@@ -4498,7 +4497,7 @@ app.post('/api/calls', auth, (req, res) => {
     createdAt: new Date().toISOString(),
   });
   saveCalls();
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishCreate(channelId, messages[channelId][messages[channelId].length - 1]);
   touchAlerts();
   res.json({ ok: true, call: callView(row) });
@@ -4962,7 +4961,7 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   };
   messages[found.channel.id].push(msg);
   if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   silenceTyping('ch:' + found.guild.id + ':' + found.channel.id, req.user.id, req.body && req.body.typingToken);
   publishCreate(found.channel.id, msg);
   touchAlerts();
@@ -5759,7 +5758,7 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   };
   messages[channelId].push(msg);
   if (messages[channelId].length > 500) messages[channelId] = messages[channelId].slice(-500);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   silenceTyping(channelId, req.user.id, req.body && req.body.typingToken);
   publishCreate(channelId, msg);
   noteBrief(req.user, [otherId]);
@@ -5786,7 +5785,7 @@ function appendRoomMessage(roomId, req) {
   };
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   silenceTyping(roomId, req.user.id, req.body && req.body.typingToken);
   publishCreate(roomId, msg);
   noteBrief(req.user, peersOfRoom(roomId, req.user.id));
@@ -5931,7 +5930,7 @@ app.post('/api/groups', auth, (req, res) => {
     createdAt: new Date().toISOString(),
     system: true,
   }];
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   res.json({ ok: true, group: publicGroup(group, req.user) });
 });
 
@@ -6100,7 +6099,7 @@ app.post('/api/threads/:id/action', auth, (req, res) => {
   } else if (type === 'delete') {
     if (!mine && !manage) return res.status(403).json({ error: 'You cannot delete this thread' });
     delete messages['thread:' + thread.id];
-    rememberMessages();
+    save(MESSAGES_FILE, messages);
     delete threads[thread.id];
     save(THREADS_FILE, threads);
     return res.json({ ok: true, deleted: true });
@@ -6117,7 +6116,7 @@ app.post('/api/messages/:id/pin', auth, (req, res) => {
   const on = !(req.body && req.body.on === false);
   found.msg.pinned = on;
   found.msg.pinnedAt = on ? new Date().toISOString() : '';
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
@@ -6251,7 +6250,7 @@ app.post('/api/messages/:id/reactions', auth, (req, res) => {
   if (mine >= 0) row.users.splice(mine, 1);
   else row.users.push(String(req.user.id));
   msg.reactions = msg.reactions.filter((item) => item && item.users && item.users.length);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishUpdate(found.roomId, msg);
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
 });
@@ -6269,7 +6268,7 @@ app.patch('/api/messages/:id', auth, (req, res) => {
     const channel = findChannel(found.roomId, '');
     if (channel) found.msg.mentions = parseMentions(channel.guild, req.user, content);
   }
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishUpdate(found.roomId, found.msg);
   res.json({ ok: true, message: presentMessage(found.msg, req.user.id) });
 });
@@ -6281,7 +6280,7 @@ app.delete('/api/messages/:id', auth, (req, res) => {
   const manage = channel && (isOwner(channel.guild, req.user) || can(channel.guild, req.user, PERM.MANAGE_CHANNELS));
   if (String(found.msg.authorId) !== String(req.user.id) && !manage) return res.status(403).json({ error: 'You can only delete your own messages' });
   found.list.splice(found.index, 1);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishDelete(found.roomId, req.params.id);
   res.json({ ok: true });
 });
@@ -6341,7 +6340,7 @@ app.post('/api/messages/:id/forward', auth, (req, res) => {
   };
   messages[roomId].push(msg);
   if (messages[roomId].length > 500) messages[roomId] = messages[roomId].slice(-500);
-  rememberMessages();
+  save(MESSAGES_FILE, messages);
   publishCreate(roomId, msg);
   touchAlerts();
   res.json({ ok: true, message: presentMessage(msg, req.user.id) });
@@ -6367,7 +6366,7 @@ app.post('/api/polls/:messageId/vote', auth, (req, res) => {
       if (!msg.poll.votes[id]) msg.poll.votes[id] = [];
       msg.poll.votes[id].push(req.user.id);
     }
-    rememberMessages();
+    save(MESSAGES_FILE, messages);
     publishUpdate(msg.channelId, msg);
     return res.json({ ok: true, poll: publicPoll(msg.poll, req.user.id) });
   }
