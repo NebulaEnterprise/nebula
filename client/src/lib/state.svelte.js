@@ -516,6 +516,71 @@ let inboxReady = false;
 let lastSentId = '';
 let dmSerial = 0;
 
+const dmSnippets = new Map();
+
+function lineOf(msg) {
+  if (!msg || msg.failed || msg.kind === 'clyde') return '';
+  if (msg.locked) return 'Encrypted message';
+  const text = String(msg.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+  if (text) return text.slice(0, 140);
+  if (msg.files && msg.files.length) return msg.files[0].name || 'Attachment';
+  if (msg.poll) return msg.poll.question || 'Poll';
+  return '';
+}
+
+function lastChatLine(list) {
+  const rows = list || [];
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const msg = rows[i];
+    if (!msg || msg.failed || msg.kind === 'clyde') continue;
+    const preview = lineOf(msg);
+    if (!preview) continue;
+    const at = Date.parse(msg.createdAt);
+    const local = String(msg.id || '').startsWith('local-');
+    return {
+      preview,
+      updatedAt: Number.isFinite(at) ? at : Date.now(),
+      lastId: local ? '' : (msg.id || ''),
+    };
+  }
+  return null;
+}
+
+function noteOpenDm(list) {
+  if (ui.mode !== 'dm' || !ui.dmUser || !ui.dmUser.id) return;
+  const snap = lastChatLine(list);
+  if (!snap) return;
+  const id = String(ui.dmUser.id);
+  dmSnippets.set(id, snap);
+  const current = ui.dms || [];
+  const row = current.find((dm) => dm.other && String(dm.other.id) === id);
+  if (!row) return;
+  if (row.preview === snap.preview && Number(row.updatedAt) === snap.updatedAt && (!snap.lastId || row.lastId === snap.lastId)) return;
+  ui.dms = current.map((dm) => {
+    if (!dm.other || String(dm.other.id) !== id) return dm;
+    return { ...dm, preview: snap.preview, updatedAt: snap.updatedAt || dm.updatedAt, lastId: snap.lastId || dm.lastId };
+  });
+}
+
+function applyDmSnippets(list) {
+  return (list || []).map((row) => {
+    const id = row.other && String(row.other.id || '');
+    const snap = id && dmSnippets.get(id);
+    if (!snap || !snap.preview) return row;
+    const serverAt = Number(row.updatedAt) || 0;
+    const newer = snap.updatedAt >= serverAt - 1500;
+    const placeholder = !row.preview || row.preview === 'Encrypted message' || row.preview === 'Encrypted file';
+    const same = snap.lastId && row.lastId && String(snap.lastId) === String(row.lastId);
+    if (!newer && !(placeholder && (same || !row.lastId))) return row;
+    return {
+      ...row,
+      preview: snap.preview,
+      updatedAt: newer ? (snap.updatedAt || row.updatedAt) : row.updatedAt,
+      lastId: snap.lastId || row.lastId,
+    };
+  });
+}
+
 function sameDms(prev, next) {
   if (!Array.isArray(prev) || prev.length !== next.length) return false;
   for (let i = 0; i < prev.length; i++) {
@@ -597,7 +662,7 @@ export async function loadDms() {
     }
     if (serial !== dmSerial) return;
     adoptRemoteSeen(seen, data.seen);
-    const next = mergeOpened(data.dms || []);
+    const next = applyDmSnippets(mergeOpened(data.dms || []));
     if (!sameDms(ui.dms, next)) ui.dms = next;
     const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
     setTimeout(() => { for (const id of warmIds) warmDm(id); }, 1200);
@@ -1307,6 +1372,7 @@ async function applySocketMessage(type, data) {
   if (type === 'MESSAGE_DELETE') {
     ui.messages = ui.messages.filter((msg) => msg && msg.id !== data.id);
     rememberLog(logKey, ui.messages);
+    noteOpenDm(ui.messages);
     return;
   }
   const message = await revealMessage(data.message);
@@ -1318,6 +1384,7 @@ async function applySocketMessage(type, data) {
     next[idx] = message;
     ui.messages = next;
     rememberLog(logKey, ui.messages);
+    noteOpenDm(ui.messages);
     return;
   }
   const mine = ui.me && message.author && message.author.id === ui.me.id;
@@ -1344,6 +1411,7 @@ async function applySocketMessage(type, data) {
     announceFresh(ui.messages, roomKey);
   }
   rememberLog(logKey, ui.messages);
+  noteOpenDm(ui.messages);
   ui.chatLoading = false;
 }
 
@@ -1645,6 +1713,7 @@ export async function loadMessages(quiet, live) {
     const next = stitchLog(list, logKey);
     if (!sameLog(ui.messages, next)) ui.messages = next;
     rememberLog(logKey, next);
+    noteOpenDm(next);
     ui.chatLoading = false;
     if (newest && newest.id) ui.seenMessageId = newest.id;
     announceFresh(list, roomKey);
@@ -1773,6 +1842,7 @@ function settleSent(tempId, message) {
     ui.messages = next.filter((msg, i) => i === idx || (msg.id !== message.id && msg.id !== tempId && msg.clientKey !== key));
   }
   rememberLog(currentRoom(), ui.messages);
+  noteOpenDm(ui.messages);
 }
 
 function looksLikeLink(content) {
@@ -1948,6 +2018,7 @@ export async function sendMessage() {
     reply: replies[0] || null,
     replies,
   }];
+  noteOpenDm(ui.messages);
   try {
     await postMessage({ content, replies, replaceId: tempId });
   } catch (err) {
@@ -1971,6 +2042,7 @@ export async function removeMessage(messageId) {
   await api('/api/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
   const roomKey = currentRoom() || ui.channelId;
   ui.messages = ui.messages.filter((msg) => msg.id !== messageId);
+  noteOpenDm(ui.messages);
   if (roomHeard[roomKey] === messageId) {
     const last = ui.messages[ui.messages.length - 1];
     roomHeard[roomKey] = last ? last.id : '';
