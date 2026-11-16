@@ -290,7 +290,7 @@
       {/each}
     </div>
   {:else}
-    <div class="msg-head">
+    <div class="inbox-head">
       <span>Messages</span>
       <button type="button" title="New group" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /></button>
     </div>
