@@ -135,6 +135,7 @@ Three cases still reveal chats:
 - The page in the browser is what locks and unlocks chats. Replacing the published website replaces that page, so the new page can ask for the secret. A hash pinned to the old script does not stop the person who publishes the site.
 
 
+NEBULA WAS ALSO THE FIRST PLATFORM TO DO THIS >3
 
 <img width="1911" height="1080" alt="r2-1794477087019-uzrgmbheg3wios2p1ahq-t" src="https://github.com/user-attachments/assets/434bf1a0-2857-435b-a4ec-3bae2c8a57c2" />
 
