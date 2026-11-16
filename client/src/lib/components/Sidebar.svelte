@@ -319,7 +319,7 @@
         {#if dm.other && (!dmQuery.trim() || ((dm.other.displayName || '') + ' ' + (dm.other.username || '')).toLowerCase().includes(dmQuery.trim().toLowerCase())) && (!chatClosed('dm:' + dm.other.id, dm.lastId) || ui.activity.dms[dm.other.id])}
           {@const note = ui.activity.dms[dm.other?.id]}
           <div class="dm-item msg-row" role="button" tabindex="0" class:on={ui.dmUser?.id === dm.other?.id} class:unread={!!note && ui.dmUser?.id !== dm.other?.id} class:pinned={pinnedChats().includes('dm:' + dm.other.id)} onpointerenter={() => warmDm(dm.other?.id)} onclick={() => openDm(dm.other)} oncontextmenu={(e) => { e.preventDefault(); e.stopPropagation(); ui.dmMenu = { x: e.clientX, y: e.clientY, user: dm.other, notify: false }; }} onkeydown={(e) => { if (e.key === 'Enter') openDm(dm.other); }}>
-            <Avatar user={dm.other} size={42} />
+            <Avatar user={dm.other} size={34} />
             <span class="dm-copy" class:sharing={dmSharing(dm.other) || partnerInCall(dm.other) || !!(ui.dmTyping && ui.dmTyping[dm.other.id])}>
               <span class="msg-top">
                 <span class="ch-name">{dm.other?.displayName || dm.other?.username}</span>

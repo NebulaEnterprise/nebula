@@ -1203,7 +1203,7 @@
     <Hash size={18} />
   {/if}
   {#if ui.mode === 'dm'}
-    <Avatar user={ui.dmUser} size={40} />
+    <Avatar user={ui.dmUser} size={32} />
     <div class="dm-id">
       <h2>{titleName}</h2>
       {#if partnerInCall(ui.dmUser)}
