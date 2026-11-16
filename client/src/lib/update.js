@@ -34,9 +34,9 @@ export function watchForUpdates() {
   if (!current) return;
 
   let checking = false;
-  let reloading = false;
   const check = async () => {
-    if (checking || reloading) return;
+    if (checking) return;
+    if (sessionStorage.getItem('nebula-reloaded') === '1') return;
     checking = true;
     try {
       const url = new URL('index.html', document.baseURI);
@@ -45,7 +45,7 @@ export function watchForUpdates() {
       if (!res.ok) return;
       const next = publishedBuild(await res.text());
       if (!next || next === current) return;
-      reloading = true;
+      sessionStorage.setItem('nebula-reloaded', '1');
       reloadFresh();
     } catch (_) {
       /* keep the page up when the check cannot reach GitHub */
@@ -54,5 +54,5 @@ export function watchForUpdates() {
     }
   };
 
-  setInterval(check, 30000);
+  setInterval(check, 120000);
 }

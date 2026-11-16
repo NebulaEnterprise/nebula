@@ -1,5 +1,5 @@
 {
-  "url": "https://nebulaapp.space/",
+  "url": "https://nebulaapp.space/?app=2",
   "server": "https://scowling-anthill-civil.ngrok-free.dev",
   "config": "https://raw.githubusercontent.com/NebulaEnterprise/nebula/main/desktop/site.json"
 }

@@ -126,12 +126,13 @@ async function maybeUpdate() {
     pendingUpdate = false;
     return;
   }
+  if (loadedScript === 'tried:' + remoteName) return;
   if (await inCall()) {
     pendingUpdate = true;
     return;
   }
   pendingUpdate = false;
-  loadedScript = '';
+  loadedScript = 'tried:' + remoteName;
   contents.loadURL(pageUrl(link));
 }
 

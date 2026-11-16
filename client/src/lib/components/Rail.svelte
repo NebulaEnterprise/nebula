@@ -85,7 +85,6 @@
   </div>
   <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
     <Compass size={22} />
-    {#if serverUnread}<em class="rail-count">{count(serverUnread)}</em>{/if}
   </button>
   <div class="rail-spacer"></div>
   <button class="rail-tab rail-gear" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
