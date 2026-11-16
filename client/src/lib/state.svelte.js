@@ -4,7 +4,7 @@ import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM } from './format.js';
 import { rememberServer } from './serverface.js';
-import { ensureBox, openSeal, sealFile, sealText } from './seal.js';
+import { ensureBox, localKeys, openSeal, saveKeys, sealFile, sealText } from './seal.js';
 
 export const nowClock = $state({ t: Date.now() });
 if (typeof window !== 'undefined') setInterval(() => { nowClock.t = Date.now(); }, 1000);
@@ -133,6 +133,13 @@ function writeAccounts(list) {
   localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(list.slice(0, ACCOUNT_LIMIT)));
 }
 
+function takeMe(user) {
+  if (!user) return user;
+  const next = { ...user };
+  delete next.boxRing;
+  return next;
+}
+
 function rememberAccount(user, token) {
   if (!user?.id || !token) return;
   const existing = savedAccounts();
@@ -208,7 +215,7 @@ export async function boot() {
   }
   try {
     const data = await api('/api/me');
-    ui.me = data.user;
+    ui.me = takeMe(data.user);
     rememberAccount(data.user, token);
     publishBox().catch(() => {});
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
@@ -247,7 +254,7 @@ async function finishLogin(data) {
   if (!data || !data.token) throw new Error('Sign-in did not finish. Try again.');
   rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
-  ui.me = data.user;
+  ui.me = takeMe(data.user);
   ui.addingAccount = false;
   ui.mfa = null;
   ui.auth = 'login';
@@ -308,7 +315,7 @@ export async function verify(code) {
   });
   rememberAccount(data.user, data.token);
   localStorage.setItem('dc_token', data.token);
-  ui.me = data.user;
+  ui.me = takeMe(data.user);
   ui.addingAccount = false;
   ui.pending = null;
   await reconnectGateway();
@@ -369,7 +376,7 @@ export async function switchAccount(id) {
   await reconnectGateway();
   try {
     const data = await api('/api/me');
-    ui.me = data.user;
+    ui.me = takeMe(data.user);
     rememberAccount(data.user, row.token);
     warmMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
     primeMedia([data.user?.avatarUrl, data.user?.bannerUrl]);
@@ -1851,8 +1858,16 @@ function looksLikeLink(content) {
   return /(?:^|[\s(])(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/\S*)?/i.test(text);
 }
 
-function shareProblem(content, files, people) {
-  const link = looksLikeLink(content);
+function withoutInvites(content) {
+  return String(content || '')
+    .replace(/https?:\/\/\S*[?&]invite=[a-z0-9_-]+/gi, ' ')
+    .replace(/https?:\/\/\S*\/invite\/[a-z0-9_-]+/gi, ' ')
+    .replace(/(?:^|[\s(])invite\/[a-z0-9_-]+/gi, ' ');
+}
+
+function shareProblem(content, files, people, where) {
+  const inChannel = where && (where.mode === 'chat' || where.mode === 'thread');
+  const link = looksLikeLink(inChannel ? withoutInvites(content) : content);
   const media = (files && files.length) || /\[\[(?:gif|sticker):/i.test(String(content || ''));
   for (const person of people || []) {
     if (!person || !ui.me || String(person.id) === String(ui.me.id)) continue;
@@ -1893,13 +1908,80 @@ function peopleFor(where) {
   return people;
 }
 
+let boxSync = null;
+
+function sameRing(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+  return left.every((row, index) => row?.pub && row.pub === right[index]?.pub && row?.priv?.d && row.priv.d === right[index]?.priv?.d);
+}
+
 export async function publishBox() {
   if (!ui.me?.id) return;
-  const pub = await ensureBox(ui.me.id);
-  if (ui.me.boxKey === pub) return;
+  if (boxSync) return boxSync;
+  boxSync = syncBox().finally(() => { boxSync = null; });
+  return boxSync;
+}
+
+async function syncBox() {
+  const id = ui.me.id;
+  let remote = [];
+  let supports = false;
+  try {
+    const data = await api('/api/me');
+    if (data.user) {
+      supports = Array.isArray(data.user.boxRing);
+      remote = supports ? data.user.boxRing : [];
+      ui.me = takeMe({ ...ui.me, ...data.user });
+    }
+  } catch (_) {}
+  if (!ui.me?.id) return;
+  const currentPub = ui.me.boxKey || '';
+  const merged = [];
+  const push = (row) => {
+    if (!row?.priv || !row?.pub || merged.some((item) => item.pub === row.pub)) return;
+    merged.push({ priv: row.priv, pub: row.pub });
+  };
+  remote.forEach(push);
+  localKeys(id).forEach(push);
+  if (!merged.length) {
+    if (currentPub) return;
+    await ensureBox(id);
+    localKeys(id).forEach(push);
+  }
+  if (!merged.length) return;
+  const match = merged.find((row) => row.pub === currentPub);
+  const ordered = match ? [match, ...merged.filter((row) => row.pub !== currentPub)] : merged;
+  saveKeys(id, ordered);
+  const pub = ordered[0].pub;
+  if (!supports) {
+    if (currentPub) {
+      ui.me = { ...ui.me, boxKey: currentPub };
+      return;
+    }
+    const data = await api('/api/me', { method: 'PATCH', body: { boxKey: pub } });
+    if (data.user) ui.me = takeMe({ ...ui.me, ...data.user, boxKey: data.user.boxKey || pub });
+    else ui.me = { ...ui.me, boxKey: pub };
+    return;
+  }
   ui.me = { ...ui.me, boxKey: pub };
-  const data = await api('/api/me', { method: 'PATCH', body: { boxKey: pub } });
-  if (data.user) ui.me = { ...ui.me, ...data.user, boxKey: data.user.boxKey || pub };
+  const body = {};
+  if (!sameRing(remote, ordered)) body.boxRing = ordered;
+  if (currentPub !== pub) body.boxKey = pub;
+  if (!Object.keys(body).length) return;
+  const data = await api('/api/me', { method: 'PATCH', body });
+  const ring = Array.isArray(data.user?.boxRing) ? data.user.boxRing : ordered;
+  const kept = [];
+  const keep = (row) => {
+    if (!row?.priv || !row?.pub || kept.some((item) => item.pub === row.pub)) return;
+    kept.push({ priv: row.priv, pub: row.pub });
+  };
+  ring.forEach(keep);
+  ordered.forEach(keep);
+  const nextPub = data.user?.boxKey || pub;
+  const nextMatch = kept.find((row) => row.pub === nextPub);
+  const next = nextMatch ? [nextMatch, ...kept.filter((row) => row.pub !== nextPub)] : kept;
+  saveKeys(id, next);
+  if (data.user) ui.me = takeMe({ ...ui.me, ...data.user, boxKey: nextPub });
 }
 
 async function revealMessage(message) {
@@ -1940,7 +2022,7 @@ async function postMessage(payload, target) {
   if (content) {
     await publishBox();
     const people = peopleFor(where);
-    const blocked = shareProblem(content, files, people);
+    const blocked = shareProblem(content, files, people, where);
     if (blocked) throw new Error(blocked);
     body.seal = await sealText(content, people);
   }
@@ -2957,7 +3039,7 @@ export async function saveMe(body) {
     ui.me = previous;
     throw err;
   }
-  ui.me = {
+  ui.me = takeMe({
     ...previous,
     ...data.user,
     displayName: data.user?.displayName ?? body.displayName ?? previous?.displayName ?? '',
@@ -2967,7 +3049,7 @@ export async function saveMe(body) {
     nameFont: data.user?.nameFont ?? body.nameFont ?? previous?.nameFont ?? '',
     profileStyle: data.user?.profileStyle || body.profileStyle || previous?.profileStyle || 'gradient',
     nameColors: data.user?.nameColors?.length ? data.user.nameColors : (body.nameColors || previous?.nameColors || []),
-  };
+  });
   ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, ...ui.me } : member);
   if (ui.popout?.user?.id === ui.me.id) {
     ui.popout = { ...ui.popout, user: { ...ui.popout.user, ...ui.me, roles: ui.popout.user.roles || [] } };

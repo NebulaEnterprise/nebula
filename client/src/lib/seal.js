@@ -18,23 +18,61 @@ function readBoxes() {
   try { return JSON.parse(localStorage.getItem(BOX) || '{}') || {}; } catch (_) { return {}; }
 }
 
+function rowsFrom(entry) {
+  const keys = [];
+  const push = (row) => {
+    if (!row?.priv || !row?.pub || keys.some((item) => item.pub === row.pub)) return;
+    keys.push({ priv: row.priv, pub: row.pub });
+  };
+  if (Array.isArray(entry?.keys)) entry.keys.forEach(push);
+  push(entry);
+  if (Array.isArray(entry?.extra)) entry.extra.forEach(push);
+  return keys;
+}
+
+export function localKeys(userId) {
+  return rowsFrom(readBoxes()[String(userId || '')]);
+}
+
+export function saveKeys(userId, keys) {
+  const id = String(userId || '');
+  const list = [];
+  for (const row of keys || []) {
+    if (!row?.priv || !row?.pub || list.some((item) => item.pub === row.pub)) continue;
+    list.push({ priv: row.priv, pub: row.pub });
+  }
+  const all = readBoxes();
+  if (!list.length) delete all[id];
+  else all[id] = { priv: list[0].priv, pub: list[0].pub, extra: list.slice(1) };
+  localStorage.setItem(BOX, JSON.stringify(all));
+  return list;
+}
+
 export async function ensureBox(userId) {
   const id = String(userId || '');
   if (!id || !crypto?.subtle) throw new Error('This browser cannot encrypt messages');
-  const all = readBoxes();
-  if (all[id]?.pub && all[id]?.priv) return all[id].pub;
+  const existing = localKeys(id);
+  if (existing.length) return existing[0].pub;
   const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
   const priv = await crypto.subtle.exportKey('jwk', pair.privateKey);
   const pub = b64(await crypto.subtle.exportKey('spki', pair.publicKey));
-  all[id] = { priv, pub };
-  localStorage.setItem(BOX, JSON.stringify(all));
+  saveKeys(id, [{ priv, pub }]);
   return pub;
 }
 
+async function ownPrivates(userId) {
+  const out = [];
+  for (const row of localKeys(userId)) {
+    try {
+      out.push(await crypto.subtle.importKey('jwk', row.priv, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']));
+    } catch (_) {}
+  }
+  return out;
+}
+
 async function ownPrivate(userId) {
-  const saved = readBoxes()[String(userId || '')];
-  if (!saved?.priv) return null;
-  return crypto.subtle.importKey('jwk', saved.priv, { name: 'ECDH', namedCurve: 'P-256' }, false, ['deriveBits']);
+  const keys = await ownPrivates(userId);
+  return keys[0] || null;
 }
 
 async function theirPublic(spki) {
@@ -68,10 +106,10 @@ export async function sealText(plain, recipients) {
   return { v: 1, iv: b64(iv), data: b64(data), for: wrap };
 }
 
-async function pairKey(myId, theirBox, usage) {
-  const mine = await ownPrivate(myId);
-  if (!mine || !theirBox) throw new Error('locked');
-  const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(theirBox) }, mine, 256);
+async function pairKey(myId, theirBox, usage, mine) {
+  const key = mine || await ownPrivate(myId);
+  if (!key || !theirBox) throw new Error('locked');
+  const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(theirBox) }, key, 256);
   return crypto.subtle.importKey('raw', secret, 'AES-GCM', false, [usage]);
 }
 
@@ -84,9 +122,19 @@ export async function sealCall(plain, myId, theirBox) {
 
 export async function openCall(blob, myId, theirBox) {
   if (!blob || blob.v !== 1 || !blob.iv || !blob.data) throw new Error('locked');
-  const key = await pairKey(myId, theirBox, 'decrypt');
-  const text = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(blob.iv) }, key, raw(blob.data));
-  return JSON.parse(new TextDecoder().decode(text));
+  const keys = await ownPrivates(myId);
+  if (!keys.length) throw new Error('locked');
+  let last = new Error('locked');
+  for (const mine of keys) {
+    try {
+      const key = await pairKey(myId, theirBox, 'decrypt', mine);
+      const text = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(blob.iv) }, key, raw(blob.data));
+      return JSON.parse(new TextDecoder().decode(text));
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last;
 }
 
 export async function sealFile(bytes, meta, recipients) {
@@ -113,30 +161,48 @@ export async function sealFile(bytes, meta, recipients) {
   };
 }
 
-export async function openFile(lock, bytes, userId) {
-  const slot = lock && lock.for && lock.for[String(userId || '')];
-  const mine = await ownPrivate(userId);
-  if (!slot || !mine || !lock.iv || !lock.metaIv || !lock.meta) throw new Error('locked');
+async function unlockMessageKey(slot, mine) {
   const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(slot.eph) }, mine, 256);
   const wrapKey = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
-  const messageKey = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(slot.iv) }, wrapKey, raw(slot.ct));
-  const key = await crypto.subtle.importKey('raw', messageKey, 'AES-GCM', false, ['decrypt']);
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(slot.iv) }, wrapKey, raw(slot.ct));
+}
+
+export async function openFile(lock, bytes, userId) {
+  const slot = lock && lock.for && lock.for[String(userId || '')];
+  const keys = await ownPrivates(userId);
+  if (!slot || !keys.length || !lock.iv || !lock.metaIv || !lock.meta) throw new Error('locked');
   const body = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.iv) }, key, body);
-  const metaRaw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.metaIv) }, key, raw(lock.meta));
-  let meta = {};
-  try { meta = JSON.parse(new TextDecoder().decode(metaRaw)); } catch (_) {}
-  return { bytes: new Uint8Array(plain), meta };
+  let last = new Error('locked');
+  for (const mine of keys) {
+    try {
+      const messageKey = await unlockMessageKey(slot, mine);
+      const key = await crypto.subtle.importKey('raw', messageKey, 'AES-GCM', false, ['decrypt']);
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.iv) }, key, body);
+      const metaRaw = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(lock.metaIv) }, key, raw(lock.meta));
+      let meta = {};
+      try { meta = JSON.parse(new TextDecoder().decode(metaRaw)); } catch (_) {}
+      return { bytes: new Uint8Array(plain), meta };
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last;
 }
 
 export async function openSeal(seal, userId) {
   const slot = seal && seal.for && seal.for[String(userId || '')];
-  const mine = await ownPrivate(userId);
-  if (!slot || !mine) throw new Error('locked');
-  const secret = await crypto.subtle.deriveBits({ name: 'ECDH', public: await theirPublic(slot.eph) }, mine, 256);
-  const wrapKey = await crypto.subtle.importKey('raw', secret, 'AES-GCM', false, ['decrypt']);
-  const messageKey = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(slot.iv) }, wrapKey, raw(slot.ct));
-  const key = await crypto.subtle.importKey('raw', messageKey, 'AES-GCM', false, ['decrypt']);
-  const text = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(seal.iv) }, key, raw(seal.data));
-  return new TextDecoder().decode(text);
+  const keys = await ownPrivates(userId);
+  if (!slot || !keys.length) throw new Error('locked');
+  let last = new Error('locked');
+  for (const mine of keys) {
+    try {
+      const messageKey = await unlockMessageKey(slot, mine);
+      const key = await crypto.subtle.importKey('raw', messageKey, 'AES-GCM', false, ['decrypt']);
+      const text = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: raw(seal.iv) }, key, raw(seal.data));
+      return new TextDecoder().decode(text);
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last;
 }
