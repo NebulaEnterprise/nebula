@@ -26,7 +26,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #app { height: 100%; margin: 0; overflow: hidden; background: #000; }
+html, body, #app { height: 100%; margin: 0; overflow: hidden; }
 .phone-back, .phone-people-back { display: none; }
 button, input, textarea { font: inherit; color: inherit; }
 button { background: none; border: 0; cursor: pointer; }
@@ -113,7 +113,10 @@ img { max-width: 100%; }
 .shell {
   height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden;
   gap: 12px; padding: 12px;
-  background: #000;
+  background:
+    radial-gradient(900px 520px at 0% -10%, rgba(168, 85, 247, 0.28), transparent 55%),
+    radial-gradient(720px 480px at 100% 110%, rgba(124, 58, 237, 0.32), transparent 50%),
+    #100818;
 }
 .rail {
   --bg-rail: #1a1028;
@@ -2324,7 +2327,7 @@ img { max-width: 100%; }
   .rail-user { justify-content: center; padding: 4px; }
   .dm-card, .pal-side, .hub-aside, .hub-strip { display: none; }
   .hub { grid-template-columns: 1fr; }
-  .shell { padding: 0; gap: 0; background: #000; }
+  .shell { padding: 0; gap: 0; background: #100818; }
   .rail, .side, .main, .members { border-radius: 0; }
   .shell.phone-chat .main { width: 100%; flex: 1; }
   .shell.phone-people .members { display: block; width: 100%; flex: 1; }
