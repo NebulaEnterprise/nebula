@@ -2538,7 +2538,7 @@ img { max-width: 100%; }
 .pop-grid button {
   margin-top: 8px; width: 100%; border-radius: 12px; background: #7c4dff; color: #fff; font-weight: 700; padding: 8px;
 }
-.hub-mini.lg { width: 54px; height: 54px; margin-bottom: 6px; }
+.hub-mini.lg { flex: 0 0 54px; width: 54px; height: 54px; margin-bottom: 6px; border-radius: 50%; }
 .discover-side { background: transparent; padding: 18px 16px; gap: 14px; align-items: stretch; text-align: left; }
 .trend, .pal-block {
   background: #221536; border-radius: 18px; padding: 12px;
@@ -2548,7 +2548,8 @@ img { max-width: 100%; }
   padding: 8px 6px; border-radius: 12px; background: transparent; font-weight: 650;
 }
 .trend button:hover { background: rgba(255, 255, 255, 0.05); }
-.trend button span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.trend button > span:not(.hub-mini) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.trend .hub-mini { flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%; }
 .trend button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trend button small { color: #b7a8c9; padding: 0; }
 .trend em { color: #c4b5fd; font-style: normal; font-weight: 800; flex-shrink: 0; }
