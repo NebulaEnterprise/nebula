@@ -35,12 +35,11 @@
 
   function servers() {
     ui.menuOpen = false;
+    ui.serverPick = false;
     if (ui.mode === 'chat') {
-      ui.serverPick = !ui.serverPick;
       phoneBrowse();
       return;
     }
-    ui.serverPick = false;
     const id = ui.serverId || ui.servers?.[0]?.id;
     if (!id) {
       ui.dialog = { kind: 'add-server' };

@@ -171,12 +171,11 @@
   {#if ui.mode === 'chat'}
     <div class="side-head">
       <div class="side-title">
-        <button class="title" onclick={() => { ui.serverPick = false; ui.menuOpen = !ui.menuOpen; }} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
+        <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
           <span>{ui.serverMeta?.name || 'Server'}</span>
           {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
           <ChevronDown size={14} />
         </button>
-        <button type="button" class="side-kicker" class:on={ui.serverPick} onclick={() => { ui.menuOpen = false; ui.serverPick = !ui.serverPick; }}>your servers</button>
       </div>
     </div>
     {#if ui.menuOpen}
@@ -190,19 +189,6 @@
       </div>
     {/if}
     <div class="scroll">
-      {#if ui.serverPick}
-        <div class="server-pick">
-          {#each ui.servers as server (server.id)}
-            <button type="button" class:on={server.id === ui.serverId} style="--srv:{server.color || '#a78bfa'}" onclick={() => { ui.serverPick = false; openServer(server.id); }}>
-              <i>{(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}</i>
-              <span>{server.name}</span>
-            </button>
-          {/each}
-          <button type="button" class="add" onclick={() => { ui.serverPick = false; ui.dialog = { kind: 'add-server' }; }}>
-            <Plus size={16} /> Add a server
-          </button>
-        </div>
-      {/if}
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
@@ -285,16 +271,18 @@
         <span>Friends</span>
         {#if requestCount}<em class="pill-count" title="Friend requests">{countLabel(requestCount)}</em>{/if}
       </button>
-      <hr class="side-rule" />
-      {#each ui.servers as server (server.id)}
-        <button type="button" class="nav-item" onclick={() => openServer(server.id)}>
-          <i class="srv-mark" style="--srv:{server.color || '#a78bfa'}">{(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}</i>
-          <span class="ch-name">{server.name}</span>
+      {#if ui.mode === 'friends'}
+        <hr class="side-rule" />
+        {#each ui.servers as server (server.id)}
+          <button type="button" class="nav-item" onclick={() => openServer(server.id)}>
+            <i class="srv-mark" style="--srv:{server.color || '#a78bfa'}">{(server.icon || server.name || 'S').slice(0, 1).toUpperCase()}</i>
+            <span class="ch-name">{server.name}</span>
+          </button>
+        {/each}
+        <button type="button" class="nav-item" onclick={() => (ui.dialog = { kind: 'add-server' })}>
+          <Plus size={16} /> Join a server
         </button>
-      {/each}
-      <button type="button" class="nav-item" onclick={() => (ui.dialog = { kind: 'add-server' })}>
-        <Plus size={16} /> Join a server
-      </button>
+      {/if}
       <button class="nav-item" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => { showFriends('find'); phoneChat(); }}><Search size={16} /> Find people</button>
       <button class="nav-item" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /> Create group</button>
       <div class="cat"><span>direct messages</span></div>
