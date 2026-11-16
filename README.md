@@ -1,6 +1,6 @@
-# Nebula
+# Nebula Privacy Policy
 
-Nebula is a chat app. This page explains how an account opens, how a message is locked, and what the server still holds.
+Nebula is a chat app.
 
 Updated November 16, 2026.
 
