@@ -489,7 +489,7 @@
             </div>
             <div class="acct-row">
               <span>Email</span>
-              <strong>Not stored</strong>
+              <strong>{ui.me?.email || 'Sign in with your email once'}</strong>
               <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
             </div>
           </section>

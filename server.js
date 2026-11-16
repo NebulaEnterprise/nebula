@@ -1202,11 +1202,17 @@ for (const u of Object.values(users)) {
     accountsChanged = true;
   }
   if (u.email && String(u.email).includes('@')) {
-    const sealed = emailRecord(u.email);
-    u.emailSalt = sealed.emailSalt;
-    u.emailHash = sealed.emailHash;
-    delete u.email;
-    accountsChanged = true;
+    const clean = String(u.email).trim().toLowerCase();
+    if (u.email !== clean) {
+      u.email = clean;
+      accountsChanged = true;
+    }
+    if (!emailMatches(clean, u.emailSalt, u.emailHash)) {
+      const sealed = emailRecord(clean);
+      u.emailSalt = sealed.emailSalt;
+      u.emailHash = sealed.emailHash;
+      accountsChanged = true;
+    }
   }
   if (u.token && !String(u.token).startsWith('sha256$')) {
     u.token = security.sealToken(u.token);
@@ -2748,7 +2754,7 @@ function publicUser(u, viewer) {
     uid: u.uid || null,
     username: u.username,
     displayName: u.displayName || u.username,
-    email: '',
+    email: self ? String(u.email || '') : '',
     bio: String(u.bio || '').replace(/\s+/g, ' ').trim().slice(0, 29),
     aboutMe: u.aboutMe || '',
     pronouns: u.pronouns || '',
@@ -3295,6 +3301,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   if (!vault) return res.status(400).json({ error: 'Choose a recovery code or a passphrase' });
   const entry = {
     username: cleanUser,
+    email: cleanEmail,
     passwordHash: hashPassword(password),
     ...emailRecord(cleanEmail),
     vault,
@@ -3308,6 +3315,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   entry.codeId = codeId;
   codes[codeId] = {
     username: entry.username,
+    email: entry.email,
     passwordHash: entry.passwordHash,
     emailSalt: entry.emailSalt,
     emailHash: entry.emailHash,
@@ -3383,6 +3391,7 @@ function createAccount(entry, req) {
     id, uid,
     username: entry.username,
     displayName: entry.username,
+    email: entry.email || '',
     emailSalt: entry.emailSalt,
     emailHash: entry.emailHash,
     passwordHash: entry.passwordHash,
@@ -3441,6 +3450,10 @@ app.post('/api/auth/login', (req, res) => {
     || Object.values(users).find((u) => emailMatches(raw, u.emailSalt, u.emailHash));
   if (!user || !checkPassword(password || '', user.passwordHash)) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
+  }
+  if (raw.includes('@') && emailMatches(raw, user.emailSalt, user.emailHash) && user.email !== raw) {
+    user.email = raw;
+    save(USERS_FILE, users);
   }
   if (!String(user.passwordHash).startsWith('scrypt$')) {
     user.passwordHash = hashPassword(password || '');
@@ -4444,7 +4457,7 @@ app.post('/api/me/email', auth, (req, res) => {
   const sealedEmail = emailRecord(email);
   req.user.emailSalt = sealedEmail.emailSalt;
   req.user.emailHash = sealedEmail.emailHash;
-  delete req.user.email;
+  req.user.email = email;
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
 });
