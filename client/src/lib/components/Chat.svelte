@@ -1,5 +1,5 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video } from '@lucide/svelte';
+  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -7,7 +7,7 @@
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
   import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct } from '../state.svelte.js';
-  import { seenPhrase, presenceDot } from '../seen.js';
+  import { seenPhrase } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
@@ -184,7 +184,6 @@
   );
   const muted = $derived(roomMuted(muteKey));
   const statusLabel = $derived(seenPhrase(ui.dmUser, nowClock.t));
-  const statusDot = $derived(presenceDot(ui.dmUser, nowClock.t));
   const titleName = $derived(
     ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message')
       : ui.mode === 'group' ? (ui.group?.name || 'Group')
@@ -1170,10 +1169,21 @@
     if (diff === 86400000) return 'Yesterday at ' + clock;
     return d.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' }) + ', ' + clock;
   }
+
+  function clock(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function mineMsg(msg) {
+    const id = msg?.author?.id || msg?.authorId;
+    return !!(ui.me && id && String(id) === String(ui.me.id));
+  }
 </script>
 
 <div class="chat-frame">
-<div class="chat-col" class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
+<div class="chat-col" class:bubbles={ui.mode === 'dm'} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 {#if showIncoming}
   <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
     <Avatar user={ui.incomingCall.from} size={80} dot={false} />
@@ -1185,26 +1195,34 @@
     </div>
   </div>
 {/if}
-<div class="top">
+<div class="top" class:dm-bar={ui.mode === 'dm'}>
   <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}
     <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
   {:else if ui.mode !== 'dm' && ui.mode !== 'group'}
     <Hash size={18} />
   {/if}
-  <h2>{titleName}</h2>
-  {#if ui.mode === 'dm' && partnerInCall(ui.dmUser)}
-    <span class="in-call"><Phone size={14} /> In a call</span>
-  {:else if ui.mode === 'dm' && typingPhrase.kind}
-    <span class="status-word typing-status">{typingPhrase.kind === 'one' ? typingPhrase.names[0] + ' is typing...' : 'Several people are typing...'}</span>
-  {:else if ui.mode === 'dm'}
-    <span class="status-word {statusDot}">{statusLabel}</span>
-  {:else if ui.mode === 'group'}
-    <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
-  {:else if ui.mode !== 'thread'}
-    <span class="topic">{channel?.topic || ''}</span>
+  {#if ui.mode === 'dm'}
+    <Avatar user={ui.dmUser} size={40} />
+    <div class="dm-id">
+      <h2>{titleName}</h2>
+      {#if partnerInCall(ui.dmUser)}
+        <span class="status-word">In a call</span>
+      {:else if typingPhrase.kind}
+        <span class="status-word">{typingPhrase.kind === 'one' ? typingPhrase.names[0] + ' is typing...' : 'Several people are typing...'}</span>
+      {:else}
+        <span class="status-word">{statusLabel}</span>
+      {/if}
+    </div>
   {:else}
-    <span class="topic"></span>
+    <h2>{titleName}</h2>
+    {#if ui.mode === 'group'}
+      <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
+    {:else if ui.mode !== 'thread'}
+      <span class="topic">{channel?.topic || ''}</span>
+    {:else}
+      <span class="topic"></span>
+    {/if}
   {/if}
   {#if ui.mode === 'thread'}
     <button class="btn sm" onclick={() => threadAct((ui.thread?.followers || []).includes(ui.me?.id) ? 'unfollow' : 'follow')}>
@@ -1378,7 +1396,7 @@
         <time>{time(msg.createdAt)}</time>
       </div>
     {:else}
-    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }} onpointerdown={(e) => pressStart(e, msg)} onpointerup={pressEnd} onpointercancel={pressEnd} onpointerleave={pressEnd}>
+    <article class="msg" class:mine={ui.mode === 'dm' && mineMsg(msg)} class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }} onpointerdown={(e) => pressStart(e, msg)} onpointerup={pressEnd} onpointercancel={pressEnd} onpointerleave={pressEnd}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -1450,6 +1468,12 @@
           </div>
         {/if}
       </div>
+      {#if ui.mode === 'dm'}
+        {#if mineMsg(msg) && !msg.pending && !msg.failed}
+          <span class="ticks" aria-label="Sent"><Check size={13} /><Check size={13} /></span>
+        {/if}
+        <time class="bubble-when">{clock(msg.createdAt)}{msg.editedAt ? ' · edited' : ''}</time>
+      {/if}
     </article>
     {/if}
     {/if}

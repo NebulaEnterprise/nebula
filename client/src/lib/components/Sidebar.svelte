@@ -332,7 +332,7 @@
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}
-              <em class="pill-count">{note.unread > 99 ? '99+' : note.unread}</em>
+              <i class="pill-dot" aria-label="New message"></i>
             {/if}
           </div>
         {/if}
