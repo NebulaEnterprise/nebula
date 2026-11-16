@@ -3305,6 +3305,7 @@ app.post('/api/auth/request-code', async (req, res) => {
     passwordHash: hashPassword(password),
     ...emailRecord(cleanEmail),
     vault,
+    view: cleanView(req.body || {}),
   };
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
     return res.json(createAccount(entry, req));
@@ -3320,6 +3321,7 @@ app.post('/api/auth/request-code', async (req, res) => {
     emailSalt: entry.emailSalt,
     emailHash: entry.emailHash,
     vault: entry.vault,
+    view: entry.view || null,
     code,
     expiresAt: Date.now() + 15 * 60 * 1000,
   };
@@ -3350,6 +3352,15 @@ function cleanVault(body) {
   if (!/^[a-f0-9]{64}$/.test(check)) return null;
   if (pub.length < 40 || pub.length > 400) return null;
   return { wrapped, salt, check, pub, kind };
+}
+
+function cleanView(body) {
+  const view = body && body.view;
+  if (!view || typeof view !== 'object') return null;
+  const salt = String(view.salt || '');
+  const wrapped = String(view.wrapped || '');
+  if (salt.length < 8 || salt.length > 80 || wrapped.length < 16 || wrapped.length > 4000) return null;
+  return { salt, wrapped };
 }
 
 function holdAuth(userId) {
@@ -3415,6 +3426,7 @@ function createAccount(entry, req) {
     users[id].vaultPub = entry.vault.pub;
     users[id].recovery = entry.vault.kind;
   }
+  if (entry.view) users[id].recoveryView = entry.view;
   if (entry.codeId) delete codes[entry.codeId];
   const session = security.openSession(users[id], req);
   saveNow(USERS_FILE, users);
@@ -3521,6 +3533,8 @@ app.post('/api/auth/setup', (req, res) => {
   user.vault = { wrapped: vault.wrapped, salt: vault.salt, check: vault.check };
   user.vaultPub = vault.pub;
   user.recovery = vault.kind;
+  const view = cleanView(req.body || {});
+  if (view) user.recoveryView = view;
   authHolds.delete(String(req.body.ticket));
   res.json(sessionFor(user, req));
 });
@@ -3531,11 +3545,27 @@ app.post('/api/me/recovery', auth, (req, res) => {
   if (req.user.vault && req.user.vault.check && String(req.body.previous || '').toLowerCase() !== req.user.vault.check) {
     return res.status(400).json({ error: 'Enter the recovery code or passphrase you use now' });
   }
+  const view = cleanView(req.body || {});
+  if (view && !checkPassword(String(req.body.password || ''), req.user.passwordHash)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
   req.user.vault = { wrapped: vault.wrapped, salt: vault.salt, check: vault.check };
   if (vault.pub) req.user.vaultPub = vault.pub;
   req.user.recovery = vault.kind;
+  if (view) req.user.recoveryView = view;
   save(USERS_FILE, users);
   res.json({ ok: true, recovery: vault.kind, user: publicUser(req.user) });
+});
+
+app.post('/api/me/recovery/show', auth, (req, res) => {
+  if (!checkPassword(String(req.body && req.body.password || ''), req.user.passwordHash)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  res.json({
+    ok: true,
+    kind: req.user.recovery || '',
+    view: req.user.recoveryView || null,
+  });
 });
 
 app.post('/api/auth/logout', auth, (req, res) => {

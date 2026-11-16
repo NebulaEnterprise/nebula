@@ -6,7 +6,7 @@ import { PERM, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.j
 import { rememberServer } from './serverface.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
 import {
-  createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, newRoomKey,
+  createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, lockSecret, newRoomKey,
   openText, openVault, rememberSecret, rememberVault, sealFile, sealText, unwrapKey, vaultCheck, wrapKeyFor, wrapVault,
 } from './vault.js';
 
@@ -328,25 +328,27 @@ export async function unlockAccount(secret) {
   pushVault().catch(() => {});
 }
 
-export async function finishSetup(secret, kind) {
+export async function finishSetup(secret, kind, password) {
   const made = await createVault(secret);
+  const view = password ? await lockSecret(password, secret) : null;
   const data = await api('/api/auth/setup', {
     method: 'POST',
-    body: { ticket: holdTicket, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind },
+    body: { ticket: holdTicket, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind, view },
   });
   rememberVault(data.user.id, made.vault);
   rememberSecret(data.user.id, secret);
   await finishLogin(data);
 }
 
-export async function saveRecovery(secret, kind) {
+export async function saveRecovery(secret, kind, password) {
   const vault = loadVault(ui.me?.id);
   const previous = vault ? await vaultCheck(vault) : '';
   const packed = await wrapVault(vault, secret);
   const check = await vaultCheck(vault);
+  const view = password ? await lockSecret(password, secret) : null;
   const data = await api('/api/me/recovery', {
     method: 'POST',
-    body: { ...packed, check, pub: vault.pub, kind, previous },
+    body: { ...packed, check, pub: vault.pub, kind, previous, view, password },
   });
   rememberSecret(ui.me.id, secret);
   if (data.user) ui.me = takeMe({ ...ui.me, ...data.user });
@@ -377,10 +379,11 @@ export async function loginWithPasskey() {
 export async function requestCode(email, username, password, secret, kind) {
   ui.authError = '';
   const made = await createVault(secret);
-  ui.pendingVault = { vault: made.vault, secret, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind };
+  const view = await lockSecret(password, secret);
+  ui.pendingVault = { vault: made.vault, secret, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind, view };
   const data = await api('/api/auth/request-code', {
     method: 'POST',
-    body: { email, username, password, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind },
+    body: { email, username, password, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind, view },
   });
   if (data.token) {
     rememberVault(data.user.id, made.vault);
@@ -408,6 +411,7 @@ export async function verify(code) {
       check: made?.check,
       pub: made?.pub,
       kind: made?.kind,
+      view: made?.view,
     },
   });
   if (made) {

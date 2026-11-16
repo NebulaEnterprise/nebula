@@ -1,7 +1,7 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery } from '../state.svelte.js';
-  import { recoveryCode } from '../vault.js';
+  import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -21,18 +21,47 @@
   import { fileToDataUrl, shrinkGif } from '../image.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
+  let emailShown = $state(false);
+  let recoverOpen = $state(false);
   let recoverMethod = $state('pass');
   let recoverSecret = $state('');
   let recoverCode = $state('');
-  let recoverSaved = $state(false);
+  let recoverPassword = $state('');
+  let revealed = $state('');
+  let recoverBusy = $state(false);
+
+  function pickRecover(next) {
+    recoverMethod = next;
+    revealed = '';
+    if (next === 'code' && !recoverCode) recoverCode = recoveryCode();
+  }
 
   async function saveUnlock() {
     const secret = recoverMethod === 'code' ? recoverCode : recoverSecret.trim();
-    if (recoverMethod === 'code' && !recoverSaved) throw new Error('Save the recovery code first');
+    if (!recoverPassword) throw new Error('Enter your password');
+    if (recoverMethod === 'code' && !secret) throw new Error('Make a recovery code first');
     if (recoverMethod === 'pass' && secret.length < 8) throw new Error('Use a passphrase of at least 8 characters');
-    await saveRecovery(secret, recoverMethod);
+    await saveRecovery(secret, recoverMethod, recoverPassword);
+    revealed = secret;
     recoverSecret = '';
-    toast(recoverMethod === 'code' ? 'Recovery code saved. The old one no longer works.' : 'Passphrase saved. The old one no longer works.');
+    recoverPassword = '';
+    toast(recoverMethod === 'code' ? 'Recovery code saved.' : 'Passphrase saved.');
+  }
+
+  async function showRecovery() {
+    if (!recoverPassword) throw new Error('Enter your password');
+    recoverBusy = true;
+    try {
+      const data = await api('/api/me/recovery/show', { method: 'POST', body: { password: recoverPassword } });
+      if (!data.view) throw new Error('Save a new recovery secret first. This one was stored before it could be shown.');
+      const secret = await unlockSecret(recoverPassword, data.view);
+      if (!secret) throw new Error('Password is wrong');
+      revealed = secret;
+      if (data.kind === 'code' || data.kind === 'pass') recoverMethod = data.kind;
+      recoverPassword = '';
+    } finally {
+      recoverBusy = false;
+    }
   }
 
   function toggleSound() {
@@ -124,6 +153,10 @@
     accountBusy = true;
     try {
       await api('/api/me/password', { method: 'POST', body: { current: currentPassword, next: nextPassword, confirm: confirmPassword } });
+      const kept = loadSecret(ui.me?.id);
+      if (kept && (ui.me?.recovery === 'code' || ui.me?.recovery === 'pass')) {
+        await saveRecovery(kept, ui.me.recovery, nextPassword);
+      }
       accountDialog = '';
       toast('Password updated');
     } catch (err) {
@@ -489,30 +522,48 @@
             </div>
             <div class="acct-row">
               <span>Email</span>
-              <strong>{ui.me?.email || 'Sign in with your email once'}</strong>
+              <strong>{emailShown ? (ui.me?.email || 'Sign in with your email once') : '••••••••••'}</strong>
+              <button type="button" class="btn sm" title={emailShown ? 'Hide email' : 'Show email'} onclick={() => (emailShown = !emailShown)}>
+                {#if emailShown}<EyeOff size={14} />{:else}<Eye size={14} />{/if}
+              </button>
               <button type="button" class="btn sm" onclick={() => openAccount('email')}>Edit</button>
             </div>
           </section>
           <div class="acct-rule"></div>
           <section class="acct-section">
             <h3>Recovery</h3>
-            <p class="hint">You enter this with your email and password. Without it, the account does not open and the messages stay scrambled.</p>
-            <p class="hint">{ui.me?.recovery === 'code' ? 'A recovery code is set.' : ui.me?.recovery === 'pass' ? 'A passphrase is set.' : 'Nothing is set yet.'}</p>
-            <div class="field">
-              <label>Method</label>
-              <select bind:value={recoverMethod} onchange={() => { recoverCode = recoverMethod === 'code' ? recoveryCode() : ''; recoverSaved = false; }}>
-                <option value="pass">Passphrase</option>
-                <option value="code">Recovery code</option>
-              </select>
-            </div>
-            {#if recoverMethod === 'pass'}
-              <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" /></div>
+            {#if !recoverOpen}
+              <button type="button" class="acct-link" onclick={() => (recoverOpen = true)}>
+                <KeyRound size={16} />
+                <span>Recovery secret</span>
+                <strong>{ui.me?.recovery === 'code' ? 'Code set' : ui.me?.recovery === 'pass' ? 'Passphrase set' : 'Set up'}</strong>
+              </button>
             {:else}
-              <div class="field"><label>New recovery code</label><input value={recoverCode} readonly /></div>
-              <label class="check"><input type="checkbox" bind:checked={recoverSaved} /> I saved this code</label>
-              <button class="btn" type="button" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
+              <div class="recover-card">
+                <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
+                {#if revealed}
+                  <div class="recover-secret">{revealed}</div>
+                  <button type="button" class="btn sm" onclick={() => (revealed = '')}>Hide</button>
+                {/if}
+                <div class="field"><label>Password</label><input type="password" bind:value={recoverPassword} autocomplete="current-password" /></div>
+                <button type="button" class="btn" disabled={recoverBusy} onclick={() => showRecovery().catch((err) => toast(err.message))}>Show secret</button>
+                <p class="label">Replace it</p>
+                <div class="recover-choice">
+                  <button type="button" class="btn" class:brand={recoverMethod === 'pass'} onclick={() => pickRecover('pass')}>Passphrase</button>
+                  <button type="button" class="btn" class:brand={recoverMethod === 'code'} onclick={() => pickRecover('code')}>Recovery code</button>
+                </div>
+                {#if recoverMethod === 'pass'}
+                  <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" autocomplete="new-password" /></div>
+                {:else}
+                  <div class="recover-secret">{recoverCode || 'Make a code'}</div>
+                  <button type="button" class="btn sm" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
+                {/if}
+                <div class="recover-actions">
+                  <button type="button" class="btn brand" disabled={recoverBusy} onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
+                  <button type="button" class="btn" onclick={() => { recoverOpen = false; revealed = ''; recoverPassword = ''; }}>Close</button>
+                </div>
+              </div>
             {/if}
-            <button class="btn brand" style="width:auto" onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
           </section>
           <div class="acct-rule"></div>
         {/if}

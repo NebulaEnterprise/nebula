@@ -94,7 +94,7 @@
         <div class="field"><label>Recovery code</label><input value={generated} readonly /></div>
         <label class="check"><input type="checkbox" bind:checked={saved} /> I saved this code somewhere safe</label>
       {/if}
-      <button class="btn brand" disabled={busy} onclick={() => run(() => finishSetup(chosenSecret(), method))}>Save and continue</button>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => finishSetup(chosenSecret(), method, password))}>Save and continue</button>
     {:else if ui.auth === 'mfa'}
       <p class="sub">Authenticator is on for this account. Enter the 6-digit code from the app.</p>
       <div class="field"><label>Code</label><input class="code" bind:value={mfaCode} maxlength="6" inputmode="numeric" autocomplete="one-time-code" /></div>

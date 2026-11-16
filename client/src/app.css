@@ -1524,6 +1524,21 @@ img { max-width: 100%; }
 .look-home .acct-rule { margin: 8px 0; }
 .look-home .save-look { margin-top: 14px; }
 .acct-link:hover { color: #fff; }
+.recover-card { margin-top: 8px; padding: 12px 0 4px; }
+.recover-choice { display: flex; gap: 8px; margin: 4px 0 12px; }
+.recover-choice .btn { flex: 1; }
+.recover-secret {
+  margin: 8px 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #111218;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+}
+.recover-actions { display: flex; gap: 8px; margin-top: 12px; }
+.recover-actions .btn { width: auto; }
 .crumb {
   display: inline-flex; align-items: center; gap: 4px; color: var(--muted);
   font-weight: 650; margin: 0 0 8px; padding: 0;

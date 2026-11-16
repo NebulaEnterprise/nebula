@@ -91,6 +91,25 @@ export async function createVault(secret) {
   return { ...packed, check: await vaultCheck(vault), pub, vault };
 }
 
+export async function lockSecret(password, secret) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await kek(password, salt);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(String(secret))));
+  return { salt: b64(salt), wrapped: b64(concat(iv, ct)) };
+}
+
+export async function unlockSecret(password, lock) {
+  try {
+    const packed = raw(lock.wrapped);
+    const key = await kek(password, raw(lock.salt));
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: packed.slice(0, 12) }, key, packed.slice(12));
+    return new TextDecoder().decode(plain);
+  } catch (_) {
+    return '';
+  }
+}
+
 export async function openVault(wrapped, salt, secret) {
   try {
     const packed = raw(wrapped);
