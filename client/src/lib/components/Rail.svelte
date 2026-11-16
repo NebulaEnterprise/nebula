@@ -63,7 +63,7 @@
 
 <aside class="rail">
   <button class="rail-logo" title="Nebula" onclick={messages}>
-    <img src="./look/moon.png" alt="" />
+    <img src="./logo.webp?v=3" alt="" />
   </button>
   <button class="rail-tab" class:on={onMessages} title="Messages" onclick={messages}>
     <MessageSquare size={22} />

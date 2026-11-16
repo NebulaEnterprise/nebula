@@ -114,10 +114,10 @@
       {/each}
     </div>
     <div class="make">
-      <img src="./look/ring.png" alt="" />
+      <img src="./look/planet.png" alt="" />
       <strong><Star size={14} /> Create your own server</strong>
       <p>Build a community, chat, and grow together.</p>
-      <button type="button" onclick={add}><Plus size={16} /> Create server</button>
+      <button type="button" class="hub-create" onclick={add}><Plus size={16} /> Create server</button>
     </div>
   </aside>
 </div>

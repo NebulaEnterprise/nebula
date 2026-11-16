@@ -177,13 +177,14 @@ img { max-width: 100%; }
 .srv-hero { position: relative; height: 112px; flex-shrink: 0; background: #24143f; }
 .srv-hero > img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .srv-hero-face {
-  position: absolute; left: 16px; bottom: -18px; width: 52px; height: 52px; border-radius: 16px;
-  display: grid; place-items: center; overflow: hidden; color: #fff; font-weight: 800; font-size: 20px;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 56px; height: 56px; border-radius: 16px;
+  display: grid; place-items: center; overflow: hidden; color: #fff; font-weight: 800; font-size: 22px;
   background: color-mix(in srgb, var(--srv, #7c6af7) 62%, #1b1230);
-  box-shadow: 0 0 0 4px #1c1230;
+  box-shadow: 0 0 0 4px rgba(18, 8, 28, 0.72);
 }
 .srv-hero-face img { width: 100%; height: 100%; object-fit: cover; }
-.side.with-hero .side-head { padding-top: 26px; }
+.side.with-hero .side-head { padding-top: 12px; }
 .side.with-hero .menu { top: 176px; }
 .msg-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -2395,8 +2396,8 @@ img { max-width: 100%; }
 .hub-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .hub-top h1 { margin: 0; font-size: 26px; display: flex; align-items: center; gap: 8px; flex: 1; }
 .hub-top p { margin: 4px 0 0; color: #b7a8c9; font-size: 13px; }
-.hub-create, .hub-aside button, .make button, .pal-invite button, .feature b {
-  display: inline-flex; align-items: center; gap: 6px; border: 0; cursor: pointer;
+.hub-create, .feature b, .pal-invite button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; cursor: pointer;
   background: #7c4dff; color: #fff; font-weight: 700; border-radius: 999px; padding: 8px 14px;
 }
 .hub-search {
@@ -2420,22 +2421,24 @@ img { max-width: 100%; }
   background: #221536; border-radius: 18px; padding: 0 0 14px; overflow: hidden; color: #fff;
 }
 .hub-banner { display: block; height: 92px; width: 100%; background: #24143f; }
-.hub-banner img, .hub-promo img, .feature img, .dm-banner img, .pal-invite img, .make img, .hub-aside > img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
+.hub-banner img, .hub-promo img, .feature img {
+  width: 100%; height: 100%; object-fit: cover; object-position: center; display: block;
 }
 .hub-face, .hub-mini {
-  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
   background: color-mix(in srgb, var(--srv, #7c6af7) 60%, #1b1230); color: #fff; font-weight: 800;
-  position: relative;
+  position: relative; flex-shrink: 0;
 }
-.hub-card .hub-face { margin: -22px 0 8px 14px; box-shadow: 0 0 0 4px #221536; }
-.hub-face i {
-  position: absolute; right: 0; bottom: 0; width: 12px; height: 12px; border-radius: 50%;
-  background: #3ecf8e; box-shadow: 0 0 0 2px #221536;
+.hub-banner { position: relative; }
+.hub-card { align-items: center; text-align: center; }
+.hub-card .hub-face {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  margin: 0; box-shadow: 0 0 0 4px rgba(18, 8, 28, 0.55);
 }
 .hub-card strong, .hub-row strong, .pop-grid strong { display: block; }
-.hub-card strong { padding: 0 14px; }
+.hub-card strong { width: 100%; padding: 10px 14px 0; text-align: center; }
 .hub-card small, .hub-row small, .pop-grid small { color: #b7a8c9; padding: 2px 14px 0; }
+.hub-card small { width: 100%; text-align: center; }
 .hub-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .hub-row {
   display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px;
@@ -2453,14 +2456,12 @@ img { max-width: 100%; }
 .hub-empty { padding: 18px 4px 8px; color: #c8bdd8; }
 .hub-empty strong { display: block; color: #fff; margin-bottom: 4px; }
 .hub-aside {
-  background:
-    linear-gradient(180deg, rgba(16, 8, 24, 0.05), #160e26 58%),
-    url('./look/moon.png') center top / cover no-repeat;
-  padding: 220px 20px 24px; display: flex; flex-direction: column; gap: 8px;
+  background: #160e26; padding: 0 0 22px; display: flex; flex-direction: column;
+  align-items: center; text-align: center; gap: 8px; overflow: hidden;
 }
-.hub-aside > img { display: none; }
-.hub-aside h2 { margin: 0; font-size: 28px; }
-.hub-aside p, .make p, .pal-invite p { margin: 0; color: #d8c6ff; }
+.hub-moon { width: 100%; height: 230px; object-fit: cover; object-position: center top; display: block; }
+.hub-aside h2 { margin: 8px 16px 0; font-size: 28px; line-height: 1.15; text-align: center; }
+.hub-aside p, .make p, .pal-invite p { margin: 0; color: #d8c6ff; text-align: center; padding: 0 16px; }
 .feature {
   position: relative; display: block; width: 100%; height: 210px; border-radius: 20px; overflow: hidden;
   margin-bottom: 14px; text-align: left; color: #fff;
@@ -2485,20 +2486,28 @@ img { max-width: 100%; }
   margin-top: 8px; width: 100%; border-radius: 12px; background: #7c4dff; color: #fff; font-weight: 700; padding: 8px;
 }
 .hub-mini.lg { width: 54px; height: 54px; margin-bottom: 6px; }
-.discover-side { background: transparent; padding: 18px 16px; gap: 14px; }
-.trend, .make, .pal-block, .pal-invite {
+.discover-side { background: transparent; padding: 18px 16px; gap: 14px; align-items: stretch; text-align: left; }
+.trend, .pal-block {
   background: #221536; border-radius: 18px; padding: 12px;
 }
 .trend button {
   width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; color: #fff;
-  padding: 8px 4px; border-radius: 12px;
+  padding: 8px 6px; border-radius: 12px; background: transparent; font-weight: 650;
 }
+.trend button:hover { background: rgba(255, 255, 255, 0.05); }
 .trend button span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.trend button small { color: #b7a8c9; }
-.trend em { color: #c4b5fd; font-style: normal; font-weight: 800; }
-.make { position: relative; overflow: hidden; min-height: 180px; }
-.make img { position: absolute; inset: 0; opacity: 0.45; }
-.make strong, .make p, .make button { position: relative; }
+.trend button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend button small { color: #b7a8c9; padding: 0; }
+.trend em { color: #c4b5fd; font-style: normal; font-weight: 800; flex-shrink: 0; }
+.make, .pal-invite {
+  background: #221536; border-radius: 18px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 0 14px; gap: 6px;
+}
+.make img, .pal-invite img {
+  position: static; width: 100%; height: 128px; object-fit: cover; object-position: center; opacity: 1; display: block;
+}
+.make strong, .pal-invite strong { position: static; display: flex; align-items: center; justify-content: center; gap: 6px; margin: 8px 12px 0; }
+.make p, .pal-invite p { position: static; }
 .dm-card {
   width: 280px; flex-shrink: 0; background: #1c1230; border-radius: 22px; overflow: auto;
   display: flex; flex-direction: column;
@@ -2546,10 +2555,7 @@ img { max-width: 100%; }
 }
 .pal-person span { min-width: 0; display: flex; flex-direction: column; }
 .pal-person small { color: #b7a8c9; }
-.pal-invite { text-align: left; overflow: hidden; position: relative; min-height: 160px; }
-.pal-invite img { position: absolute; right: 0; top: 0; width: 100%; height: 90px; object-fit: cover; opacity: 0.8; }
-.pal-invite strong, .pal-invite p, .pal-invite button { position: relative; }
-.pal-invite strong { display: block; margin-top: 78px; }
+.pal-invite button { margin-top: 4px; }
 @media (max-width: 1200px) {
   .hub { grid-template-columns: 76px minmax(0, 1fr); }
   .hub-aside { display: none; }

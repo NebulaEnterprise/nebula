@@ -52,10 +52,11 @@
           {#each yours as server (server.id)}
             {@const face = serverFace(server)}
             <button type="button" class="hub-card" onclick={() => openServer(server.id)}>
-              <span class="hub-banner"><img src="./look/sky.png" alt="" /></span>
-              <span class="hub-face" style="--srv:{face.color}">
-                {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
-                <i></i>
+              <span class="hub-banner">
+                <img src="./look/sky.png" alt="" />
+                <span class="hub-face" style="--srv:{face.color}">
+                  {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
+                </span>
               </span>
               <strong>{server.name}</strong>
               {#if memberLine(server)}<small>{memberLine(server)}</small>{:else}<small>Your server</small>{/if}
@@ -109,9 +110,9 @@
     </section>
   </div>
   <aside class="hub-aside">
-    <img src="./look/moon.png" alt="" />
+    <img class="hub-moon" src="./look/moon.png" alt="" />
     <h2>Create your own server</h2>
     <p>Build a community, chat, and grow together.</p>
-    <button type="button" onclick={add}><Users size={16} /> Create a Server</button>
+    <button type="button" class="hub-create" onclick={add}><Users size={16} /> Create a Server</button>
   </aside>
 </div>

@@ -11,7 +11,6 @@
   import Friends from './lib/components/Friends.svelte';
   import ServersHome from './lib/components/ServersHome.svelte';
   import Discover from './lib/components/Discover.svelte';
-  import DmSide from './lib/components/DmSide.svelte';
   import Popout from './lib/components/Popout.svelte';
   import UserSettings from './lib/components/UserSettings.svelte';
   import ServerSettings from './lib/components/ServerSettings.svelte';
@@ -157,9 +156,6 @@
         <Chat />
       {/if}
     </main>
-    {#if ui.mode === 'dm' && ui.dmUser}
-      <DmSide />
-    {/if}
     {#if (ui.mode === 'chat' || ui.mode === 'thread') && ui.showMembers !== false}
       <Members />
     {/if}

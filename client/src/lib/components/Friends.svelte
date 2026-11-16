@@ -225,7 +225,7 @@
       {/each}
     </div>
     <div class="pal-invite">
-      <img src="./look/ring.png" alt="" />
+      <img src="./look/planet.png" alt="" />
       <strong>Add more friends</strong>
       <p>Grow your community on Nebula.</p>
       <button type="button" onclick={() => showFriends('find')}>Invite friends</button>
