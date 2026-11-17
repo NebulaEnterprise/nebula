@@ -234,28 +234,14 @@
     }
     const blob = await fetch(url).then((res) => res.blob());
     const type = /^image\//i.test(blob.type || '') ? blob.type : 'image/jpeg';
+    const saved = await api('/api/preview', { method: 'POST', body: blob, headers: { 'Content-Type': type } });
+    const pretty = 'https://nebulaapp.space' + saved.url;
     const desktop = window.nebulaDesktop;
-    if (desktop && typeof desktop.openImage === 'function') {
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      await desktop.openImage({ name: String(name || 'image'), type, bytes });
-      return;
-    }
-    if (/Electron/i.test(navigator.userAgent || '')) {
-      const saved = await api('/api/preview', { method: 'POST', body: blob, headers: { 'Content-Type': type } });
+    if (/Electron/i.test(navigator.userAgent || '') && !(desktop && desktop.pictureLinks)) {
       window.open(fileUrl(saved.url), '_blank', 'noopener,noreferrer');
       return;
     }
-    const tab = window.open('', '_blank');
-    if (!tab) return;
-    const title = String(name || 'Image');
-    tab.document.title = title;
-    const style = tab.document.createElement('style');
-    style.textContent = 'html,body{margin:0;background:#111;min-height:100%}body{display:grid;place-items:center}img{max-width:100vw;max-height:100vh;object-fit:contain}';
-    tab.document.head.appendChild(style);
-    const img = tab.document.createElement('img');
-    img.alt = title;
-    tab.document.body.appendChild(img);
-    img.src = tab.URL.createObjectURL(blob);
+    window.open(pretty, '_blank', 'noopener,noreferrer');
   }
 
   $effect(() => {

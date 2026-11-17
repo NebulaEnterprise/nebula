@@ -24,6 +24,14 @@ let linkCheckedAt = 0;
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
+function isPictureLink(url) {
+  try {
+    return new URL(url).pathname.startsWith('/preview/');
+  } catch (_) {
+    return false;
+  }
+}
+
 function isSiteUrl(url) {
   try {
     const parsed = new URL(url);
@@ -155,15 +163,18 @@ function createWindow() {
   const contents = contentView.webContents;
   contents.setWindowOpenHandler(({ url }) => {
     if (!url || url === 'about:blank' || url.startsWith('blob:') || url.startsWith('data:')) return { action: 'deny' };
-    if (isSiteUrl(url)) return { action: 'allow' };
-    shell.openExternal(url);
-    return { action: 'deny' };
+    if (isPictureLink(url) || !isSiteUrl(url)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
   });
   contents.on('will-navigate', (event, url) => {
     if (url.startsWith('file:')) return;
-    if (isSiteUrl(url)) return;
-    event.preventDefault();
-    shell.openExternal(url);
+    if (isPictureLink(url) || !isSiteUrl(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
   contents.on('did-fail-load', (_event, code, _desc, _url, isMainFrame) => {
     if (!isMainFrame || code === -3) return;

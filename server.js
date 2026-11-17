@@ -4227,18 +4227,41 @@ app.post('/api/preview', auth, express.raw({ type: () => true, limit: '25mb' }),
   res.json({ ok: true, url: '/preview/' + id + ext });
 });
 
-app.get('/preview/:name', (req, res) => {
-  const name = String(req.params.name || '');
-  const id = name.replace(/\.[a-z0-9]+$/i, '');
+function previewFile(name) {
+  const id = String(name || '').replace(/\.[a-z0-9]+$/i, '');
   const row = imagePreviews.get(id);
   if (!/^[a-f0-9]{36}$/.test(id) || !row || row.expires < Date.now()) {
     imagePreviews.delete(id);
-    return res.status(404).end();
+    return null;
   }
+  return row;
+}
+
+function previewCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'ngrok-skip-browser-warning, bypass-tunnel-reminder, content-type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+}
+
+app.options('/preview/:name/raw', (req, res) => {
+  previewCors(res);
+  res.sendStatus(204);
+});
+
+app.get('/preview/:name/raw', (req, res) => {
+  const row = previewFile(req.params.name);
+  previewCors(res);
+  if (!row) return res.status(404).end();
   res.setHeader('Content-Type', row.type);
   res.setHeader('Content-Disposition', 'inline');
   res.setHeader('Cache-Control', 'private, max-age=60');
   res.end(row.body);
+});
+
+app.get('/preview/:name', (req, res) => {
+  const name = String(req.params.name || '');
+  if (!/^[a-f0-9]{36}\.(?:png|jpe?g|gif|webp)$/i.test(name) || !previewFile(name)) return res.status(404).end();
+  res.redirect(302, 'https://nebulaapp.space/preview/' + name);
 });
 
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), async (req, res) => {

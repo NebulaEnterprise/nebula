@@ -1,13 +1,44 @@
 <!doctype html>
 <meta charset="utf-8">
 <title>Nebula</title>
+<style>
+  html, body { margin: 0; background: #111; min-height: 100%; }
+  body { display: grid; place-items: center; }
+  img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+  p { color: #fff; font: 600 16px Outfit, sans-serif; }
+</style>
 <script>
   (function () {
     var path = location.pathname || '/';
     var root = path.indexOf('/nebula/') === 0 ? '/nebula/' : '/';
+    var preview = path.match(/\/preview\/([a-f0-9]{36}\.(?:png|jpe?g|gif|webp))$/i);
+    if (preview) {
+      var headers = { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' };
+      var fail = function () {
+        var note = document.createElement('p');
+        note.textContent = 'This picture link expired.';
+        document.body.appendChild(note);
+      };
+      var show = function (server) {
+        fetch(String(server || '').replace(/\/$/, '') + '/preview/' + preview[1] + '/raw', { headers: headers })
+          .then(function (res) { if (!res.ok) throw new Error('gone'); return res.blob(); })
+          .then(function (blob) {
+            var img = document.createElement('img');
+            img.alt = 'Nebula';
+            img.src = URL.createObjectURL(blob);
+            document.body.appendChild(img);
+          })
+          .catch(fail);
+      };
+      fetch(root + 'desktop/site.json', { cache: 'no-store' })
+        .then(function (res) { return res.ok ? res.json() : {}; })
+        .then(function (data) { show(data.server || 'https://scowling-anthill-civil.ngrok-free.dev'); })
+        .catch(function () { show('https://scowling-anthill-civil.ngrok-free.dev'); });
+      return;
+    }
     var parts = path.split('/').filter(Boolean);
     if (root === '/nebula/') parts = parts.slice(1);
-    var skip = { api: 1, assets: 1, files: 1, uploads: 1, index: 1, 'index.html': 1, sw: 1, 'sw.js': 1, look: 1, invite: 1 };
+    var skip = { api: 1, assets: 1, files: 1, uploads: 1, index: 1, 'index.html': 1, sw: 1, 'sw.js': 1, look: 1, invite: 1, preview: 1 };
     var code = '';
     var old = path.match(/\/invite\/([A-Za-z0-9_-]+)/);
     if (old) code = old[1];
