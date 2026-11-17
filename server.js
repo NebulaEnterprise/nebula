@@ -7897,11 +7897,11 @@ app.post('/api/live-room/enter', (req, res) => {
   const b = Buffer.from(saved, 'hex');
   if (!given || !crypto.timingSafeEqual(a, b)) {
     liveRoomFail(ip);
-    return res.status(401).json({ error: 'Wrong code' });
+    return res.json({ ok: false, error: 'Wrong code' });
   }
   const token = crypto.randomBytes(32).toString('hex');
   liveRoomPasses.set(token, Date.now() + 12 * 60 * 60 * 1000);
-  res.json({ token });
+  res.json({ ok: true, token });
 });
 
 app.post('/api/live-room/check', (req, res) => {
@@ -7909,7 +7909,7 @@ app.post('/api/live-room/check', (req, res) => {
   const until = liveRoomPasses.get(token);
   if (!token || !until || until < Date.now()) {
     liveRoomPasses.delete(token);
-    return res.status(401).json({ error: 'Code required' });
+    return res.json({ ok: false });
   }
   res.json({ ok: true });
 });
