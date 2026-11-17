@@ -101,6 +101,48 @@
     };
   });
 
+  function portal(node) {
+    document.body.appendChild(node);
+    return { destroy() { node.remove(); } };
+  }
+
+  function stillFromVideo(url) {
+    return new Promise((resolve) => {
+      const videoEl = document.createElement('video');
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value || '');
+      };
+      videoEl.preload = 'auto';
+      videoEl.muted = true;
+      videoEl.playsInline = true;
+      videoEl.src = url;
+      videoEl.onloadeddata = () => {
+        const duration = Number(videoEl.duration) || 0;
+        const target = duration ? Math.min(0.25, duration / 2) : 0;
+        const draw = () => {
+          const w0 = videoEl.videoWidth || 0;
+          const h0 = videoEl.videoHeight || 0;
+          if (!w0 || !h0) return finish('');
+          const scale = Math.min(1, 640 / Math.max(w0, h0));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(w0 * scale));
+          canvas.height = Math.max(1, Math.round(h0 * scale));
+          canvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          finish(canvas.toDataURL('image/jpeg', 0.72));
+        };
+        if (target > 0) {
+          videoEl.onseeked = draw;
+          try { videoEl.currentTime = target; } catch (_) { draw(); }
+        } else draw();
+      };
+      videoEl.onerror = () => finish('');
+      setTimeout(() => finish(''), 2500);
+    });
+  }
+
   function failed() {
     const url = file?.url || '';
     if (!url || String(url).startsWith('blob:')) return;
@@ -182,6 +224,15 @@
   }
 
   $effect(() => {
+    const url = src;
+    if (!view && video && url && !poster) {
+      let stop = false;
+      stillFromVideo(url).then((next) => { if (!stop && next) poster = next; });
+      return () => { stop = true; };
+    }
+  });
+
+  $effect(() => {
     if (!view) return;
     syncFrame();
     const previous = document.body.style.overflow;
@@ -225,7 +276,7 @@
   {/if}
 </div>
 {#if view}
-  <div class="image-view" role="dialog" aria-modal="true" aria-label={name}>
+  <div class="image-view" role="dialog" aria-modal="true" aria-label={name} use:portal>
     <div
       class="image-stage"
       style:cursor={zoomed ? 'zoom-out' : (over ? 'zoom-in' : 'default')}

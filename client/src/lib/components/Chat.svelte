@@ -13,6 +13,7 @@
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
+  import { videoPoster } from '../media.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
   const typingPhrase = $derived(typingLine(ui.typers));
@@ -649,7 +650,10 @@
   $effect(() => {
     const key = ui.mode === 'dm' ? 'dm:' + (ui.dmUser?.id || '') : 'ch:' + (ui.channelId || '');
     if (draftRoom && draftRoom !== key) {
-      for (const row of drafts) if (row.preview) URL.revokeObjectURL(row.preview);
+      for (const row of drafts) {
+        if (row.preview) URL.revokeObjectURL(row.preview);
+        if (row.poster) URL.revokeObjectURL(row.poster);
+      }
       drafts = [];
       editAt = -1;
     }
@@ -676,15 +680,30 @@
       if (!file) continue;
       if (drafts.length + next.length >= 10) break;
       const named = file.name && file.name !== 'image.png' ? file : new File([file], pastedName(file), { type: file.type });
+      const id = Math.random().toString(36).slice(2);
+      const video = /^video\//.test(named.type || '') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(named.name || '');
       next.push({
-        id: Math.random().toString(36).slice(2),
+        id,
         file: named,
         name: named.name || pastedName(file),
         alt: '',
         spoiler: false,
         preview: URL.createObjectURL(named),
+        poster: '',
         image: /^image\//.test(named.type || '') || /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(named.name || ''),
+        video,
       });
+      if (video) {
+        videoPoster(named).then((blob) => {
+          if (!blob) return;
+          const poster = URL.createObjectURL(blob);
+          drafts = drafts.map((item) => {
+            if (item.id !== id) return item;
+            if (item.poster) URL.revokeObjectURL(item.poster);
+            return { ...item, poster };
+          });
+        });
+      }
     }
     if (drafts.length >= 10) toast('You can attach up to 10 files');
     if (!next.length) return;
@@ -695,6 +714,7 @@
   function removeDraft(id) {
     const row = drafts.find((item) => item.id === id);
     if (row?.preview) URL.revokeObjectURL(row.preview);
+    if (row?.poster) URL.revokeObjectURL(row.poster);
     drafts = drafts.filter((item) => item.id !== id);
     if (editAt >= drafts.length) editAt = -1;
   }
@@ -738,7 +758,10 @@
     if (sendingFiles) return;
     sendingFiles = true;
     const payload = drafts.map((row) => ({ file: row.file, name: row.name, alt: row.alt, spoiler: row.spoiler }));
-    for (const row of drafts) if (row.preview) URL.revokeObjectURL(row.preview);
+    for (const row of drafts) {
+      if (row.preview) URL.revokeObjectURL(row.preview);
+      if (row.poster) URL.revokeObjectURL(row.poster);
+    }
     drafts = [];
     editAt = -1;
     try { await sendFiles(payload); }
@@ -1671,8 +1694,10 @@
           </div>
           {#if row.spoiler}
             <div class="staged-cover"><span>SPOILER</span></div>
-          {:else if row.image}
-            <img src={row.preview} alt={row.alt || row.name} />
+          {:else if row.poster || row.image}
+            <img src={row.poster || row.preview} alt={row.alt || row.name} />
+          {:else if row.video}
+            <video src={row.preview} muted playsinline preload="auto"></video>
           {:else}
             <div class="staged-cover"><span>FILE</span></div>
           {/if}
@@ -1726,8 +1751,10 @@
           <h3>Modify Attachment</h3>
           <button type="button" class="btn icon" onclick={() => (editAt = -1)}>✕</button>
         </div>
-        {#if drafts[editAt].image && !editSpoiler}
-          <img class="modify-preview" src={drafts[editAt].preview} alt={editAlt || editName} />
+        {#if (drafts[editAt].poster || drafts[editAt].image) && !editSpoiler}
+          <img class="modify-preview" src={drafts[editAt].poster || drafts[editAt].preview} alt={editAlt || editName} />
+        {:else if drafts[editAt].video && !editSpoiler}
+          <video class="modify-preview" src={drafts[editAt].preview} muted playsinline preload="auto"></video>
         {:else}
           <div class="staged-cover modify-cover"><span>{editSpoiler ? 'SPOILER' : 'FILE'}</span></div>
         {/if}

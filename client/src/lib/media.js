@@ -44,7 +44,7 @@ function scaleStill(file, maxEdge, quality) {
   });
 }
 
-function videoPoster(file) {
+export function videoPoster(file) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const video = document.createElement('video');
