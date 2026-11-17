@@ -135,6 +135,6 @@ Three cases still reveal chats:
 - The page in the browser is what locks and unlocks chats. Replacing the published website replaces that page, so the new page can ask for the secret. A hash pinned to the old script does not stop the person who publishes the site.
 
 
-<img width="1911" height="1080" alt="r2-1794477087019-uzrgmbheg3wios2p1ahq-t" src="https://github.com/user-attachments/assets/434bf1a0-2857-435b-a4ec-3bae2c8a57c2" />
+<img width="1918" height="1077" alt="image" src="https://github.com/user-attachments/assets/d464a96d-ed32-4560-abae-9c5d147cec84" />
 
-<img width="1452" height="918" alt="image" src="https://github.com/user-attachments/assets/89a3b6a3-eb2b-4905-9d0d-d278a05c9c56" />
+<img width="1919" height="1068" alt="image" src="https://github.com/user-attachments/assets/a5b5b5d5-0478-4e40-adb3-7dc50094737c" />
