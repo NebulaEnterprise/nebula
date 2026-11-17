@@ -37,7 +37,7 @@
   let tint = $state(ui.settings?.theme?.tint || '');
   let about = $state(ui.settings?.about || '');
   let showLobby = $state(!!ui.settings?.showLobby);
-  let discover = $state(ui.settings?.discover !== false);
+  let discover = $state(ui.settings?.discover === true);
   let iconUrl = $state('');
   let bannerUrl = $state('');
   let assetName = $state('');
@@ -194,15 +194,15 @@
       {:else if ui.settingsPage === 'lobby'}
         <p class="hint">A short note shown above the message box.</p>
         <label class="check"><input type="checkbox" bind:checked={discover} /> Appear in Discover</label>
-        <p class="hint">This is on by default. Turning it on publishes the invite, including the secret, so anyone can join and read the history. Nebula is a public server, so its link can be listed. The link is no longer only nebulaapp.space/nebula.</p>
+        <p class="hint">Off until you turn it on. The room key stays on the devices that have the invite. Turning this on stores that key and publishes the full invite, so anyone can join and read the history.</p>
         <p class="hint">{serverInvite(s.slug || (s.official ? 'nebula' : vanity))}</p>
         <button class="btn brand" style="width:auto" onclick={() => run(async () => {
           let roomKey = s.roomKey || '';
           if (discover && !roomKey) roomKey = newRoomKey();
           if (discover && roomKey) keepServerKey(ui.serverId, roomKey);
-          await guildAction({ type: 'settings', discover, roomKey });
+          await guildAction({ type: 'settings', discover, roomKey: discover ? roomKey : '' });
           await reloadSettings();
-          discover = ui.settings?.discover !== false;
+          discover = ui.settings?.discover === true;
         })}>Save discovery</button>
         <label class="check"><input type="checkbox" bind:checked={showLobby} /> Show the lobby</label>
         <div class="field"><label>About</label><textarea bind:value={about} maxlength="2000" rows="5"></textarea></div>

@@ -245,7 +245,7 @@
         <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" placeholder="A name people will remember" /></div>
         <button class="btn brand" disabled={busy} onclick={() => go(async () => {
           const roomKey = newRoomKey();
-          const data = await api('/api/servers', { method: 'POST', body: { name, discover: true, roomKey } });
+          const data = await api('/api/servers', { method: 'POST', body: { name, discover: false } });
           if (data.server) keepServerKey(data.server.id, roomKey);
           const link = serverInvite(data.slug || data.invite, data.server?.id);
           try { await navigator.clipboard.writeText(link); } catch (_) {}

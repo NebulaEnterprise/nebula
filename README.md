@@ -62,7 +62,7 @@ The invite looks like `https://nebulaapp.space/the-server#k=` followed by the ro
 
 The part after `#` is a fragment. The browser does not send a fragment to the server when it requests the page. The page reads `#k=`, writes the key into the vault, uploads a freshly wrapped vault so the next device can learn it after a full sign-in, and clears the address bar.
 
-Appear in Discover defaults to on. While it is on, the room key is stored on the server and the Discover list publishes the full invite, secret included. Nebula Official is public, so `https://nebulaapp.space/nebula` is no longer enough. The real link has `#k=` and the key.
+Appear in Discover is off until the owner turns it on. While it is off, the room key is not stored on the server. The invite still carries the key after the #, and that is what a new member needs. Nebula Official is public, so its listing includes the key, and `https://nebulaapp.space/nebula` is not the full link.
 
 A listed server is public. Anyone with the published link can read its history. The stored key also opens that history for whoever can read the server record. On startup, the server rewrites leftover plaintext in listed servers into `NEB2.` with that stored key, and it rewrites local chat files the same way. That pass does not touch profile pictures or server icons, and it does not touch old direct messages, because the server does not have those keys.
 
