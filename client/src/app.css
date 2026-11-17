@@ -168,23 +168,22 @@ img { max-width: 100%; }
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
 }
 html.app-blur .rail, html.app-blur .side, html.app-blur .main, html.app-blur .members,
-html.app-blur .settings, html.app-blur .set-nav {
+html.app-blur .settings, html.app-blur .set-nav,
+html.app-blur .chat-frame:has(.profile-dock) > .chat-col,
+html.app-blur .dock.profile-dock {
   backdrop-filter: blur(16px);
 }
 html:not(.app-blur) .rail,
 html:not(.app-blur) .side,
 html:not(.app-blur) .main,
 html:not(.app-blur) .members,
-html:not(.app-blur) .settings {
+html:not(.app-blur) .settings,
+html:not(.app-blur) .chat-frame:has(.profile-dock) > .chat-col,
+html:not(.app-blur) .dock.profile-dock {
   background: rgba(14, 6, 28, 0.84);
   border: 1px solid rgba(198, 146, 255, 0.72);
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
 }
-html:not(.app-blur) .chat-frame:has(.profile-dock) > .chat-col {
-  background: rgba(14, 6, 28, 0.9);
-  border: 1px solid rgba(198, 146, 255, 0.72);
-}
-html:not(.app-blur) .dock.profile-dock .dock-profile.profile-card,
 html:not(.app-blur) .composer,
 html:not(.app-blur) .menu,
 html:not(.app-blur) .attach-menu,
@@ -1069,15 +1068,25 @@ html:not(.app-blur) .thread-menu {
 .voice-tool.on { color: #fff; background: #da373c; }
 .dock.profile-dock { background: transparent; }
 @media (min-width: 901px) {
-  .main:has(.profile-dock) { background: transparent; border-radius: 0; overflow: visible; }
+  .main:has(.profile-dock) {
+    background: transparent; border: 0; box-shadow: none;
+    border-radius: 0; overflow: visible;
+  }
   .chat-frame:has(.profile-dock) { gap: 8px; }
   .chat-frame:has(.profile-dock) > .chat-col {
-    background: #160e26; border-radius: 18px; overflow: hidden;
+    background: rgba(28, 12, 48, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+    border-radius: 18px; overflow: hidden;
   }
   .dock.profile-dock {
-    width: 256px; border: 0; border-radius: 18px; overflow: hidden; flex-shrink: 0;
+    width: 256px; flex-shrink: 0;
+    background: rgba(28, 12, 48, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.18);
+    border-radius: 18px; overflow: hidden;
   }
-  .dock.profile-dock .dock-profile.profile-card { border-radius: 22px; overflow: hidden; }
+  .dock.profile-dock .dock-profile.profile-card { border: 0; border-radius: 18px; overflow: hidden; box-shadow: none; }
 }
 .dock.profile-dock .dock-body { flex: 1; min-height: 0; padding: 0; gap: 0; }
 .dock-profile.profile-card {
@@ -1476,9 +1485,18 @@ html[data-theme="light"] .rail,
 html[data-theme="light"] .side,
 html[data-theme="light"] .main,
 html[data-theme="light"] .members,
-html[data-theme="light"] .settings {
+html[data-theme="light"] .settings,
+html[data-theme="light"] .chat-frame:has(.profile-dock) > .chat-col,
+html[data-theme="light"] .dock.profile-dock {
   background: rgba(255, 248, 252, 0.62);
   color: var(--text);
+}
+html[data-theme="light"] .main:has(.profile-dock),
+html:not(.app-blur) .main:has(.profile-dock),
+html[data-theme="amoled"] .main:has(.profile-dock) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 html[data-theme="light"] .rail-tab { color: #6b4d78; }
 html[data-theme="light"] .rail-tab.on { color: #fff; }
@@ -1487,7 +1505,9 @@ html[data-theme="amoled"] .side,
 html[data-theme="amoled"] .main,
 html[data-theme="amoled"] .members,
 html[data-theme="amoled"] .settings,
-html[data-theme="amoled"] .set-nav {
+html[data-theme="amoled"] .set-nav,
+html[data-theme="amoled"] .chat-frame:has(.profile-dock) > .chat-col,
+html[data-theme="amoled"] .dock.profile-dock {
   background: #000;
   backdrop-filter: none;
 }
