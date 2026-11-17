@@ -1,4 +1,6 @@
 const { app, BaseWindow, BrowserWindow, WebContentsView, Menu, shell, session, desktopCapturer, ipcMain } = require('electron');
+const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 const { resolveLink, pageUrl, DEFAULT_URL } = require('./link');
 
@@ -152,6 +154,7 @@ function createWindow() {
 
   const contents = contentView.webContents;
   contents.setWindowOpenHandler(({ url }) => {
+    if (!url || url === 'about:blank' || url.startsWith('blob:') || url.startsWith('data:')) return { action: 'deny' };
     if (isSiteUrl(url)) return { action: 'allow' };
     shell.openExternal(url);
     return { action: 'deny' };
@@ -298,6 +301,44 @@ function chooseSource(sources) {
     });
   });
 }
+
+function chromeBins() {
+  if (process.platform === 'win32') {
+    const local = process.env.LOCALAPPDATA || '';
+    return [
+      path.join(local, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ];
+  }
+  if (process.platform === 'darwin') return ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+  return ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'];
+}
+
+function openInChrome(file) {
+  for (const bin of chromeBins()) {
+    if (!fs.existsSync(bin)) continue;
+    try {
+      const child = spawn(bin, [file], { detached: true, stdio: 'ignore', windowsHide: true });
+      child.unref();
+      return true;
+    } catch (_) {}
+  }
+  return false;
+}
+
+ipcMain.handle('open-image', async (_event, payload) => {
+  const type = String(payload && payload.type || '');
+  const ext = type === 'image/png' ? '.png' : type === 'image/gif' ? '.gif' : type === 'image/webp' ? '.webp' : '.jpg';
+  const bytes = payload && payload.bytes;
+  const data = Buffer.from(bytes || []);
+  if (!data.length || data.length > 25 * 1024 * 1024) return false;
+  const file = path.join(app.getPath('temp'), 'nebula-' + Date.now().toString(36) + ext);
+  fs.writeFileSync(file, data);
+  if (openInChrome(file)) return true;
+  const opened = await shell.openPath(file);
+  return !opened;
+});
 
 ipcMain.on('retry', async () => {
   await refreshLink(true);

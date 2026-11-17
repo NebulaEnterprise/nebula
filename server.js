@@ -4211,6 +4211,36 @@ app.post('/api/upload/finish', auth, async (req, res) => {
   res.json({ ok: true, url, name: 'animation.gif' });
 });
 
+const imagePreviews = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, row] of imagePreviews) if (!row || row.expires < now) imagePreviews.delete(id);
+}, 30000).unref?.();
+
+app.post('/api/preview', auth, express.raw({ type: () => true, limit: '25mb' }), (req, res) => {
+  const body = req.body;
+  const ext = sniffImage(body);
+  if (!ext || body.length > 25 * 1024 * 1024) return res.status(400).json({ error: 'That picture could not be opened' });
+  const id = crypto.randomBytes(18).toString('hex');
+  const type = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+  imagePreviews.set(id, { body, type, expires: Date.now() + 2 * 60 * 1000 });
+  res.json({ ok: true, url: '/preview/' + id + ext });
+});
+
+app.get('/preview/:name', (req, res) => {
+  const name = String(req.params.name || '');
+  const id = name.replace(/\.[a-z0-9]+$/i, '');
+  const row = imagePreviews.get(id);
+  if (!/^[a-f0-9]{36}$/.test(id) || !row || row.expires < Date.now()) {
+    imagePreviews.delete(id);
+    return res.status(404).end();
+  }
+  res.setHeader('Content-Type', row.type);
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', 'private, max-age=60');
+  res.end(row.body);
+});
+
 app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }), async (req, res) => {
   const slot = String(req.query.slot || '');
   if (slot === 'file') {

@@ -4,6 +4,9 @@ contextBridge.exposeInMainWorld('nebulaDesktop', {
   retry() {
     ipcRenderer.send('retry');
   },
+  openImage(payload) {
+    return ipcRenderer.invoke('open-image', payload);
+  },
   onSources(fn) {
     ipcRenderer.on('sources', (_event, rows) => fn(rows));
   },

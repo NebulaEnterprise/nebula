@@ -1,6 +1,6 @@
 <script>
   import { ExternalLink, Info, X, ZoomIn, ZoomOut } from '@lucide/svelte';
-  import { fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
+  import { api, fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
   import { formatSize, imageLayout } from '../image-view.js';
   import { openFile } from '../seal.js';
   import { ui } from '../state.svelte.js';
@@ -223,13 +223,26 @@
     if (view && event.key === 'Escape') closeView();
   }
 
-  function openInBrowser(event) {
+  async function openInBrowser(event) {
     event.preventDefault();
     event.stopPropagation();
     const url = src;
     if (!url) return;
     if (/^https?:/i.test(url)) {
       window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const blob = await fetch(url).then((res) => res.blob());
+    const type = /^image\//i.test(blob.type || '') ? blob.type : 'image/jpeg';
+    const desktop = window.nebulaDesktop;
+    if (desktop && typeof desktop.openImage === 'function') {
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      await desktop.openImage({ name: String(name || 'image'), type, bytes });
+      return;
+    }
+    if (/Electron/i.test(navigator.userAgent || '')) {
+      const saved = await api('/api/preview', { method: 'POST', body: blob, headers: { 'Content-Type': type } });
+      window.open(fileUrl(saved.url), '_blank', 'noopener,noreferrer');
       return;
     }
     const tab = window.open('', '_blank');
@@ -242,10 +255,7 @@
     const img = tab.document.createElement('img');
     img.alt = title;
     tab.document.body.appendChild(img);
-    fetch(url).then((res) => res.blob()).then((blob) => {
-      if (tab.closed) return;
-      img.src = tab.URL.createObjectURL(blob);
-    }).catch(() => {});
+    img.src = tab.URL.createObjectURL(blob);
   }
 
   $effect(() => {
