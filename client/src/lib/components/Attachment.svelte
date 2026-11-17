@@ -1,5 +1,7 @@
 <script>
+  import { ExternalLink, Info, X, ZoomIn, ZoomOut } from '@lucide/svelte';
   import { fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
+  import { formatSize, imageLayout } from '../image-view.js';
   import { openFile } from '../seal.js';
   import { ui } from '../state.svelte.js';
   import { loadVault, openPackedFile } from '../vault.js';
@@ -8,6 +10,14 @@
   let src = $state('');
   let poster = $state('');
   let open = $state(false);
+  let view = $state(false);
+  let zoomed = $state(false);
+  let details = $state(false);
+  let focus = $state({ x: 0.5, y: 0.5 });
+  let natural = $state({ w: 0, h: 0 });
+  let bytes = $state(0);
+  let frame = $state({ w: 0, h: 0 });
+  let over = $state(false);
   let revealed = $state(false);
   let unlockedName = $state('');
   let unlockedMime = $state('');
@@ -96,7 +106,104 @@
     if (!url || String(url).startsWith('blob:')) return;
     resolveMedia(url).then((next) => { if (next) src = next; });
   }
+
+  const place = $derived(imageLayout(natural.w, natural.h, frame.w, frame.h, zoomed, focus.x, focus.y));
+  const sizeLine = $derived(formatSize(natural.w, natural.h, bytes));
+
+  function rememberSize(event) {
+    const img = event.currentTarget;
+    if (img?.naturalWidth) natural = { w: img.naturalWidth, h: img.naturalHeight };
+  }
+
+  function syncFrame() {
+    frame = { w: window.innerWidth, h: window.innerHeight };
+  }
+
+  function showImage() {
+    zoomed = false;
+    details = false;
+    focus = { x: 0.5, y: 0.5 };
+    over = false;
+    syncFrame();
+    view = true;
+  }
+
+  function closeView() {
+    view = false;
+    zoomed = false;
+    details = false;
+  }
+
+  function pointInImage(event) {
+    const box = place;
+    if (!box) return false;
+    return event.clientX >= box.x && event.clientX <= box.x + box.w && event.clientY >= box.y && event.clientY <= box.y + box.h;
+  }
+
+  function onMove(event) {
+    over = pointInImage(event);
+    if (!zoomed) return;
+    const vw = frame.w || window.innerWidth;
+    const vh = frame.h || window.innerHeight;
+    focus = {
+      x: Math.min(1, Math.max(0, event.clientX / vw)),
+      y: Math.min(1, Math.max(0, event.clientY / vh)),
+    };
+  }
+
+  function onStageClick(event) {
+    const hit = pointInImage(event);
+    if (zoomed) {
+      zoomed = false;
+      return;
+    }
+    if (!hit) {
+      closeView();
+      return;
+    }
+    const vw = frame.w || window.innerWidth;
+    const vh = frame.h || window.innerHeight;
+    focus = {
+      x: Math.min(1, Math.max(0, event.clientX / vw)),
+      y: Math.min(1, Math.max(0, event.clientY / vh)),
+    };
+    zoomed = true;
+  }
+
+  function zoomFromButton(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!zoomed) focus = { x: 0.5, y: 0.5 };
+    zoomed = !zoomed;
+  }
+
+  function onKey(event) {
+    if (view && event.key === 'Escape') closeView();
+  }
+
+  $effect(() => {
+    if (!view) return;
+    syncFrame();
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const blockWheel = (event) => event.preventDefault();
+    window.addEventListener('wheel', blockWheel, { passive: false });
+    let stop = false;
+    bytes = 0;
+    if (src) {
+      fetch(src).then((res) => res.blob()).then((blob) => {
+        if (!stop) bytes = blob.size || 0;
+      }).catch(() => {});
+    }
+    return () => {
+      stop = true;
+      document.body.style.overflow = previous;
+      window.removeEventListener('wheel', blockWheel);
+    };
+  });
 </script>
+
+<svelte:window onkeydown={onKey} onresize={syncFrame} />
 
 <div class="file-card" class:is-spoiler={spoiler}>
   {#if spoiler}
@@ -107,7 +214,7 @@
   {:else if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
   {:else if image}
-    {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={() => (open = true)}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onerror={failed} /></button>{/if}
+    {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{/if}
   {:else if (file?.lock || file?.enc) && !src}
     <span class="file-chip">Encrypted file</span>
   {:else}
@@ -117,7 +224,42 @@
     <span class="file-progress"><i style="width:{progress}%"></i></span>
   {/if}
 </div>
-{#if open}
+{#if view}
+  <div class="image-view" role="dialog" aria-modal="true" aria-label={name}>
+    <div
+      class="image-stage"
+      style:cursor={zoomed ? 'zoom-out' : (over ? 'zoom-in' : 'default')}
+      onpointermove={onMove}
+      onclick={onStageClick}
+    >
+      <img
+        src={src}
+        alt={name}
+        draggable="false"
+        style:width={place ? `${place.w}px` : undefined}
+        style:height={place ? `${place.h}px` : undefined}
+        style:transform={place ? `translate(${place.x}px, ${place.y}px)` : undefined}
+        onload={rememberSize}
+      />
+    </div>
+    <div class="image-bar">
+      <button type="button" title={zoomed ? 'Zoom out' : 'Zoom in'} aria-label={zoomed ? 'Zoom out' : 'Zoom in'} onclick={zoomFromButton}>
+        {#if zoomed}<ZoomOut size={20} />{:else}<ZoomIn size={20} />{/if}
+      </button>
+      <a class="image-tool" href={src} target="_blank" rel="noopener noreferrer" title="Open in browser" aria-label="Open in browser"><ExternalLink size={20} /></a>
+      <button type="button" class="words" class:on={details} title="View details" aria-label="View details" aria-expanded={details} onclick={(event) => { event.stopPropagation(); details = !details; }}>View details</button>
+      <button type="button" title="Close" aria-label="Close" onclick={(event) => { event.stopPropagation(); closeView(); }}><X size={20} /></button>
+    </div>
+    {#if details}
+      <aside class="image-details">
+        <p>Filename</p>
+        <strong>{name}</strong>
+        <p>Size</p>
+        <strong>{sizeLine}</strong>
+      </aside>
+    {/if}
+  </div>
+{:else if open}
   <div class="lightbox" role="presentation" onclick={() => (open = false)}>
     {#if video}
       <video src={src} poster={poster || undefined} controls autoplay playsinline onclick={(e) => e.stopPropagation()}></video>
