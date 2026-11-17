@@ -171,6 +171,33 @@ html.app-blur .rail, html.app-blur .side, html.app-blur .main, html.app-blur .me
 html.app-blur .settings, html.app-blur .set-nav {
   backdrop-filter: blur(16px);
 }
+html:not(.app-blur) .rail,
+html:not(.app-blur) .side,
+html:not(.app-blur) .main,
+html:not(.app-blur) .members,
+html:not(.app-blur) .settings {
+  background: rgba(14, 6, 28, 0.84);
+  border: 1px solid rgba(198, 146, 255, 0.72);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+}
+html:not(.app-blur) .chat-frame:has(.profile-dock) > .chat-col {
+  background: rgba(14, 6, 28, 0.9);
+  border: 1px solid rgba(198, 146, 255, 0.72);
+}
+html:not(.app-blur) .dock.profile-dock .dock-profile.profile-card,
+html:not(.app-blur) .composer,
+html:not(.app-blur) .menu,
+html:not(.app-blur) .attach-menu,
+html:not(.app-blur) .bell-menu,
+html:not(.app-blur) .thread-menu {
+  border: 1px solid rgba(198, 146, 255, 0.72);
+}
+html:not(.app-blur) .menu,
+html:not(.app-blur) .attach-menu,
+html:not(.app-blur) .bell-menu,
+html:not(.app-blur) .thread-menu {
+  background: rgba(18, 8, 36, 0.96);
+}
 .rail {
   --bg-rail: transparent;
   width: 86px; display: flex; flex-direction: column;
