@@ -1,7 +1,7 @@
 {
   "name": "nebula",
   "productName": "Nebula",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Nebula desktop app. On startup it reads the site and server link from GitHub.",
   "main": "main.js",
   "author": "Nebula",
