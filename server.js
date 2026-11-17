@@ -4678,21 +4678,12 @@ function eraseAccount(user) {
     if (String(group.ownerId) === id) group.ownerId = members[0];
   }
 
-  for (const thread of Object.values(threads)) {
-    if (!thread) continue;
-    if (String(thread.ownerId) === id) {
-      dropRooms.add('thread:' + thread.id);
-      delete threads[thread.id];
-      continue;
-    }
-    if (Array.isArray(thread.followers)) thread.followers = thread.followers.map(String).filter((memberId) => memberId !== id);
-  }
-
   for (const g of Object.values(guilds.servers || {})) {
     if (!g) continue;
     const owners = (g.ownerIds || []).map(String);
     const soleOwner = g.id !== OFFICIAL_ID && owners.includes(id) && !owners.some((ownerId) => ownerId !== id);
-    if (soleOwner) {
+    const others = Object.keys(g.members || {}).map(String).filter((memberId) => memberId !== id);
+    if (soleOwner && !others.length) {
       if (memberCount(g) > 5 && g.vanity) holdLink(g.vanity);
       for (const channel of g.channels || []) if (channel && channel.id) dropRooms.add(channel.id);
       for (const thread of Object.values(threads)) {
@@ -4708,8 +4699,21 @@ function eraseAccount(user) {
       delete guilds.servers[g.id];
       continue;
     }
+    if (soleOwner) {
+      const nextOwner = others.slice().sort((a, b) => {
+        const joined = (memberId) => Date.parse((g.members[memberId] && g.members[memberId].joinedAt) || 0) || 0;
+        return joined(a) - joined(b);
+      })[0];
+      g.ownerIds = [nextOwner];
+      const mem = g.members[nextOwner];
+      if (mem) {
+        mem.roles = Array.isArray(mem.roles) ? mem.roles : ['everyone'];
+        if (!mem.roles.includes('owner')) mem.roles.push('owner');
+      }
+    } else if (Array.isArray(g.ownerIds)) {
+      g.ownerIds = g.ownerIds.filter((ownerId) => String(ownerId) !== id);
+    }
     if (g.members) delete g.members[id];
-    if (Array.isArray(g.ownerIds)) g.ownerIds = g.ownerIds.filter((ownerId) => String(ownerId) !== id);
     if (g.bans) delete g.bans[id];
     if (g.invites) {
       for (const code of Object.keys(g.invites)) {
@@ -4719,6 +4723,19 @@ function eraseAccount(user) {
     g.requests = (g.requests || []).filter((row) => !row || String(row.userId) !== id);
     g.reports = (g.reports || []).filter((row) => !row || (String(row.by) !== id && String(row.targetId) !== id));
     g.audit = (g.audit || []).filter((row) => !row || String(row.userId) !== id);
+  }
+
+  for (const thread of Object.values(threads)) {
+    if (!thread) continue;
+    if (Array.isArray(thread.followers)) thread.followers = thread.followers.map(String).filter((memberId) => memberId !== id);
+    if (String(thread.ownerId) !== id) continue;
+    const server = guilds.servers && guilds.servers[thread.serverId];
+    const next = (server && server.ownerIds && server.ownerIds[0]) || (thread.followers && thread.followers[0]) || '';
+    if (server && next) thread.ownerId = String(next);
+    else {
+      dropRooms.add('thread:' + thread.id);
+      delete threads[thread.id];
+    }
   }
 
   for (const [roomId, list] of Object.entries(messages)) {
