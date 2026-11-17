@@ -997,12 +997,13 @@ const MESSAGES_FILE = path.join(DATA_DIR, 'messages.json');
 const CODES_FILE = path.join(DATA_DIR, 'codes.json');
 const FRIENDS_FILE = path.join(DATA_DIR, 'friends.json');
 const DMS_FILE = path.join(DATA_DIR, 'dms.json');
+const RETIRED_FILE = path.join(DATA_DIR, 'retired.json');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(FILES_DIR)) fs.mkdirSync(FILES_DIR, { recursive: true });
 
-const sealedFiles = new Set([USERS_FILE, DMS_FILE, FRIENDS_FILE, MESSAGES_FILE]);
+const sealedFiles = new Set([USERS_FILE, DMS_FILE, FRIENDS_FILE, MESSAGES_FILE, RETIRED_FILE]);
 const reseal = new Set();
 let dataKeyCache = null;
 function dataKey() {
@@ -1279,11 +1280,20 @@ function dmKey(a, b) {
   return [a, b].sort().join(':');
 }
 
+let retired = load(RETIRED_FILE, { ids: [], uids: [], names: [] });
+if (!Array.isArray(retired.ids)) retired.ids = [];
+if (!Array.isArray(retired.uids)) retired.uids = [];
+if (!Array.isArray(retired.names)) retired.names = [];
+
 function nextUid() {
   let max = 0;
   for (const u of Object.values(users)) {
     const n = Number(u.uid) || 0;
     if (n > max) max = n;
+  }
+  for (const n of retired.uids) {
+    const value = Number(n) || 0;
+    if (value > max) max = value;
   }
   return max + 1;
 }
@@ -2318,6 +2328,43 @@ async function r2Get(cfg, key) {
   return Buffer.from(await res.arrayBuffer());
 }
 
+async function r2Delete(cfg, key) {
+  const host = new URL(cfg.endpoint).host;
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const payloadHash = sha256hex(Buffer.alloc(0));
+  const encodedKey = String(key || '').split('/').map((part) => encodeURIComponent(part)).join('/');
+  const canonicalUri = '/' + cfg.bucket + '/' + encodedKey;
+  const headers = {
+    host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  const names = Object.keys(headers).sort();
+  const canonicalHeaders = names.map((name) => name + ':' + String(headers[name]).trim() + '\n').join('');
+  const signedHeaders = names.join(';');
+  const canonicalRequest = ['DELETE', canonicalUri, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
+  const scope = dateStamp + '/auto/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256hex(canonicalRequest)].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac('AWS4' + cfg.secretKey, dateStamp), 'auto'), 's3'), 'aws4_request');
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+  const authorization = 'AWS4-HMAC-SHA256 Credential=' + cfg.accessKey + '/' + scope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
+  const res = await fetch(cfg.endpoint + canonicalUri, {
+    method: 'DELETE',
+    headers: {
+      Authorization: authorization,
+      'x-amz-content-sha256': payloadHash,
+      'x-amz-date': amzDate,
+    },
+  });
+  if (res.status === 404 || res.ok) {
+    await res.arrayBuffer().catch(() => {});
+    return;
+  }
+  const detail = await res.text().catch(() => '');
+  throw new Error('R2 ' + res.status + ' ' + detail.slice(0, 180));
+}
+
 function shipMessages(body) {
   const cfg = r2Config();
   if (!cfg || !body) return;
@@ -3226,6 +3273,28 @@ function normalizeUsername(name) {
     .slice(0, 32);
 }
 
+function pruneHeldNames() {
+  const now = Date.now();
+  const next = retired.names.filter((row) => row && row.name && row.until > now);
+  if (next.length === retired.names.length) return;
+  retired.names = next;
+  save(RETIRED_FILE, retired);
+}
+
+function usernameHeld(name) {
+  const clean = normalizeUsername(name);
+  if (!clean) return false;
+  pruneHeldNames();
+  return retired.names.some((row) => row.name === clean);
+}
+
+function usernameTaken(name, exceptId) {
+  const clean = normalizeUsername(name);
+  if (!clean) return true;
+  if (usernameHeld(clean)) return true;
+  return Object.values(users).some((u) => u && u.username === clean && String(u.id) !== String(exceptId || ''));
+}
+
 function cleanAliases(list) {
   const out = [];
   const seen = new Set();
@@ -3304,7 +3373,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   if (Object.values(users).some((u) => emailMatches(cleanEmail, u.emailSalt, u.emailHash))) {
     return res.status(409).json({ error: 'Email already registered' });
   }
-  if (Object.values(users).some((u) => u.username === cleanUser)) {
+  if (usernameTaken(cleanUser)) {
     return res.status(409).json({ error: 'Username taken' });
   }
 
@@ -3405,7 +3474,8 @@ function sessionFor(user, req) {
 }
 
 function createAccount(entry, req) {
-  const id = uuidv4();
+  let id = uuidv4();
+  while (users[id] || retired.ids.includes(id)) id = uuidv4();
   const uid = nextUid();
   const badges = [];
   if (isEarlySupporterWindow()) badges.push('early');
@@ -4296,7 +4366,7 @@ app.get('/api/username-available', auth, (req, res) => {
   const clean = normalizeUsername(req.query.name);
   if (!clean) return res.json({ ok: true, username: '', available: false, reason: 'invalid' });
   if (clean === req.user.username) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
-  const taken = Object.values(users).some((u) => u && u.id !== req.user.id && u.username === clean);
+  const taken = usernameTaken(clean, req.user.id);
   res.json({ ok: true, username: clean, available: !taken, reason: taken ? 'taken' : 'available' });
 });
 
@@ -4320,8 +4390,7 @@ app.patch('/api/me', auth, (req, res) => {
     const clean = normalizeUsername(username);
     if (clean.length < 1) return res.status(400).json({ error: 'Username required' });
     if (clean !== req.user.username) {
-      const taken = Object.values(users).some((u) => u.id !== req.user.id && u.username === clean);
-      if (taken) return res.status(409).json({ error: 'Username taken' });
+      if (usernameTaken(clean, req.user.id)) return res.status(409).json({ error: 'Username taken' });
       req.user.username = clean;
     }
   }
@@ -4469,6 +4538,272 @@ app.delete('/api/me/stories/:id', auth, (req, res) => {
   req.user.stories = liveStories(req.user.stories).filter((row) => String(row.id) !== id);
   save(USERS_FILE, users);
   res.json({ ok: true, user: publicUser(req.user) });
+});
+
+function forgetUpload(url) {
+  const value = String(url || '');
+  if (!value) return;
+  const name = uploadName(value);
+  const cfg = r2Config();
+  if (name) {
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, name)); } catch (_) {}
+    if (cfg) {
+      r2Delete(cfg, 'sealed/uploads/' + name).catch(() => {});
+      r2Delete(cfg, 'uploads/' + name).catch(() => {});
+    }
+  }
+  if (cfg && isR2Url(value)) {
+    const rel = value.slice(cfg.publicBase.length + 1);
+    if (rel && !rel.includes('..')) r2Delete(cfg, rel).catch(() => {});
+  }
+  const local = value.replace(/^\/files\//, '').replace(/^\/+/, '');
+  if (/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(local)) {
+    try { fs.unlinkSync(path.join(FILES_DIR, local)); } catch (_) {}
+  }
+}
+
+function forgetTree(dir) {
+  try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {}
+}
+
+function forgetProfileFiles(user) {
+  const id = String(user.id).replace(/[^A-Za-z0-9_-]/g, '');
+  forgetTree(path.join(FILES_DIR, 'avatars', id));
+  forgetTree(path.join(FILES_DIR, 'banners', id));
+  forgetUpload(user.avatarUrl);
+  forgetUpload(user.bannerUrl);
+  forgetUpload(user.avatarPath);
+  forgetUpload(user.bannerPath);
+  forgetUpload(user.songFile);
+  for (const row of [...(user.gallery || []), ...(user.stories || [])]) forgetUpload(row && row.url);
+  try {
+    const prefix = 'song-' + id + '-';
+    for (const name of fs.readdirSync(UPLOAD_DIR)) {
+      if (name.startsWith(prefix)) {
+        try { fs.unlinkSync(path.join(UPLOAD_DIR, name)); } catch (_) {}
+      }
+    }
+  } catch (_) {}
+}
+
+function messageFileUrls(msg) {
+  const urls = [];
+  for (const file of (msg && msg.files) || []) {
+    if (file && file.url) urls.push(file.url);
+    if (file && file.poster) urls.push(file.poster);
+  }
+  return urls;
+}
+
+function scrubLeftover(msg, id) {
+  if (!msg || typeof msg !== 'object') return;
+  if (Array.isArray(msg.reactions)) {
+    msg.reactions = msg.reactions
+      .map((row) => {
+        if (!row) return null;
+        const usersLeft = (row.users || []).map(String).filter((userId) => userId !== id);
+        return usersLeft.length ? Object.assign({}, row, { users: usersLeft }) : null;
+      })
+      .filter(Boolean);
+  }
+  if (msg.mentions && Array.isArray(msg.mentions.users)) {
+    msg.mentions.users = msg.mentions.users.map(String).filter((userId) => userId !== id);
+  }
+  if (msg.poll && msg.poll.votes && typeof msg.poll.votes === 'object') {
+    for (const key of Object.keys(msg.poll.votes)) {
+      msg.poll.votes[key] = (msg.poll.votes[key] || []).map(String).filter((userId) => userId !== id);
+    }
+  }
+  const replies = [].concat(msg.reply || [], Array.isArray(msg.replies) ? msg.replies : []);
+  for (const reply of replies) {
+    if (!reply || typeof reply !== 'object') continue;
+    const authorId = String(reply.authorId || (reply.author && reply.author.id) || '');
+    if (authorId !== id) continue;
+    reply.name = 'Deleted account';
+    reply.preview = '';
+    reply.authorId = '';
+    reply.author = { displayName: 'Deleted account' };
+  }
+  if (msg.seal && msg.seal.for) delete msg.seal.for[id];
+}
+
+function eraseAccount(user) {
+  const id = String(user.id);
+  const username = normalizeUsername(user.username);
+  const email = String(user.email || '').trim().toLowerCase();
+  forgetProfileFiles(user);
+  const dropRooms = new Set();
+
+  for (const key of Object.keys(dmThreads)) {
+    const thread = dmThreads[key];
+    const parts = key.split(':');
+    if (parts.includes(id) || (thread && (String(thread.a) === id || String(thread.b) === id))) {
+      dropRooms.add(key.startsWith('dm:') ? key : 'dm:' + key);
+      delete dmThreads[key];
+    }
+  }
+  for (const roomId of Object.keys(messages)) {
+    if (roomId.startsWith('dm:') && roomId.slice(3).split(':').includes(id)) dropRooms.add(roomId);
+  }
+
+  for (const group of Object.values(groups)) {
+    if (!group) continue;
+    const members = (group.memberIds || []).map(String).filter((memberId) => memberId !== id);
+    if (group.wraps && typeof group.wraps === 'object') delete group.wraps[id];
+    if (!members.length) {
+      dropRooms.add('group:' + group.id);
+      forgetUpload(group.iconUrl);
+      delete groups[group.id];
+      continue;
+    }
+    group.memberIds = members;
+    if (String(group.ownerId) === id) group.ownerId = members[0];
+  }
+
+  for (const thread of Object.values(threads)) {
+    if (!thread) continue;
+    if (String(thread.ownerId) === id) {
+      dropRooms.add('thread:' + thread.id);
+      delete threads[thread.id];
+      continue;
+    }
+    if (Array.isArray(thread.followers)) thread.followers = thread.followers.map(String).filter((memberId) => memberId !== id);
+  }
+
+  for (const g of Object.values(guilds.servers || {})) {
+    if (!g) continue;
+    if (g.members) delete g.members[id];
+    if (Array.isArray(g.ownerIds)) g.ownerIds = g.ownerIds.filter((ownerId) => String(ownerId) !== id);
+    if (g.bans) delete g.bans[id];
+    if (g.invites) {
+      for (const code of Object.keys(g.invites)) {
+        if (g.invites[code] && String(g.invites[code].inviterId) === id) delete g.invites[code];
+      }
+    }
+    g.requests = (g.requests || []).filter((row) => !row || String(row.userId) !== id);
+    g.reports = (g.reports || []).filter((row) => !row || (String(row.by) !== id && String(row.targetId) !== id));
+    g.audit = (g.audit || []).filter((row) => !row || String(row.userId) !== id);
+    const memberIds = Object.keys(g.members || {});
+    if (g.id !== OFFICIAL_ID && !memberIds.length) {
+      for (const channel of g.channels || []) if (channel && channel.id) dropRooms.add(channel.id);
+      forgetUpload(g.iconUrl);
+      forgetUpload(g.bannerUrl);
+      delete guilds.servers[g.id];
+      continue;
+    }
+    if (g.id !== OFFICIAL_ID && !(g.ownerIds || []).length && memberIds.length) {
+      const nextOwner = memberIds[0];
+      g.ownerIds = [nextOwner];
+      const mem = g.members[nextOwner];
+      if (mem) {
+        mem.roles = Array.isArray(mem.roles) ? mem.roles : ['everyone'];
+        if (!mem.roles.includes('owner')) mem.roles.push('owner');
+      }
+    }
+  }
+
+  for (const [roomId, list] of Object.entries(messages)) {
+    if (!Array.isArray(list)) continue;
+    if (dropRooms.has(roomId)) {
+      for (const msg of list) {
+        for (const url of messageFileUrls(msg)) forgetUpload(url);
+        if (msg && msg.id) publishDelete(roomId, msg.id);
+      }
+      delete messages[roomId];
+      continue;
+    }
+    const kept = [];
+    for (const msg of list) {
+      if (msg && String(msg.authorId) === id) {
+        for (const url of messageFileUrls(msg)) forgetUpload(url);
+        if (msg.id) publishDelete(roomId, msg.id);
+        continue;
+      }
+      scrubLeftover(msg, id);
+      kept.push(msg);
+    }
+    messages[roomId] = kept;
+  }
+
+  delete reads[id];
+  for (const book of Object.values(reads)) {
+    if (!book || typeof book !== 'object' || Array.isArray(book)) continue;
+    for (const key of Object.keys(book)) {
+      if (key === 'dm:' + id || key.split(':').includes(id)) delete book[key];
+    }
+  }
+
+  delete friendGraph[id];
+  for (const node of Object.values(friendGraph)) {
+    if (!node) continue;
+    for (const bucket of ['friends', 'incoming', 'outgoing', 'blocked']) {
+      if (Array.isArray(node[bucket])) node[bucket] = node[bucket].map(String).filter((memberId) => memberId !== id);
+    }
+  }
+
+  for (const codeId of Object.keys(codes)) {
+    const entry = codes[codeId];
+    if (!entry) continue;
+    const sameEmail = email && (String(entry.email || '').trim().toLowerCase() === email || emailMatches(email, entry.emailSalt, entry.emailHash));
+    const sameName = username && normalizeUsername(entry.username) === username;
+    if (sameEmail || sameName) delete codes[codeId];
+  }
+
+  callLog = callLog.filter((row) => row && String(row.from) !== id && String(row.to) !== id);
+  try { dropVoiceNow(id); } catch (_) {}
+  liveUsers.delete(id);
+  briefOnline.delete(id);
+  presenceRefresh.delete(id);
+  const queued = songQueue.indexOf(id);
+  if (queued >= 0) songQueue.splice(queued, 1);
+  for (const [ticket, row] of authHolds) {
+    if (row && String(row.userId) === id) authHolds.delete(ticket);
+  }
+  for (const [ticket, row] of challenges) {
+    if (row && String(row.userId) === id) challenges.delete(ticket);
+  }
+  storeChallenges();
+  for (const room of typingRooms.values()) {
+    const row = room.get(id);
+    if (row && row.timer) clearTimeout(row.timer);
+    room.delete(id);
+  }
+  for (const book of typingEpoch.values()) book.delete(id);
+
+  if (!retired.ids.includes(id)) retired.ids.push(id);
+  const uid = Number(user.uid);
+  if (uid && !retired.uids.includes(uid)) retired.uids.push(uid);
+  if (username) {
+    retired.names = retired.names.filter((row) => row.name !== username);
+    retired.names.push({ name: username, until: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+  }
+  delete users[id];
+
+  save(USERS_FILE, users);
+  save(MESSAGES_FILE, messages);
+  save(DMS_FILE, dmThreads);
+  save(FRIENDS_FILE, friendGraph);
+  save(GROUPS_FILE, groups);
+  save(THREADS_FILE, threads);
+  save(READS_FILE, reads);
+  save(CODES_FILE, codes);
+  save(RETIRED_FILE, retired);
+  saveGuilds();
+  touchProfiles();
+  touchAlerts();
+}
+
+app.post('/api/me/delete', auth, (req, res) => {
+  if (!checkPassword(String(req.body && req.body.password || ''), req.user.passwordHash)) {
+    return res.status(400).json({ error: 'Password is wrong' });
+  }
+  try {
+    eraseAccount(req.user);
+  } catch (err) {
+    console.log('Account delete failed. ' + (err && err.message));
+    return res.status(500).json({ error: 'Could not delete the account' });
+  }
+  res.json({ ok: true });
 });
 
 app.post('/api/me/password', auth, (req, res) => {
@@ -7609,6 +7944,7 @@ function sealListedHistory() {
 }
 
 function listen() {
+  try { pruneHeldNames(); } catch (_) {}
   try { sealListedHistory(); } catch (err) { console.log('Room seal skipped: ' + (err.message || err)); }
   httpServer = app.listen(PORT, '0.0.0.0', () => {
     hub = attachGateway(httpServer, {

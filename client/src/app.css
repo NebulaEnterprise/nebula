@@ -97,6 +97,9 @@ img { max-width: 100%; }
 .btn.brand:hover { filter: brightness(1.08); }
 .btn.ghost { background: transparent; }
 .btn.danger, .danger { color: var(--danger); }
+.btn.danger-fill { background: #da373c; border-color: transparent; color: #fff; }
+.btn.danger-fill:hover { filter: brightness(1.08); }
+.btn.danger-fill:disabled { opacity: 0.5; }
 .btn.sm { padding: 7px 10px; border-radius: 10px; font-size: 13px; }
 .btn.icon {
   width: 34px; height: 34px; padding: 0; border-radius: 10px; color: var(--muted);

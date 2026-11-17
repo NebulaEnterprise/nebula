@@ -76,6 +76,7 @@
   let viewing = $state(null);
   let accountDialog = $state('');
   let accountBusy = $state(false);
+  let deletePassword = $state('');
   let showPw = $state(false);
   let draftUser = $state('');
   let nameStatus = $state('');
@@ -142,6 +143,20 @@
       ui.me = { ...ui.me, ...data.user };
       accountDialog = '';
       toast('Sign-in email updated');
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      accountBusy = false;
+    }
+  }
+
+  async function deleteAccount() {
+    accountBusy = true;
+    try {
+      await api('/api/me/delete', { method: 'POST', body: { password: deletePassword } });
+      accountDialog = '';
+      deletePassword = '';
+      logout();
     } catch (err) {
       toast(err.message);
     } finally {
@@ -578,6 +593,14 @@
           {/if}
           <Security bind:open={securityOpen} />
         </section>
+        {#if !securityOpen}
+          <div class="acct-rule"></div>
+          <section class="acct-section">
+            <h3>Delete account</h3>
+            <p class="hint">This erases the profile, email, vault, friends, server memberships, photos, and messages. Direct messages are removed for both people. The user id is retired and cannot be given out again. The username stays held for 7 days, then anyone can use it.</p>
+            <button type="button" class="btn danger" onclick={() => { deletePassword = ''; accountDialog = 'delete'; }}>Delete account</button>
+          </section>
+        {/if}
       {:else}
       <div class="grid-2" class:look-layout={page === 'look'}>
         <div>
@@ -1044,6 +1067,13 @@
           <div class="modify-actions">
             <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
             <button type="button" class="btn brand" disabled={accountBusy} onclick={saveEmail}>Done</button>
+          </div>
+        {:else if accountDialog === 'delete'}
+          <p class="hint">Enter the account password. This cannot be undone. The username stays held for 7 days.</p>
+          <div class="field"><label>Password</label><input type="password" bind:value={deletePassword} autocomplete="current-password" /></div>
+          <div class="modify-actions">
+            <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>
+            <button type="button" class="btn danger-fill" disabled={accountBusy || !deletePassword} onclick={deleteAccount}>Delete account</button>
           </div>
         {:else}
           <p class="hint">Enter your current password and a new password.</p>
