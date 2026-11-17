@@ -184,7 +184,6 @@ html:not(.app-blur) .dock.profile-dock {
   border: 1px solid rgba(198, 146, 255, 0.72);
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
 }
-html:not(.app-blur) .composer,
 html:not(.app-blur) .menu,
 html:not(.app-blur) .attach-menu,
 html:not(.app-blur) .bell-menu,
@@ -1241,15 +1240,25 @@ html:not(.app-blur) .thread-menu {
   70% { opacity: 0; transform: scale(0.45); }
 }
 .composer {
-  position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 4px;
-  background: #101117; border: 1px solid var(--line); border-radius: 14px; padding: 6px 8px 6px 6px;
+  position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  background: rgba(28, 10, 52, 0.46);
+  border: 1px solid rgba(198, 146, 255, 0.78);
+  border-radius: 28px; padding: 6px 10px;
+  box-shadow: 0 0 0 1px rgba(130, 60, 200, 0.22), 0 8px 28px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(14px);
 }
 .composer textarea {
   flex: 1 1 180px; min-width: 0; max-height: 180px; resize: none; overflow-y: auto;
   background: transparent; border: 0; outline: none; padding: 10px 6px; line-height: 1.45;
 }
-.composer .btn.icon { flex-shrink: 0; }
-.gif-btn { width: auto; padding: 0 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
+.composer .btn.icon {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 12px;
+  border: 1px solid rgba(198, 146, 255, 0.72);
+  background: rgba(52, 20, 88, 0.42); color: #f4ecff;
+}
+.composer .btn.icon:hover { background: rgba(96, 42, 150, 0.55); color: #fff; }
+.composer .attach-toggle { width: 38px; height: 38px; border-radius: 50%; }
+.gif-btn { width: auto; min-width: 44px; padding: 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
 .attach-menu {
   position: absolute; left: 8px; bottom: calc(100% + 8px); z-index: 7;
   min-width: 220px; padding: 6px; background: #111214; border: 1px solid var(--line);
