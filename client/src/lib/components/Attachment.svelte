@@ -223,6 +223,31 @@
     if (view && event.key === 'Escape') closeView();
   }
 
+  function openInBrowser(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const url = src;
+    if (!url) return;
+    if (/^https?:/i.test(url)) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const tab = window.open('', '_blank');
+    if (!tab) return;
+    const title = String(name || 'Image');
+    tab.document.title = title;
+    const style = tab.document.createElement('style');
+    style.textContent = 'html,body{margin:0;background:#111;min-height:100%}body{display:grid;place-items:center}img{max-width:100vw;max-height:100vh;object-fit:contain}';
+    tab.document.head.appendChild(style);
+    const img = tab.document.createElement('img');
+    img.alt = title;
+    tab.document.body.appendChild(img);
+    fetch(url).then((res) => res.blob()).then((blob) => {
+      if (tab.closed) return;
+      img.src = tab.URL.createObjectURL(blob);
+    }).catch(() => {});
+  }
+
   $effect(() => {
     const url = src;
     if (!view && video && url && !poster) {
@@ -297,7 +322,7 @@
       <button type="button" title={zoomed ? 'Zoom out' : 'Zoom in'} aria-label={zoomed ? 'Zoom out' : 'Zoom in'} onclick={zoomFromButton}>
         {#if zoomed}<ZoomOut size={20} />{:else}<ZoomIn size={20} />{/if}
       </button>
-      <a class="image-tool" href={src} target="_blank" rel="noopener noreferrer" title="Open in browser" aria-label="Open in browser"><ExternalLink size={20} /></a>
+      <button type="button" title="Open in browser" aria-label="Open in browser" onclick={openInBrowser}><ExternalLink size={20} /></button>
       <button type="button" class="words" class:on={details} title="View details" aria-label="View details" aria-expanded={details} onclick={(event) => { event.stopPropagation(); details = !details; }}>View details</button>
       <button type="button" title="Close" aria-label="Close" onclick={(event) => { event.stopPropagation(); closeView(); }}><X size={20} /></button>
     </div>
