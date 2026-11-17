@@ -19,6 +19,7 @@
   import Security from './Security.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
+  import { look, setLook } from '../look.svelte.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
   let emailShown = $state(false);
@@ -421,6 +422,29 @@
     form.nameColors = next;
   }
 
+  const appAccents = ['#ff4f9a', '#c026d3', '#a855f7', '#3b82f6', '#22d3ee', '#22c55e', '#eab308', '#f97316', '#ef4444'];
+
+  function pickWallpaper() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/webp';
+    input.style.cssText = 'position:fixed;left:-1000px;top:0;width:1px;height:1px;opacity:0';
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      input.remove();
+      if (!file) return;
+      try {
+        const background = await fileToDataUrl(file, { maxW: 1600, maxH: 900, quality: 0.72 });
+        setLook({ background });
+      } catch (err) {
+        toast(err.message || 'Could not use that picture');
+      }
+    });
+    input.addEventListener('cancel', () => input.remove());
+    document.body.appendChild(input);
+    input.click();
+  }
+
   const accentPresets = [
     '#c026d3', '#ec4899', '#3b82f6', '#22d3ee', '#22c55e', '#eab308', '#f97316', '#ef4444',
     '#d8b4fe', '#818cf8', '#67e8f9', '#86efac', '#2dd4bf', '#fbbf24', '#fb923c', '#fb7185',
@@ -516,7 +540,7 @@
             <i class="look-mark"><Palette size={18} /></i>
             <div>
               <h2>Appearance</h2>
-              <p>Customize how your profile and interface look.</p>
+              <p>Change the look and feel of Nebula.</p>
             </div>
           </div>
         {:else}
@@ -758,34 +782,85 @@
             </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {:else if page === 'look'}
+            <section class="look-sec app-card">
+              <h3><Sparkles size={16} class="sec-ico" /> App Appearance</h3>
+              <p class="look-note">The colors and wallpaper of Nebula itself.</p>
+              <div class="app-split">
+                <div>
+                  <strong>Theme</strong>
+                  <div class="app-themes">
+                    <button type="button" class="theme-card" class:on={look.theme === 'dark'} onclick={() => setLook({ theme: 'dark' })}>
+                      {#if look.theme === 'dark'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                      <Moon size={22} />
+                      Dark
+                    </button>
+                    <button type="button" class="theme-card" class:on={look.theme === 'light'} onclick={() => setLook({ theme: 'light' })}>
+                      {#if look.theme === 'light'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                      <Sun size={22} />
+                      Light
+                    </button>
+                    <button type="button" class="theme-card" class:on={look.theme === 'amoled'} onclick={() => setLook({ theme: 'amoled' })}>
+                      {#if look.theme === 'amoled'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                      <Circle size={22} />
+                      AMOLED
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <strong>Accent Color</strong>
+                  <div class="swatches app-swatches">
+                    {#each appAccents as hex}
+                      <button type="button" class="swatch" class:on={sameHex(look.accent, hex)} style="background:{hex}" aria-label={hex} onclick={() => setLook({ accent: hex })}></button>
+                    {/each}
+                  </div>
+                </div>
+              </div>
+              <div class="app-bg">
+                <span class="bg-thumb app-bg-thumb" style:background-image={look.background ? `url("${look.background}")` : 'var(--app-wallpaper)'}></span>
+                <div class="copy">
+                  <strong>Background</strong>
+                  <em>{look.background ? 'Your picture sits behind the panels.' : 'Nebula’s space picture sits behind the panels.'}</em>
+                </div>
+                <button type="button" class="btn sm" onclick={pickWallpaper}>Change Background</button>
+                {#if look.background}<button type="button" class="btn sm" onclick={() => setLook({ background: '' })}>Remove</button>{/if}
+              </div>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Blur Background</strong>
+                  <em>Soften the wallpaper behind the panels.</em>
+                </div>
+                <button type="button" class="switch" class:on={look.blur} aria-pressed={look.blur} onclick={() => setLook({ blur: !look.blur })}><i></i></button>
+              </div>
+              <div class="look-line">
+                <div class="copy">
+                  <strong>Animations</strong>
+                  <em>Motion when panels and buttons change.</em>
+                </div>
+                <button type="button" class="switch" class:on={look.motion} aria-pressed={look.motion} onclick={() => setLook({ motion: !look.motion })}><i></i></button>
+              </div>
+            </section>
             <section class="look-sec">
-              <h3><Sparkles size={16} class="sec-ico" /> Theme</h3>
+              <h3><Palette size={16} class="sec-ico" /> Profile theme</h3>
+              <p class="look-note">How your profile card is colored. This is separate from the app theme above.</p>
               <div class="theme-grid">
                 <button type="button" class="theme-card" class:on={form.profileStyle === 'solid'} onclick={() => (form.profileStyle = 'solid')}>
                   {#if form.profileStyle === 'solid'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                  <Moon size={22} />
                   Solid
                 </button>
                 <button type="button" class="theme-card" class:on={form.profileStyle === 'gradient'} onclick={() => (form.profileStyle = 'gradient')}>
                   {#if form.profileStyle === 'gradient'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                  <Sun size={22} />
                   Gradient
                 </button>
                 <button type="button" class="theme-card" class:on={form.profileStyle === 'glow'} onclick={() => (form.profileStyle = 'glow')}>
                   {#if form.profileStyle === 'glow'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                  <Sparkles size={22} />
                   Glow
                 </button>
                 <button type="button" class="theme-card" class:on={form.profileStyle === 'rainbow'} onclick={() => (form.profileStyle = 'rainbow')}>
                   {#if form.profileStyle === 'rainbow'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                  <Palette size={22} />
                   Rainbow
                 </button>
               </div>
-            </section>
-            <section class="look-sec">
-              <h3><Droplet size={16} class="sec-ico" /> Accent color</h3>
-              <div class="accent-row">
+              <div class="accent-row" style="margin-top:14px">
                 <div class="swatches">
                   {#each accentPresets as hex}
                     <button type="button" class="swatch" class:on={sameHex(form.profileColors[accentSlot] || form.profileColors[0], hex)} style="background:{hex}" aria-label={hex} onclick={() => setProfileColor(accentSlot, hex)}></button>
@@ -804,7 +879,8 @@
               </div>
             </section>
             <section class="look-sec">
-              <h3><Monitor size={16} class="sec-ico" /> Display settings</h3>
+              <h3><Monitor size={16} class="sec-ico" /> Profile Customization</h3>
+              <p class="look-note">Customize the look of your profile and interface.</p>
               <div class="look-block">
                 <strong>Display name style</strong>
                 <em>Choose how your name is displayed.</em>

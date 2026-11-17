@@ -3,6 +3,7 @@ import './app.css'
 import App from './App.svelte'
 import { watchForUpdates } from './lib/update.js'
 import { startTunnelProxy } from './lib/api.js'
+import './lib/look.svelte.js'
 
 watchForUpdates()
 startTunnelProxy()

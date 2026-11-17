@@ -62,8 +62,8 @@ function layout() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const { width, height } = mainWindow.getContentBounds();
   const bar = barHeight;
-  if (titleView) titleView.setBounds({ x: 0, y: 0, width, height: bar });
-  if (contentView) contentView.setBounds({ x: 0, y: bar, width, height: Math.max(0, height - bar) });
+  if (titleView) titleView.setBounds({ x: 0, y: 0, width, height: bar || 0 });
+  if (contentView) contentView.setBounds({ x: 0, y: 0, width, height });
 }
 
 function sendChromeState() {
@@ -154,6 +154,7 @@ function createWindow() {
   titleView = new WebContentsView({
     webPreferences: { ...shared, preload: path.join(__dirname, 'title-preload.js') },
   });
+  try { titleView.setBackgroundColor('#00000000'); } catch (_) {}
   contentView = new WebContentsView({
     webPreferences: { ...shared, preload: path.join(__dirname, 'preload.js'), spellcheck: true },
   });
