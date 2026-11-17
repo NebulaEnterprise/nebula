@@ -7858,6 +7858,71 @@ app.get('/api/health', (req, res) => {
   });
 })(app, { auth, guilds, users, findChannel, can, PERM, publicUser });
 
+const LIVE_ROOM_CODE_FILE = path.join(DATA_DIR, 'live-room.code');
+const liveRoomPasses = new Map();
+const liveRoomFails = new Map();
+let liveRoomCodeDigest = '';
+
+function liveRoomCode() {
+  let text = '';
+  try { text = fs.readFileSync(LIVE_ROOM_CODE_FILE, 'utf8').trim(); } catch (_) {}
+  if (!text) {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const bytes = crypto.randomBytes(12);
+    let raw = '';
+    for (const byte of bytes) raw += alphabet[byte % alphabet.length];
+    text = raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12);
+    fs.writeFileSync(LIVE_ROOM_CODE_FILE, text + '\n', { mode: 0o600 });
+    try { fs.chmodSync(LIVE_ROOM_CODE_FILE, 0o600); } catch (_) {}
+    console.log('  Live room code: ' + text);
+    console.log('  Saved on this server as data/live-room.code');
+  }
+  const digest = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+  if (liveRoomCodeDigest && liveRoomCodeDigest !== digest) liveRoomPasses.clear();
+  liveRoomCodeDigest = digest;
+  return text;
+}
+
+function liveRoomLimited(ip) {
+  const row = liveRoomFails.get(ip);
+  if (!row) return false;
+  if (Date.now() - row.at > 10 * 60 * 1000) return false;
+  return row.n >= 8;
+}
+
+function liveRoomFail(ip) {
+  const now = Date.now();
+  const row = liveRoomFails.get(ip);
+  if (!row || now - row.at > 10 * 60 * 1000) liveRoomFails.set(ip, { n: 1, at: now });
+  else row.n += 1;
+}
+
+app.post('/api/live-room/enter', (req, res) => {
+  const ip = String((req.socket && req.socket.remoteAddress) || '');
+  if (liveRoomLimited(ip)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' });
+  const given = String((req.body && req.body.code) || '').trim().slice(0, 80);
+  const saved = liveRoomCode();
+  const a = crypto.createHash('sha256').update(given, 'utf8').digest();
+  const b = crypto.createHash('sha256').update(saved, 'utf8').digest();
+  if (!given || !crypto.timingSafeEqual(a, b)) {
+    liveRoomFail(ip);
+    return res.status(401).json({ error: 'Wrong code' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  liveRoomPasses.set(token, Date.now() + 12 * 60 * 60 * 1000);
+  res.json({ token });
+});
+
+app.post('/api/live-room/check', (req, res) => {
+  const token = String((req.body && req.body.token) || '').trim().slice(0, 80);
+  const until = liveRoomPasses.get(token);
+  if (!token || !until || until < Date.now()) {
+    liveRoomPasses.delete(token);
+    return res.status(401).json({ error: 'Code required' });
+  }
+  res.json({ ok: true });
+});
+
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API route not found' });
 });
@@ -7981,6 +8046,7 @@ function sealListedHistory() {
 
 function listen() {
   try { pruneHeldNames(); } catch (_) {}
+  try { liveRoomCode(); } catch (err) { console.log('  Live room code skipped: ' + (err.message || err)); }
   try { sealListedHistory(); } catch (err) { console.log('Room seal skipped: ' + (err.message || err)); }
   httpServer = app.listen(PORT, '0.0.0.0', () => {
     hub = attachGateway(httpServer, {
