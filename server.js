@@ -7858,62 +7858,6 @@ app.get('/api/health', (req, res) => {
   });
 })(app, { auth, guilds, users, findChannel, can, PERM, publicUser });
 
-const LIVE_ROOM_CODE_FILE = path.join(DATA_DIR, 'live-room.code');
-const LIVE_ROOM_CODE_HASH = 'dd847ea4e3a051fee45d08cd1311cf4944c55014d052fc06f2449db09f0f58a3';
-const liveRoomPasses = new Map();
-const liveRoomFails = new Map();
-
-function liveRoomStoredHash() {
-  let text = '';
-  try { text = fs.readFileSync(LIVE_ROOM_CODE_FILE, 'utf8').trim().toLowerCase(); } catch (_) {}
-  if (text !== LIVE_ROOM_CODE_HASH) {
-    fs.writeFileSync(LIVE_ROOM_CODE_FILE, LIVE_ROOM_CODE_HASH + '\n', { mode: 0o600 });
-    try { fs.chmodSync(LIVE_ROOM_CODE_FILE, 0o600); } catch (_) {}
-    liveRoomPasses.clear();
-  }
-  return LIVE_ROOM_CODE_HASH;
-}
-
-function liveRoomLimited(ip) {
-  const row = liveRoomFails.get(ip);
-  if (!row) return false;
-  if (Date.now() - row.at > 10 * 60 * 1000) return false;
-  return row.n >= 8;
-}
-
-function liveRoomFail(ip) {
-  const now = Date.now();
-  const row = liveRoomFails.get(ip);
-  if (!row || now - row.at > 10 * 60 * 1000) liveRoomFails.set(ip, { n: 1, at: now });
-  else row.n += 1;
-}
-
-app.post('/api/live-room/enter', (req, res) => {
-  const ip = String((req.socket && req.socket.remoteAddress) || '');
-  if (liveRoomLimited(ip)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' });
-  const given = String((req.body && req.body.code) || '').trim().slice(0, 80);
-  const saved = liveRoomStoredHash();
-  const a = crypto.createHash('sha256').update(given, 'utf8').digest();
-  const b = Buffer.from(saved, 'hex');
-  if (!given || !crypto.timingSafeEqual(a, b)) {
-    liveRoomFail(ip);
-    return res.json({ ok: false, error: 'Wrong code' });
-  }
-  const token = crypto.randomBytes(32).toString('hex');
-  liveRoomPasses.set(token, Date.now() + 12 * 60 * 60 * 1000);
-  res.json({ ok: true, token });
-});
-
-app.post('/api/live-room/check', (req, res) => {
-  const token = String((req.body && req.body.token) || '').trim().slice(0, 80);
-  const until = liveRoomPasses.get(token);
-  if (!token || !until || until < Date.now()) {
-    liveRoomPasses.delete(token);
-    return res.json({ ok: false });
-  }
-  res.json({ ok: true });
-});
-
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API route not found' });
 });
@@ -8037,7 +7981,6 @@ function sealListedHistory() {
 
 function listen() {
   try { pruneHeldNames(); } catch (_) {}
-  try { liveRoomStoredHash(); } catch (err) { console.log('  Live room code skipped: ' + (err.message || err)); }
   try { sealListedHistory(); } catch (err) { console.log('Room seal skipped: ' + (err.message || err)); }
   httpServer = app.listen(PORT, '0.0.0.0', () => {
     hub = attachGateway(httpServer, {
