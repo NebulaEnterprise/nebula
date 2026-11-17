@@ -7859,28 +7859,19 @@ app.get('/api/health', (req, res) => {
 })(app, { auth, guilds, users, findChannel, can, PERM, publicUser });
 
 const LIVE_ROOM_CODE_FILE = path.join(DATA_DIR, 'live-room.code');
+const LIVE_ROOM_CODE_HASH = 'dd847ea4e3a051fee45d08cd1311cf4944c55014d052fc06f2449db09f0f58a3';
 const liveRoomPasses = new Map();
 const liveRoomFails = new Map();
-let liveRoomCodeDigest = '';
 
-function liveRoomCode() {
+function liveRoomStoredHash() {
   let text = '';
-  try { text = fs.readFileSync(LIVE_ROOM_CODE_FILE, 'utf8').trim(); } catch (_) {}
-  if (!text) {
-    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    const bytes = crypto.randomBytes(12);
-    let raw = '';
-    for (const byte of bytes) raw += alphabet[byte % alphabet.length];
-    text = raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12);
-    fs.writeFileSync(LIVE_ROOM_CODE_FILE, text + '\n', { mode: 0o600 });
+  try { text = fs.readFileSync(LIVE_ROOM_CODE_FILE, 'utf8').trim().toLowerCase(); } catch (_) {}
+  if (text !== LIVE_ROOM_CODE_HASH) {
+    fs.writeFileSync(LIVE_ROOM_CODE_FILE, LIVE_ROOM_CODE_HASH + '\n', { mode: 0o600 });
     try { fs.chmodSync(LIVE_ROOM_CODE_FILE, 0o600); } catch (_) {}
-    console.log('  Live room code: ' + text);
-    console.log('  Saved on this server as data/live-room.code');
+    liveRoomPasses.clear();
   }
-  const digest = crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-  if (liveRoomCodeDigest && liveRoomCodeDigest !== digest) liveRoomPasses.clear();
-  liveRoomCodeDigest = digest;
-  return text;
+  return LIVE_ROOM_CODE_HASH;
 }
 
 function liveRoomLimited(ip) {
@@ -7901,9 +7892,9 @@ app.post('/api/live-room/enter', (req, res) => {
   const ip = String((req.socket && req.socket.remoteAddress) || '');
   if (liveRoomLimited(ip)) return res.status(429).json({ error: 'Too many tries. Wait a few minutes.' });
   const given = String((req.body && req.body.code) || '').trim().slice(0, 80);
-  const saved = liveRoomCode();
+  const saved = liveRoomStoredHash();
   const a = crypto.createHash('sha256').update(given, 'utf8').digest();
-  const b = crypto.createHash('sha256').update(saved, 'utf8').digest();
+  const b = Buffer.from(saved, 'hex');
   if (!given || !crypto.timingSafeEqual(a, b)) {
     liveRoomFail(ip);
     return res.status(401).json({ error: 'Wrong code' });
@@ -8046,7 +8037,7 @@ function sealListedHistory() {
 
 function listen() {
   try { pruneHeldNames(); } catch (_) {}
-  try { liveRoomCode(); } catch (err) { console.log('  Live room code skipped: ' + (err.message || err)); }
+  try { liveRoomStoredHash(); } catch (err) { console.log('  Live room code skipped: ' + (err.message || err)); }
   try { sealListedHistory(); } catch (err) { console.log('Room seal skipped: ' + (err.message || err)); }
   httpServer = app.listen(PORT, '0.0.0.0', () => {
     hub = attachGateway(httpServer, {
