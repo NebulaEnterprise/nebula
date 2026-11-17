@@ -597,7 +597,7 @@
           <div class="acct-rule"></div>
           <section class="acct-section">
             <h3>Delete account</h3>
-            <p class="hint">This erases the profile, email, vault, friends, server memberships, photos, and messages. Direct messages are removed for both people. The user id is retired and cannot be given out again. The username stays held for 7 days, then anyone can use it.</p>
+            <p class="hint">This erases the profile, email, vault, friends, photos, and messages. Direct messages are removed for both people. Servers you own are removed, including their history, even when other people are in them. The user id is retired. The username stays held for 7 days. A custom invite on a server with more than 5 members stays held for 7 days, then anyone can claim it.</p>
             <button type="button" class="btn danger" onclick={() => { deletePassword = ''; accountDialog = 'delete'; }}>Delete account</button>
           </section>
         {/if}
@@ -1069,7 +1069,7 @@
             <button type="button" class="btn brand" disabled={accountBusy} onclick={saveEmail}>Done</button>
           </div>
         {:else if accountDialog === 'delete'}
-          <p class="hint">Enter the account password. This cannot be undone. The username stays held for 7 days.</p>
+          <p class="hint">Enter the account password. This cannot be undone. The username, and a custom invite from a server with more than 5 members, stay held for 7 days.</p>
           <div class="field"><label>Password</label><input type="password" bind:value={deletePassword} autocomplete="current-password" /></div>
           <div class="modify-actions">
             <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>

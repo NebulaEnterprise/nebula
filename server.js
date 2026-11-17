@@ -1284,6 +1284,7 @@ let retired = load(RETIRED_FILE, { ids: [], uids: [], names: [] });
 if (!Array.isArray(retired.ids)) retired.ids = [];
 if (!Array.isArray(retired.uids)) retired.uids = [];
 if (!Array.isArray(retired.names)) retired.names = [];
+if (!Array.isArray(retired.links)) retired.links = [];
 
 function nextUid() {
   let max = 0;
@@ -1562,6 +1563,20 @@ function cleanSlug(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20);
 }
 
+function linkHeld(slug) {
+  const clean = cleanSlug(slug);
+  if (!clean) return false;
+  pruneHeldNames();
+  return retired.links.some((row) => row.slug === clean);
+}
+
+function holdLink(slug) {
+  const clean = cleanSlug(slug);
+  if (!clean || clean === 'nebula') return;
+  retired.links = (retired.links || []).filter((row) => row && row.slug !== clean);
+  retired.links.push({ slug: clean, until: Date.now() + 7 * 24 * 60 * 60 * 1000 });
+}
+
 function inviteCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   for (let i = 0; i < 8; i += 1) {
@@ -1569,7 +1584,7 @@ function inviteCode() {
     let code = '';
     for (let n = 0; n < bytes.length; n += 1) code += alphabet[bytes[n] % alphabet.length];
     const want = code.toLowerCase();
-    if (RESERVED_LINKS.has(want)) continue;
+    if (RESERVED_LINKS.has(want) || linkHeld(want)) continue;
     const taken = Object.values(guilds.servers || {}).some((g) =>
       (g.vanity && String(g.vanity).toLowerCase() === want) ||
       (g.invites && Object.keys(g.invites).some((item) => String(item).toLowerCase() === want)));
@@ -3276,8 +3291,11 @@ function normalizeUsername(name) {
 function pruneHeldNames() {
   const now = Date.now();
   const next = retired.names.filter((row) => row && row.name && row.until > now);
-  if (next.length === retired.names.length) return;
+  if (!Array.isArray(retired.links)) retired.links = [];
+  const links = retired.links.filter((row) => row && row.slug && row.until > now);
+  if (next.length === retired.names.length && links.length === retired.links.length) return;
   retired.names = next;
+  retired.links = links;
   save(RETIRED_FILE, retired);
 }
 
@@ -4672,6 +4690,24 @@ function eraseAccount(user) {
 
   for (const g of Object.values(guilds.servers || {})) {
     if (!g) continue;
+    const owners = (g.ownerIds || []).map(String);
+    const soleOwner = g.id !== OFFICIAL_ID && owners.includes(id) && !owners.some((ownerId) => ownerId !== id);
+    if (soleOwner) {
+      if (memberCount(g) > 5 && g.vanity) holdLink(g.vanity);
+      for (const channel of g.channels || []) if (channel && channel.id) dropRooms.add(channel.id);
+      for (const thread of Object.values(threads)) {
+        if (!thread) continue;
+        if (String(thread.serverId) === String(g.id)) {
+          dropRooms.add('thread:' + thread.id);
+          delete threads[thread.id];
+        }
+      }
+      forgetUpload(g.iconUrl);
+      forgetUpload(g.bannerUrl);
+      for (const item of [...(g.emoji || []), ...(g.stickers || [])]) forgetUpload(item && item.url);
+      delete guilds.servers[g.id];
+      continue;
+    }
     if (g.members) delete g.members[id];
     if (Array.isArray(g.ownerIds)) g.ownerIds = g.ownerIds.filter((ownerId) => String(ownerId) !== id);
     if (g.bans) delete g.bans[id];
@@ -4683,23 +4719,6 @@ function eraseAccount(user) {
     g.requests = (g.requests || []).filter((row) => !row || String(row.userId) !== id);
     g.reports = (g.reports || []).filter((row) => !row || (String(row.by) !== id && String(row.targetId) !== id));
     g.audit = (g.audit || []).filter((row) => !row || String(row.userId) !== id);
-    const memberIds = Object.keys(g.members || {});
-    if (g.id !== OFFICIAL_ID && !memberIds.length) {
-      for (const channel of g.channels || []) if (channel && channel.id) dropRooms.add(channel.id);
-      forgetUpload(g.iconUrl);
-      forgetUpload(g.bannerUrl);
-      delete guilds.servers[g.id];
-      continue;
-    }
-    if (g.id !== OFFICIAL_ID && !(g.ownerIds || []).length && memberIds.length) {
-      const nextOwner = memberIds[0];
-      g.ownerIds = [nextOwner];
-      const mem = g.members[nextOwner];
-      if (mem) {
-        mem.roles = Array.isArray(mem.roles) ? mem.roles : ['everyone'];
-        if (!mem.roles.includes('owner')) mem.roles.push('owner');
-      }
-    }
   }
 
   for (const [roomId, list] of Object.entries(messages)) {
@@ -4729,7 +4748,7 @@ function eraseAccount(user) {
   for (const book of Object.values(reads)) {
     if (!book || typeof book !== 'object' || Array.isArray(book)) continue;
     for (const key of Object.keys(book)) {
-      if (key === 'dm:' + id || key.split(':').includes(id)) delete book[key];
+      if (key === 'dm:' + id || key.split(':').includes(id) || dropRooms.has(key)) delete book[key];
     }
   }
 
@@ -7241,7 +7260,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
         const slug = cleanSlug(b.vanity);
         if (!slug) g.vanity = '';
         else if (slug.length < 2) return res.status(400).json({ error: 'Invite link needs at least 2 characters' });
-        else if (RESERVED_LINKS.has(slug) || Object.values(guilds.servers).some((other) => other.id !== g.id && String(other.vanity || '').toLowerCase() === slug)) {
+        else if (RESERVED_LINKS.has(slug) || linkHeld(slug) || Object.values(guilds.servers).some((other) => other.id !== g.id && String(other.vanity || '').toLowerCase() === slug)) {
           return res.status(409).json({ error: 'That invite link is taken' });
         } else g.vanity = slug;
       }
