@@ -11,7 +11,6 @@ app.setName('Nebula');
 app.setAppUserModelId('lol.nebulaspace.desktop');
 
 let mainWindow = null;
-let titleView = null;
 let contentView = null;
 let barHeight = BAR;
 let pickerWindow = null;
@@ -61,14 +60,14 @@ function page() {
 function layout() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const { width, height } = mainWindow.getContentBounds();
-  const bar = barHeight;
-  if (titleView) titleView.setBounds({ x: 0, y: 0, width, height: bar || 0 });
   if (contentView) contentView.setBounds({ x: 0, y: 0, width, height });
 }
 
 function sendChromeState() {
-  if (!titleView || titleView.webContents.isDestroyed() || !mainWindow) return;
-  titleView.webContents.send('win-state', mainWindow.isMaximized());
+  const contents = page();
+  if (!contents || contents.isDestroyed() || !mainWindow) return;
+  contents.send('win-state', mainWindow.isMaximized());
+  contents.send('win-full', !!mainWindow.isFullScreen());
 }
 
 async function inCall() {
@@ -136,7 +135,7 @@ function createWindow() {
     minWidth: 940,
     minHeight: 640,
     title: 'Nebula',
-    backgroundColor: '#08090c',
+    backgroundColor: '#14081f',
     icon: ICON,
     frame: false,
     thickFrame: true,
@@ -151,15 +150,10 @@ function createWindow() {
     nodeIntegration: false,
     sandbox: true,
   };
-  titleView = new WebContentsView({
-    webPreferences: { ...shared, preload: path.join(__dirname, 'title-preload.js') },
-  });
-  try { titleView.setBackgroundColor('#00000000'); } catch (_) {}
   contentView = new WebContentsView({
     webPreferences: { ...shared, preload: path.join(__dirname, 'preload.js'), spellcheck: true },
   });
   mainWindow.contentView.addChildView(contentView);
-  mainWindow.contentView.addChildView(titleView);
 
   const contents = contentView.webContents;
   contents.setWindowOpenHandler(({ url }) => {
@@ -187,22 +181,20 @@ function createWindow() {
     if (!isSiteUrl(contents.getURL())) return;
     loadedScript = await currentScript();
     contents.focus();
+    sendChromeState();
   });
 
-  titleView.webContents.on('did-finish-load', sendChromeState);
   mainWindow.on('resize', layout);
   mainWindow.on('maximize', sendChromeState);
   mainWindow.on('unmaximize', sendChromeState);
-  mainWindow.on('enter-full-screen', () => { barHeight = 0; layout(); });
-  mainWindow.on('leave-full-screen', () => { barHeight = BAR; layout(); });
+  mainWindow.on('enter-full-screen', () => { barHeight = 0; sendChromeState(); });
+  mainWindow.on('leave-full-screen', () => { barHeight = BAR; sendChromeState(); });
   mainWindow.on('closed', () => {
     mainWindow = null;
-    titleView = null;
     contentView = null;
   });
 
   layout();
-  titleView.webContents.loadFile(path.join(__dirname, 'titlebar.html'));
   contents.loadFile(path.join(__dirname, 'splash.html')).then(async () => {
     await refreshLink(true);
     openSite();

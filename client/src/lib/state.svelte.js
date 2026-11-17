@@ -4,6 +4,7 @@ import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
+import { look } from './look.svelte.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
 import {
   createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, lockSecret, newRoomKey,
@@ -201,8 +202,9 @@ setUnauthorizedHandler(logout);
 
 function applyTheme() {
   const root = document.documentElement;
-  if (ui.mode === 'chat' && ui.theme?.accent) root.style.setProperty('--brand', ui.theme.accent);
-  else root.style.setProperty('--brand', '#7c6af7');
+  const accent = look.accent || '#ff4f9a';
+  root.style.setProperty('--brand', accent);
+  root.style.setProperty('--brand-2', accent);
   if (ui.mode === 'chat' && ui.theme?.tint) root.style.setProperty('--bg-main', ui.theme.tint);
   else root.style.removeProperty('--bg-main');
 }

@@ -205,7 +205,7 @@
     pointer-events: none;
     background:
       radial-gradient(ellipse at center, transparent 0%, rgba(5, 1, 13, 0.28) 62%, rgba(5, 1, 13, 0.78) 100%),
-      url('/space.jpg') center / cover no-repeat;
+      url('/space.jpg?v=2') center / cover no-repeat;
   }
   .home.light { color: #1b1230; background: #f7f3ff; }
   .home.light .sky {

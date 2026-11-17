@@ -17,6 +17,7 @@
   import Dialogs from './lib/components/Dialogs.svelte';
   import Quick from './lib/components/Quick.svelte';
   import Switcher from './lib/components/Switcher.svelte';
+  import DesktopChrome from './lib/components/DesktopChrome.svelte';
 
   $effect(() => {
     ui.activity;
@@ -128,6 +129,7 @@
   });
 </script>
 
+<DesktopChrome />
 {#if ui.booting}
   <div class="boot">Opening Nebula…</div>
 {:else if !ui.me}

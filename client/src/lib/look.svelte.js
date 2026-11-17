@@ -25,7 +25,7 @@ function hexAlpha(hex, alpha) {
 
 function wallpaper() {
   if (look.background) return `url("${look.background}")`;
-  try { return `url("${new URL('space.jpg', document.baseURI).href}")`; } catch { return 'none'; }
+  try { return `url("${new URL('space.jpg?v=2', document.baseURI).href}")`; } catch { return 'none'; }
 }
 
 export function applyLook() {
