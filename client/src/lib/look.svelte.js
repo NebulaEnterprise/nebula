@@ -1,4 +1,26 @@
 const KEY = 'nebula-look';
+const DB = 'nebula-look';
+let objectUrl = '';
+
+function openDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains('files')) req.result.createObjectStore('files');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('Could not save that picture'));
+  });
+}
+
+function idb(mode, run) {
+  return openDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction('files', mode);
+    const req = run(tx.objectStore('files'));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error('Could not save that picture'));
+  }));
+}
 
 function stored() {
   try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; }
@@ -24,7 +46,8 @@ function hexAlpha(hex, alpha) {
 }
 
 function wallpaper() {
-  if (look.background) return `url("${look.background}")`;
+  if (objectUrl) return `url("${objectUrl}")`;
+  if (typeof look.background === 'string' && look.background.startsWith('data:')) return `url("${look.background}")`;
   try { return `url("${new URL('space.jpg?v=2', document.baseURI).href}")`; } catch { return 'none'; }
 }
 
@@ -41,7 +64,26 @@ export function applyLook() {
   root.classList.toggle('desktop-frame', desktop);
 }
 
+export async function saveWallpaper(file) {
+  if (!file) throw new Error('Choose an image');
+  const type = String(file.type || '');
+  const name = String(file.name || '');
+  if (!/^image\/(png|jpeg|webp|gif)$/i.test(type) && !/\.(png|jpe?g|webp|gif)$/i.test(name)) {
+    throw new Error('Use a PNG, JPEG, or WebP picture');
+  }
+  if (file.size > 32 * 1024 * 1024) throw new Error('That picture is over 32 MB.');
+  await idb('readwrite', (store) => store.put(file, 'background'));
+  if (objectUrl) URL.revokeObjectURL(objectUrl);
+  objectUrl = URL.createObjectURL(file);
+  setLook({ background: 'idb' });
+}
+
 export function setLook(patch) {
+  if (patch && Object.prototype.hasOwnProperty.call(patch, 'background') && !patch.background) {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = '';
+    idb('readwrite', (store) => store.delete('background')).catch(() => {});
+  }
   Object.assign(look, patch);
   const pack = { theme: look.theme, accent: look.accent, background: look.background, blur: look.blur, motion: look.motion };
   try {
@@ -57,3 +99,18 @@ export function setLook(patch) {
 }
 
 applyLook();
+
+if (look.background === 'idb') {
+  idb('readonly', (store) => store.get('background')).then((blob) => {
+    if (!blob) {
+      look.background = '';
+      applyLook();
+      return;
+    }
+    objectUrl = URL.createObjectURL(blob);
+    applyLook();
+  }).catch(() => {
+    look.background = '';
+    applyLook();
+  });
+}

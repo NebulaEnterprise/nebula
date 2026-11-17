@@ -19,7 +19,7 @@
   import Security from './Security.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
-  import { look, setLook } from '../look.svelte.js';
+  import { look, saveWallpaper, setLook } from '../look.svelte.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
   let emailShown = $state(false);
@@ -434,8 +434,7 @@
       input.remove();
       if (!file) return;
       try {
-        const background = await fileToDataUrl(file, { maxW: 1600, maxH: 900, quality: 0.72 });
-        setLook({ background });
+        await saveWallpaper(file);
       } catch (err) {
         toast(err.message || 'Could not use that picture');
       }
@@ -816,7 +815,7 @@
                 </div>
               </div>
               <div class="app-bg">
-                <span class="bg-thumb app-bg-thumb" style:background-image={look.background ? `url("${look.background}")` : 'var(--app-wallpaper)'}></span>
+                <span class="bg-thumb app-bg-thumb" style:background-image="var(--app-wallpaper)"></span>
                 <div class="copy">
                   <strong>Background</strong>
                   <em>{look.background ? 'Your picture sits behind the panels.' : 'Nebula’s space picture sits behind the panels.'}</em>
