@@ -84,7 +84,7 @@
     <span>Discover</span>
   </button>
   <div class="rail-spacer"></div>
-  <button class="rail-tab" class:on={ui.userSettings} title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
+  <button class="rail-tab rail-settings" class:on={ui.userSettings} title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
     <Settings size={22} />
     <span>Settings</span>
   </button>
