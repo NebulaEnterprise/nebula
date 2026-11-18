@@ -493,13 +493,11 @@
       </div>
     {/if}
   {/if}
-</aside>
-<div class="me">
+  <div class="me">
     <button type="button" class="me-card" onclick={openAccount}>
       <Avatar user={ui.me} size={36} />
       <div class="who">
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-        <span>{ui.me?.status === 'dnd' ? 'Busy' : ui.me?.status === 'idle' ? 'Idle' : ui.me?.status === 'offline' ? 'Offline' : 'Online'}</span>
       </div>
     </button>
     <div class="me-tools">
@@ -511,4 +509,5 @@
       <button class="btn icon" title="Log out" onclick={logout}><LogOut size={15} /></button>
     </div>
     {#if ui.inboxOpen}<Inbox />{/if}
-</div>
+  </div>
+</aside>

@@ -198,19 +198,6 @@ html:not(.app-blur) .bell-menu,
 html:not(.app-blur) .thread-menu {
   background: rgba(18, 8, 36, 0.96);
 }
-.nav-stack {
-  position: relative; display: grid;
-  grid-template-columns: 86px auto; grid-template-rows: minmax(0, 1fr);
-  column-gap: 8px; height: 100%; min-height: 0; flex-shrink: 0; align-self: stretch;
-}
-.nav-stack > .rail { grid-column: 1; grid-row: 1; min-height: 0; height: auto; }
-.nav-stack > .side { grid-column: 2; grid-row: 1; min-height: 0; height: auto; }
-.nav-stack > .me {
-  grid-column: 1 / -1; grid-row: 1; align-self: end; z-index: 5;
-  min-width: 0; margin: 0 4px 8px; width: auto;
-}
-.nav-stack > .rail,
-.nav-stack > .side { padding-bottom: 64px; }
 .rail {
   --bg-rail: transparent;
   width: 86px; display: flex; flex-direction: column;
@@ -2539,17 +2526,8 @@ html[data-theme="amoled"] #app { background-color: #000; }
   .shell.phone-people .side,
   .shell.phone-people .main,
   .members { display: none; }
-  .nav-stack {
-    grid-template-columns: 76px minmax(0, 1fr); column-gap: 0;
-    flex: 1; min-width: 0; width: 100%;
-  }
-  .shell.phone-chat .nav-stack,
-  .shell.phone-people .nav-stack { display: none; }
-  .shell.phone-browse .nav-stack > .rail,
-  .shell.phone-browse .nav-stack > .side { padding-bottom: 72px; }
-  .nav-stack > .me { margin-bottom: calc(8px + env(safe-area-inset-bottom)); }
   .shell.phone-browse .side { width: auto; flex: 1; min-width: 0; }
-  .shell.phone-browse .rail { width: 76px; padding: 10px 6px 72px; }
+  .shell.phone-browse .rail { width: 76px; padding: 10px 6px; }
   .rail-tab span, .rail-user strong, .rail-user em, .rail-user svg { display: none; }
   .rail-tab { min-height: 48px; width: 48px; }
   .rail-logo { width: 48px; height: 48px; }

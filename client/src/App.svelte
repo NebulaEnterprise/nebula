@@ -140,10 +140,8 @@
   {/if}
 {:else}
   <div class="shell" class:directory={ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'servers' || ui.mode === 'discover'} class:phone-browse={ui.phone === 'browse'} class:phone-chat={ui.phone === 'chat'} class:phone-people={ui.phone === 'people'}>
-    <div class="nav-stack">
-      <Rail />
-      <Sidebar />
-    </div>
+    <Rail />
+    <Sidebar />
     <main class="main">
       {#if ui.mode === 'friends' || ui.mode === 'add'}
         <Friends />
