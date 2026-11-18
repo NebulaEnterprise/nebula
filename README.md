@@ -143,5 +143,6 @@ Your conversations are yours. Your privacy is not a product, and your personal i
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/e1e93985-257f-4330-a12a-be42710f9e88" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a2429a1e-cf0a-4b74-88c9-00be712183c5" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/9f92a298-e1bf-457d-a305-0b16cc6ca653" />
 
 
