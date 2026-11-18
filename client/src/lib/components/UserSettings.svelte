@@ -1,6 +1,6 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound, Plus, Users } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount, savedBackups, createContentBackup, downloadBackup, removeContentBackup, loadContentBackup } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -30,10 +30,6 @@
   let recoverPassword = $state('');
   let revealed = $state('');
   let recoverBusy = $state(false);
-  let backupBusy = $state(false);
-  let backupNote = $state('');
-  let backupInput = $state(null);
-  let backups = $state([]);
 
   function pickRecover(next) {
     recoverMethod = next;
@@ -76,58 +72,6 @@
   }
 
   const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts' };
-
-  function backupWhen(iso) {
-    const when = new Date(iso);
-    if (Number.isNaN(when.getTime())) return 'Backup';
-    return when.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  }
-
-  function backupSummary(row) {
-    const parts = [];
-    parts.push(row.chats + (row.chats === 1 ? ' direct message' : ' direct messages'));
-    parts.push(row.groups + (row.groups === 1 ? ' group' : ' groups'));
-    parts.push(row.servers + (row.servers === 1 ? ' server' : ' servers'));
-    return parts.join(', ');
-  }
-
-  async function makeBackup() {
-    backupBusy = true;
-    backupNote = '';
-    try {
-      const row = await createContentBackup();
-      backups = savedBackups();
-      backupNote = 'Backup saved. Take that file to the other device and load it after you sign in.';
-      toast('Backup created');
-      return row;
-    } catch (err) {
-      toast(err.message);
-    } finally {
-      backupBusy = false;
-    }
-  }
-
-  async function onBackupFile(event) {
-    const file = event.target.files && event.target.files[0];
-    event.target.value = '';
-    if (!file) return;
-    backupBusy = true;
-    backupNote = '';
-    try {
-      const row = await loadContentBackup(await file.text());
-      backups = savedBackups();
-      backupNote = 'Loaded the ' + backupWhen(row.createdAt) + ' backup. Your messages and photos can open with these keys.';
-      toast('Backup loaded');
-    } catch (err) {
-      toast(err.message);
-    } finally {
-      backupBusy = false;
-    }
-  }
-
-  function dropBackup(id) {
-    backups = removeContentBackup(id);
-  }
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -277,9 +221,6 @@
     }
   }
   const page = $derived(ui.userPage || 'profile');
-  $effect(() => {
-    if (page === 'account' && ui.me?.id) backups = savedBackups();
-  });
   $effect(() => {
     if (page !== 'account') securityOpen = false;
     if (page !== 'look') lookOpen = '';
@@ -692,31 +633,6 @@
                 </div>
               </div>
             {/if}
-          </section>
-          <div class="acct-rule"></div>
-          <section class="acct-section">
-            <h3>Backups</h3>
-            <p class="hint">Make these on the device that can already see your messages and photos. Each one is its own file. On the other device, sign in with your recovery code, then load the file.</p>
-            <div class="recover-actions">
-              <button type="button" class="btn" disabled={backupBusy} onclick={makeBackup}>{backupBusy ? 'Working…' : 'Create backup'}</button>
-              <button type="button" class="btn" disabled={backupBusy} onclick={() => backupInput && backupInput.click()}>Load backup</button>
-              <input bind:this={backupInput} type="file" accept="application/json,.json" hidden onchange={onBackupFile} />
-            </div>
-            {#if backups.length}
-              <div class="acct-list backup-list">
-                {#each backups as row (row.id)}
-                  <div class="acct-account backup-row">
-                    <span>
-                      <strong>{backupWhen(row.createdAt)}</strong>
-                      <em>{backupSummary(row)}</em>
-                    </span>
-                    <button type="button" class="btn sm" onclick={() => downloadBackup(row)}>Save file</button>
-                    <button type="button" class="btn sm" onclick={() => dropBackup(row.id)}>Remove</button>
-                  </div>
-                {/each}
-              </div>
-            {/if}
-            {#if backupNote}<p class="hint">{backupNote}</p>{/if}
           </section>
           <div class="acct-rule"></div>
         {/if}

@@ -1685,9 +1685,6 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .acct-account strong, .acct-account em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct-account em { color: var(--muted); font-style: normal; font-size: 12px; }
 .acct-account.add { font-weight: 700; }
-.backup-list { margin-top: 12px; }
-.backup-row { flex-wrap: wrap; }
-.backup-row .btn { width: auto; padding: 6px 10px; }
 .inbox-page.inbox-pop {
   position: static; left: auto; bottom: auto; width: min(560px, 100%); max-height: none;
   background: transparent; border: 0; box-shadow: none;
