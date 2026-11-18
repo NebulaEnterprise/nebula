@@ -28,7 +28,7 @@
       <img src="./logo.webp?v=3" alt="" />
       <strong>Nebula</strong>
     </div>
-    {#if !mac}
+    {#if overlay && !mac}
       <div class="desk-wins">
         <button type="button" aria-label="Minimize" onclick={() => chrome.minimize()}>
           <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
