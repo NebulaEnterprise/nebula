@@ -4,7 +4,13 @@
   import Name from './Name.svelte';
   import { ui, markAllRead, openMention, openServer, pickChannel, friendAct, showFriends } from '../state.svelte.js';
 
+  let { embedded = false } = $props();
   let tab = $state('you');
+
+  function closeInbox() {
+    ui.inboxOpen = false;
+    if (embedded) ui.userSettings = false;
+  }
 
   const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
   const unreadCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0) + Object.values(ui.activity.dms || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
@@ -42,17 +48,19 @@
   }
 
   async function openUnread(row) {
-    ui.inboxOpen = false;
+    closeInbox();
     if (row.serverId && row.serverId !== ui.serverId) await openServer(row.serverId);
     const channel = (ui.channels || []).find((item) => item.id === row.id);
     if (channel) pickChannel(channel);
   }
 </script>
 
-<div class="inbox-pop" onclick={(e) => e.stopPropagation()}>
+<div class="inbox-pop" class:inbox-page={embedded} onclick={(e) => e.stopPropagation()}>
   <div class="inbox-h">
     <strong><Inbox size={16} /> Inbox</strong>
-    <button class="btn icon" title="Close" onclick={() => (ui.inboxOpen = false)}><X size={16} /></button>
+    {#if !embedded}
+      <button class="btn icon" title="Close" onclick={() => (ui.inboxOpen = false)}><X size={16} /></button>
+    {/if}
   </div>
   <div class="inbox-tabs">
     <button type="button" class:on={tab === 'you'} onclick={() => (tab = 'you')}>For you {#if ui.incoming.length || (ui.missedCalls || []).length}<em>{count(ui.incoming.length + (ui.missedCalls || []).length)}</em>{/if}</button>
@@ -86,7 +94,7 @@
         <div class="empty-note">
           <strong>You're all caught up</strong>
           <p>Friend requests and missed calls show up here.</p>
-          <button class="btn brand empty-act" type="button" onclick={() => { ui.inboxOpen = false; showFriends('find'); }}>Find friends</button>
+          <button class="btn brand empty-act" type="button" onclick={() => { closeInbox(); showFriends('find'); }}>Find friends</button>
         </div>
       {/if}
     {:else if tab === 'mentions'}
@@ -94,7 +102,7 @@
         <p class="inbox-total">{count(mentionCount)} mention{mentionCount === 1 ? '' : 's'}</p>
       {/if}
       {#each ui.mentions as row (row.id)}
-        <button type="button" class="inbox-row" onclick={() => openMention(row)}>
+        <button type="button" class="inbox-row" onclick={() => { closeInbox(); openMention(row); }}>
           <Avatar user={row.author} size={32} dot={false} />
           <div class="inbox-copy">
             <strong><Name user={row.author} /></strong>

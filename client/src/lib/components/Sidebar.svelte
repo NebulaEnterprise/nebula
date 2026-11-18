@@ -1,29 +1,18 @@
 <script>
   import {
-    ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Check, Search, X, Inbox as InboxIcon, MessageSquare,
+    ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Search, X, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, ChevronRight, Monitor,
+    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
-  import Name from './Name.svelte';
-  import Photo from './Photo.svelte';
-  import MoonBadge from './MoonBadge.svelte';
-  import StaffBadge from './StaffBadge.svelte';
-  import DevBadge from './DevBadge.svelte';
-  import SongButton from './SongButton.svelte';
-  import Inbox from './Inbox.svelte';
   import { api } from '../api.js';
-  import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity, phoneChat } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
-  const mentionCount = $derived(Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
-  const inboxBadge = $derived(mentionCount + (ui.incoming || []).length + (ui.missedCalls || []).length);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
-  function countLabel(n) { return n > 99 ? '99+' : String(n); }
   let dmQuery = $state('');
   const recentServers = $derived.by(() => {
     ui.serverId;
@@ -97,91 +86,6 @@
     const id = 'dm:' + [ui.me.id, other.id].sort().join(':');
     return (ui.voiceRooms[id] || []).some((person) => person.sharing && String(person.id) !== String(ui.me.id));
   }
-
-  let accountOpen = $state(false);
-  let statusOpen = $state(false);
-  let accountsOpen = $state(false);
-  let editingBio = $state(false);
-  let bioDraft = $state('');
-  const presence = [
-    ['online', 'Online', '#3ecf8e'],
-    ['idle', 'Idle', '#f0b429'],
-    ['dnd', 'Do not disturb', '#f06a6a'],
-    ['offline', 'Invisible', '#8b8e98'],
-  ];
-  const presenceLabel = $derived(presence.find((row) => row[0] === (ui.me?.status || 'online')) || presence[0]);
-
-  function openAccount(event) {
-    event.stopPropagation();
-    accountOpen = !accountOpen;
-    if (accountOpen) ui.inboxOpen = false;
-    statusOpen = false;
-    accountsOpen = false;
-    editingBio = false;
-    bioDraft = shortBio(ui.me?.bio);
-  }
-
-  function editProfile() {
-    accountOpen = false;
-    ui.userPage = 'look';
-    ui.userSettings = true;
-  }
-
-  async function setPresence(id) {
-    try {
-      await saveMe({ status: id });
-      statusOpen = false;
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  async function useAccount(id) {
-    if (id === ui.me?.id) {
-      accountsOpen = false;
-      return;
-    }
-    accountsOpen = false;
-    accountOpen = false;
-    try {
-      await switchAccount(id);
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  function startAnother() {
-    if (!addAccount()) return;
-    accountsOpen = false;
-    accountOpen = false;
-  }
-
-  async function saveBio() {
-    try {
-      await saveMe({ bio: shortBio(bioDraft.trim()) });
-      editingBio = false;
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
-  $effect(() => {
-    if (!accountOpen) return;
-    const close = (event) => {
-      const node = event.target instanceof Element ? event.target : null;
-      if (node && (node.closest('.account-pop') || node.closest('.account-switch') || node.closest('.me-card'))) return;
-      accountOpen = false;
-    };
-    const onKey = (event) => {
-      if (event.key === 'Escape') accountOpen = false;
-    };
-    window.addEventListener('click', close);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('keydown', onKey);
-    };
-  });
 
   async function menu(act) {
     ui.menuOpen = false;
@@ -408,106 +312,4 @@
       </div>
     </div>
   {/if}
-  {#if accountOpen}
-    {@const cardShades = Array.isArray(ui.me?.profileColors) && ui.me.profileColors.length >= 2 ? ui.me.profileColors : ['#7c3aed', '#c084fc']}
-    {@const cardSkin = ['solid', 'glow', 'rainbow'].includes(ui.me?.profileStyle) ? ui.me.profileStyle : 'gradient'}
-    <div class="account-pop profile-card skin-{cardSkin}" style="--shade-a:{cardShades[0]};--shade-b:{cardShades[1]}" onclick={(e) => e.stopPropagation()}>
-      <div class="pop-banner" style="background:{ui.me?.bannerColor || ui.me?.accentColor || 'var(--brand)'}">
-        {#if ui.me?.bannerUrl}<Photo url={ui.me.bannerUrl} fill />{/if}
-      </div>
-      <div class="pop-body">
-        <div class="profile-hero">
-          <div class="profile-face">
-            <div class="song-av">
-              <div class="pop-av profile-av" style="background:{ui.me?.avatarColor || 'var(--brand)'}">
-                {#if ui.me?.avatarUrl}<Photo url={ui.me.avatarUrl} />{:else}{(ui.me?.displayName || ui.me?.username || '?').charAt(0).toUpperCase()}{/if}
-              </div>
-              <SongButton file={ui.me?.songFile} start={ui.me?.songStart} />
-            </div>
-            <i class="profile-dot" style="background:{presenceLabel[2]}"></i>
-            {#if editingBio}
-              <form class="bio-bubble account-bubble" onsubmit={(e) => { e.preventDefault(); saveBio(); }}>
-                <input bind:value={bioDraft} maxlength="29" placeholder="Bio" />
-                <button type="submit" title="Save bio">✓</button>
-              </form>
-            {:else if shortBio(ui.me?.bio)}
-              <div class="bio-bubble account-bubble">
-                <span>{shortBio(ui.me.bio)}</span>
-                <button type="button" title="Edit bio" onclick={() => { bioDraft = ui.me?.bio || ''; editingBio = true; }}><Pencil size={14} /></button>
-                <button type="button" title="Remove bio" onclick={() => { bioDraft = ''; saveBio(); }}><Trash2 size={14} /></button>
-              </div>
-            {:else}
-              <button type="button" class="bio-bubble bio-hint" onclick={() => { bioDraft = ''; editingBio = true; }}>
-                <i><Plus size={13} /></i>
-                <span>Add a bio</span>
-              </button>
-            {/if}
-          </div>
-          <h3><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></h3>
-          <p class="handle">
-            <span>@{ui.me?.username}</span>
-            {#if visibleBadges(ui.me).includes('early')}<MoonBadge />{/if}
-            {#if visibleBadges(ui.me).includes('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
-            {#if visibleBadges(ui.me).includes('developer')}<DevBadge on={true} />{/if}
-          </p>
-        </div>
-        <div class="account-menu">
-          <button type="button" class="account-edit" onclick={editProfile}><Pencil size={14} /> Edit Profile</button>
-          <button type="button" class="account-row" onclick={() => { statusOpen = !statusOpen; accountsOpen = false; }}>
-            <i style="background:{presenceLabel[2]}"></i>
-            <span>{presenceLabel[1]}</span>
-            <ChevronRight size={14} />
-          </button>
-          {#if statusOpen}
-            <div class="account-statuses">
-              {#each presence as [id, label, color]}
-                <button type="button" class:on={ui.me?.status === id || (!ui.me?.status && id === 'online')} onclick={() => setPresence(id)}>
-                  <i style="background:{color}"></i> {label}
-                </button>
-              {/each}
-            </div>
-          {/if}
-          <button type="button" class="account-row" onclick={() => { accountsOpen = !accountsOpen; statusOpen = false; }}>
-            <span>Switch accounts</span>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-    {#if accountsOpen}
-      <div class="account-switch" onclick={(e) => e.stopPropagation()}>
-        {#each savedAccounts() as row (row.id)}
-          <button type="button" class:on={row.id === ui.me?.id} onclick={() => useAccount(row.id)}>
-            <Avatar user={row} size={32} dot={false} />
-            <span>
-              <strong>{row.displayName || row.username}</strong>
-              <em>@{row.username}</em>
-            </span>
-            {#if row.id === ui.me?.id}<Check size={16} />{/if}
-          </button>
-        {/each}
-        <button type="button" class="add" onclick={startAnother}>
-          <Plus size={18} /> Add another account
-        </button>
-        <p>{savedAccounts().length} of 7 accounts</p>
-      </div>
-    {/if}
-  {/if}
-  <div class="me">
-    <button type="button" class="me-card" onclick={openAccount}>
-      <Avatar user={ui.me} size={36} />
-      <div class="who">
-        <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
-      </div>
-    </button>
-    <div class="me-tools">
-      <button class="btn icon inbox-btn" title="Inbox" onclick={(e) => { e.stopPropagation(); accountOpen = false; ui.inboxOpen = !ui.inboxOpen; if (ui.inboxOpen) pollActivity(); }}>
-        <InboxIcon size={15} />
-        {#if inboxBadge}<em class="inbox-badge">{countLabel(inboxBadge)}</em>{/if}
-      </button>
-      <button class="btn icon" title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}><Settings size={15} /></button>
-      <button class="btn icon" title="Log out" onclick={logout}><LogOut size={15} /></button>
-    </div>
-    {#if ui.inboxOpen}<Inbox />{/if}
-  </div>
 </aside>

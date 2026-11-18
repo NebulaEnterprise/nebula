@@ -1,6 +1,6 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery } from '../state.svelte.js';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound, Inbox as InboxIcon, Plus, Users } from '@lucide/svelte';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount, pollActivity } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -17,6 +17,7 @@
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
+  import Inbox from './Inbox.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook } from '../look.svelte.js';
@@ -71,7 +72,18 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', inbox: 'Inbox', accounts: 'Switch accounts' };
+  const inboxBadge = $derived((ui.incoming || []).length + (ui.missedCalls || []).length + Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+
+  async function useSaved(id) {
+    if (id === ui.me?.id) return;
+    try {
+      ui.userSettings = false;
+      await switchAccount(id);
+    } catch (err) {
+      toast(err.message);
+    }
+  }
   const reasonLabel = { harassment: 'Harassment or bullying', hate: 'Hate speech or slurs', sexual: 'Sexual content', child: 'Child safety', threats: 'Threats or violence', 'self-harm': 'Self-harm or suicide', spam: 'Spam or scams', illegal: 'Something illegal', other: 'Something else' };
   let devOn = $state(developerMode());
   let viewing = $state(null);
@@ -510,6 +522,7 @@
         </div>
       </div>
       <div class="group">User settings</div>
+      <button class:on={page === 'inbox'} onclick={() => { ui.userPage = 'inbox'; pollActivity(); }}><InboxIcon size={16} /> Inbox {#if inboxBadge}<em class="set-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}</button>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
       <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
@@ -521,7 +534,8 @@
       {/if}
       <div class="group">Account</div>
       <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
-      <button class="danger set-logout" onclick={logout}>Log out</button>
+      <button class:on={page === 'accounts'} onclick={() => (ui.userPage = 'accounts')}><Users size={16} /> Switch accounts</button>
+      <button class="danger set-logout" onclick={logout}>Sign out</button>
     </aside>
     <div class="set-main" class:look-main={page === 'look'}>
       <div class="set-head">
@@ -549,7 +563,29 @@
         {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
-      {#if page === 'account'}
+      {#if page === 'inbox'}
+        <Inbox embedded />
+      {:else if page === 'accounts'}
+        <section class="acct-section">
+          <h3>Saved on this device</h3>
+          <div class="acct-list">
+            {#each savedAccounts() as row (row.id)}
+              <button type="button" class="acct-account" class:on={row.id === ui.me?.id} onclick={() => useSaved(row.id)}>
+                <Avatar user={row} size={36} />
+                <span>
+                  <strong>{row.displayName || row.username}</strong>
+                  <em>@{row.username}</em>
+                </span>
+                {#if row.id === ui.me?.id}<Check size={16} />{/if}
+              </button>
+            {/each}
+            <button type="button" class="acct-account add" onclick={() => addAccount()}>
+              <Plus size={18} /> Add another account
+            </button>
+            <p class="hint">{savedAccounts().length} of 7 accounts</p>
+          </div>
+        </section>
+      {:else if page === 'account'}
         {#if !securityOpen}
           <section class="acct-section">
             <h3>Account Info</h3>
