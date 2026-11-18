@@ -200,8 +200,8 @@ html:not(.app-blur) .thread-menu {
 }
 .rail {
   --bg-rail: transparent;
-  width: 86px; display: flex; flex-direction: column;
-  align-items: center; gap: 6px; padding: 10px 6px 8px; flex-shrink: 0;
+  width: 156px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; padding: 10px 8px 8px; flex-shrink: 0;
   border-radius: 18px; overflow: hidden;
 }
 .rail-logo {
@@ -214,7 +214,7 @@ html:not(.app-blur) .thread-menu {
   filter: drop-shadow(0 0 6px rgba(255, 160, 240, 0.95)) drop-shadow(0 0 16px rgba(168, 85, 247, 0.9));
 }
 .rail-tab {
-  width: 100%; min-height: 52px; border-radius: 14px; display: flex; flex-direction: column;
+  width: 74px; min-height: 52px; border-radius: 14px; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 4px; position: relative;
   color: #b7a8c9; background: transparent; flex-shrink: 0;
 }
@@ -224,8 +224,8 @@ html:not(.app-blur) .thread-menu {
 .rail-tab.on:hover { filter: brightness(1.08); }
 .rail-spacer { flex: 1; width: 100%; }
 .rail-user {
-  width: 100%; display: flex; align-items: center; gap: 6px;
-  padding: 6px; border-radius: 14px; background: #241838; color: #efeaf8; text-align: left;
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 14px; background: #241838; color: #efeaf8; text-align: left;
 }
 .rail-user:hover { background: #2d2044; }
 .rail-user span { min-width: 0; display: flex; flex-direction: column; flex: 1; }
@@ -233,7 +233,7 @@ html:not(.app-blur) .thread-menu {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-style: normal; font-size: 10px; color: #b7a8c9;
 }
-.rail-user strong { color: #fff; font-size: 12px; font-weight: 700; }
+.rail-user strong { color: #fff; font-size: 13px; font-weight: 700; }
 .rail-user svg { flex-shrink: 0; color: #b7a8c9; }
 .rail-count {
   position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px;
