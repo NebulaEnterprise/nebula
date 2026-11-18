@@ -134,6 +134,12 @@ Three cases still reveal chats:
 - A server listed in Discover can be read by joining the published link. The key is part of that listing on purpose.
 - The page in the browser is what locks and unlocks chats. Replacing the published website replaces that page, so the new page can ask for the secret. A hash pinned to the old script does not stop the person who publishes the site.
 
+## More information
+
+Nebula does not sell users' personal data, and we do not operate as a data-broker or sell user information to advertisers.
+Nebula is independently operated. We do not partner with, work on behalf of, or maintain affiliations with government agencies. Our platform is built around user privacy, and we do not provide government agencies with routine or direct access to private conversations.
+We collect only the information necessary to operate accounts and provide the platform's features. Private message contents are encrypted before leaving the user's device, and we do not ordinarily possess the keys needed to read private conversations.
+Your conversations are yours. Your privacy is not a product, and your personal information is not something we sell.
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/e1e93985-257f-4330-a12a-be42710f9e88" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a2429a1e-cf0a-4b74-88c9-00be712183c5" />
