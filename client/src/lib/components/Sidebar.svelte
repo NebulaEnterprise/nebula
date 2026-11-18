@@ -498,6 +498,7 @@
       <Avatar user={ui.me} size={36} />
       <div class="who">
         <strong><Name user={{ displayName: ui.me?.displayName || ui.me?.username || '', username: ui.me?.username || '', nameEffect: ui.me?.nameEffect || '', nameFont: ui.me?.nameFont || '', nameColors: ui.me?.nameColors || [] }} /></strong>
+        <span>{ui.me?.status === 'dnd' ? 'Busy' : ui.me?.status === 'idle' ? 'Idle' : ui.me?.status === 'offline' ? 'Offline' : 'Online'}</span>
       </div>
     </button>
     <div class="me-tools">

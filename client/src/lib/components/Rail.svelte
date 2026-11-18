@@ -1,8 +1,6 @@
 <script>
-  import { ChevronRight, Compass, MessageSquare, Server, Settings, Users } from '@lucide/svelte';
-  import Avatar from './Avatar.svelte';
+  import { Compass, MessageSquare, Server, Users } from '@lucide/svelte';
   import { ui, showFriends, showMessages, showServers, showDiscover, openDm, phoneBrowse } from '../state.svelte.js';
-  import { presenceDot } from '../seen.js';
 
   const onMessages = $derived(ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'messages');
   const onPeople = $derived(ui.mode === 'friends' || ui.mode === 'add');
@@ -10,7 +8,6 @@
   const onDiscover = $derived(ui.mode === 'discover');
   const chatUnread = $derived((ui.dms || []).reduce((sum, dm) => sum + (Number(ui.activity.dms[dm.other?.id]?.unread) || 0), 0));
   const peopleUnread = $derived((ui.incoming || []).length);
-  const status = $derived(presenceDot(ui.me));
 
   function latestDm() {
     return [...(ui.dms || [])]
@@ -84,16 +81,4 @@
     <span>Discover</span>
   </button>
   <div class="rail-spacer"></div>
-  <button class="rail-tab" class:on={ui.userSettings} title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
-    <Settings size={22} />
-    <span>Settings</span>
-  </button>
-  <button type="button" class="rail-user" title="Account" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
-    <Avatar user={ui.me} size={32} />
-    <span>
-      <strong>{ui.me?.displayName || ui.me?.username || 'You'}</strong>
-      <em>{status === 'dnd' ? 'Busy' : status === 'idle' ? 'Idle' : status === 'online' ? 'Online' : 'Offline'}</em>
-    </span>
-    <ChevronRight size={14} />
-  </button>
 </aside>
