@@ -16,7 +16,7 @@
   import { shortBio, visibleBadges } from '../format.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, logout, openServerSettings, openServer, toast, saveMe, savedAccounts, switchAccount, addAccount, chatClosed, closeConversation, openIdMenu, pinnedChats, pollActivity, phoneChat } from '../state.svelte.js';
-  import { serverFace } from '../serverface.js';
+  import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -25,6 +25,22 @@
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   function countLabel(n) { return n > 99 ? '99+' : String(n); }
   let dmQuery = $state('');
+  const recentServers = $derived.by(() => {
+    ui.serverId;
+    const byId = new Map((ui.servers || []).map((server) => [String(server.id), server]));
+    const picked = [];
+    for (const id of recentServerIds()) {
+      const server = byId.get(String(id));
+      if (!server || picked.some((row) => String(row.id) === String(server.id))) continue;
+      picked.push(server);
+      if (picked.length === 3) break;
+    }
+    return picked;
+  });
+  function serverHasUnread(id) {
+    const note = ui.activity?.servers?.[id];
+    return !!(note && (Number(note.unread) || Number(note.mentions)));
+  }
   const serverRow = $derived((ui.servers || []).find((server) => server.id === ui.serverId) || {});
   const face = $derived(serverFace({
     ...serverRow,
@@ -294,6 +310,28 @@
       <span>Messages</span>
       <button type="button" title="New group" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /></button>
     </div>
+    {#if recentServers.length}
+      <div class="recent-servers" aria-label="Recent servers">
+        {#each [recentServers[0]] as server (server.id)}
+          {@const face = serverFace(server)}
+          <button type="button" class="recent-srv" title={server.name} style="--srv:{face.color}" onclick={() => openServer(server.id)}>
+            {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
+            {#if serverHasUnread(server.id)}<i></i>{/if}
+          </button>
+        {/each}
+        {#if recentServers.length > 1}
+          <div class="recent-row">
+            {#each recentServers.slice(1) as server (server.id)}
+              {@const face = serverFace(server)}
+              <button type="button" class="recent-srv" title={server.name} style="--srv:{face.color}" onclick={() => openServer(server.id)}>
+                {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
+                {#if serverHasUnread(server.id)}<i></i>{/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
     <label class="msg-search">
       <Search size={15} />
       <input placeholder="Search DMs..." bind:value={dmQuery} />

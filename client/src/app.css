@@ -276,6 +276,23 @@ html:not(.app-blur) .thread-menu {
   width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: #d8c6ff;
 }
 .inbox-head button:hover { background: rgba(255, 255, 255, 0.06); }
+.recent-servers {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 0 16px 2px;
+}
+.recent-row { display: flex; justify-content: center; gap: 22px; }
+.recent-srv {
+  position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center; overflow: visible; flex-shrink: 0;
+  background: color-mix(in srgb, var(--srv, #7c6af7) 62%, #1b1230);
+  color: #fff; font-size: 13px; font-weight: 750;
+}
+.recent-srv img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.recent-srv:hover { box-shadow: 0 0 0 2px rgba(198, 146, 255, 0.7), 0 0 12px rgba(168, 85, 247, 0.7); }
+.recent-srv i {
+  position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--brand); box-shadow: 0 0 0 2px rgba(14, 6, 28, 0.95);
+}
 .msg-search {
   display: flex; align-items: center; gap: 8px; margin: 4px 12px 8px; padding: 0 12px;
   height: 38px; border-radius: 12px; background: #140c22; color: #9a8eae;
