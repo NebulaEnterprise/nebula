@@ -114,7 +114,6 @@ The server still knows who joined a call and when. The network path between the 
 After the disk seal is open, the running server can see:
 
 - Usernames, which anyone in a server can also see.
-- The saved email. Only the owner’s own account response includes it.
 - The password hash and the email hash, not the password.
 - The wrapped vault, the public key, and the password-wrapped recovery copy.
 - Who is friends with whom, who is in a direct message, and who belongs to a server.
