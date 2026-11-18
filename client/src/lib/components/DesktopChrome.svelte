@@ -1,5 +1,6 @@
 <script>
   import { onMount } from 'svelte';
+  import { ui } from '../state.svelte.js';
 
   const chrome = typeof window !== 'undefined' ? window.nebulaDesktop : null;
   const overlay = !!(chrome && chrome.overlayTitle);
@@ -14,8 +15,8 @@
   });
 </script>
 
-{#if overlay && !fullscreen}
-  <header class="desk-title" class:mac>
+{#if (overlay && !fullscreen) || (!chrome && ui.me)}
+  <header class="desk-title" class:mac class:web={!overlay}>
     {#if mac}
       <div class="desk-wins">
         <button type="button" class="close" aria-label="Close" onclick={() => chrome.close()}></button>
