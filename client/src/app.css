@@ -277,10 +277,11 @@ html:not(.app-blur) .thread-menu {
 }
 .inbox-head button:hover { background: rgba(255, 255, 255, 0.06); }
 .recent-servers {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 0 16px 2px;
+  display: grid; grid-template-columns: 32px 32px; justify-content: center;
+  column-gap: 36px; row-gap: 6px; padding: 2px 16px 4px;
 }
-.recent-row { display: flex; justify-content: center; gap: 22px; }
+.recent-servers > .recent-srv { grid-column: 1 / -1; justify-self: center; }
+.recent-row { display: contents; }
 .recent-srv {
   position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%;
   display: grid; place-items: center; overflow: visible; flex-shrink: 0;

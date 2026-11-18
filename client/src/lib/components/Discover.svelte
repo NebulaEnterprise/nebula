@@ -7,7 +7,9 @@
   let listed = $state([]);
 
   $effect(() => {
-    api('/api/discover').then((data) => { listed = data.servers || []; }).catch(() => {});
+    api('/api/discover').then((data) => {
+      listed = (data.servers || []).filter((server) => server && server.discover !== false);
+    }).catch(() => { listed = []; });
   });
 
   async function joinListed(server) {
@@ -39,7 +41,7 @@
 
   const list = $derived.by(() => {
     const query = q.trim().toLowerCase();
-    const source = listed.length ? listed : (ui.servers || []);
+    const source = listed;
     return source.filter((server) => {
       const text = blob(server);
       if (query && !text.includes(query) && !(server.name || '').toLowerCase().includes(query)) return false;
