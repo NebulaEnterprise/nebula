@@ -223,7 +223,6 @@ html:not(.app-blur) .thread-menu {
 .rail-tab.on { color: #fff; background: var(--brand); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.25); }
 .rail-tab.on:hover { filter: brightness(1.08); }
 .rail-spacer { flex: 1; width: 100%; }
-.rail-settings { margin-bottom: 116px; }
 .rail-user {
   width: 100%; display: flex; align-items: center; gap: 6px;
   padding: 6px; border-radius: 14px; background: #241838; color: #efeaf8; text-align: left;
@@ -2556,7 +2555,6 @@ html[data-theme="amoled"] #app { background-color: #000; }
   .shell.phone-browse .rail { width: 76px; padding: 10px 6px; }
   .rail-tab span, .rail-user strong, .rail-user em, .rail-user svg { display: none; }
   .rail-tab { min-height: 48px; width: 48px; }
-  .rail-settings { margin-bottom: 16px; }
   .rail-logo { width: 48px; height: 48px; }
   .rail-user { justify-content: center; padding: 4px; }
   .dm-card, .pal-side, .hub-aside, .hub-strip { display: none; }
