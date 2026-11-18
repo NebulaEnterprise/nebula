@@ -2109,6 +2109,47 @@ async function pushVault() {
   });
 }
 
+export async function restoreEncryptedChats() {
+  const vault = liveVault();
+  if (!vault?.priv) throw new Error('Sign in with your recovery code or passphrase first');
+  vault.dms = vault.dms || {};
+  vault.groups = vault.groups || {};
+  let restored = 0;
+  let missing = 0;
+  for (const dm of ui.dms || []) {
+    const otherId = dm?.other?.id;
+    if (!otherId) continue;
+    const id = [String(ui.me.id), String(otherId)].sort().join(':');
+    try {
+      const data = await api('/api/dms/' + encodeURIComponent(otherId) + '/messages');
+      const pack = data.wraps && data.wraps[ui.me.id];
+      if (!pack) { missing += 1; continue; }
+      vault.dms[id] = await unwrapKey(pack, vault.priv);
+      roomLogs.delete('dm:' + otherId);
+      restored += 1;
+    } catch (_) {
+      missing += 1;
+    }
+  }
+  for (const group of ui.groups || []) {
+    if (!group?.id) continue;
+    try {
+      const data = await api('/api/groups/' + encodeURIComponent(group.id) + '/messages');
+      const pack = data.wraps && data.wraps[ui.me.id];
+      if (!pack) { missing += 1; continue; }
+      vault.groups[group.id] = await unwrapKey(pack, vault.priv);
+      roomLogs.delete('group:' + group.id);
+      restored += 1;
+    } catch (_) {
+      missing += 1;
+    }
+  }
+  rememberVault(ui.me.id, vault);
+  await pushVault().catch(() => {});
+  if (ui.mode === 'dm' || ui.mode === 'group') await loadMessages();
+  return { restored, missing };
+}
+
 export function keepServerKey(serverId, roomKey) {
   const vault = liveVault();
   if (!vault || !serverId || !roomKey || vault.servers[serverId] === roomKey) return;
@@ -2149,6 +2190,9 @@ async function roomMaster(where) {
       const key = await keepWrap('dms', id, data.wraps[ui.me.id]);
       if (key) return key;
     }
+    if ((data.messages || []).some((msg) => isSealedText(msg && msg.content))) {
+      throw new Error('This chat is locked. Open Settings, Account, and choose Restore chats.');
+    }
     const pub = other?.vaultPub || data.other?.vaultPub || '';
     if (!pub) throw new Error('They need to set a recovery code before this chat can be encrypted');
     const key = newRoomKey();
@@ -2167,6 +2211,9 @@ async function roomMaster(where) {
     if (data.wraps && data.wraps[ui.me.id]) {
       const key = await keepWrap('groups', groupId, data.wraps[ui.me.id]);
       if (key) return key;
+    }
+    if ((data.messages || []).some((msg) => isSealedText(msg && msg.content))) {
+      throw new Error('This chat is locked. Open Settings, Account, and choose Restore chats.');
     }
     const members = data.group?.members || ui.group?.members || [];
     const key = newRoomKey();

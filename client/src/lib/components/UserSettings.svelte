@@ -1,6 +1,6 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound, Plus, Users } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount, restoreEncryptedChats } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -30,6 +30,8 @@
   let recoverPassword = $state('');
   let revealed = $state('');
   let recoverBusy = $state(false);
+  let restoreBusy = $state(false);
+  let restoreNote = $state('');
 
   function pickRecover(next) {
     recoverMethod = next;
@@ -72,6 +74,22 @@
   }
 
   const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts' };
+
+  async function restoreChats() {
+    restoreBusy = true;
+    restoreNote = '';
+    try {
+      const result = await restoreEncryptedChats();
+      if (!result.restored && !result.missing) restoreNote = 'No chats to restore.';
+      else if (!result.missing) restoreNote = 'Restored ' + result.restored + (result.restored === 1 ? ' chat.' : ' chats.');
+      else restoreNote = 'Restored ' + result.restored + '. ' + result.missing + (result.missing === 1 ? ' chat has' : ' chats have') + ' no saved key, so those old messages stay locked.';
+      toast(restoreNote);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      restoreBusy = false;
+    }
+  }
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -633,6 +651,13 @@
                 </div>
               </div>
             {/if}
+          </section>
+          <div class="acct-rule"></div>
+          <section class="acct-section">
+            <h3>Restore chats</h3>
+            <p class="hint">After you sign in with your recovery code on a new browser, this reads the saved key for each chat and unlocks the messages.</p>
+            <button type="button" class="btn" disabled={restoreBusy} onclick={restoreChats}>{restoreBusy ? 'Restoring…' : 'Restore chats'}</button>
+            {#if restoreNote}<p class="hint">{restoreNote}</p>{/if}
           </section>
           <div class="acct-rule"></div>
         {/if}
