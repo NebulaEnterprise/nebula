@@ -2109,45 +2109,159 @@ async function pushVault() {
   });
 }
 
-export async function restoreEncryptedChats() {
-  const vault = liveVault();
-  if (!vault?.priv) throw new Error('Sign in with your recovery code or passphrase first');
+function backupStore() {
+  try { return JSON.parse(localStorage.getItem(accountKey('nebula-backups')) || '[]') || []; }
+  catch (_) { return []; }
+}
+
+function writeBackups(list) {
+  const next = (list || []).slice(0, 12);
+  localStorage.setItem(accountKey('nebula-backups'), JSON.stringify(next));
+  return next;
+}
+
+function backupName(createdAt) {
+  const when = new Date(createdAt);
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = Number.isNaN(when.getTime())
+    ? 'backup'
+    : when.getFullYear() + '-' + pad(when.getMonth() + 1) + '-' + pad(when.getDate()) + '-' + pad(when.getHours()) + pad(when.getMinutes());
+  return 'nebula-backup-' + stamp + '.json';
+}
+
+function backupFile(row) {
+  return {
+    nebula: 'backup',
+    v: 1,
+    userId: ui.me?.id || '',
+    username: ui.me?.username || '',
+    createdAt: row.createdAt,
+    chats: row.chats,
+    groups: row.groups,
+    servers: row.servers,
+    wrapped: row.wrapped,
+    salt: row.salt,
+  };
+}
+
+export function savedBackups() {
+  return backupStore();
+}
+
+export function downloadBackup(row) {
+  if (!row?.wrapped || !row?.salt) return;
+  const blob = new Blob([JSON.stringify(backupFile(row))], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = backupName(row.createdAt);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function collectRoomKeys(vault) {
   vault.dms = vault.dms || {};
   vault.groups = vault.groups || {};
-  let restored = 0;
-  let missing = 0;
   for (const dm of ui.dms || []) {
     const otherId = dm?.other?.id;
     if (!otherId) continue;
     const id = [String(ui.me.id), String(otherId)].sort().join(':');
+    if (vault.dms[id]) continue;
     try {
       const data = await api('/api/dms/' + encodeURIComponent(otherId) + '/messages');
       const pack = data.wraps && data.wraps[ui.me.id];
-      if (!pack) { missing += 1; continue; }
-      vault.dms[id] = await unwrapKey(pack, vault.priv);
-      roomLogs.delete('dm:' + otherId);
-      restored += 1;
-    } catch (_) {
-      missing += 1;
-    }
+      if (pack) vault.dms[id] = await unwrapKey(pack, vault.priv);
+    } catch (_) {}
   }
   for (const group of ui.groups || []) {
-    if (!group?.id) continue;
+    if (!group?.id || vault.groups[group.id]) continue;
     try {
       const data = await api('/api/groups/' + encodeURIComponent(group.id) + '/messages');
       const pack = data.wraps && data.wraps[ui.me.id];
-      if (!pack) { missing += 1; continue; }
-      vault.groups[group.id] = await unwrapKey(pack, vault.priv);
-      roomLogs.delete('group:' + group.id);
-      restored += 1;
-    } catch (_) {
-      missing += 1;
-    }
+      if (pack) vault.groups[group.id] = await unwrapKey(pack, vault.priv);
+    } catch (_) {}
   }
   rememberVault(ui.me.id, vault);
+}
+
+export async function createContentBackup() {
+  const vault = liveVault();
+  const secret = ui.me?.id ? loadSecret(ui.me.id) : '';
+  if (!vault?.priv || !secret) throw new Error('Sign in with your recovery code or passphrase on this device first');
+  await collectRoomKeys(vault);
+  const chats = Object.keys(vault.dms || {}).length;
+  const groups = Object.keys(vault.groups || {}).length;
+  const servers = Object.keys(vault.servers || {}).length;
+  if (!chats && !groups && !servers) throw new Error('Open your chats on this device first. There is nothing here to back up yet.');
+  const packed = await wrapVault({
+    v: vault.v,
+    master: vault.master,
+    pub: vault.pub,
+    priv: vault.priv,
+    servers: { ...(vault.servers || {}) },
+    dms: { ...(vault.dms || {}) },
+    groups: { ...(vault.groups || {}) },
+    boxes: localKeys(ui.me.id),
+  }, secret);
+  const row = {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    chats,
+    groups,
+    servers,
+    wrapped: packed.wrapped,
+    salt: packed.salt,
+  };
+  writeBackups([row, ...backupStore()]);
+  downloadBackup(row);
+  return row;
+}
+
+export function removeContentBackup(id) {
+  return writeBackups(backupStore().filter((row) => row.id !== id));
+}
+
+export async function loadContentBackup(text) {
+  let file;
+  try { file = JSON.parse(text); } catch (_) { throw new Error('That file is not a Nebula backup'); }
+  if (!file || file.nebula !== 'backup' || !file.wrapped || !file.salt) throw new Error('That file is not a Nebula backup');
+  if (file.userId && ui.me?.id && String(file.userId) !== String(ui.me.id)) throw new Error('This backup is for a different account');
+  const secret = ui.me?.id ? loadSecret(ui.me.id) : '';
+  if (!secret) throw new Error('Sign in with your recovery code or passphrase first');
+  const opened = await openVault(file.wrapped, file.salt, secret);
+  if (!opened) throw new Error('This backup does not match your recovery code');
+  const current = liveVault();
+  if (!current?.priv) throw new Error('Sign in with your recovery code or passphrase first');
+  current.dms = { ...(current.dms || {}), ...(opened.dms || {}) };
+  current.groups = { ...(current.groups || {}), ...(opened.groups || {}) };
+  current.servers = { ...(current.servers || {}), ...(opened.servers || {}) };
+  rememberVault(ui.me.id, current);
+  const boxes = Array.isArray(opened.boxes) ? opened.boxes : [];
+  if (boxes.length) {
+    const merged = localKeys(ui.me.id).slice();
+    for (const row of boxes) {
+      if (row?.priv && row?.pub && !merged.some((item) => item.pub === row.pub)) merged.push(row);
+    }
+    saveKeys(ui.me.id, merged);
+  }
+  for (const key of [...roomLogs.keys()]) {
+    if (String(key).startsWith('dm:') || String(key).startsWith('group:')) roomLogs.delete(key);
+  }
+  const row = {
+    id: crypto.randomUUID(),
+    createdAt: file.createdAt || new Date().toISOString(),
+    chats: Object.keys(opened.dms || {}).length,
+    groups: Object.keys(opened.groups || {}).length,
+    servers: Object.keys(opened.servers || {}).length,
+    wrapped: file.wrapped,
+    salt: file.salt,
+  };
+  if (!backupStore().some((item) => item.wrapped === row.wrapped)) writeBackups([row, ...backupStore()]);
   await pushVault().catch(() => {});
-  if (ui.mode === 'dm' || ui.mode === 'group') await loadMessages();
-  return { restored, missing };
+  if (ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'chat') await loadMessages();
+  return row;
 }
 
 export function keepServerKey(serverId, roomKey) {
@@ -2191,7 +2305,7 @@ async function roomMaster(where) {
       if (key) return key;
     }
     if ((data.messages || []).some((msg) => isSealedText(msg && msg.content))) {
-      throw new Error('This chat is locked. Open Settings, Account, and choose Restore chats.');
+      throw new Error('This chat is locked. Load a backup from the device that can already open it.');
     }
     const pub = other?.vaultPub || data.other?.vaultPub || '';
     if (!pub) throw new Error('They need to set a recovery code before this chat can be encrypted');
@@ -2213,7 +2327,7 @@ async function roomMaster(where) {
       if (key) return key;
     }
     if ((data.messages || []).some((msg) => isSealedText(msg && msg.content))) {
-      throw new Error('This chat is locked. Open Settings, Account, and choose Restore chats.');
+      throw new Error('This chat is locked. Load a backup from the device that can already open it.');
     }
     const members = data.group?.members || ui.group?.members || [];
     const key = newRoomKey();
