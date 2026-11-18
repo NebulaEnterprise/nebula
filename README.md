@@ -137,7 +137,7 @@ Three cases still reveal chats:
 ## More information
 
 Nebula does not sell users' personal data, and we do not operate as a data-broker or sell user information to advertisers.
-Nebula is independently operated. We do not partner with, work on behalf of, or maintain affiliations with government agencies. Our platform is built around user privacy, and we do not provide government agencies with routine or direct access to private conversations.
+Nebula is independently operated. We do not partner with, work on behalf of, or maintain affiliations with government agencies. Our platform is built around user privacy, and we do not provide government agencies with routine or direct access to private conversations or accounts.
 We collect only the information necessary to operate accounts and provide the platform's features. Private message contents are encrypted before leaving the user's device, and we do not ordinarily possess the keys needed to read private conversations.
 Your conversations are yours. Your privacy is not a product, and your personal information is not something we sell.
 
