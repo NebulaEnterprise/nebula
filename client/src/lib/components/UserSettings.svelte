@@ -1,6 +1,6 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound, Inbox as InboxIcon, Plus, Users } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount, pollActivity } from '../state.svelte.js';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, KeyRound, Plus, Users } from '@lucide/svelte';
+  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -17,7 +17,6 @@
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
-  import Inbox from './Inbox.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook } from '../look.svelte.js';
@@ -72,8 +71,7 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', inbox: 'Inbox', accounts: 'Switch accounts' };
-  const inboxBadge = $derived((ui.incoming || []).length + (ui.missedCalls || []).length + Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -522,7 +520,6 @@
         </div>
       </div>
       <div class="group">User settings</div>
-      <button class:on={page === 'inbox'} onclick={() => { ui.userPage = 'inbox'; pollActivity(); }}><InboxIcon size={16} /> Inbox {#if inboxBadge}<em class="set-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}</button>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
       <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
@@ -563,9 +560,7 @@
         {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
-      {#if page === 'inbox'}
-        <Inbox embedded />
-      {:else if page === 'accounts'}
+      {#if page === 'accounts'}
         <section class="acct-section">
           <h3>Saved on this device</h3>
           <div class="acct-list">

@@ -2478,6 +2478,11 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .empty-act { width: auto; min-width: 120px; margin-top: 8px; background: #f97316; }
 .dm-empty { padding-top: 18px; }
 .friend-hit { cursor: pointer; }
+.inbox-anchor { position: relative; }
+.inbox-anchor .inbox-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; left: auto; bottom: auto;
+  width: min(340px, 78vw); z-index: 40;
+}
 .inbox-btn { position: relative; overflow: visible; }
 .inbox-badge {
   position: absolute; top: -4px; right: -5px; z-index: 2; pointer-events: none;

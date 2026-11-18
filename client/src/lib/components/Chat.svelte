@@ -1,15 +1,16 @@
 <script>
-  import { Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct } from '../state.svelte.js';
+  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity } from '../state.svelte.js';
   import { seenPhrase } from '../seen.js';
   import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
   import Dock from './Dock.svelte';
+  import Inbox from './Inbox.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
@@ -173,6 +174,12 @@
   }
 
   let bell = $state(false);
+  const inboxBadge = $derived((ui.incoming || []).length + (ui.missedCalls || []).length + Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
+  function toggleInbox() {
+    ui.inboxOpen = !ui.inboxOpen;
+    bell = false;
+    if (ui.inboxOpen) pollActivity();
+  }
   let threadMenu = $state(false);
   let renaming = $state(false);
   let threadName = $state('');
@@ -1265,6 +1272,13 @@
     <button class="btn icon" title="Thread options" onclick={() => (threadMenu = !threadMenu)}><MoreHorizontal size={16} /></button>
   {/if}
   <div class="top-tools">
+    <div class="inbox-anchor">
+      <button type="button" class="bar-tool inbox-btn" class:on={ui.inboxOpen} title="Inbox" onclick={toggleInbox}>
+        <AtSign size={18} />
+        {#if inboxBadge}<em class="inbox-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}
+      </button>
+      {#if ui.inboxOpen}<Inbox />{/if}
+    </div>
     <button type="button" class="bar-tool switcher-btn" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /><kbd>Ctrl K</kbd></button>
     {#if ui.mode === 'dm' || ui.mode === 'group'}
       <button type="button" class="bar-tool" title="Start a call" onclick={startCall}><Phone size={18} /></button>
