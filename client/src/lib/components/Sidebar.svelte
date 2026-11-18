@@ -493,7 +493,8 @@
       </div>
     {/if}
   {/if}
-  <div class="me">
+</aside>
+<div class="me">
     <button type="button" class="me-card" onclick={openAccount}>
       <Avatar user={ui.me} size={36} />
       <div class="who">
@@ -510,5 +511,4 @@
       <button class="btn icon" title="Log out" onclick={logout}><LogOut size={15} /></button>
     </div>
     {#if ui.inboxOpen}<Inbox />{/if}
-  </div>
-</aside>
+</div>
