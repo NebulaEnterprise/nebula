@@ -10,9 +10,15 @@
   const onDiscover = $derived(ui.mode === 'discover');
   const chatUnread = $derived((ui.dms || []).reduce((sum, dm) => sum + (Number(ui.activity.dms[dm.other?.id]?.unread) || 0), 0));
   const peopleUnread = $derived((ui.incoming || []).length);
+  function dmCount(dm) {
+    const id = dm?.other?.id;
+    if (!id) return 0;
+    if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) return 0;
+    return Math.max(Number(ui.activity.dms?.[id]?.unread) || 0, Number(dm.unread) || 0);
+  }
   const unreadDms = $derived(
     (ui.dms || [])
-      .filter((dm) => dm.other && Number(ui.activity.dms?.[dm.other.id]?.unread) > 0)
+      .filter((dm) => dmCount(dm) > 0)
       .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0))
   );
   const status = $derived(presenceDot(ui.me));
@@ -73,10 +79,9 @@
   {#if unreadDms.length}
     <div class="rail-dms">
       {#each unreadDms as dm (dm.other.id)}
-        {@const note = ui.activity.dms[dm.other.id]}
         <button type="button" class="rail-dm" title={dm.other.displayName || dm.other.username} onclick={() => openDm(dm.other)}>
-          <Avatar user={dm.other} size={40} dot={false} />
-          <em>{count(note.unread)}</em>
+          <Avatar user={dm.other} size={48} dot={false} />
+          <em>{count(dmCount(dm))}</em>
         </button>
       {/each}
     </div>

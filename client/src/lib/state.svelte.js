@@ -1543,13 +1543,34 @@ function noteTypingEvent(data) {
   acceptTypers(rows);
 }
 
+function pingDm(roomId, author) {
+  const channel = String(roomId || '');
+  if (!channel.startsWith('dm:') || !ui.me) return;
+  if (viewingRoom(channel)) return;
+  const otherId = channel.split(':').slice(1).find((id) => id && String(id) !== String(ui.me.id));
+  if (!otherId || (author && String(author.id) === String(ui.me.id))) return;
+  const prev = Number(ui.activity.dms?.[otherId]?.unread) || 0;
+  const unread = prev + 1;
+  ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
+  const rows = ui.dms || [];
+  const hit = rows.find((dm) => dm.other && String(dm.other.id) === String(otherId));
+  if (hit) {
+    ui.dms = rows.map((dm) => dm.other && String(dm.other.id) === String(otherId) ? { ...dm, unread, updatedAt: Date.now(), other: author ? { ...dm.other, ...author } : dm.other } : dm);
+  } else if (author) {
+    ui.dms = [{ id: channel.slice(3), other: author, unread, updatedAt: Date.now() }, ...rows];
+  }
+}
+
 async function applySocketMessage(type, data) {
   if (type === 'TYPING') {
     noteTypingEvent(data);
     return;
   }
   if (data && data.message) revealMessage(data.message).catch(() => {});
-  if (!viewingRoom(data.roomId)) return;
+  if (!viewingRoom(data && data.roomId)) {
+    if (type === 'MESSAGE_CREATE') pingDm(data && (data.roomId || data.message?.channelId), data && data.message && data.message.author);
+    return;
+  }
   const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
   const logKey = currentRoom();
   if (type === 'MESSAGE_DELETE') {
