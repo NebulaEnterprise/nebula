@@ -14,7 +14,8 @@
     const id = dm?.other?.id;
     if (!id) return 0;
     if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) return 0;
-    return Math.max(Number(ui.activity.dms?.[id]?.unread) || 0, Number(dm.unread) || 0);
+    if (ui.quickOpen && String(ui.quickUser?.id || '') === String(id)) return 0;
+    return Number(ui.activity.dms?.[id]?.unread) || 0;
   }
   const unreadDms = $derived.by(() => {
     const rows = [];

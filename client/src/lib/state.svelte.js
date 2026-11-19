@@ -263,10 +263,11 @@ async function enterApp() {
   await consumeInvite();
   await openSharedLink();
   if (pollTimer) clearInterval(pollTimer);
+  let dmPollBusy = false;
   pollTimer = setInterval(() => {
-    if (!localStorage.getItem('dc_token') || document.hidden) return;
-    pollActivity();
-    loadDms();
+    if (dmPollBusy || !localStorage.getItem('dc_token') || document.hidden) return;
+    dmPollBusy = true;
+    pollActivity().then(() => loadDms()).finally(() => { dmPollBusy = false; });
   }, 4000);
   watchChat();
   startClocks();
@@ -631,6 +632,7 @@ export async function loadFriends() {
 }
 
 const heardDm = {};
+const ackedDm = {};
 let inboxReady = false;
 let lastSentId = '';
 let dmSerial = 0;
@@ -809,7 +811,6 @@ export async function loadDms() {
       inboxReady = true;
       return;
     }
-    const seenAt = dmSeenAt();
     const unread = {};
     let changed = false;
     for (const row of next) {
@@ -820,27 +821,23 @@ export async function loadDms() {
       const viewing = (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id))
         || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
-      if (viewing || own) {
+      const readHere = !!(stamp && ((map[key] && map[key] === stamp) || (ackedDm[id] && ackedDm[id] === stamp)));
+      if (viewing || own || readHere) {
         if (row.lastId && map[key] !== row.lastId) {
           map[key] = row.lastId;
           changed = true;
         }
         rememberDm(id, row.updatedAt || Date.now());
         heardDm[id] = stamp;
+        ackedDm[id] = stamp;
         continue;
       }
       const listed = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
       const noted = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
+      const prev = Number(ui.activity.dms[id] && ui.activity.dms[id].unread) || 0;
+      const newer = !!(heardDm[id] && heardDm[id] !== stamp);
       let count = Math.max(listed, noted);
-      if (!own) {
-        const freshId = !!(row.lastId && map[key] && map[key] !== row.lastId);
-        const freshAt = !!(row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0) && (!row.lastId || !map[key] || map[key] !== row.lastId));
-        if (freshId || freshAt) {
-          const prev = (ui.activity.dms[id] && ui.activity.dms[id].unread) || 0;
-          const bumped = heardDm[id] && heardDm[id] !== stamp ? prev + 1 : Math.max(prev, 1);
-          count = Math.max(count, bumped);
-        }
-      }
+      if (!count || newer) count = Math.max(count, newer ? prev + 1 : prev, 1);
       if (count > 0) {
         unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
@@ -942,17 +939,42 @@ export function showAddFriend() {
   phoneChat();
 }
 
+function clearDmUnread(userId, lastId) {
+  if (!userId) return;
+  const id = String(userId);
+  const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === id);
+  const stamp = lastId || (row && row.lastId) || (ui.heads && ui.heads['dm:' + id]) || '';
+  if (stamp) {
+    const map = seenMap();
+    if (map['dm:' + id] !== stamp) {
+      map['dm:' + id] = stamp;
+      saveSeen(map);
+    }
+    heardDm[id] = stamp;
+    ackedDm[id] = stamp;
+  }
+  rememberDm(id, Date.now());
+  if (ui.activity.dms[id]) {
+    const dms = { ...ui.activity.dms };
+    delete dms[id];
+    ui.activity = { ...ui.activity, dms };
+  }
+  if (serverDmNotes[id]) {
+    const notes = { ...serverDmNotes };
+    delete notes[id];
+    serverDmNotes = notes;
+  }
+  if (row && Number(row.unread)) {
+    ui.dms = (ui.dms || []).map((dm) => dm.other && String(dm.other.id) === id ? { ...dm, unread: 0 } : dm);
+  }
+}
+
 export function openQuick(user) {
   if (!user || !user.id) return;
   const same = ui.quickUser && String(ui.quickUser.id) === String(user.id);
   ui.quickUser = same ? { ...ui.quickUser, ...user } : user;
   ui.quickOpen = true;
-  if (ui.activity.dms[user.id]) {
-    const dms = { ...ui.activity.dms };
-    delete dms[user.id];
-    ui.activity = { ...ui.activity, dms };
-  }
-  rememberDm(user.id, Date.now());
+  clearDmUnread(user.id);
 }
 
 export function closeQuick() {
@@ -1021,12 +1043,7 @@ export async function openDm(user) {
   ui.group = null;
   ui.thread = null;
   if (user && user.id) revealChat('dm:' + user.id);
-  if (user && user.id && ui.activity.dms[user.id]) {
-    const dms = { ...ui.activity.dms };
-    delete dms[user.id];
-    ui.activity = { ...ui.activity, dms };
-    rememberDm(user.id, Date.now());
-  }
+  if (user && user.id) clearDmUnread(user.id);
   ui.menuOpen = false;
   ui.picker = '';
   ui.popout = null;
@@ -1546,14 +1563,17 @@ function noteTypingEvent(data) {
   acceptTypers(rows);
 }
 
-function pingDm(roomId, author) {
+function pingDm(roomId, author, messageId) {
   const channel = String(roomId || '');
   if (!channel.startsWith('dm:') || !ui.me) return;
   if (viewingRoom(channel)) return;
   const otherId = channel.split(':').slice(1).find((id) => id && String(id) !== String(ui.me.id));
   if (!otherId || (author && String(author.id) === String(ui.me.id))) return;
+  const stamp = String(messageId || '');
+  if (stamp && (heardDm[otherId] === stamp || ackedDm[otherId] === stamp)) return;
   const prev = Number(ui.activity.dms?.[otherId]?.unread) || 0;
   const unread = prev + 1;
+  if (stamp) heardDm[otherId] = stamp;
   ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
   const rows = ui.dms || [];
   const hit = rows.find((dm) => dm.other && String(dm.other.id) === String(otherId));
@@ -1571,7 +1591,7 @@ async function applySocketMessage(type, data) {
   }
   if (data && data.message) revealMessage(data.message).catch(() => {});
   if (!viewingRoom(data && data.roomId)) {
-    if (type === 'MESSAGE_CREATE') pingDm(data && (data.roomId || data.message?.channelId), data && data.message && data.message.author);
+    if (type === 'MESSAGE_CREATE') pingDm(data && (data.roomId || data.message?.channelId), data && data.message && data.message.author, data && data.message && data.message.id);
     return;
   }
   const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
@@ -3307,6 +3327,16 @@ export function markSeen(id, messageId) {
     saveSeen(map);
     queueRead(id, messageId, false);
   }
+  if (String(id).startsWith('dm:')) {
+    const userId = String(id).slice(3).split(':').find((part) => part && String(part) !== String(ui.me && ui.me.id)) || String(id).slice(3);
+    heardDm[userId] = messageId;
+    ackedDm[userId] = messageId;
+    if (serverDmNotes[userId]) {
+      const notes = { ...serverDmNotes };
+      delete notes[userId];
+      serverDmNotes = notes;
+    }
+  }
   forgetActivity(id);
 }
 
@@ -3378,11 +3408,17 @@ export async function pollActivity() {
       const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId) && ui.readHold !== 'dm:' + userId;
       if (openHere) continue;
       const seenId = sentSeen[headId] || sentSeen['dm:' + userId];
-      if (seenId && String(seenId) === String(messageId)) continue;
+      if ((seenId && String(seenId) === String(messageId)) || ackedDm[userId] === String(messageId)) continue;
       const speaker = (data.speakers || {})[headId] || (data.speakers || {})['dm:' + userId];
       if (speaker && ui.me && String(speaker) === String(ui.me.id)) continue;
       const prev = Number(dms[userId] && dms[userId].unread) || 0;
       dms[userId] = { ...(dms[userId] || {}), unread: Math.max(prev, 1) };
+    }
+    for (const userId of Object.keys(dms)) {
+      const seenId = sentSeen['dm:' + userId];
+      const head = headsIn['dm:' + userId];
+      const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId);
+      if (openHere || (seenId && head && String(seenId) === String(head)) || (ackedDm[userId] && head && ackedDm[userId] === String(head))) delete dms[userId];
     }
     if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
       const note = channels[ui.channelId];
