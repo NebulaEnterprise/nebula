@@ -91,6 +91,7 @@ export const ui = $state({
   typers: [],
   dmTyping: {},
   voice: null,
+  voiceStage: null,
   voiceRooms: {},
   screen: null,
   streamUi: { view: 'auto', watching: false, hideChat: false },
@@ -1406,6 +1407,7 @@ export async function openVoiceRoom(voiceChannel) {
     if (room && !(ui.channels || []).some((row) => row.id === room.id)) ui.channels = [...ui.channels, room];
   }
   if (!room) throw new Error('Could not open that voice chat');
+  ui.voiceStage = { id: voiceChannel.id, name: voiceChannel.name };
   ui.streamUi = { ...(ui.streamUi || {}), view: 'wide', hideChat: false };
   if (room.id === ui.channelId && ui.mode === 'chat') return;
   stopTyping();
@@ -1427,6 +1429,7 @@ export async function openVoiceRoom(voiceChannel) {
 
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
+  ui.voiceStage = null;
   phoneChat();
   if (ch.id === ui.channelId && ui.mode === 'chat') return;
   stopTyping();

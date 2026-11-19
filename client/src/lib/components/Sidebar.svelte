@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
-  import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
+  import { leaveVoice, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
@@ -85,7 +85,7 @@
   });
 
   function onVoice(ch) {
-    joinVoice(ch);
+    openVoiceChat(ch, false);
   }
 
   function dmSharing(other) {
@@ -129,16 +129,12 @@
     };
   }
 
-  async function openVoiceChat(ch) {
-    const here = ui.voice && ui.voice.channelId === ch.id && ui.voice.serverId === ui.serverId;
+  async function openVoiceChat(ch, toggle = true) {
     const room = (ui.channels || []).find((row) => row.type === 'text' && row.topic === 'voice-chat:' + ch.id);
-    const showing = here && ui.streamUi?.hideChat === false && room && ui.channelId === room.id;
-    if (showing) {
+    const showing = ui.voiceStage?.id === ch.id && ui.streamUi?.hideChat === false && room && ui.channelId === room.id;
+    if (toggle && showing) {
       ui.streamUi = { ...ui.streamUi, view: 'wide', hideChat: true };
       return;
-    }
-    if (!here) {
-      try { await joinVoice(ch); } catch (err) { toast(err.message); return; }
     }
     try { await openVoiceRoom(ch); } catch (err) { toast(err.message); }
   }
@@ -258,7 +254,7 @@
               {/if}
             </div>
             {#each voices as ch}
-              <div class="channel" class:on={ui.voice?.channelId === ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
+              <div class="channel" class:on={ui.voiceStage ? ui.voiceStage.id === ch.id : ui.voice?.channelId === ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
                 <button class="channel-hit" onclick={() => onVoice(ch)}>
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>

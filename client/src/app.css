@@ -1089,6 +1089,13 @@ html:not(.app-blur) .thread-menu {
 .stage-pop select, .stage-pop audio { width: 100%; }
 .stage-pop p { margin: 0; color: var(--muted); }
 .stage-pop .check { display: flex; align-items: center; gap: 8px; }
+.voice-lobby {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px; text-align: center; color: #fff;
+}
+.voice-lobby h2 { margin: 0; font-size: 24px; }
+.voice-lobby p { max-width: 380px; margin: 0; color: var(--muted); }
+.lobby-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; width: 100%; }
 .chat-col.voice-full .call-board.wide {
   flex: 1; min-height: 0; align-items: stretch;
 }

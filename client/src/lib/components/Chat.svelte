@@ -1,5 +1,5 @@
 <script>
-  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors, Volume2 } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -8,7 +8,7 @@
   import Attachment from './Attachment.svelte';
   import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity } from '../state.svelte.js';
   import { seenPhrase } from '../seen.js';
-  import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
+  import { startCall, joinOpenCall, joinVoice, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
   import Inbox from './Inbox.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
@@ -1052,9 +1052,11 @@
   let callGear = $state(null);
   let clipUrl = $state('');
   const serverVoice = $derived(!!(ui.voice && ui.voice.serverId !== 'call'));
+  const inStagedCall = $derived(!!(ui.voiceStage && ui.voice && ui.voice.channelId === ui.voiceStage.id && ui.voice.serverId !== 'call'));
+  const previewing = $derived(!!(ui.voiceStage && !inStagedCall && ui.mode === 'chat'));
   const streamLive = $derived(!!(ui.screen?.local || ui.screen?.remote));
   const mineStream = $derived(!!(ui.voice?.sharing || ui.screen?.local));
-  const wideOpen = $derived(serverVoice && ui.streamUi?.view === 'wide');
+  const wideOpen = $derived((serverVoice && ui.streamUi?.view === 'wide' && (!ui.voiceStage || inStagedCall)) || previewing);
   const dmBoard = $derived((ui.mode === 'dm' || ui.mode === 'group') && ui.streamUi?.view !== 'mini' && ((ui.voice?.serverId === 'call') || rejoinPeople.length > 0));
   const showBoard = $derived(dmBoard || wideOpen);
   const remoteSharer = $derived.by(() => {
@@ -1074,6 +1076,13 @@
     const host = sharer?.id;
     return room.filter((person) => person.watching && String(person.id) !== String(host)).length;
   });
+
+  function joinStaged() {
+    const stage = ui.voiceStage;
+    if (!stage) return;
+    const ch = (ui.channels || []).find((row) => row.id === stage.id) || { id: stage.id, name: stage.name, type: 'voice' };
+    joinVoice(ch);
+  }
 
   function setStream(patch) {
     ui.streamUi = { ...ui.streamUi, ...patch };
@@ -1364,6 +1373,26 @@
 {/if}
 {#if showBoard}
   <div class="call-board" class:wide={wideOpen || (showBoard && ui.streamUi?.hideChat)} class:focus={!!(remoteSharer || mineStream)}>
+    {#if previewing}
+      {@const here = ui.voiceRooms[ui.voiceStage.id] || []}
+      <div class="voice-lobby">
+        <Volume2 size={42} />
+        <h2>{ui.voiceStage.name}</h2>
+        {#if here.length}
+          <div class="lobby-people">
+            {#each here as person (person.id)}
+              <div class="person-tile" class:speaking={person.speaking}>
+                <Avatar user={person} size={72} dot={false} />
+                <span>{person.displayName || person.username}</span>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <p>No one's here yet. Jump in and wait for people to show up.</p>
+        {/if}
+        <button type="button" class="btn brand" onclick={joinStaged}>Join Voice</button>
+      </div>
+    {:else}
     <div class="call-tiles">
       {#if remoteSharer && !ui.streamUi?.watching}
         <button type="button" class="watch-tile" onclick={watchStream}>Watch Stream</button>
@@ -1396,6 +1425,7 @@
         {/each}
       </div>
     </div>
+    {/if}
     <div class="call-controls">
       {#if stagePop === 'device' && callGear}
         <div class="stage-pop">
@@ -1427,7 +1457,8 @@
           <button type="button" class="btn sm" onclick={saveClip}>Save last 30 seconds</button>
         </div>
       {/if}
-      {#if ui.voice}
+      {#if previewing}
+      {:else if ui.voice}
         <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
           {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
         </button>
