@@ -23,8 +23,9 @@
   let unlockedMime = $state('');
 
   const name = $derived(unlockedName || file?.name || 'File');
-  const video = $derived(file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv|ogg)(\?|$)/i.test(unlockedName || file?.url || file?.name || ''));
-  const image = $derived(!video && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
+  const audio = $derived(file?.kind === 'audio' || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
+  const video = $derived(!audio && (file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
+  const image = $derived(!video && !audio && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const gif = $derived(/gif/i.test(unlockedMime) || /\.gif(\?|$)/i.test(unlockedName || file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
   const progress = $derived(Math.max(0, Math.min(100, Number(file?.progress) || 0)));
   const spoiler = $derived(!!file?.spoiler && !revealed);
@@ -285,6 +286,8 @@
     </button>
   {:else if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
+  {:else if audio}
+    {#if src}<audio class="file-audio" src={src} controls preload="metadata"></audio>{:else}<span class="file-chip">Voice message</span>{/if}
   {:else if image}
     {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{/if}
   {:else if (file?.lock || file?.enc) && !src}

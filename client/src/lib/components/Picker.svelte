@@ -1,4 +1,5 @@
 <script>
+  import { Smile, Sticker, Image as ImageIcon } from '@lucide/svelte';
   import { ui, sendSticker, sendGif, insertEmoji, loadPacks } from '../state.svelte.js';
   import { api, fileUrl } from '../api.js';
   import { EMOJI, NAMED } from '../emoji.js';
@@ -120,14 +121,6 @@
 </script>
 
 <div class="picker" class:picker-pop={reacting}>
-  {#if !reacting}
-  <div class="picker-tabs">
-    <button type="button" class:on={tab === 'gif'} onclick={() => (tab = 'gif')}>GIFs</button>
-    <button type="button" class:on={tab === 'sticker'} onclick={() => (tab = 'sticker')}>Stickers</button>
-    <button type="button" class:on={tab === 'emoji'} onclick={() => (tab = 'emoji')}>Emoji</button>
-  </div>
-  {/if}
-
   {#if reacting || tab === 'emoji'}
     <div class="picker-search">
       <input bind:value={query} placeholder={reacting ? 'Find the perfect emoji' : 'Find an emoji'} />
@@ -231,6 +224,13 @@
     {#if klipy}
       <a class="klipy-credit" href="https://klipy.com" target="_blank" rel="noreferrer">KLIPY</a>
     {/if}
+  {/if}
+  {#if !reacting}
+    <div class="picker-tabs">
+      <button type="button" class:on={tab === 'emoji'} title="Emoji" onclick={() => (tab = 'emoji')}><Smile size={18} /></button>
+      <button type="button" class:on={tab === 'sticker'} title="Stickers" onclick={() => (tab = 'sticker')}><Sticker size={18} /></button>
+      <button type="button" class:on={tab === 'gif'} title="GIFs" onclick={() => (tab = 'gif')}><ImageIcon size={18} /></button>
+    </div>
   {/if}
 </div>
 

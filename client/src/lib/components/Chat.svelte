@@ -1,5 +1,5 @@
 <script>
-  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors, Volume2 } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors, Volume2, Square } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -669,6 +669,7 @@
       }
       drafts = [];
       editAt = -1;
+      cancelVoice();
     }
     draftRoom = key;
   });
@@ -694,7 +695,8 @@
       if (drafts.length + next.length >= 10) break;
       const named = file.name && file.name !== 'image.png' ? file : new File([file], pastedName(file), { type: file.type });
       const id = Math.random().toString(36).slice(2);
-      const video = /^video\//.test(named.type || '') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(named.name || '');
+      const audio = /^audio\//.test(named.type || '') || /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(named.name || '');
+      const video = !audio && (/^video\//.test(named.type || '') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(named.name || ''));
       next.push({
         id,
         file: named,
@@ -705,6 +707,7 @@
         poster: '',
         image: /^image\//.test(named.type || '') || /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(named.name || ''),
         video,
+        audio,
       });
       if (video) {
         videoPoster(named).then((blob) => {
@@ -807,6 +810,102 @@
     const list = [...(event.target.files || [])];
     event.target.value = '';
     if (list.length) stageFiles(list);
+  }
+
+  let voiceRec = null;
+  let voiceChunks = [];
+  let voiceTimer = 0;
+  let voiceDrop = false;
+  let voiceRecording = $state(false);
+  let voiceSeconds = $state(0);
+  let voicePreview = $state(null);
+
+  function voiceClock(seconds) {
+    const s = Math.max(0, Number(seconds) || 0);
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function discardVoice() {
+    if (voicePreview?.url) URL.revokeObjectURL(voicePreview.url);
+    voicePreview = null;
+  }
+
+  function cancelVoice() {
+    voiceDrop = true;
+    if (voiceTimer) clearInterval(voiceTimer);
+    voiceTimer = 0;
+    if (voiceRec && voiceRec.state !== 'inactive') voiceRec.stop();
+    else discardVoice();
+  }
+
+  async function startVoice() {
+    if (locked || dmBlocked || voiceRecording) return;
+    if (ui.editing) {
+      toast('Finish editing before recording');
+      return;
+    }
+    ui.picker = '';
+    ui.attachOpen = false;
+    voiceDrop = false;
+    discardVoice();
+    let stream = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (_) {
+      toast('Allow the microphone to record a voice message');
+      return;
+    }
+    voiceChunks = [];
+    const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+    let rec = null;
+    try {
+      rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    } catch (_) {
+      stream.getTracks().forEach((track) => track.stop());
+      toast('This browser cannot record a voice message');
+      return;
+    }
+    voiceRec = rec;
+    rec.ondataavailable = (event) => {
+      if (event.data && event.data.size) voiceChunks.push(event.data);
+    };
+    rec.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      voiceRecording = false;
+      if (voiceDrop) {
+        voiceDrop = false;
+        voiceChunks = [];
+        return;
+      }
+      const type = rec.mimeType || 'audio/webm';
+      const blob = new Blob(voiceChunks, { type });
+      const ext = /mp4/i.test(type) ? 'm4a' : 'webm';
+      const file = new File([blob], 'voice-message.' + ext, { type });
+      voicePreview = { url: URL.createObjectURL(blob), file };
+    };
+    rec.start();
+    voiceRecording = true;
+    voiceSeconds = 0;
+    if (voiceTimer) clearInterval(voiceTimer);
+    voiceTimer = setInterval(() => { voiceSeconds += 1; }, 1000);
+  }
+
+  function stopVoice() {
+    if (voiceTimer) clearInterval(voiceTimer);
+    voiceTimer = 0;
+    if (voiceRec && voiceRec.state !== 'inactive') voiceRec.stop();
+    else voiceRecording = false;
+  }
+
+  async function sendVoice() {
+    const file = voicePreview?.file;
+    if (!file || sendingFiles) return;
+    const url = voicePreview.url;
+    voicePreview = null;
+    if (url) URL.revokeObjectURL(url);
+    sendingFiles = true;
+    try { await sendFiles([{ file, name: 'Voice message', alt: '', spoiler: false }]); }
+    finally { sendingFiles = false; }
   }
 
   function openPoll() {
@@ -1810,6 +1909,8 @@
           </div>
           {#if row.spoiler}
             <div class="staged-cover"><span>SPOILER</span></div>
+          {:else if row.audio}
+            <audio src={row.preview} controls preload="metadata"></audio>
           {:else if row.poster || row.image}
             <img src={row.poster || row.preview} alt={row.alt || row.name} />
           {:else if row.video}
@@ -1829,6 +1930,19 @@
     </div>
   {:else}
   <form class="composer" onsubmit={(e) => { e.preventDefault(); submitComposer(); }}>
+    {#if voiceRecording || voicePreview}
+      <div class="voice-draft">
+        <button type="button" class="btn icon" title="Discard" onclick={cancelVoice}><Trash2 size={18} /></button>
+        {#if voiceRecording}
+          <span class="rec-dot"></span>
+          <span class="rec-time">{voiceClock(voiceSeconds)}</span>
+          <button type="button" class="btn icon mic-btn recording" title="Stop" onclick={stopVoice}><Square size={16} /></button>
+        {:else}
+          <audio src={voicePreview.url} controls preload="metadata"></audio>
+          <button type="button" class="btn brand voice-send" onclick={sendVoice}>Send</button>
+        {/if}
+      </div>
+    {:else}
     <button type="button" class="btn icon attach-toggle" title="Attach" disabled={locked} onclick={() => { ui.attachOpen = !ui.attachOpen; ui.picker = ''; }}>
       <Plus size={20} />
     </button>
@@ -1837,9 +1951,6 @@
         <label class="attach-file" for="nebula-file">
           <FileUp size={16} /> Upload a File
         </label>
-        <button type="button" class="picker-toggle" onclick={() => openPicker('gif')}><ImageIcon size={16} /> GIF</button>
-        <button type="button" class="picker-toggle" onclick={() => openPicker('emoji')}><Smile size={16} /> Emoji</button>
-        <button type="button" class="picker-toggle" onclick={() => openPicker('sticker')}><Sticker size={16} /> Stickers</button>
         <button type="button" onclick={openPoll}><BarChart3 size={16} /> Create Poll</button>
       </div>
     {/if}
@@ -1857,7 +1968,10 @@
       disabled={locked}
       placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message ' + (voiceChat?.name || '#' + (channel?.name || 'channel'))}
     ></textarea>
-    <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple onchange={onFiles} />
+    <button type="button" class="btn icon picker-toggle" title="Emoji, stickers, and GIFs" disabled={locked} onclick={() => openPicker('emoji')}><Smile size={20} /></button>
+    <button type="button" class="btn icon mic-btn" title="Voice message" disabled={locked} onclick={startVoice}><Mic size={18} /></button>
+    {/if}
+    <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,audio/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov,.mp3,.m4a,.wav,.ogg" multiple onchange={onFiles} />
   </form>
   {/if}
   {#if editAt >= 0 && drafts[editAt]}
@@ -1871,6 +1985,8 @@
           <img class="modify-preview" src={drafts[editAt].poster || drafts[editAt].preview} alt={editAlt || editName} />
         {:else if drafts[editAt].video && !editSpoiler}
           <video class="modify-preview" src={drafts[editAt].preview} muted playsinline preload="auto"></video>
+        {:else if drafts[editAt].audio && !editSpoiler}
+          <audio class="modify-preview" src={drafts[editAt].preview} controls preload="metadata"></audio>
         {:else}
           <div class="staged-cover modify-cover"><span>{editSpoiler ? 'SPOILER' : 'FILE'}</span></div>
         {/if}

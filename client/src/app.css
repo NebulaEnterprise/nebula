@@ -1339,9 +1339,29 @@ html:not(.app-blur) .thread-menu {
 .picker.picker-pop { position: relative; right: auto; bottom: auto; left: auto; width: min(408px, 86vw); max-height: min(480px, 70vh); }
 .picker.picker-pop .emoji-grid { max-height: 400px; }
 .react-picker { position: fixed; z-index: 45; }
-.picker-tabs { display: flex; gap: 6px; padding: 10px 10px 0; }
-.picker-tabs button { padding: 6px 12px; border-radius: 8px; color: var(--muted); font-weight: 700; font-size: 13px; }
+.picker-tabs {
+  display: flex; justify-content: space-around; gap: 6px; margin-top: auto;
+  padding: 6px; border-top: 1px solid var(--line); flex-shrink: 0; background: #111214;
+}
+.picker-tabs button {
+  width: 44px; height: 36px; padding: 0; border-radius: 10px; color: var(--muted);
+  display: grid; place-items: center;
+}
 .picker-tabs button.on { background: var(--bg-active); color: white; }
+.composer .mic-btn {
+  width: 36px; height: 36px; border-radius: 50%; border: 0;
+  background: var(--brand); color: #fff;
+}
+.composer .mic-btn:hover { background: var(--brand); filter: brightness(1.08); }
+.composer .mic-btn.recording { background: #ed4245; }
+.composer .voice-draft { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.composer .voice-draft audio { flex: 1; min-width: 0; height: 36px; }
+.composer .rec-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #ed4245;
+  box-shadow: 0 0 0 4px rgba(237, 66, 69, 0.22); flex-shrink: 0;
+}
+.composer .rec-time { flex: 1; font-variant-numeric: tabular-nums; font-weight: 700; }
+.composer .voice-send { width: auto; height: 36px; border-radius: 18px; padding: 0 16px; flex-shrink: 0; }
 .picker-search { padding: 10px; }
 .picker-search input { width: 100%; }
 .picker-cats {
@@ -1424,6 +1444,8 @@ html:not(.app-blur) .thread-menu {
   background: #1e1f22; overflow: hidden;
 }
 .staged-card img, .staged-card video { width: 100%; height: 124px; object-fit: cover; display: block; background: #111; }
+.staged-card audio { display: block; width: calc(100% - 16px); margin: 44px 8px 12px; }
+.file-audio { width: min(280px, 100%); display: block; margin: 4px 0; }
 .staged-card em { display: block; padding: 8px 10px 10px; font-style: normal; font-size: 13px; color: #7eb6ff; }
 .staged-tools {
   position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
