@@ -263,7 +263,11 @@ async function enterApp() {
   await consumeInvite();
   await openSharedLink();
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
+  pollTimer = setInterval(() => {
+    if (!localStorage.getItem('dc_token') || document.hidden) return;
+    pollActivity();
+    loadDms();
+  }, 4000);
   watchChat();
   startClocks();
   startPresence();
@@ -825,17 +829,16 @@ export async function loadDms() {
         heardDm[id] = stamp;
         continue;
       }
-      const reported = row.unread != null && row.unread !== '';
-      const serverCount = reported
-        ? Number(row.unread) || 0
-        : Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
-      let count = serverCount;
-      if (!reported && !serverCount && !own) {
-        const freshId = row.lastId && map[key] && map[key] !== row.lastId;
-        const freshAt = row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0);
+      const listed = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
+      const noted = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
+      let count = Math.max(listed, noted);
+      if (!own) {
+        const freshId = !!(row.lastId && map[key] && map[key] !== row.lastId);
+        const freshAt = !!(row.updatedAt && Number(row.updatedAt) > Number(seenAt[id] || 0) && (!row.lastId || !map[key] || map[key] !== row.lastId));
         if (freshId || freshAt) {
           const prev = (ui.activity.dms[id] && ui.activity.dms[id].unread) || 0;
-          count = heardDm[id] && heardDm[id] !== stamp ? prev + 1 : Math.max(prev, 1);
+          const bumped = heardDm[id] && heardDm[id] !== stamp ? prev + 1 : Math.max(prev, 1);
+          count = Math.max(count, bumped);
         }
       }
       if (count > 0) {
@@ -3366,6 +3369,21 @@ export async function pollActivity() {
     const servers = { ...(data.servers || {}) };
     const channels = { ...(data.channels || {}) };
     const dms = { ...(data.dms || {}) };
+    const headsIn = data.heads || {};
+    for (const [headId, messageId] of Object.entries(headsIn)) {
+      if (!messageId || !String(headId).startsWith('dm:')) continue;
+      const parts = String(headId).slice(3).split(':').filter(Boolean);
+      const userId = parts.find((part) => String(part) !== String(ui.me && ui.me.id)) || parts[0] || '';
+      if (!userId) continue;
+      const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId) && ui.readHold !== 'dm:' + userId;
+      if (openHere) continue;
+      const seenId = sentSeen[headId] || sentSeen['dm:' + userId];
+      if (seenId && String(seenId) === String(messageId)) continue;
+      const speaker = (data.speakers || {})[headId] || (data.speakers || {})['dm:' + userId];
+      if (speaker && ui.me && String(speaker) === String(ui.me.id)) continue;
+      const prev = Number(dms[userId] && dms[userId].unread) || 0;
+      dms[userId] = { ...(dms[userId] || {}), unread: Math.max(prev, 1) };
+    }
     if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
       const note = channels[ui.channelId];
       delete channels[ui.channelId];

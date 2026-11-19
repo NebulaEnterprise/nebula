@@ -16,11 +16,25 @@
     if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) return 0;
     return Math.max(Number(ui.activity.dms?.[id]?.unread) || 0, Number(dm.unread) || 0);
   }
-  const unreadDms = $derived(
-    (ui.dms || [])
-      .filter((dm) => dmCount(dm) > 0)
-      .sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0))
-  );
+  const unreadDms = $derived.by(() => {
+    const rows = [];
+    const seen = new Set();
+    for (const dm of ui.dms || []) {
+      if (!dm?.other || dmCount(dm) <= 0) continue;
+      seen.add(String(dm.other.id));
+      rows.push(dm);
+    }
+    for (const [id, note] of Object.entries(ui.activity.dms || {})) {
+      if (seen.has(String(id)) || !(Number(note?.unread) > 0)) continue;
+      if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) continue;
+      const person = (ui.friends || []).find((user) => String(user.id) === String(id))
+        || (ui.members || []).find((user) => String(user.id) === String(id));
+      if (!person) continue;
+      rows.push({ other: person, updatedAt: Date.now(), unread: note.unread });
+    }
+    rows.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
+    return rows;
+  });
   const status = $derived(presenceDot(ui.me));
 
   function latestDm() {
@@ -77,7 +91,7 @@
     <img src="./logo.webp?v=3" alt="" />
   </button>
   {#if unreadDms.length}
-    <div class="rail-dms">
+    <div class="rail-dms" aria-label="New direct messages">
       {#each unreadDms as dm (dm.other.id)}
         <button type="button" class="rail-dm" title={dm.other.displayName || dm.other.username} onclick={() => openDm(dm.other)}>
           <Avatar user={dm.other} size={48} dot={false} />
