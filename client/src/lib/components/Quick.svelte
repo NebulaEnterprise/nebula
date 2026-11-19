@@ -2,7 +2,7 @@
   import { MessageSquare, X, ChevronLeft, ExternalLink, Phone, EyeOff } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone, relation } from '../state.svelte.js';
+  import { ui, openQuick, closeQuick, openDm, loadDms, toast, deliveryTone, relation, revealList, prepareRoom, sealRoomText } from '../state.svelte.js';
   import { api } from '../api.js';
   import { formatContent, emojiScale } from '../format.js';
   import { startCall } from '../voice.js';
@@ -79,9 +79,11 @@
     const mine = ++serial;
     const after = !full && messages.length ? messages[messages.length - 1]?.id : '';
     const query = full || !after ? '?all=1' : '?after=' + encodeURIComponent(after);
+    const where = { mode: 'dm', dmUserId: id };
+    await prepareRoom(where);
     const data = await api('/api/dms/' + encodeURIComponent(id) + '/messages' + query);
     if (mine !== serial || !ui.quickUser || String(ui.quickUser.id) !== String(id)) return;
-    const incoming = await revealQuick(data.messages || []);
+    const incoming = await revealList(data.messages || []);
     const locals = messages.filter((msg) => String(msg.id || '').startsWith('local-'));
     const withLocal = (rows) => {
       if (!locals.length) return rows;
@@ -200,10 +202,6 @@
     log.scrollTop = log.scrollHeight;
   });
 
-  function revealQuick(list) {
-    return (list || []).filter((msg) => msg && !(msg.seal && !String(msg.content || '').trim()));
-  }
-
   function undeliveredText(tone) {
     if (tone === 'friends') return 'Your message could not be delivered. Send a friend request first and start the conversation once they\'ve accepted.';
     if (tone === 'links') return 'Your message could not be delivered. They are not accepting links from you.';
@@ -227,8 +225,10 @@
     }];
     follow = true;
     try {
-      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content, typingToken } });
-      const opened = data.message ? revealQuick([data.message])[0] : null;
+      const where = { mode: 'dm', dmUserId: user.id };
+      const sealed = await sealRoomText(where, content);
+      const data = await api('/api/dms/' + encodeURIComponent(user.id) + '/messages', { method: 'POST', body: { content: sealed.content, wraps: sealed.wraps, typingToken } });
+      const opened = data.message ? (await revealList([data.message]))[0] : null;
       if (opened) messages = [...messages.filter((msg) => msg.id !== tempId && msg.id !== opened.id), opened];
       loadDms();
     } catch (err) {
@@ -346,11 +346,12 @@
             {@const text = textOf(msg)}
             <div class="qbubble" class:mine class:theirs={!mine} class:notice={msg.kind === 'clyde'}>
               {#if msg.locked}<div class="quick-text">Encrypted message</div>
+              {:else if msg.kind === 'call'}<div class="quick-text">{msg.callMissed ? 'Missed call' : msg.callDeclined ? 'Call declined' : 'Call'}</div>
               {:else if text}<div class="quick-text" class:jumbo={emojiScale(text) === 'jumbo'} class:jumbo-mid={emojiScale(text) === 'jumbo-mid'} class:jumbo-sm={emojiScale(text) === 'jumbo-sm'}>{@html formatContent(text, emoji, stickers, names)}</div>{/if}
               {#if msg.files?.length}
                 <div class="quick-files">
                   {#each msg.files as file}
-                    <Attachment {file} />
+                    <Attachment {file} room={{ mode: 'dm', dmUserId: ui.quickUser?.id || '' }} />
                   {/each}
                 </div>
               {/if}

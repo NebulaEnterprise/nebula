@@ -6,7 +6,7 @@
   import { ui } from '../state.svelte.js';
   import { loadVault, openPackedFile } from '../vault.js';
 
-  let { file } = $props();
+  let { file, room = null } = $props();
   let src = $state('');
   let poster = $state('');
   let open = $state(false);
@@ -45,10 +45,13 @@
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (file?.enc) {
       const vault = loadVault(ui.me?.id);
-      const serverKey = vault?.servers?.[ui.serverId] || '';
-      const dmId = ui.dmUser ? [ui.me.id, ui.dmUser.id].sort().join(':') : '';
-      const groupId = ui.group?.id || '';
-      const master = ui.mode === 'dm' ? vault?.dms?.[dmId] : (ui.mode === 'group' ? vault?.groups?.[groupId] : serverKey);
+      const mode = room?.mode || ui.mode;
+      const otherId = room?.dmUserId || ui.dmUser?.id || '';
+      const dmId = ui.me && otherId ? [ui.me.id, otherId].sort().join(':') : '';
+      const groupId = room?.groupId || ui.group?.id || '';
+      const serverId = room?.serverId || ui.serverId;
+      const serverKey = vault?.servers?.[serverId] || '';
+      const master = mode === 'dm' ? vault?.dms?.[dmId] : (mode === 'group' ? vault?.groups?.[groupId] : serverKey);
       if (!master) throw new Error('locked');
       const opened = await openPackedFile(master, bytes);
       const blob = new Blob([opened.bytes], { type: opened.type || 'application/octet-stream' });
@@ -68,6 +71,10 @@
     const url = file?.url || '';
     const lock = file?.lock;
     const posterUrl = file?.poster || '';
+    room?.mode;
+    room?.dmUserId;
+    room?.groupId;
+    room?.serverId;
     if ((lock || file?.enc) && url && !String(url).startsWith('blob:')) {
       let stop = false;
       let made = '';

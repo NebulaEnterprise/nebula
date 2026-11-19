@@ -2252,6 +2252,18 @@ function masterOf(value) {
   return value && typeof value === 'object' ? value.key : value;
 }
 
+export async function prepareRoom(where) {
+  try { await roomMaster(where); } catch (_) {}
+}
+
+export async function sealRoomText(where, text) {
+  const packed = await roomMaster(where);
+  return {
+    content: await sealText(masterOf(packed), text),
+    wraps: packed && packed.wraps,
+  };
+}
+
 const CALL_NOTE = /^\[\[call:(ring|missed|declined|\d{1,6})\]\]$/;
 const closedCallNotes = new Set();
 
@@ -2373,7 +2385,7 @@ async function revealMessage(message) {
   }
 }
 
-async function revealList(list) {
+export async function revealList(list) {
   const opened = [];
   for (const msg of list || []) {
     const next = await revealMessage(msg);
