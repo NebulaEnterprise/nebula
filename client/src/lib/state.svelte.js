@@ -840,7 +840,8 @@ export async function loadDms() {
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
       const readHere = !!(stamp && ((map[key] && map[key] === stamp) || (ackedDm[id] && ackedDm[id] === stamp)));
       const pendingCount = pendingDm.get(String(id)) ? pendingDm.get(String(id)).size : 0;
-      if (viewing || ((own || readHere) && pendingCount === 0)) {
+      const looking = viewing && chatInFront();
+      if (looking || ((own || readHere) && pendingCount === 0)) {
         if (row.lastId && map[key] !== row.lastId) {
           map[key] = row.lastId;
           changed = true;
@@ -3345,8 +3346,27 @@ export function markChannelRead(id) {
   ui.channelMenu = null;
 }
 
+function chatInFront() {
+  if (typeof document === 'undefined') return false;
+  if (document.visibilityState !== 'visible') return false;
+  if (typeof document.hasFocus === 'function' && !document.hasFocus()) return false;
+  if (ui.userSettings || ui.serverSettings) return false;
+  if (ui.phone === 'browse') return false;
+  return ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'chat' || ui.mode === 'thread';
+}
+
+export function catchUpRead() {
+  if (!chatInFront()) return;
+  const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
+  if (!roomKey) return;
+  const newest = [...(ui.messages || [])].reverse().find((msg) => msg && msg.id && !msg.pending && !msg.failed && !String(msg.id).startsWith('local-'));
+  if (newest) markSeen(roomKey, newest.id);
+}
+
 export function markSeen(id, messageId) {
-  if (!id || !messageId) return;
+  if (!id || !messageId || !chatInFront()) return;
+  const here = currentRoom().replace(/^ch:/, '') || ui.channelId;
+  if (String(here || '') !== String(id) && currentRoom() !== String(id)) return;
   const map = seenMap();
   if (map[id] !== messageId) {
     map[id] = messageId;
@@ -3364,6 +3384,11 @@ export function markSeen(id, messageId) {
     }
   }
   forgetActivity(id);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', catchUpRead);
+  document.addEventListener('visibilitychange', catchUpRead);
 }
 
 let serverDmNotes = {};
@@ -3432,7 +3457,7 @@ export async function pollActivity() {
       const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId);
       if (openHere || (seenId && head && String(seenId) === String(head)) || (ackedDm[userId] && head && ackedDm[userId] === String(head))) delete dms[userId];
     }
-    if (ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
+    if (chatInFront() && ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
       const note = channels[ui.channelId];
       delete channels[ui.channelId];
       const srv = servers[note.serverId];
@@ -3443,7 +3468,7 @@ export async function pollActivity() {
         else delete servers[note.serverId];
       }
     }
-    if (ui.mode === 'dm' && ui.dmUser && ui.readHold !== 'dm:' + ui.dmUser.id) delete dms[ui.dmUser.id];
+    if (chatInFront() && ui.mode === 'dm' && ui.dmUser && ui.readHold !== 'dm:' + ui.dmUser.id) delete dms[ui.dmUser.id];
     serverDmNotes = dms;
     let mentions = 0;
     let dmUnread = 0;
