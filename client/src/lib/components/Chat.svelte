@@ -1837,6 +1837,9 @@
         <label class="attach-file" for="nebula-file">
           <FileUp size={16} /> Upload a File
         </label>
+        <button type="button" class="picker-toggle" onclick={() => openPicker('gif')}><ImageIcon size={16} /> GIF</button>
+        <button type="button" class="picker-toggle" onclick={() => openPicker('emoji')}><Smile size={16} /> Emoji</button>
+        <button type="button" class="picker-toggle" onclick={() => openPicker('sticker')}><Sticker size={16} /> Stickers</button>
         <button type="button" onclick={openPoll}><BarChart3 size={16} /> Create Poll</button>
       </div>
     {/if}
@@ -1854,9 +1857,6 @@
       disabled={locked}
       placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message ' + (voiceChat?.name || '#' + (channel?.name || 'channel'))}
     ></textarea>
-    <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
-    <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>
-    <button type="button" class="btn icon picker-toggle" title="Emoji" onclick={() => openPicker('emoji')}><Smile size={18} /></button>
     <input id="nebula-file" class="file-input" type="file" accept="image/*,video/*,.gif,.png,.jpg,.jpeg,.webp,.mp4,.webm,.mov" multiple onchange={onFiles} />
   </form>
   {/if}
