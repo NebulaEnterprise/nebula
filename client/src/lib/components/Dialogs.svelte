@@ -1,6 +1,6 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite } from '../state.svelte.js';
+  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
   import { keyInLink, newRoomKey } from '../vault.js';
@@ -21,6 +21,8 @@
   let groupQuery = $state('');
   let iconUrl = $state('');
   let reportToken = '';
+  let channelKind = $state('text');
+  let channelToken = '';
 
   const friendChoices = $derived((ui.friends || []).filter((person) => {
     const q = groupQuery.trim().toLowerCase();
@@ -58,6 +60,14 @@
     if (kind === 'invite') loadInvites();
     if (kind === 'events') loadEvents();
     if (kind === 'pings') loadPings();
+    if ((kind === 'channel' || kind === 'discussion')) {
+      const token = kind + ':' + (ui.dialog?.voice ? 'voice' : 'text') + ':' + (ui.dialog?.channelId || '');
+      if (token !== channelToken) {
+        channelToken = token;
+        channelKind = kind === 'discussion' ? 'discussion' : (ui.dialog?.voice ? 'voice' : 'text');
+        if (kind === 'discussion') name = '';
+      }
+    }
     if (kind === 'edit-channel' && channel) {
       name = channel.name || '';
       extra = channel.topic || '';
@@ -186,7 +196,7 @@
         {#if kind === 'add-server'}Add a server
         {:else if kind === 'invite'}Invite people
         {:else if kind === 'events'}Events
-        {:else if kind === 'channel'}{ui.dialog.voice ? 'Voice channel' : 'Create channel'}
+        {:else if kind === 'channel' || kind === 'discussion'}{channelKind === 'discussion' ? 'Create discussion' : channelKind === 'voice' ? 'Voice channel' : 'Create channel'}
         {:else if kind === 'category'}Create category
         {:else if kind === 'lock'}Lock server
         {:else if kind === 'notify'}Notifications
@@ -318,14 +328,42 @@
           })}>Create event</button>
         {/if}
 
-      {:else if kind === 'channel'}
-        <div class="field"><label>Name</label><input bind:value={name} maxlength="32" placeholder="new-channel" /></div>
-        <div class="field"><label>Topic</label><input bind:value={extra} maxlength="200" /></div>
+      {:else if kind === 'channel' || kind === 'discussion'}
+        <div class="channel-types">
+          <button type="button" class="btn" class:brand={channelKind === 'text'} onclick={() => (channelKind = 'text')}># Text</button>
+          <button type="button" class="btn" class:brand={channelKind === 'voice'} onclick={() => (channelKind = 'voice')}>Voice</button>
+          <button type="button" class="btn" class:brand={channelKind === 'discussion'} onclick={() => (channelKind = 'discussion')}>Discussion</button>
+        </div>
+        <div class="field"><label>{channelKind === 'discussion' ? 'Discussion name' : 'Name'}</label><input bind:value={name} maxlength={channelKind === 'discussion' ? 100 : 32} placeholder={channelKind === 'discussion' ? 'A short title' : 'new-channel'} /></div>
+        {#if channelKind === 'discussion'}
+          <div class="field"><label>First message</label><input bind:value={extra} maxlength="2000" placeholder="Start the conversation" /></div>
+        {:else}
+          <div class="field"><label>Topic</label><input bind:value={extra} maxlength="200" /></div>
+        {/if}
         <button class="btn brand" style="width:auto" onclick={() => go(async () => {
-          await api('/api/servers/' + ui.serverId + '/channels', { method: 'POST', body: { name, topic: extra, type: ui.dialog.voice ? 'voice' : 'text' } });
+          if (channelKind === 'discussion') {
+            const channelId = ui.dialog.channelId || ui.channelId || (ui.channels || []).find((row) => row.type === 'text')?.id;
+            if (!channelId) throw new Error('Add a text channel first');
+            const title = name.trim();
+            const content = extra.trim();
+            if (!title) throw new Error('Give the discussion a name');
+            if (!content) throw new Error('Write the first message');
+            const data = await api('/api/channels/' + encodeURIComponent(channelId) + '/threads', {
+              method: 'POST',
+              body: { serverId: ui.serverId, name: title, content },
+            });
+            const channelName = (ui.channels || []).find((row) => row.id === channelId)?.name || 'channel';
+            close();
+            if (data.thread) await openThread({ ...data.thread, channelName });
+            return;
+          }
+          const data = await api('/api/servers/' + ui.serverId + '/channels', { method: 'POST', body: { name, topic: extra, type: channelKind === 'voice' ? 'voice' : 'text' } });
+          if (ui.dialog.categoryId && data.channel?.id && hasPerm(PERM.MANAGE_SERVER)) {
+            await guildAction({ type: 'set-category', channelId: data.channel.id, categoryId: ui.dialog.categoryId });
+          }
           close();
           await openServer(ui.serverId, { keepDialog: true });
-        })}>Create</button>
+        })}>{channelKind === 'discussion' ? 'Create discussion' : 'Create'}</button>
 
       {:else if kind === 'category'}
         <div class="field"><label>Name</label><input bind:value={name} maxlength="40" placeholder="Community" /></div>

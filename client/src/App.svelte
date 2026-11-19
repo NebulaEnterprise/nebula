@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { UserRound, Flag } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode } from './lib/state.svelte.js';
+  import { UserRound, Flag, Hash, FolderPlus, MessagesSquare, ArrowUp, ArrowDown } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, moveChannel } from './lib/state.svelte.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
@@ -86,6 +86,7 @@
       ui.attachOpen = false;
       ui.dmMenu = null;
       ui.memberMenu = null;
+      ui.channelMenu = null;
     };
     const onClick = (e) => {
       const node = e.target instanceof Element ? e.target : null;
@@ -98,6 +99,7 @@
       if (!inside('.id-menu')) ui.idMenu = null;
       if (!inside('.dm-menu')) ui.dmMenu = null;
       if (!inside('.member-menu')) ui.memberMenu = null;
+      if (!inside('.channel-menu')) ui.channelMenu = null;
       if (!inside('.inbox-pop') && !inside('.inbox-btn')) ui.inboxOpen = false;
     };
     const onGesture = () => askSiteAccess();
@@ -197,6 +199,28 @@
     {/if}
     {#if developerMode()}
       <button type="button" onclick={() => copyText(person?.id, 'user ID')}>Copy User ID</button>
+    {/if}
+  </div>
+{/if}
+{#if ui.channelMenu}
+  {@const menu = ui.channelMenu}
+  <div class="msg-menu channel-menu" style="left:{menu.x}px;top:{menu.y}px">
+    {#if menu.canMove}
+      <button type="button" onclick={() => moveChannel(menu.channel.id, 'up')}><ArrowUp size={16} /> Move up</button>
+      <button type="button" onclick={() => moveChannel(menu.channel.id, 'down')}><ArrowDown size={16} /> Move down</button>
+      <hr />
+    {/if}
+    {#if menu.canChannels}
+      <button type="button" onclick={() => { ui.dialog = { kind: 'channel', voice: false, categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
+    {/if}
+    {#if menu.canServer}
+      <button type="button" onclick={() => { ui.dialog = { kind: 'category' }; ui.channelMenu = null; }}><FolderPlus size={16} /> Create category</button>
+    {/if}
+    {#if menu.discussionId}
+      <button type="button" onclick={() => { ui.dialog = { kind: 'discussion', channelId: menu.discussionId, categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><MessagesSquare size={16} /> Create discussion</button>
+    {/if}
+    {#if developerMode() && menu.channel}
+      <button type="button" onclick={() => copyText(menu.channel.id, 'channel ID')}>Copy Channel ID</button>
     {/if}
   </div>
 {/if}

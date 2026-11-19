@@ -7,13 +7,17 @@
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
   import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   let dmQuery = $state('');
+  let dragId = $state('');
+  let dropId = $state('');
+  const canChannels = $derived(hasPerm(PERM.MANAGE_CHANNELS));
+  const canServer = $derived(hasPerm(PERM.MANAGE_SERVER));
   const recentServers = $derived.by(() => {
     ui.serverId;
     const byId = new Map((ui.servers || []).map((server) => [String(server.id), server]));
@@ -86,6 +90,68 @@
     ui.dialog = { kind: act };
   }
 
+  function discussionChannel(channel, categoryId) {
+    if (channel?.type === 'text') return channel;
+    const same = (ui.channels || []).find((row) => row.type === 'text' && (row.categoryId || '') === (categoryId || ''));
+    if (same) return same;
+    const current = (ui.channels || []).find((row) => row.id === ui.channelId && row.type === 'text');
+    return current || (ui.channels || []).find((row) => row.type === 'text') || null;
+  }
+
+  function openChannelMenu(event, extra = {}) {
+    if (!canChannels && !canServer) {
+      if (extra.channel) openIdMenu(event, [{ label: 'Channel ID', value: extra.channel.id }]);
+      else if (extra.categoryId) openIdMenu(event, [{ label: 'Category ID', value: extra.categoryId }]);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const categoryId = extra.channel ? (extra.channel.categoryId || '') : (extra.categoryId || '');
+    const talk = discussionChannel(extra.channel, categoryId);
+    ui.idMenu = null;
+    ui.channelMenu = {
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 240)),
+      channel: extra.channel || null,
+      categoryId,
+      discussionId: talk?.id || '',
+      canMove: canServer && !!extra.channel,
+      canChannels,
+      canServer,
+    };
+  }
+
+  function dragStart(event, ch) {
+    if (!canServer) return;
+    dragId = ch.id;
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', ch.id);
+  }
+
+  function dragOver(event, ch) {
+    if (!dragId || dragId === ch.id) return;
+    const from = (ui.channels || []).find((row) => row.id === dragId);
+    if (!from || from.type !== ch.type || (from.categoryId || '') !== (ch.categoryId || '')) return;
+    event.preventDefault();
+    dropId = ch.id;
+  }
+
+  async function dragDrop(event, ch) {
+    event.preventDefault();
+    const id = dragId;
+    dragId = '';
+    dropId = '';
+    const from = (ui.channels || []).find((row) => row.id === id);
+    if (!from) return;
+    try { await placeChannel(from, ch); }
+    catch (err) { toast(err.message); }
+  }
+
+  function dragEnd() {
+    dragId = '';
+    dropId = '';
+  }
+
   async function removeChannel(ch) {
     const label = ch.type === 'voice' ? ch.name : '#' + ch.name;
     if (!confirm('Delete ' + label + '?')) return;
@@ -122,16 +188,16 @@
         Invite people
       </button>
     {/if}
-    <div class="scroll">
+    <div class="scroll" oncontextmenu={(e) => { if (e.target === e.currentTarget) openChannelMenu(e); }}>
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
         {#if cat.id && !texts.length && !voices.length}
           <!-- empty category stays out of the sidebar -->
         {:else}
-          {#if cat.name}<div class="cat" oncontextmenu={(e) => openIdMenu(e, [{ label: 'Category ID', value: cat.id }])}><span>{cat.name}</span></div>{/if}
+          {#if cat.name}<div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}><span>{cat.name}</span></div>{/if}
           {#if texts.length || !cat.id}
-            <div class="cat">
+            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
               <span>{cat.name ? 'text' : 'text channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
@@ -139,7 +205,7 @@
             </div>
             {#each texts as ch}
               {@const note = ui.activity.channels[ch.id]}
-              <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Channel ID', value: ch.id }])}>
+              <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
                 <button class="channel-hit" onpointerenter={() => warmChannel(ch.id)} onclick={() => pickChannel(ch)}>
                   {#if String(ch.name || '').toLowerCase() === 'general'}
                     <MessageSquare size={16} />
@@ -163,14 +229,14 @@
             {/each}
           {/if}
           {#if voices.length || (!cat.id && hasPerm(PERM.MANAGE_CHANNELS))}
-            <div class="cat">
+            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
               <span>{cat.name ? 'voice' : 'voice channels'}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
               {/if}
             </div>
             {#each voices as ch}
-              <div class="channel" class:on={ui.voice?.channelId === ch.id} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Channel ID', value: ch.id }])}>
+              <div class="channel" class:on={ui.voice?.channelId === ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
                 <button class="channel-hit" onclick={() => onVoice(ch)}>
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>

@@ -44,6 +44,7 @@ export const ui = $state({
   muteTick: 0,
   devTick: 0,
   idMenu: null,
+  channelMenu: null,
   reportPopup: null,
   staffReports: [],
   servers: [],
@@ -1158,6 +1159,7 @@ export async function openServer(id, opts = {}) {
   ui.thread = null;
   ui.dock = '';
   ui.menuOpen = false;
+  ui.channelMenu = null;
   ui.picker = '';
   ui.reply = null;
   ui.editing = null;
@@ -2610,6 +2612,47 @@ export async function loadPacks() {
     const data = await api('/api/media');
     ui.packs = data.packs || [];
   } catch (_) {}
+}
+
+export async function moveChannel(channelId, dir) {
+  const ch = (ui.channels || []).find((row) => row.id === channelId);
+  if (!ch) return;
+  const list = ui.channels.filter((row) => row.type === ch.type && (row.categoryId || '') === (ch.categoryId || ''));
+  const at = list.findIndex((row) => row.id === ch.id);
+  const target = dir === 'up' ? list[at - 1] : list[at + 1];
+  if (!target) return;
+  await placeChannel(ch, target);
+}
+
+export async function placeChannel(ch, target) {
+  if (!ch || !target || ch.id === target.id) return;
+  if (ch.type !== target.type || (ch.categoryId || '') !== (target.categoryId || '')) return;
+  const from = ui.channels.findIndex((row) => row.id === ch.id);
+  const to = ui.channels.findIndex((row) => row.id === target.id);
+  if (from < 0 || to < 0 || from === to) return;
+  const previous = ui.channels.slice();
+  const next = ui.channels.slice();
+  const [row] = next.splice(from, 1);
+  let dest = next.findIndex((item) => item.id === target.id);
+  if (from < to) dest += 1;
+  next.splice(dest, 0, row);
+  ui.channels = next;
+  ui.channelMenu = null;
+  const steps = Math.abs(to - from);
+  const way = to > from ? 'down' : 'up';
+  try {
+    for (let i = 0; i < steps; i += 1) {
+      await guildAction({ type: 'move-channel', channelId: ch.id, dir: way });
+    }
+  } catch (err) {
+    toast(err.message);
+    try {
+      const data = await api('/api/channels?serverId=' + encodeURIComponent(ui.serverId));
+      ui.channels = data.channels || previous;
+    } catch (_) {
+      ui.channels = previous;
+    }
+  }
 }
 
 export async function guildAction(body) {
