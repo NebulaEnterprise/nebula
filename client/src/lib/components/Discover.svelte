@@ -5,9 +5,17 @@
   import { api } from '../api.js';
 
   let listed = $state([]);
+  let ready = $state(false);
 
   $effect(() => {
-    api('/api/discover').then((data) => { listed = data.servers || []; }).catch(() => {});
+    let stop = false;
+    ready = false;
+    api('/api/discover').then((data) => {
+      if (stop) return;
+      listed = (data.servers || []).filter((server) => server && server.discover !== false);
+      ready = true;
+    }).catch(() => { if (!stop) ready = true; });
+    return () => { stop = true; };
   });
 
   async function joinListed(server) {
@@ -39,8 +47,7 @@
 
   const list = $derived.by(() => {
     const query = q.trim().toLowerCase();
-    const source = listed.length ? listed : (ui.servers || []);
-    return source.filter((server) => {
+    return listed.filter((server) => {
       const text = blob(server);
       if (query && !text.includes(query) && !(server.name || '').toLowerCase().includes(query)) return false;
       if (cat === 'all') return true;
@@ -88,7 +95,12 @@
     </div>
     <section>
       <div class="hub-label"><Flame size={15} /> Popular servers <button type="button" class="hub-see" onclick={() => (q = '', cat = 'all')}>See all</button></div>
-      {#if list.length}
+      {#if !ready}
+        <div class="hub-empty">
+          <strong>Loading servers…</strong>
+          <p>Public servers will show up here.</p>
+        </div>
+      {:else if list.length}
         <div class="pop-grid">
           {#each list as server (server.id)}
             {@const face = serverFace(server)}
@@ -105,7 +117,7 @@
       {:else}
         <div class="hub-empty">
           <strong>{q || cat !== 'all' ? 'Nothing in this category' : 'No servers to show yet'}</strong>
-          <p>Servers you join show up here. You can also create one.</p>
+          <p>Servers with discovery turned on show up here. You can also create one.</p>
           <button type="button" class="hub-create" onclick={add}>Create a server</button>
         </div>
       {/if}
@@ -114,6 +126,9 @@
   <aside class="hub-aside discover-side">
     <div class="trend">
       <div class="hub-label"><Flame size={15} /> Trending servers</div>
+      {#if !ready}
+        <p class="hint">Loading servers…</p>
+      {:else}
       {#each list.slice(0, 5) as server, i (server.id)}
         {@const face = serverFace(server)}
         <button type="button" onclick={() => joinListed(server)}>
@@ -129,6 +144,7 @@
       {:else}
         <p class="hint">Join a server and it will be listed here.</p>
       {/each}
+      {/if}
     </div>
     <div class="make">
       <img src="./look/planet.png" alt="" />
