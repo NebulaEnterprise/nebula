@@ -186,7 +186,112 @@ async function sendSignal(to, kind, payload) {
   });
 }
 
+let micDeviceId = '';
+let speakerDeviceId = '';
+let noiseOn = true;
+let echoOn = true;
+let clipRecorder = null;
+let clipChunks = [];
+try {
+  micDeviceId = localStorage.getItem('nebula-mic') || '';
+  speakerDeviceId = localStorage.getItem('nebula-speaker') || '';
+  noiseOn = localStorage.getItem('nebula-noise') !== 'off';
+  echoOn = localStorage.getItem('nebula-echo') !== 'off';
+} catch (_) {}
+
+function audioConstraints() {
+  const audio = { echoCancellation: echoOn, noiseSuppression: noiseOn };
+  if (micDeviceId) audio.deviceId = { exact: micDeviceId };
+  return audio;
+}
+
+function stopClip() {
+  clipChunks = [];
+  const rec = clipRecorder;
+  clipRecorder = null;
+  if (!rec || rec.state === 'inactive') return;
+  try { rec.ondataavailable = null; rec.stop(); } catch (_) {}
+}
+
+function startClip() {
+  stopClip();
+  if (!stream || typeof MediaRecorder === 'undefined') return;
+  let rec = null;
+  try { rec = new MediaRecorder(stream); } catch (_) { return; }
+  clipRecorder = rec;
+  rec.ondataavailable = (event) => {
+    if (!event.data || !event.data.size) return;
+    clipChunks.push({ at: Date.now(), blob: event.data });
+    const cutoff = Date.now() - 30000;
+    clipChunks = clipChunks.filter((row) => row.at >= cutoff);
+  };
+  try { rec.start(1000); } catch (_) { clipRecorder = null; }
+}
+
+export async function callDevices() {
+  const all = await navigator.mediaDevices.enumerateDevices();
+  return {
+    mics: all.filter((row) => row.kind === 'audioinput'),
+    speakers: all.filter((row) => row.kind === 'audiooutput'),
+    micId: micDeviceId,
+    speakerId: speakerDeviceId,
+    noise: noiseOn,
+    echo: echoOn,
+  };
+}
+
+export async function setCallMic(deviceId) {
+  micDeviceId = deviceId || '';
+  try { localStorage.setItem('nebula-mic', micDeviceId); } catch (_) {}
+  if (!stream || !ui.voice) return;
+  const next = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
+  const track = next.getAudioTracks()[0];
+  if (!track) return;
+  stream.getAudioTracks().forEach((old) => { stream.removeTrack(old); old.stop(); });
+  stream.addTrack(track);
+  track.enabled = !ui.voice.muted && !ui.voice.deafened;
+  for (const peer of peers.values()) {
+    const sender = peer.pc.getSenders().find((item) => item.track && item.track.kind === 'audio');
+    if (sender) {
+      try { await sender.replaceTrack(track); } catch (_) {}
+    }
+  }
+  if (levelTimer) clearInterval(levelTimer);
+  if (audioCtx) audioCtx.close().catch(() => {});
+  watchMic();
+  startClip();
+}
+
+export async function setCallSpeaker(deviceId) {
+  speakerDeviceId = deviceId || '';
+  try { localStorage.setItem('nebula-speaker', speakerDeviceId); } catch (_) {}
+  for (const peer of peers.values()) {
+    if (peer.audio && speakerDeviceId && peer.audio.setSinkId) {
+      try { await peer.audio.setSinkId(speakerDeviceId); } catch (_) {}
+    }
+  }
+}
+
+export function setCallProcessing(next) {
+  if (typeof next.noise === 'boolean') {
+    noiseOn = next.noise;
+    try { localStorage.setItem('nebula-noise', noiseOn ? 'on' : 'off'); } catch (_) {}
+  }
+  if (typeof next.echo === 'boolean') {
+    echoOn = next.echo;
+    try { localStorage.setItem('nebula-echo', echoOn ? 'on' : 'off'); } catch (_) {}
+  }
+}
+
+export async function takeClip() {
+  const cutoff = Date.now() - 30000;
+  const blobs = clipChunks.filter((row) => row.at >= cutoff).map((row) => row.blob);
+  if (!blobs.length) return null;
+  return new Blob(blobs, { type: blobs[0].type || 'audio/webm' });
+}
+
 function stopLocal() {
+  stopClip();
   if (levelTimer) clearInterval(levelTimer);
   levelTimer = null;
   if (audioCtx) audioCtx.close().catch(() => {});
@@ -268,6 +373,7 @@ function ensurePeer(id) {
     audio.autoplay = true;
     audio.srcObject = event.streams[0];
     audio.muted = !!(ui.voice && ui.voice.deafened);
+    if (speakerDeviceId && audio.setSinkId) audio.setSinkId(speakerDeviceId).catch(() => {});
     audio.play().catch(() => {});
     const current = peers.get(id);
     if (current) current.audio = audio;
@@ -500,10 +606,7 @@ function noteWhere(channelId) {
 async function connectCall(channelId, name, person, callId, callMessageId) {
   if (ui.voice && ui.voice.channelId === channelId && ui.voice.serverId === 'call') return;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: false,
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
   } catch (_) {
     await dropOutgoing(false);
     toast('Allow the microphone to start the call');
@@ -537,6 +640,7 @@ async function connectCall(channelId, name, person, callId, callMessageId) {
   };
   ui.streamUi = { view: 'auto', watching: false, hideChat: false };
   watchMic();
+  startClip();
   try { await sync(); } catch (_) {}
   poll = setInterval(() => { sync().catch(() => {}); }, 500);
 }
@@ -633,19 +737,22 @@ export async function declineCall() {
   } catch (_) {}
 }
 
-export async function joinVoice(channel) {
+export async function joinVoice(channel, opts = {}) {
   if (!channel || channel.type !== 'voice') return;
   const same = ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId;
   if (same && stream) {
-    ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: true };
+    ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: false };
+    if (opts.muted || opts.deafened) {
+      ui.voice.deafened = !!opts.deafened;
+      ui.voice.muted = true;
+      stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+      applyDeaf();
+    }
     return;
   }
   await leaveVoice();
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true },
-      video: false,
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
   } catch (_) {
     toast('Allow the microphone to join the call');
     return;
@@ -665,15 +772,24 @@ export async function joinVoice(channel) {
     serverId: ui.serverId,
     channelId: channel.id,
     name: channel.name,
-    muted: false,
-    deafened: false,
+    muted: !!(opts.muted || opts.deafened),
+    deafened: !!opts.deafened,
     speakingSent: false,
     sharing: false,
     screenTick: 0,
     joinedAt: Date.now(),
   };
-  ui.streamUi = { view: 'wide', watching: false, hideChat: true };
+  if (ui.voice.muted) stream.getAudioTracks().forEach((track) => { track.enabled = false; });
+  if (ui.voice.deafened) applyDeaf();
+  ui.streamUi = { view: 'wide', watching: false, hideChat: false };
   watchMic();
+  startClip();
+  if (ui.voice.muted || ui.voice.deafened) {
+    api('/api/voice/' + encodeURIComponent(channel.id) + '/state', {
+      method: 'POST',
+      body: { serverId: ui.serverId, muted: ui.voice.muted, deafened: ui.voice.deafened },
+    }).catch(() => {});
+  }
   try { await sync(); } catch (_) {}
   poll = setInterval(() => { sync().catch(() => {}); }, 500);
 }

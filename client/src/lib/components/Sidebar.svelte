@@ -2,11 +2,11 @@
   import {
     ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Search, X, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor,
+    Mic, MicOff, Headphones, HeadphoneOff, PhoneOff, Monitor, AudioLines, Scissors,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
-  import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall } from '../voice.js';
+  import { joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
@@ -16,6 +16,10 @@
   let dmQuery = $state('');
   let dragId = $state('');
   let dropId = $state('');
+  let voiceTools = $state(false);
+  let voicePop = $state('');
+  let callGear = $state(null);
+  let clipUrl = $state('');
   const canChannels = $derived(hasPerm(PERM.MANAGE_CHANNELS));
   const canServer = $derived(hasPerm(PERM.MANAGE_SERVER));
   const recentServers = $derived.by(() => {
@@ -50,7 +54,21 @@
     return ui.channels.filter((c) => c.type === type && (c.categoryId || '') === cat.id);
   }
 
+  const ownsServer = $derived(!!ui.serverMeta?.owner);
   const items = $derived.by(() => {
+    if (!ownsServer) {
+      const list = [
+        { act: 'invite', label: 'Invite people', icon: Link },
+        { act: 'events', label: 'Events', icon: Calendar },
+        { act: 'notify', label: 'Notification settings', icon: Bell },
+        { act: 'nick', label: 'Change Nickname', icon: Pencil },
+        { act: 'server-profile', label: 'Edit Server Profile', icon: UserPlus },
+        { act: 'mute', label: 'Mute Server', icon: BellOff },
+        { act: 'report-server', label: 'Report Server', icon: Flag, danger: true },
+      ];
+      if (ui.serverId !== 'nebula-official') list.push({ act: 'leave-server', label: 'Leave server', icon: LogOut, danger: true });
+      return list;
+    }
     const list = [];
     const manage = hasPerm(PERM.MANAGE_SERVER);
     const channels = hasPerm(PERM.MANAGE_CHANNELS);
@@ -66,8 +84,7 @@
     list.push({ act: 'nick', label: 'Change nickname', icon: Pencil });
     list.push({ act: 'mute', label: 'Mute server', icon: BellOff });
     list.push({ act: 'report', label: 'Report a member', icon: Flag });
-    if (ui.serverId !== 'nebula-official' && !ui.serverMeta?.owner) list.push({ act: 'leave-server', label: 'Leave server', icon: LogOut, danger: true });
-    if (ui.serverMeta?.owner && ui.serverId !== 'nebula-official') list.push({ act: 'delete', label: 'Delete server', icon: Trash2, danger: true });
+    if (ui.serverId !== 'nebula-official') list.push({ act: 'delete', label: 'Delete server', icon: Trash2, danger: true });
     return list;
   });
 
@@ -87,38 +104,71 @@
       try { await openServerSettings('overview'); } catch (err) { ui.toast = err.message; }
       return;
     }
+    if (act === 'server-profile') {
+      ui.userPage = 'profile';
+      ui.userSettings = true;
+      return;
+    }
     ui.dialog = { kind: act };
   }
 
-  function discussionChannel(channel, categoryId) {
-    if (channel?.type === 'text') return channel;
-    const same = (ui.channels || []).find((row) => row.type === 'text' && (row.categoryId || '') === (categoryId || ''));
-    if (same) return same;
-    const current = (ui.channels || []).find((row) => row.id === ui.channelId && row.type === 'text');
-    return current || (ui.channels || []).find((row) => row.type === 'text') || null;
-  }
-
   function openChannelMenu(event, extra = {}) {
-    if (!canChannels && !canServer) {
-      if (extra.channel) openIdMenu(event, [{ label: 'Channel ID', value: extra.channel.id }]);
-      else if (extra.categoryId) openIdMenu(event, [{ label: 'Category ID', value: extra.categoryId }]);
+    const channel = extra.channel || null;
+    const blank = !channel;
+    if (blank && !canChannels && !canServer) {
+      if (extra.categoryId) openIdMenu(event, [{ label: 'Category ID', value: extra.categoryId }]);
       return;
     }
     event.preventDefault();
     event.stopPropagation();
-    const categoryId = extra.channel ? (extra.channel.categoryId || '') : (extra.categoryId || '');
-    const talk = discussionChannel(extra.channel, categoryId);
     ui.idMenu = null;
     ui.channelMenu = {
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 230)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 240)),
-      channel: extra.channel || null,
-      categoryId,
-      discussionId: talk?.id || '',
-      canMove: canServer && !!extra.channel,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 240)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 320)),
+      kind: channel ? channel.type : 'blank',
+      channel,
+      categoryId: channel ? (channel.categoryId || '') : (extra.categoryId || ''),
       canChannels,
       canServer,
     };
+  }
+
+  async function openVoiceTools(ch) {
+    const same = ui.voice && ui.voice.channelId === ch.id;
+    if (same && voiceTools) {
+      voiceTools = false;
+      voicePop = '';
+      return;
+    }
+    voicePop = '';
+    if (!same) {
+      try { await joinVoice(ch); } catch (err) { toast(err.message); return; }
+    }
+    voiceTools = true;
+    try { callGear = await callDevices(); } catch (_) { callGear = null; }
+  }
+
+  async function refreshGear() {
+    try { callGear = await callDevices(); } catch (_) {}
+  }
+
+  async function saveClip() {
+    try {
+      const blob = await takeClip();
+      if (!blob) {
+        toast('Stay in the call a little longer, then clip the last 30 seconds');
+        return;
+      }
+      if (clipUrl) URL.revokeObjectURL(clipUrl);
+      clipUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = clipUrl;
+      link.download = 'nebula-clip.webm';
+      link.click();
+      toast('Saved the last 30 seconds');
+    } catch (err) {
+      toast(err.message || 'Could not make a clip');
+    }
   }
 
   function dragStart(event, ch) {
@@ -241,6 +291,7 @@
                   <Volume2 size={16} />
                   <span class="ch-name">{ch.name}</span>
                 </button>
+                <button class="row-act voice-open" title="Voice controls" onclick={(e) => { e.stopPropagation(); openVoiceTools(ch); }}><Settings size={15} /></button>
                 {#if hasPerm(PERM.MANAGE_CHANNELS)}
                   <span class="row-actions">
                     <button class="row-act" title="Edit channel" onclick={() => (ui.dialog = { kind: 'edit-channel', channel: ch })}><Pencil size={15} /></button>
@@ -248,6 +299,49 @@
                   </span>
                 {/if}
               </div>
+              {#if voiceTools && ui.voice?.channelId === ch.id}
+                <div class="voice-dock">
+                  {#if voicePop === 'device' && callGear}
+                    <div class="voice-pop">
+                      <label>Microphone
+                        <select value={callGear.micId} onchange={(e) => setCallMic(e.target.value).then(refreshGear).catch((err) => toast(err.message))}>
+                          <option value="">Default</option>
+                          {#each callGear.mics as mic (mic.deviceId)}<option value={mic.deviceId}>{mic.label || 'Microphone'}</option>{/each}
+                        </select>
+                      </label>
+                      <label>Speakers
+                        <select value={callGear.speakerId} onchange={(e) => setCallSpeaker(e.target.value).then(refreshGear).catch((err) => toast(err.message))}>
+                          <option value="">Default</option>
+                          {#each callGear.speakers as speaker (speaker.deviceId)}<option value={speaker.deviceId}>{speaker.label || 'Speakers'}</option>{/each}
+                        </select>
+                      </label>
+                      <label class="check"><input type="checkbox" checked={callGear.noise} onchange={(e) => { setCallProcessing({ noise: e.target.checked }); refreshGear(); }} /> Noise suppression</label>
+                      <label class="check"><input type="checkbox" checked={callGear.echo} onchange={(e) => { setCallProcessing({ echo: e.target.checked }); refreshGear(); }} /> Echo cancellation</label>
+                    </div>
+                  {:else if voicePop === 'sound'}
+                    <div class="voice-pop">
+                      <strong>Soundboard</strong>
+                      <p>No sounds yet. This server has no sounds.</p>
+                    </div>
+                  {:else if voicePop === 'clip'}
+                    <div class="voice-pop">
+                      <strong>Clip</strong>
+                      <p>The last 30 seconds of your microphone stay on this device until you save them.</p>
+                      {#if clipUrl}<audio src={clipUrl} controls></audio>{/if}
+                      <button type="button" class="btn sm" onclick={saveClip}>Save last 30 seconds</button>
+                    </div>
+                  {/if}
+                  <div class="voice-tools">
+                    <button class="voice-tool" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>{#if ui.voice.muted}<MicOff size={16} />{:else}<Mic size={16} />{/if}</button>
+                    <button class="voice-tool" class:on={ui.voice.deafened} title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>{#if ui.voice.deafened}<HeadphoneOff size={16} />{:else}<Headphones size={16} />{/if}</button>
+                    <button class="voice-tool" class:on={voicePop === 'device'} title="Call device" onclick={() => (voicePop = voicePop === 'device' ? '' : 'device')}><Settings size={16} /></button>
+                    <button class="voice-tool" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share screen'} onclick={toggleShare}><Monitor size={16} /></button>
+                    <button class="voice-tool" class:on={voicePop === 'sound'} title="Soundboard" onclick={() => (voicePop = voicePop === 'sound' ? '' : 'sound')}><AudioLines size={16} /></button>
+                    <button class="voice-tool" class:on={voicePop === 'clip'} title="Clip the last few seconds" onclick={() => (voicePop = voicePop === 'clip' ? '' : 'clip')}><Scissors size={16} /></button>
+                    <button class="voice-tool hang" title="Disconnect" onclick={leaveVoice}><PhoneOff size={16} /></button>
+                  </div>
+                </div>
+              {/if}
               {#each ui.voiceRooms[ch.id] || [] as person (person.id)}
                 <div class="voice-person" class:speaking={person.speaking}>
                   <Avatar user={person} size={22} dot={false} />
@@ -350,17 +444,6 @@
           <span>{ui.voice.name}</span>
         </div>
         <button class="hangup" title="Leave call" onclick={leaveVoice}><PhoneOff size={18} /></button>
-      </div>
-      <div class="voice-tools">
-        <button class="voice-tool" title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
-          {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
-        </button>
-        <button class="voice-tool" title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
-          {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
-        </button>
-        <button class="voice-tool" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
-          <Monitor size={18} />
-        </button>
       </div>
     </div>
   {/if}

@@ -3189,6 +3189,24 @@ function noteRemoteRead(data) {
   loadDms();
 }
 
+export async function deleteChannel(ch) {
+  if (!ch) return;
+  const label = ch.type === 'voice' ? ch.name : '#' + ch.name;
+  if (!confirm('Delete ' + label + '?')) return;
+  await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
+  if (ui.channelId === ch.id) ui.channelId = '';
+  ui.channelMenu = null;
+  await openServer(ui.serverId);
+}
+
+export function markChannelRead(id) {
+  if (!id) return;
+  const head = (ui.heads || {})[id];
+  if (head) markSeen(id, head);
+  else forgetActivity(id);
+  ui.channelMenu = null;
+}
+
 export function markSeen(id, messageId) {
   if (!id || !messageId) return;
   const map = seenMap();

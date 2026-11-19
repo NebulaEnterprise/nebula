@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
-  import { UserRound, Flag, Hash, FolderPlus, MessagesSquare, ArrowUp, ArrowDown } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, moveChannel } from './lib/state.svelte.js';
+  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel } from './lib/state.svelte.js';
+  import { joinVoice } from './lib/voice.js';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
@@ -205,19 +206,31 @@
 {#if ui.channelMenu}
   {@const menu = ui.channelMenu}
   <div class="msg-menu channel-menu" style="left:{menu.x}px;top:{menu.y}px">
-    {#if menu.canMove}
-      <button type="button" onclick={() => moveChannel(menu.channel.id, 'up')}><ArrowUp size={16} /> Move up</button>
-      <button type="button" onclick={() => moveChannel(menu.channel.id, 'down')}><ArrowDown size={16} /> Move down</button>
-      <hr />
-    {/if}
-    {#if menu.canChannels}
-      <button type="button" onclick={() => { ui.dialog = { kind: 'channel', voice: false, categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
-    {/if}
-    {#if menu.canServer}
-      <button type="button" onclick={() => { ui.dialog = { kind: 'category' }; ui.channelMenu = null; }}><FolderPlus size={16} /> Create category</button>
-    {/if}
-    {#if menu.discussionId}
-      <button type="button" onclick={() => { ui.dialog = { kind: 'discussion', channelId: menu.discussionId, categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><MessagesSquare size={16} /> Create discussion</button>
+    {#if menu.kind === 'blank'}
+      {#if menu.canChannels}
+        <button type="button" onclick={() => { ui.dialog = { kind: 'channel', categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
+      {/if}
+      {#if menu.canServer}
+        <button type="button" onclick={() => { ui.dialog = { kind: 'category' }; ui.channelMenu = null; }}><FolderPlus size={16} /> Create category</button>
+      {/if}
+    {:else if menu.kind === 'voice'}
+      <button type="button" onclick={() => { joinVoice(menu.channel, { muted: true }); ui.channelMenu = null; }}><MicOff size={16} /> Join muted</button>
+      <button type="button" onclick={() => { joinVoice(menu.channel, { deafened: true }); ui.channelMenu = null; }}><HeadphoneOff size={16} /> Join deafened</button>
+      <button type="button" onclick={() => { joinVoice(menu.channel); ui.channelMenu = null; }}><MessageSquare size={16} /> Open chat</button>
+      <button type="button" onclick={() => { ui.dialog = { kind: 'voice-log', channel: menu.channel }; ui.channelMenu = null; }}><Clock size={16} /> Voice log</button>
+      <button type="button" onclick={() => markChannelRead(menu.channel.id)}>Mark as read</button>
+      <button type="button" onclick={() => { ui.dialog = { kind: 'channel-notify', channel: menu.channel }; ui.channelMenu = null; }}><Bell size={16} /> Notifications</button>
+      {#if menu.canChannels}
+        <button type="button" onclick={() => { ui.dialog = { kind: 'edit-channel', channel: menu.channel }; ui.channelMenu = null; }}><Pencil size={16} /> Edit channel</button>
+        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel).catch((err) => { ui.toast = err.message; })}><Trash2 size={16} /> Delete channel</button>
+      {/if}
+    {:else}
+      <button type="button" onclick={() => markChannelRead(menu.channel.id)}>Mark as read</button>
+      <button type="button" onclick={() => { ui.dialog = { kind: 'channel-notify', channel: menu.channel }; ui.channelMenu = null; }}><Bell size={16} /> Notifications</button>
+      {#if menu.canChannels}
+        <button type="button" onclick={() => { ui.dialog = { kind: 'edit-channel', channel: menu.channel }; ui.channelMenu = null; }}><Pencil size={16} /> Edit channel</button>
+        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel).catch((err) => { ui.toast = err.message; })}><Trash2 size={16} /> Delete channel</button>
+      {/if}
     {/if}
     {#if developerMode() && menu.channel}
       <button type="button" onclick={() => copyText(menu.channel.id, 'channel ID')}>Copy Channel ID</button>

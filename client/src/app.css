@@ -440,12 +440,24 @@ html:not(.app-blur) .thread-menu {
   border-radius: 8px; background: #da373c; color: #fff;
 }
 .hangup:hover { background: #a12828; }
-.voice-tools { display: flex; gap: 6px; }
+.voice-tools { display: flex; gap: 4px; }
 .voice-tool {
-  width: 36px; height: 36px; display: grid; place-items: center;
+  width: 28px; height: 28px; display: grid; place-items: center; flex: 1;
   border-radius: 8px; background: #2b2d31; color: #fff;
 }
-.voice-tool:hover { background: #3a3c43; }
+.voice-tool:hover, .voice-tool.on { background: #3a3c43; }
+.voice-tool.hang { background: #da373c; color: #fff; flex: 0 0 28px; }
+.voice-tool.hang:hover { background: #a12828; }
+.voice-dock { position: relative; margin: 2px 8px 8px; }
+.voice-pop {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 6;
+  display: flex; flex-direction: column; gap: 8px; padding: 10px;
+  background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
+  color: #fff; font-size: 12px;
+}
+.voice-pop select, .voice-pop audio { width: 100%; }
+.voice-pop p { margin: 0; color: var(--muted); }
+.voice-open { margin-left: auto; }
 .join-voice {
   margin-left: auto; height: 22px; padding: 0 8px; border-radius: 4px; flex-shrink: 0;
   background: #248046; color: #fff; font-size: 12px; font-weight: 700;

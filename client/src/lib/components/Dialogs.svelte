@@ -1,6 +1,6 @@
 <script>
   import { X } from '@lucide/svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread } from '../state.svelte.js';
+  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
   import { keyInLink, newRoomKey } from '../vault.js';
@@ -199,7 +199,10 @@
         {:else if kind === 'channel' || kind === 'discussion'}{channelKind === 'discussion' ? 'Create discussion' : channelKind === 'voice' ? 'Voice channel' : 'Create channel'}
         {:else if kind === 'category'}Create category
         {:else if kind === 'lock'}Lock server
-        {:else if kind === 'notify'}Notifications
+        {:else if kind === 'notify'}Notification settings
+        {:else if kind === 'channel-notify'}Notifications
+        {:else if kind === 'voice-log'}Voice log
+        {:else if kind === 'report-server'}Report server
         {:else if kind === 'nick'}Nickname
         {:else if kind === 'mute'}Mute server
         {:else if kind === 'report'}Report a member
@@ -380,6 +383,33 @@
             <button class="btn sm" onclick={() => go(async () => { await guildAction({ type: 'lock', minutes: min }); toast(min ? 'Server locked' : 'Server unlocked'); close(); })}>{label}</button>
           {/each}
         </div>
+
+      {:else if kind === 'channel-notify'}
+        {#each [['all', 'All messages'], ['mentions', 'Only @mentions'], ['nothing', 'Nothing']] as [id, title]}
+          <button class="btn" style="width:100%;margin-bottom:8px;justify-content:flex-start" class:brand={channelNotify(ui.dialog.channel?.id) === id || (id === 'all' && channelNotify(ui.dialog.channel?.id) === 'default')} onclick={() => { setChannelNotify(ui.dialog.channel?.id, id); close(); }}>{title}</button>
+        {/each}
+
+      {:else if kind === 'voice-log'}
+        {@const people = ui.voiceRooms[ui.dialog.channel?.id] || []}
+        {#if people.length}
+          {#each people as person (person.id)}
+            <div class="row"><strong>{person.displayName || person.username}</strong></div>
+          {/each}
+        {:else}
+          <p class="hint">No one is in this voice channel.</p>
+        {/if}
+
+      {:else if kind === 'report-server'}
+        <p class="hint">This report goes to Nebula's admins.</p>
+        <div class="field"><label>What happened</label><input bind:value={extra} maxlength="400" placeholder="What should they look at?" /></div>
+        <button class="btn brand" style="width:auto" onclick={() => go(async () => {
+          const mem = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
+          const owner = (mem.members || []).find((person) => person.serverOwner && String(person.id) !== String(ui.me?.id));
+          if (!owner) throw new Error('Could not send that report');
+          await api('/api/reports', { method: 'POST', body: { userId: owner.id, reason: 'other', text: 'Server ' + (ui.serverMeta?.name || '') + (extra ? ': ' + extra : '') } });
+          close();
+          toast('Report sent');
+        })}>Send report</button>
 
       {:else if kind === 'notify'}
         {#each [['all', 'All messages', 'Ping me for every message'], ['mentions', 'Only @mentions', 'Pings for @you and @everyone'], ['nothing', 'Nothing', 'Stay quiet']] as [id, title, sub]}
