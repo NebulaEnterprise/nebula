@@ -10,6 +10,7 @@
   const onDiscover = $derived(ui.mode === 'discover');
   const chatUnread = $derived((ui.dms || []).reduce((sum, dm) => sum + (Number(ui.activity.dms[dm.other?.id]?.unread) || 0), 0));
   const peopleUnread = $derived((ui.incoming || []).length);
+  const serverUnread = $derived(Object.values(ui.activity.servers || {}).reduce((sum, row) => sum + (Number(row?.unread) || 0), 0));
   const status = $derived(presenceDot(ui.me));
 
   function latestDm() {
@@ -78,6 +79,7 @@
   <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
     <Server size={22} />
     <span>Servers</span>
+    {#if serverUnread}<em class="rail-count">{count(serverUnread)}</em>{/if}
   </button>
   <button class="rail-tab" class:on={onDiscover} title="Discover" onclick={discover}>
     <Compass size={22} />

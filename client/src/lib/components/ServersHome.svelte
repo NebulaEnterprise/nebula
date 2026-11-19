@@ -30,8 +30,8 @@
         style="--srv:{face.color}"
         onclick={() => openServer(server.id)}
       >
-        {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
-        {#if note?.mentions}<em>{note.mentions > 99 ? '99+' : note.mentions}</em>{/if}
+        <span class="hub-glyph">{#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}</span>
+        {#if note?.unread}<em>{note.unread > 99 ? '99+' : note.unread}</em>{/if}
       </button>
     {/each}
   </aside>
