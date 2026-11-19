@@ -832,12 +832,9 @@ export async function loadDms() {
         ackedDm[id] = stamp;
         continue;
       }
-      const listed = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
-      const noted = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
-      const prev = Number(ui.activity.dms[id] && ui.activity.dms[id].unread) || 0;
-      const newer = !!(heardDm[id] && heardDm[id] !== stamp);
-      let count = Math.max(listed, noted);
-      if (!count || newer) count = Math.max(count, newer ? prev + 1 : prev, 1);
+      const listed = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : null;
+      const noted = serverDmNotes[id] && serverDmNotes[id].unread != null ? Number(serverDmNotes[id].unread) || 0 : null;
+      const count = listed != null ? listed : (noted != null ? noted : 0);
       if (count > 0) {
         unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
@@ -1563,6 +1560,15 @@ function noteTypingEvent(data) {
   acceptTypers(rows);
 }
 
+let dmCountTimer = 0;
+function refreshDmCounts() {
+  if (dmCountTimer) clearTimeout(dmCountTimer);
+  dmCountTimer = setTimeout(() => {
+    dmCountTimer = 0;
+    loadDms();
+  }, 200);
+}
+
 function pingDm(roomId, author, messageId) {
   const channel = String(roomId || '');
   if (!channel.startsWith('dm:') || !ui.me) return;
@@ -1570,18 +1576,8 @@ function pingDm(roomId, author, messageId) {
   const otherId = channel.split(':').slice(1).find((id) => id && String(id) !== String(ui.me.id));
   if (!otherId || (author && String(author.id) === String(ui.me.id))) return;
   const stamp = String(messageId || '');
-  if (stamp && (heardDm[otherId] === stamp || ackedDm[otherId] === stamp)) return;
-  const prev = Number(ui.activity.dms?.[otherId]?.unread) || 0;
-  const unread = prev + 1;
-  if (stamp) heardDm[otherId] = stamp;
-  ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
-  const rows = ui.dms || [];
-  const hit = rows.find((dm) => dm.other && String(dm.other.id) === String(otherId));
-  if (hit) {
-    ui.dms = rows.map((dm) => dm.other && String(dm.other.id) === String(otherId) ? { ...dm, unread, updatedAt: Date.now(), other: author ? { ...dm.other, ...author } : dm.other } : dm);
-  } else if (author) {
-    ui.dms = [{ id: channel.slice(3), other: author, unread, updatedAt: Date.now() }, ...rows];
-  }
+  if (stamp && ackedDm[otherId] === stamp) return;
+  refreshDmCounts();
 }
 
 async function applySocketMessage(type, data) {
@@ -3400,20 +3396,6 @@ export async function pollActivity() {
     const channels = { ...(data.channels || {}) };
     const dms = { ...(data.dms || {}) };
     const headsIn = data.heads || {};
-    for (const [headId, messageId] of Object.entries(headsIn)) {
-      if (!messageId || !String(headId).startsWith('dm:')) continue;
-      const parts = String(headId).slice(3).split(':').filter(Boolean);
-      const userId = parts.find((part) => String(part) !== String(ui.me && ui.me.id)) || parts[0] || '';
-      if (!userId) continue;
-      const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId) && ui.readHold !== 'dm:' + userId;
-      if (openHere) continue;
-      const seenId = sentSeen[headId] || sentSeen['dm:' + userId];
-      if ((seenId && String(seenId) === String(messageId)) || ackedDm[userId] === String(messageId)) continue;
-      const speaker = (data.speakers || {})[headId] || (data.speakers || {})['dm:' + userId];
-      if (speaker && ui.me && String(speaker) === String(ui.me.id)) continue;
-      const prev = Number(dms[userId] && dms[userId].unread) || 0;
-      dms[userId] = { ...(dms[userId] || {}), unread: Math.max(prev, 1) };
-    }
     for (const userId of Object.keys(dms)) {
       const seenId = sentSeen['dm:' + userId];
       const head = headsIn['dm:' + userId];
@@ -3457,8 +3439,8 @@ export async function pollActivity() {
     dmSnap = dmUnread;
     ui.mentions = Array.isArray(data.inbox) ? data.inbox : [];
     ui.heads = data.heads || {};
-    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels) || !sameNotes(ui.activity.dms, dms)) {
-      ui.activity = { ...ui.activity, servers, channels, dms };
+    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels)) {
+      ui.activity = { ...ui.activity, servers, channels };
     }
     const heads = data.heads || {};
     for (const [id, note] of Object.entries(channels)) {
