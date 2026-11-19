@@ -8,34 +8,12 @@
   const onPeople = $derived(ui.mode === 'friends' || ui.mode === 'add');
   const onServers = $derived(ui.mode === 'servers' || ui.mode === 'chat' || ui.mode === 'thread');
   const onDiscover = $derived(ui.mode === 'discover');
-  const chatUnread = $derived((ui.dms || []).reduce((sum, dm) => sum + (Number(ui.activity.dms[dm.other?.id]?.unread) || 0), 0));
+  const chatUnread = $derived(Object.entries(ui.activity.dms || {}).reduce((sum, [id, row]) => {
+    if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) return sum;
+    if (ui.quickOpen && String(ui.quickUser?.id || '') === String(id)) return sum;
+    return sum + (Number(row?.unread) || 0);
+  }, 0));
   const peopleUnread = $derived((ui.incoming || []).length);
-  function dmCount(dm) {
-    const id = dm?.other?.id;
-    if (!id) return 0;
-    if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) return 0;
-    if (ui.quickOpen && String(ui.quickUser?.id || '') === String(id)) return 0;
-    return Number(ui.activity.dms?.[id]?.unread) || 0;
-  }
-  const unreadDms = $derived.by(() => {
-    const rows = [];
-    const seen = new Set();
-    for (const dm of ui.dms || []) {
-      if (!dm?.other || dmCount(dm) <= 0) continue;
-      seen.add(String(dm.other.id));
-      rows.push(dm);
-    }
-    for (const [id, note] of Object.entries(ui.activity.dms || {})) {
-      if (seen.has(String(id)) || !(Number(note?.unread) > 0)) continue;
-      if (ui.mode === 'dm' && String(ui.dmUser?.id || '') === String(id)) continue;
-      const person = (ui.friends || []).find((user) => String(user.id) === String(id))
-        || (ui.members || []).find((user) => String(user.id) === String(id));
-      if (!person) continue;
-      rows.push({ other: person, updatedAt: Date.now(), unread: note.unread });
-    }
-    rows.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
-    return rows;
-  });
   const status = $derived(presenceDot(ui.me));
 
   function latestDm() {
@@ -91,16 +69,6 @@
   <button class="rail-logo" title="Nebula" onclick={messages}>
     <img src="./logo.webp?v=3" alt="" />
   </button>
-  {#if unreadDms.length}
-    <div class="rail-dms" aria-label="New direct messages">
-      {#each unreadDms as dm (dm.other.id)}
-        <button type="button" class="rail-dm" title={dm.other.displayName || dm.other.username} onclick={() => openDm(dm.other)}>
-          <Avatar user={dm.other} size={48} dot={false} />
-          <em>{count(dmCount(dm))}</em>
-        </button>
-      {/each}
-    </div>
-  {/if}
   <button class="rail-tab" class:on={onMessages} title="Messages" onclick={messages}>
     <MessageSquare size={22} />
     <span>Messages</span>
