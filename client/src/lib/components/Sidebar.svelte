@@ -116,6 +116,12 @@
         {/each}
       </div>
     {/if}
+    {#if hasPerm(PERM.INVITE)}
+      <button type="button" class="invite-bar" onclick={() => (ui.dialog = { kind: 'invite' })}>
+        <Link size={16} />
+        Invite people
+      </button>
+    {/if}
     <div class="scroll">
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}

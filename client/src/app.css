@@ -278,6 +278,13 @@ html:not(.app-blur) .thread-menu {
 .side-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-head svg { margin-left: auto; width: 18px; height: 18px; color: #c9c1d4; flex-shrink: 0; transition: transform 0.15s ease; }
 .side-head.open svg { transform: rotate(-180deg); }
+.invite-bar {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin: 10px 10px 2px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  background: color-mix(in srgb, var(--brand) 28%, rgba(20, 8, 28, 0.55));
+  color: #ffd4e8; font-weight: 700; font-size: 14px;
+}
+.invite-bar:hover { background: var(--brand); color: #fff; }
 .inbox-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 12px 6px; font-size: 16px; font-weight: 750;
