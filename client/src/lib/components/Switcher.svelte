@@ -24,7 +24,7 @@
     }
     if (ui.mode === 'chat' || ui.serverId) {
       for (const channel of ui.channels || []) {
-        if (channel.type === 'voice') continue;
+        if (channel.type === 'voice' || String(channel.topic || '').startsWith('voice-chat:')) continue;
         const label = channel.name || 'channel';
         if (keep(label)) list.push({ kind: 'Channel', label: '#' + label, run: () => pickChannel(channel.id) });
       }

@@ -17,6 +17,12 @@
   import { videoPoster } from '../media.js';
 
   const channel = $derived(ui.channels.find((c) => c.id === ui.channelId));
+  const voiceChat = $derived.by(() => {
+    const topic = String(channel?.topic || '');
+    if (!topic.startsWith('voice-chat:')) return null;
+    const id = topic.slice('voice-chat:'.length);
+    return (ui.channels || []).find((row) => row.id === id) || { id, name: channel?.name || 'Voice' };
+  });
   const typingPhrase = $derived(typingLine(ui.typers));
   const locked = $derived(!!(ui.onboarding && ui.onboarding.mustFinish));
   const dmBlocked = $derived(ui.mode === 'dm' && !!ui.dmUser && relation(ui.dmUser.id) === 'blocked');
@@ -196,7 +202,7 @@
     ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message')
       : ui.mode === 'group' ? (ui.group?.name || 'Group')
         : ui.mode === 'thread' ? (ui.thread?.name || 'Thread')
-          : (channel?.name || 'channel')
+          : (voiceChat?.name || channel?.name || 'channel')
   );
 
   let holdTimer = 0;
@@ -1291,7 +1297,7 @@
     {#if ui.mode === 'group'}
       <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
     {:else if ui.mode !== 'thread'}
-      <span class="topic">{channel?.topic || ''}</span>
+      <span class="topic">{voiceChat ? 'Voice chat' : (channel?.topic || '')}</span>
     {:else}
       <span class="topic"></span>
     {/if}
@@ -1455,8 +1461,8 @@
     </div>
   {:else if !ui.messages.length}
     <div class="welcome">
-      <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : ui.mode === 'group' ? (ui.group?.name || 'Group') : ui.mode === 'thread' ? (ui.thread?.name || 'Thread') : '#' + (channel?.name || 'channel')}</h2>
-      <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : 'This is the start of the channel. Say hi.'}</p>
+      <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : ui.mode === 'group' ? (ui.group?.name || 'Group') : ui.mode === 'thread' ? (ui.thread?.name || 'Thread') : voiceChat ? (voiceChat.name || 'Voice') : '#' + (channel?.name || 'channel')}</h2>
+      <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : voiceChat ? 'This is the start of the chat in ' + (voiceChat.name || 'this voice channel') + '.' : 'This is the start of the channel. Say hi.'}</p>
     </div>
   {/if}
   {#each chatRows as row (row.key)}
@@ -1815,7 +1821,7 @@
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
-      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message #' + (channel?.name || 'channel')}
+      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message ' + (voiceChat?.name || '#' + (channel?.name || 'channel'))}
     ></textarea>
     <button type="button" class="btn icon picker-toggle gif-btn" title="GIF" onclick={() => openPicker('gif')}>GIF</button>
     <button type="button" class="btn icon picker-toggle" title="Stickers" onclick={() => openPicker('sticker')}><Sticker size={18} /></button>

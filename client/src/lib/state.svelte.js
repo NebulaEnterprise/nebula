@@ -1188,7 +1188,7 @@ export async function openServer(id, opts = {}) {
   ui.onboarding = data.onboarding || null;
   applyTheme();
   const current = ui.channels.find((c) => c.id === ui.channelId && c.type === 'text');
-  const ch = current || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
+  const ch = current || ui.channels.find((c) => c.type === 'text' && !isVoiceRoom(c)) || ui.channels.find((c) => c.type === 'text') || ui.channels[0];
   const nextId = ch ? ch.id : '';
   if (nextId !== ui.channelId) {
     ui.channelId = nextId;
@@ -1370,6 +1370,59 @@ export function phoneChat() {
 
 export function phoneBrowse() {
   ui.phone = 'browse';
+}
+
+export function isVoiceRoom(ch) {
+  return String(ch?.topic || '').startsWith('voice-chat:');
+}
+
+function voiceRoomName(name) {
+  return String(name || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '')
+    .slice(0, 32);
+}
+
+export async function openVoiceRoom(voiceChannel) {
+  if (!voiceChannel || !ui.serverId) return;
+  const marker = 'voice-chat:' + voiceChannel.id;
+  let room = (ui.channels || []).find((row) => row.type === 'text' && row.topic === marker);
+  if (!room) {
+    const base = voiceRoomName(voiceChannel.name) || 'general';
+    const taken = new Set((ui.channels || []).filter((row) => row.type === 'text').map((row) => row.name));
+    let name = base;
+    if (taken.has(name)) {
+      const short = String(voiceChannel.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 6).toLowerCase() || 'voice';
+      name = (base + '-' + short).slice(0, 32);
+      if (taken.has(name)) name = ('voice-' + short).slice(0, 32);
+    }
+    const data = await api('/api/servers/' + encodeURIComponent(ui.serverId) + '/channels', {
+      method: 'POST',
+      body: { name, topic: marker, type: 'text' },
+    });
+    room = data.channel;
+    if (room && !(ui.channels || []).some((row) => row.id === room.id)) ui.channels = [...ui.channels, room];
+  }
+  if (!room) throw new Error('Could not open that voice chat');
+  ui.streamUi = { ...(ui.streamUi || {}), view: 'wide', hideChat: false };
+  if (room.id === ui.channelId && ui.mode === 'chat') return;
+  stopTyping();
+  const prev = currentRoom();
+  if (ui.mode === 'chat') snapServer(ui.serverId);
+  stashRoom(prev);
+  ui.mode = 'chat';
+  ui.dmUser = null;
+  ui.channelId = room.id;
+  ui.seenMessageId = '';
+  ui.picker = '';
+  ui.reply = null;
+  ui.editing = null;
+  showCached('ch:' + room.id);
+  snapServer(ui.serverId);
+  dropLive();
+  await loadMessages();
 }
 
 export function pickChannel(ch) {

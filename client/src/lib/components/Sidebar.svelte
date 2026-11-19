@@ -7,7 +7,7 @@
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
 
@@ -47,7 +47,7 @@
   }
 
   function channelsIn(cat, type) {
-    return ui.channels.filter((c) => c.type === type && (c.categoryId || '') === cat.id);
+    return ui.channels.filter((c) => c.type === type && (c.categoryId || '') === cat.id && !isVoiceRoom(c));
   }
 
   const ownsServer = $derived(!!ui.serverMeta?.owner);
@@ -131,11 +131,16 @@
 
   async function openVoiceChat(ch) {
     const here = ui.voice && ui.voice.channelId === ch.id && ui.voice.serverId === ui.serverId;
+    const room = (ui.channels || []).find((row) => row.type === 'text' && row.topic === 'voice-chat:' + ch.id);
+    const showing = here && ui.streamUi?.hideChat === false && room && ui.channelId === room.id;
+    if (showing) {
+      ui.streamUi = { ...ui.streamUi, view: 'wide', hideChat: true };
+      return;
+    }
     if (!here) {
       try { await joinVoice(ch); } catch (err) { toast(err.message); return; }
     }
-    const open = here && ui.streamUi?.hideChat === false;
-    ui.streamUi = { ...ui.streamUi, view: 'wide', hideChat: open };
+    try { await openVoiceRoom(ch); } catch (err) { toast(err.message); }
   }
 
   function dragStart(event, ch) {
