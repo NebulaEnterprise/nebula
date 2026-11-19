@@ -235,6 +235,24 @@ html:not(.app-blur) .thread-menu {
 }
 .rail-user strong { color: #fff; font-size: 12px; font-weight: 700; }
 .rail-user svg { flex-shrink: 0; color: #b7a8c9; }
+.rail-servers {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  width: 100%; min-height: 0; max-height: 42%; overflow-x: hidden; overflow-y: auto; scrollbar-width: none;
+}
+.rail-servers::-webkit-scrollbar { display: none; }
+.rail-srv {
+  width: 44px; height: 44px; border-radius: 16px; display: grid; place-items: center; position: relative;
+  flex-shrink: 0; overflow: visible; color: #fff; font-weight: 800;
+  background: color-mix(in srgb, var(--srv, #7c6af7) 55%, #241838);
+}
+.rail-srv.on { box-shadow: 0 0 0 2px #eadfff; }
+.rail-srv img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.rail-srv em {
+  position: absolute; right: -3px; bottom: -3px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: #f23f43; color: #fff; font-size: 10px; font-weight: 800;
+  font-style: normal; display: grid; place-items: center; line-height: 1;
+  box-shadow: 0 0 0 2px #14081c;
+}
 .rail-count {
   position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px;
   border-radius: 999px; background: #7c5cbf; color: #fff; font-size: 10px; font-weight: 700;
@@ -2733,11 +2751,7 @@ html[data-theme="amoled"] #app { background-color: #000; }
 }
 .hub-plus, .hub-ico {
   width: 46px; height: 46px; border-radius: 16px; display: grid; place-items: center; flex-shrink: 0;
-  background: #241838; color: #efeaf8; position: relative; font-weight: 800; overflow: visible;
-}
-.hub-glyph {
-  width: 100%; height: 100%; border-radius: inherit; overflow: hidden;
-  display: grid; place-items: center;
+  background: #241838; color: #efeaf8; position: relative; font-weight: 800; overflow: hidden;
 }
 .hub-ico { background: color-mix(in srgb, var(--srv, #7c6af7) 55%, #241838); }
 .hub-ico.on { box-shadow: 0 0 0 2px #efe7ff; }
