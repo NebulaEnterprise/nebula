@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
-  import { leaveVoice, partnerInCall } from '../voice.js';
+  import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { PERM } from '../format.js';
@@ -85,7 +85,8 @@
   });
 
   function onVoice(ch) {
-    openVoiceChat(ch, false);
+    ui.voiceStage = { id: ch.id, name: ch.name };
+    joinVoice(ch);
   }
 
   function dmSharing(other) {
