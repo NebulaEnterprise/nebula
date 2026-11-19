@@ -741,7 +741,7 @@ export async function joinVoice(channel, opts = {}) {
   if (!channel || channel.type !== 'voice') return;
   const same = ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId;
   if (same && stream) {
-    ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: false };
+    ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: ui.streamUi?.hideChat !== false };
     if (opts.muted || opts.deafened) {
       ui.voice.deafened = !!opts.deafened;
       ui.voice.muted = true;
@@ -781,7 +781,7 @@ export async function joinVoice(channel, opts = {}) {
   };
   if (ui.voice.muted) stream.getAudioTracks().forEach((track) => { track.enabled = false; });
   if (ui.voice.deafened) applyDeaf();
-  ui.streamUi = { view: 'wide', watching: false, hideChat: false };
+  ui.streamUi = { view: 'wide', watching: false, hideChat: true };
   watchMic();
   startClip();
   if (ui.voice.muted || ui.voice.deafened) {

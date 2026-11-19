@@ -1,5 +1,5 @@
 <script>
-  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -8,7 +8,7 @@
   import Attachment from './Attachment.svelte';
   import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity } from '../state.svelte.js';
   import { seenPhrase } from '../seen.js';
-  import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall } from '../voice.js';
+  import { startCall, joinOpenCall, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
   import Inbox from './Inbox.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
@@ -1042,6 +1042,9 @@
   }
   let streamPop = null;
   let gearOpen = $state(false);
+  let stagePop = $state('');
+  let callGear = $state(null);
+  let clipUrl = $state('');
   const serverVoice = $derived(!!(ui.voice && ui.voice.serverId !== 'call'));
   const streamLive = $derived(!!(ui.screen?.local || ui.screen?.remote));
   const mineStream = $derived(!!(ui.voice?.sharing || ui.screen?.local));
@@ -1096,8 +1099,7 @@
     const hidden = !!ui.streamUi?.hideChat;
     const live = !!(remoteSharer || mineStream || streamLive);
     if (serverVoice) {
-      if (hidden) setStream({ hideChat: false, view: live ? 'mini' : 'auto', watching: live });
-      else setStream({ hideChat: true, view: 'wide' });
+      setStream({ hideChat: !hidden, view: 'wide', watching: live || !!ui.streamUi?.watching });
       return;
     }
     if (hidden) setStream({ hideChat: false, view: live && ui.streamUi?.watching ? 'mini' : 'auto' });
@@ -1216,6 +1218,36 @@
     return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  async function openStagePop(kind) {
+    stagePop = stagePop === kind ? '' : kind;
+    if (stagePop === 'device') {
+      try { callGear = await callDevices(); } catch (_) { callGear = null; }
+    }
+  }
+
+  async function refreshGear() {
+    try { callGear = await callDevices(); } catch (_) {}
+  }
+
+  async function saveClip() {
+    try {
+      const blob = await takeClip();
+      if (!blob) {
+        toast('Stay in the call a little longer, then clip the last 30 seconds');
+        return;
+      }
+      if (clipUrl) URL.revokeObjectURL(clipUrl);
+      clipUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = clipUrl;
+      link.download = 'nebula-clip.webm';
+      link.click();
+      toast('Saved the last 30 seconds');
+    } catch (err) {
+      toast(err.message || 'Could not make a clip');
+    }
+  }
+
   function mineMsg(msg) {
     const id = msg?.author?.id || msg?.authorId;
     return !!(ui.me && id && String(id) === String(ui.me.id));
@@ -1223,7 +1255,7 @@
 </script>
 
 <div class="chat-frame">
-<div class="chat-col" class:bubbles={ui.mode === 'dm'} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
+<div class="chat-col" class:bubbles={ui.mode === 'dm'} class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 {#if showIncoming}
   <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
     <Avatar user={ui.incomingCall.from} size={80} dot={false} />
@@ -1359,18 +1391,51 @@
       </div>
     </div>
     <div class="call-controls">
-      {#if ui.voice?.serverId === 'call'}
+      {#if stagePop === 'device' && callGear}
+        <div class="stage-pop">
+          <label>Microphone
+            <select value={callGear.micId} onchange={(e) => setCallMic(e.target.value).then(refreshGear).catch((err) => toast(err.message))}>
+              <option value="">Default</option>
+              {#each callGear.mics as mic (mic.deviceId)}<option value={mic.deviceId}>{mic.label || 'Microphone'}</option>{/each}
+            </select>
+          </label>
+          <label>Speakers
+            <select value={callGear.speakerId} onchange={(e) => setCallSpeaker(e.target.value).then(refreshGear).catch((err) => toast(err.message))}>
+              <option value="">Default</option>
+              {#each callGear.speakers as speaker (speaker.deviceId)}<option value={speaker.deviceId}>{speaker.label || 'Speakers'}</option>{/each}
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" checked={callGear.noise} onchange={(e) => { setCallProcessing({ noise: e.target.checked }); refreshGear(); }} /> Noise suppression</label>
+          <label class="check"><input type="checkbox" checked={callGear.echo} onchange={(e) => { setCallProcessing({ echo: e.target.checked }); refreshGear(); }} /> Echo cancellation</label>
+        </div>
+      {:else if stagePop === 'sound'}
+        <div class="stage-pop">
+          <strong>Soundboard</strong>
+          <p>No sounds yet. This server has no sounds.</p>
+        </div>
+      {:else if stagePop === 'clip'}
+        <div class="stage-pop">
+          <strong>Clip</strong>
+          <p>The last 30 seconds of your microphone stay on this device until you save them.</p>
+          {#if clipUrl}<audio src={clipUrl} controls></audio>{/if}
+          <button type="button" class="btn sm" onclick={saveClip}>Save last 30 seconds</button>
+        </div>
+      {/if}
+      {#if ui.voice}
         <button type="button" class:on={ui.voice.muted} title={ui.voice.muted ? 'Unmute' : 'Mute'} onclick={toggleMute}>
           {#if ui.voice.muted}<MicOff size={18} />{:else}<Mic size={18} />{/if}
         </button>
         <button type="button" class:on={ui.voice.deafened} title={ui.voice.deafened ? 'Undeafen' : 'Deafen'} onclick={toggleDeafen}>
           {#if ui.voice.deafened}<HeadphoneOff size={18} />{:else}<Headphones size={18} />{/if}
         </button>
-        <button type="button" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share your screen'} onclick={toggleShare}>
+        <button type="button" class:on={stagePop === 'device'} title="Call device" onclick={() => openStagePop('device')}><Settings size={18} /></button>
+        <button type="button" class:on={ui.voice.sharing} title={ui.voice.sharing ? 'Stop sharing' : 'Share screen'} onclick={toggleShare}>
           <Monitor size={18} />
         </button>
-        <button type="button" class="hang" title="Hang up" onclick={leaveVoice}><PhoneOff size={18} /></button>
-      {:else if !ui.voice}
+        <button type="button" class:on={stagePop === 'sound'} title="Soundboard" onclick={() => openStagePop('sound')}><AudioLines size={18} /></button>
+        <button type="button" class:on={stagePop === 'clip'} title="Clip the last few seconds" onclick={() => openStagePop('clip')}><Scissors size={18} /></button>
+        <button type="button" class="hang" title="Disconnect" onclick={leaveVoice}><PhoneOff size={18} /></button>
+      {:else}
         <button type="button" class="join-cam" title="Join call" onclick={joinOpenCall}><Video size={18} /></button>
         <button type="button" class="join-back" title="Join call" onclick={joinOpenCall}><Phone size={18} /></button>
       {/if}

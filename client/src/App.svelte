@@ -216,7 +216,7 @@
     {:else if menu.kind === 'voice'}
       <button type="button" onclick={() => { joinVoice(menu.channel, { muted: true }); ui.channelMenu = null; }}><MicOff size={16} /> Join muted</button>
       <button type="button" onclick={() => { joinVoice(menu.channel, { deafened: true }); ui.channelMenu = null; }}><HeadphoneOff size={16} /> Join deafened</button>
-      <button type="button" onclick={() => { joinVoice(menu.channel); ui.channelMenu = null; }}><MessageSquare size={16} /> Open chat</button>
+      <button type="button" onclick={() => { joinVoice(menu.channel).then(() => { ui.streamUi = { ...ui.streamUi, view: 'wide', hideChat: false }; }); ui.channelMenu = null; }}><MessageSquare size={16} /> Open chat</button>
       <button type="button" onclick={() => { ui.dialog = { kind: 'voice-log', channel: menu.channel }; ui.channelMenu = null; }}><Clock size={16} /> Voice log</button>
       <button type="button" onclick={() => markChannelRead(menu.channel.id)}>Mark as read</button>
       <button type="button" onclick={() => { ui.dialog = { kind: 'channel-notify', channel: menu.channel }; ui.channelMenu = null; }}><Bell size={16} /> Notifications</button>

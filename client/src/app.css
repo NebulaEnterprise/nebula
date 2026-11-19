@@ -398,10 +398,8 @@ html:not(.app-blur) .thread-menu {
   color: var(--faint); border-radius: 3px;
 }
 .cat-add:hover { color: var(--text); }
-.row-actions { display: none; align-items: center; gap: 1px; flex-shrink: 0; margin-right: 2px; }
-.channel:hover .row-actions { display: flex; }
-.channel.on .row-actions { display: none; }
-.channel.on:hover .row-actions { display: flex; }
+.row-actions { display: none; align-items: center; gap: 1px; flex-shrink: 0; margin-left: auto; margin-right: 2px; }
+.channel:hover .row-actions, .channel.on .row-actions { display: flex; }
 .row-act {
   width: 22px; height: 22px; padding: 0; display: grid; place-items: center;
   color: #c7cad1; border-radius: 4px;
@@ -440,24 +438,6 @@ html:not(.app-blur) .thread-menu {
   border-radius: 8px; background: #da373c; color: #fff;
 }
 .hangup:hover { background: #a12828; }
-.voice-tools { display: flex; gap: 4px; }
-.voice-tool {
-  width: 28px; height: 28px; display: grid; place-items: center; flex: 1;
-  border-radius: 8px; background: #2b2d31; color: #fff;
-}
-.voice-tool:hover, .voice-tool.on { background: #3a3c43; }
-.voice-tool.hang { background: #da373c; color: #fff; flex: 0 0 28px; }
-.voice-tool.hang:hover { background: #a12828; }
-.voice-dock { position: relative; margin: 2px 8px 8px; }
-.voice-pop {
-  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 6;
-  display: flex; flex-direction: column; gap: 8px; padding: 10px;
-  background: #111214; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow);
-  color: #fff; font-size: 12px;
-}
-.voice-pop select, .voice-pop audio { width: 100%; }
-.voice-pop p { margin: 0; color: var(--muted); }
-.voice-open { margin-left: auto; }
 .join-voice {
   margin-left: auto; height: 22px; padding: 0 8px; border-radius: 4px; flex-shrink: 0;
   background: #248046; color: #fff; font-size: 12px; font-weight: 700;
@@ -1097,8 +1077,43 @@ html:not(.app-blur) .thread-menu {
   border-radius: 10px; background: #000; object-fit: cover; border: 2px solid #000;
 }
 .call-controls {
-  display: flex; align-items: center; gap: 8px;
+  position: relative; display: flex; align-items: center; gap: 8px;
   background: #1a1b20; padding: 8px; border-radius: 16px;
+}
+.stage-pop {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  width: min(280px, 80vw); display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  background: #111214; border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  color: #fff; font-size: 13px; text-align: left;
+}
+.stage-pop select, .stage-pop audio { width: 100%; }
+.stage-pop p { margin: 0; color: var(--muted); }
+.stage-pop .check { display: flex; align-items: center; gap: 8px; }
+.chat-col.voice-full .call-board.wide {
+  flex: 1; min-height: 0; align-items: stretch;
+}
+.chat-col.voice-full .call-board.wide:not(.focus) .call-tiles {
+  flex: 1; min-height: 0; align-items: stretch; align-content: stretch;
+}
+.chat-col.voice-full .call-board.wide:not(.focus) .person-tile {
+  flex: 1 1 280px; width: auto; height: auto; min-height: 240px; align-self: stretch;
+}
+.chat-col.voice-full:not(.chat-hidden) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.chat-col.voice-full:not(.chat-hidden) > .top { grid-column: 1 / -1; }
+.chat-col.voice-full:not(.chat-hidden) > .call-board { grid-column: 1; grid-row: 2 / span 2; min-height: 0; }
+.chat-col.voice-full:not(.chat-hidden) > .messages { grid-column: 2; grid-row: 2; min-height: 0; border-left: 1px solid var(--line); }
+.chat-col.voice-full:not(.chat-hidden) > .composer-wrap { grid-column: 2; grid-row: 3; }
+.chat-col.voice-full:not(.chat-hidden) > .bell-menu,
+.chat-col.voice-full:not(.chat-hidden) > .thread-menu,
+.chat-col.voice-full:not(.chat-hidden) > .thread-rename,
+.chat-col.voice-full:not(.chat-hidden) > .incoming-call { grid-column: 1 / -1; }
+@media (max-width: 800px) {
+  .chat-col.voice-full:not(.chat-hidden) { display: flex; flex-direction: column; }
+  .chat-col.voice-full:not(.chat-hidden) > .call-board { min-height: 280px; }
 }
 .call-controls button {
   width: 42px; height: 42px; border-radius: 12px; background: #2b2d31; color: #fff;
@@ -1108,7 +1123,6 @@ html:not(.app-blur) .thread-menu {
 .call-controls .hang, .call-controls .join-back { width: 52px; }
 .call-controls .join-back { background: #248046; }
 .call-controls .join-back:hover { background: #1a6334; }
-.voice-tool.on { color: #fff; background: #da373c; }
 .dock.profile-dock { background: transparent; }
 @media (min-width: 901px) {
   .main:has(.profile-dock) {
