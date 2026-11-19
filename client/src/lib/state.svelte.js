@@ -633,6 +633,7 @@ export async function loadFriends() {
 
 const heardDm = {};
 const ackedDm = {};
+const pendingDm = new Map();
 let inboxReady = false;
 let lastSentId = '';
 let dmSerial = 0;
@@ -768,6 +769,22 @@ function revealChat(key) {
   try { localStorage.setItem(accountKey('nebula-closed'), JSON.stringify(map)); } catch (_) {}
 }
 
+function unseenInLog(userId, lastId) {
+  const log = roomLogs.get('dm:' + userId);
+  if (!lastId || !log || !log.length || !log[log.length - 1] || log[log.length - 1].id !== lastId) return null;
+  const seenId = seenMap()['dm:' + userId];
+  if (!seenId || seenId === lastId) return seenId === lastId ? 0 : null;
+  const idx = log.findIndex((msg) => msg && msg.id === seenId);
+  if (idx < 0) return null;
+  let total = 0;
+  for (let i = idx + 1; i < log.length; i += 1) {
+    const msg = log[i];
+    if (!msg || msg.failed || isMine(msg)) continue;
+    total += 1;
+  }
+  return total;
+}
+
 export async function loadGroups() {
   try {
     const data = await api('/api/groups');
@@ -822,19 +839,25 @@ export async function loadDms() {
         || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
       const readHere = !!(stamp && ((map[key] && map[key] === stamp) || (ackedDm[id] && ackedDm[id] === stamp)));
-      if (viewing || own || readHere) {
+      const pendingCount = pendingDm.get(String(id)) ? pendingDm.get(String(id)).size : 0;
+      if (viewing || ((own || readHere) && pendingCount === 0)) {
         if (row.lastId && map[key] !== row.lastId) {
           map[key] = row.lastId;
           changed = true;
         }
+        pendingDm.delete(String(id));
         rememberDm(id, row.updatedAt || Date.now());
         heardDm[id] = stamp;
         ackedDm[id] = stamp;
         continue;
       }
-      const listed = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : null;
-      const noted = serverDmNotes[id] && serverDmNotes[id].unread != null ? Number(serverDmNotes[id].unread) || 0 : null;
-      const count = listed != null ? listed : (noted != null ? noted : 0);
+      const fromList = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
+      const fromActivity = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
+      const serverCount = Math.max(fromList, fromActivity);
+      const unseen = !!(stamp && (!map[key] || map[key] !== stamp));
+      const exact = unseen ? unseenInLog(id, row.lastId || '') : null;
+      let count = Math.max(serverCount, pendingCount, exact || 0);
+      if (count <= 0 && unseen) count = 1;
       if (count > 0) {
         unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
@@ -941,6 +964,7 @@ function clearDmUnread(userId, lastId) {
   const id = String(userId);
   const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === id);
   const stamp = lastId || (row && row.lastId) || (ui.heads && ui.heads['dm:' + id]) || '';
+  pendingDm.delete(id);
   if (stamp) {
     const map = seenMap();
     if (map['dm:' + id] !== stamp) {
@@ -1565,8 +1589,8 @@ function refreshDmCounts() {
   if (dmCountTimer) clearTimeout(dmCountTimer);
   dmCountTimer = setTimeout(() => {
     dmCountTimer = 0;
-    loadDms();
-  }, 200);
+    pollActivity().then(() => loadDms());
+  }, 250);
 }
 
 function pingDm(roomId, author, messageId) {
@@ -1577,6 +1601,12 @@ function pingDm(roomId, author, messageId) {
   if (!otherId || (author && String(author.id) === String(ui.me.id))) return;
   const stamp = String(messageId || '');
   if (stamp && ackedDm[otherId] === stamp) return;
+  const bag = pendingDm.get(String(otherId)) || new Set();
+  bag.add(stamp || ('tick:' + Date.now()));
+  pendingDm.set(String(otherId), bag);
+  const unread = Math.max(Number(ui.activity.dms?.[otherId]?.unread) || 0, bag.size);
+  ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
+  warmDm(otherId);
   refreshDmCounts();
 }
 
@@ -3439,8 +3469,17 @@ export async function pollActivity() {
     dmSnap = dmUnread;
     ui.mentions = Array.isArray(data.inbox) ? data.inbox : [];
     ui.heads = data.heads || {};
-    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels)) {
-      ui.activity = { ...ui.activity, servers, channels };
+    const mergedDms = { ...(ui.activity.dms || {}) };
+    let dmChanged = false;
+    for (const [id, note] of Object.entries(dms)) {
+      const n = Number(note && note.unread) || 0;
+      if (n > 0 && (!mergedDms[id] || mergedDms[id].unread !== n)) {
+        mergedDms[id] = { unread: n };
+        dmChanged = true;
+      }
+    }
+    if (!sameNotes(ui.activity.servers, servers) || !sameNotes(ui.activity.channels, channels) || dmChanged) {
+      ui.activity = { ...ui.activity, servers, channels, ...(dmChanged ? { dms: mergedDms } : {}) };
     }
     const heads = data.heads || {};
     for (const [id, note] of Object.entries(channels)) {
