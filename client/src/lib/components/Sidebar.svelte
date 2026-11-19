@@ -30,16 +30,6 @@
     const note = ui.activity?.servers?.[id];
     return !!(note && (Number(note.unread) || Number(note.mentions)));
   }
-  const serverRow = $derived((ui.servers || []).find((server) => server.id === ui.serverId) || {});
-  const face = $derived(serverFace({
-    ...serverRow,
-    ...(ui.serverMeta || {}),
-    icon: ui.serverMeta?.icon || serverRow.icon,
-    iconUrl: ui.serverMeta?.iconUrl || serverRow.iconUrl,
-    color: ui.serverMeta?.color || serverRow.color,
-    name: ui.serverMeta?.name || serverRow.name,
-  }));
-
   function dmWhen(ts) {
     const n = Number(ts) || 0;
     if (!n) return '';
@@ -109,23 +99,13 @@
   }
 </script>
 
-<aside class="side" class:with-hero={ui.mode === 'chat'} class:inbox-side={ui.mode !== 'chat'}>
+<aside class="side" class:inbox-side={ui.mode !== 'chat'}>
   {#if ui.mode === 'chat'}
-    <div class="srv-hero">
-      <img src="./look/sky.png" alt="" />
-      <span class="srv-hero-face" style="--srv:{face.color}">
-        {#if face.image}<img src={face.image} alt="" />{:else}{face.mark}{/if}
-      </span>
-    </div>
-    <div class="side-head">
-      <div class="side-title">
-        <button class="title" onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
-          <span>{ui.serverMeta?.name || 'Server'}</span>
-          {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
-          <ChevronDown size={14} />
-        </button>
-      </div>
-    </div>
+    <button class="side-head title" class:open={ui.menuOpen} onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
+      <span>{ui.serverMeta?.name || 'Server'}</span>
+      {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
+      <ChevronDown size={18} />
+    </button>
     {#if ui.menuOpen}
       <div class="menu">
         {#each items as item, i}

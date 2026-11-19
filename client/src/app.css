@@ -267,8 +267,17 @@ html:not(.app-blur) .thread-menu {
   box-shadow: 0 0 0 4px rgba(18, 8, 28, 0.72);
 }
 .srv-hero-face img { width: 100%; height: 100%; object-fit: cover; }
-.side.with-hero .side-head { padding-top: 12px; }
-.side.with-hero .menu { top: 176px; }
+.side-head {
+  height: 48px; min-height: 48px; width: 100%;
+  display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px;
+  border: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.08); border-radius: 0;
+  font-weight: 700; font-size: 15px; letter-spacing: -0.01em; color: #fff;
+  background: rgba(8, 4, 18, 0.45); flex-shrink: 0; text-align: left; cursor: pointer;
+}
+.side-head:hover, .side-head.open { background: rgba(255, 255, 255, 0.06); }
+.side-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-head svg { margin-left: auto; width: 18px; height: 18px; color: #c9c1d4; flex-shrink: 0; transition: transform 0.15s ease; }
+.side-head.open svg { transform: rotate(-180deg); }
 .inbox-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 12px 6px; font-size: 16px; font-weight: 750;
@@ -319,15 +328,7 @@ html:not(.app-blur) .thread-menu {
   height: 100%; display: grid; place-items: center; align-content: center; text-align: center; gap: 6px; color: #c8bdd8;
 }
 .pick-chat strong { font-size: 18px; color: #fff; }
-.side-head {
-  height: auto; min-height: 58px; display: flex; align-items: center; gap: 8px; padding: 16px 14px 4px;
-  font-weight: 650; border-bottom: 0; flex-shrink: 0; background: none;
-}
 .side-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
-.side-head button.title {
-  width: 100%; text-align: left; font-weight: 650; font-size: 16px; letter-spacing: -0.01em;
-  display: flex; align-items: center; gap: 6px; min-width: 0; color: #f4f1f8;
-}
 .side-kicker {
   margin: 0; padding: 0; color: #8e8798; font-size: 12px; font-weight: 500; text-align: left;
 }
@@ -346,8 +347,6 @@ html:not(.app-blur) .thread-menu {
 }
 .server-pick span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .server-pick .add { color: #b7a8c9; font-weight: 600; }
-.side-head button.title svg { width: 14px; height: 14px; color: #9a93a6; flex-shrink: 0; }
-.side-head .title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .muted-pill { font-size: 11px; color: var(--faint); font-weight: 600; }
 .banner-strip { height: 84px; background: #1c1d26 center/cover no-repeat; border-bottom: 1px solid var(--line); }
 .scroll { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 10px 8px 16px; }
@@ -627,7 +626,7 @@ html:not(.app-blur) .thread-menu {
 .me .who span:not(.name-fx) { color: var(--faint); font-size: 12px; }
 
 .menu {
-  position: absolute; top: 64px; left: 10px; right: 10px; z-index: 8;
+  position: absolute; top: 56px; left: 8px; right: 8px; z-index: 8;
   background: #1c1d26; border: 1px solid var(--line); border-radius: 14px;
   padding: 6px; box-shadow: var(--shadow); max-height: min(70vh, 520px); overflow: auto;
 }
