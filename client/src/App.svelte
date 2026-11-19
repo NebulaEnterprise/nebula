@@ -1,8 +1,9 @@
 <script>
   import { onMount } from 'svelte';
-  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom } from './lib/state.svelte.js';
-  import { joinVoice } from './lib/voice.js';
+  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity } from './lib/state.svelte.js';
+  import { answerCall, declineCall, joinVoice } from './lib/voice.js';
+  import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
   import Rail from './lib/components/Rail.svelte';
@@ -27,6 +28,10 @@
     applySiteTitle();
   });
 
+  let callDrag = $state({ x: 0, y: 0 });
+  let callDragging = $state(false);
+  let callDragFor = '';
+
   $effect(() => {
     const call = ui.incomingCall;
     if (!call) return;
@@ -38,6 +43,42 @@
     }, wait);
     return () => clearTimeout(timer);
   });
+
+  $effect(() => {
+    const id = String(ui.incomingCall?.id || '');
+    if (id === callDragFor) return;
+    callDragFor = id;
+    callDrag = { x: 0, y: 0 };
+  });
+
+  function dragCall(event) {
+    if (event.button !== 0 || event.target.closest('button')) return;
+    const box = event.currentTarget;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = callDrag.x;
+    const originY = callDrag.y;
+    callDragging = true;
+    const move = (e) => {
+      const width = box.offsetWidth;
+      const height = box.offsetHeight;
+      const baseLeft = window.innerWidth / 2 - width / 2;
+      const baseTop = 76;
+      let x = originX + e.clientX - startX;
+      let y = originY + e.clientY - startY;
+      x = Math.min(window.innerWidth - width - 8 - baseLeft, Math.max(8 - baseLeft, x));
+      y = Math.min(window.innerHeight - height - 8 - baseTop, Math.max(8 - baseTop, y));
+      callDrag = { x, y };
+    };
+    const up = () => {
+      callDragging = false;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
 
   onMount(() => {
     boot();
@@ -72,6 +113,8 @@
     vv?.addEventListener('resize', fitKeyboard);
     vv?.addEventListener('scroll', fitKeyboard);
     window.addEventListener('resize', fitKeyboard);
+    const onVisible = () => { if (!document.hidden && ui.me) pollActivity(); };
+    document.addEventListener('visibilitychange', onVisible);
     const onKey = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -128,6 +171,7 @@
       vv?.removeEventListener('resize', fitKeyboard);
       vv?.removeEventListener('scroll', fitKeyboard);
       window.removeEventListener('resize', fitKeyboard);
+      document.removeEventListener('visibilitychange', onVisible);
     };
   });
 </script>
@@ -171,6 +215,17 @@
   {#if ui.userSettings}<UserSettings />{/if}
   {#if ui.serverSettings}<ServerSettings />{/if}
   {#if ui.dialog}<Dialogs />{/if}
+  {#if ui.incomingCall?.from}
+    <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
+      <Avatar user={ui.incomingCall.from} size={80} dot={false} />
+      <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'}</strong>
+      <span>Incoming Call...</span>
+      <div class="incoming-actions">
+        <button type="button" class="decline" title="Ignore" onclick={declineCall}><X size={18} /></button>
+        <button type="button" class="accept" title="Accept" onclick={answerCall}><Phone size={18} /></button>
+      </div>
+    </div>
+  {/if}
 {/if}
 {#if ui.toast}<div class="toast">{ui.toast}</div>{/if}
 {#if ui.dmMenu}

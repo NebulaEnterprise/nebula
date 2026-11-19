@@ -8,7 +8,7 @@
   import Attachment from './Attachment.svelte';
   import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity } from '../state.svelte.js';
   import { seenPhrase } from '../seen.js';
-  import { startCall, joinOpenCall, joinVoice, answerCall, declineCall, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
+  import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
   import Inbox from './Inbox.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
@@ -1077,14 +1077,6 @@
     if (!callRoomId || (ui.voice && ui.voice.channelId === callRoomId)) return [];
     return (ui.voiceRooms[callRoomId] || []).filter((person) => String(person.id) !== String(ui.me?.id));
   });
-  const showIncoming = $derived.by(() => {
-    const call = ui.incomingCall;
-    if (!call?.from) return false;
-    const fromId = String(call.from.id || '');
-    if (ui.mode === 'chat' || ui.mode === 'thread' || ui.mode === 'group') return true;
-    if (ui.mode === 'dm') return String(ui.dmUser?.id || '') !== fromId;
-    return false;
-  });
   function callFace(msg) {
     if (!msg || msg.kind !== 'call') return '';
     const token = msg.callToken || '';
@@ -1103,48 +1095,6 @@
     }
     return '';
   });
-  let callDrag = $state({ x: 0, y: 0 });
-  let callDragging = $state(false);
-  let callDragFor = '';
-
-  $effect(() => {
-    const id = String(ui.incomingCall?.id || '');
-    if (id === callDragFor) return;
-    callDragFor = id;
-    callDrag = { x: 0, y: 0 };
-  });
-
-  function dragCall(event) {
-    if (event.button !== 0 || event.target.closest('button')) return;
-    const box = event.currentTarget;
-    const parent = box.offsetParent;
-    if (!parent) return;
-    event.preventDefault();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const originX = callDrag.x;
-    const originY = callDrag.y;
-    callDragging = true;
-    const move = (e) => {
-      const bounds = parent.getBoundingClientRect();
-      const width = box.offsetWidth;
-      const height = box.offsetHeight;
-      const baseLeft = bounds.width / 2 - width / 2;
-      const baseTop = 64;
-      let x = originX + e.clientX - startX;
-      let y = originY + e.clientY - startY;
-      x = Math.min(bounds.width - width - 8 - baseLeft, Math.max(8 - baseLeft, x));
-      y = Math.min(bounds.height - height - 8 - baseTop, Math.max(8 - baseTop, y));
-      callDrag = { x, y };
-    };
-    const up = () => {
-      callDragging = false;
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  }
   let streamPop = null;
   let gearOpen = $state(false);
   let stagePop = $state('');
@@ -1370,17 +1320,6 @@
 
 <div class="chat-frame">
 <div class="chat-col" class:bubbles={ui.mode === 'dm'} class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
-{#if showIncoming}
-  <div class="incoming-call" class:dragging={callDragging} role="dialog" aria-label="Incoming call" style="transform: translate(calc(-50% + {callDrag.x}px), {callDrag.y}px)" onpointerdown={dragCall}>
-    <Avatar user={ui.incomingCall.from} size={80} dot={false} />
-    <strong>{ui.incomingCall.from?.displayName || ui.incomingCall.from?.username || 'Someone'}</strong>
-    <span>Incoming Call...</span>
-    <div class="incoming-actions">
-      <button type="button" class="decline" title="Decline" onclick={declineCall}><X size={18} /></button>
-      <button type="button" class="accept" title="Accept" onclick={answerCall}><Phone size={18} /></button>
-    </div>
-  </div>
-{/if}
 <div class="top" class:dm-bar={ui.mode === 'dm'}>
   <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}
