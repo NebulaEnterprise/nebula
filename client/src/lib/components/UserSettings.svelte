@@ -17,6 +17,7 @@
   import { ownedBadges, shortBio } from '../format.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
+  import Developer from './Developer.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook } from '../look.svelte.js';
@@ -71,7 +72,7 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts' };
+  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -525,6 +526,7 @@
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
       <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
+      <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => (ui.userPage = 'developer')}><Code size={16} /> Developer</button>
       {#if ui.me?.canAdmin}
         <div class="group">Nebula staff</div>
         <button class:on={page === 'admin'} onclick={() => (ui.userPage = 'admin')}><Flag size={16} /> Admin</button>
@@ -730,6 +732,8 @@
                 <button type="button" class="switch" class:on={devOn} aria-pressed={devOn} onclick={() => { devOn = !devOn; setDeveloperMode(devOn); }}><i></i></button>
               </div>
             </div>
+          {:else if page === 'developer' || page === 'devdocs'}
+            <Developer docs={page === 'devdocs'} />
           {:else if page === 'admin'}
             <div class="report-list">
               {#each ui.staffReports.filter((report) => report.status !== 'closed') as report (report.id)}

@@ -80,6 +80,16 @@
     window.addEventListener('pointerup', up);
   }
 
+  let docsOpened = false;
+  $effect(() => {
+    if (docsOpened || !ui.me) return;
+    if (new URLSearchParams(window.location.search).get('docs') === '1') {
+      docsOpened = true;
+      ui.userPage = 'devdocs';
+      ui.userSettings = true;
+    }
+  });
+
   onMount(() => {
     boot();
     const vv = window.visualViewport;

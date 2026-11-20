@@ -1138,6 +1138,7 @@ function wakePulse(roomId) {
 function publishCreate(roomId, msg) {
   wakePulse(roomId);
   if (hub) hub.room(roomId, 'MESSAGE_CREATE', (user) => ({ roomId, message: presentMessage(msg, user.id) }));
+  noteBotMessage(msg);
 }
 function publishUpdate(roomId, msg) {
   wakePulse(roomId);
@@ -1866,6 +1867,7 @@ function slimAuthor(u) {
     badges: [...new Set([...(u.badges || []).filter((b) => b === 'early'), ...(signedUpForMoon(u) ? ['early'] : [])])],
     staff: staffKey(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
+    bot: !!u.bot,
   };
 }
 
@@ -2166,6 +2168,7 @@ function presentMessage(msg, viewerId) {
   const storedAvatar = String(base.avatarUrl || '');
   author.avatarUrl = liveAvatar || (storedAvatar.startsWith('data:') ? '' : storedAvatar);
   const out = Object.assign({}, msg, { author });
+  if (live && live.bot) out.bot = true;
   if (out.channelId && !String(out.channelId).startsWith('dm:')) {
     const room = findChannel(out.channelId, '');
     if (room && live) author.staff = staffKey(room.guild, live);
@@ -2580,7 +2583,7 @@ function friendOfFriend(a, b) {
 }
 
 function canMessage(sender, target) {
-  if (!sender || !target || String(sender.id) === String(target.id)) return false;
+  if (!sender || !target || target.bot || String(sender.id) === String(target.id)) return false;
   if (isBlocked(sender.id, target.id)) return false;
   if (friendsWith(target.id, sender.id)) return true;
   const mode = dmPrivacyOf(target);
@@ -2615,7 +2618,7 @@ function groupBlockReason(target) {
 }
 
 function canCall(sender, target) {
-  if (!sender || !target || String(sender.id) === String(target.id)) return false;
+  if (!sender || !target || target.bot || String(sender.id) === String(target.id)) return false;
   if (isBlocked(sender.id, target.id)) return false;
   const mode = callPrivacyOf(target);
   if (mode === 'nobody') return false;
@@ -2831,6 +2834,7 @@ function publicUser(u, viewer) {
     showcaseBadge: userOwnsBadge(u, u.showcaseBadge) ? u.showcaseBadge : '',
     showcase: showcaseOf(u),
     tagChoices: tagChoices(u),
+    bot: !!u.bot,
     server: SERVER_NAME,
     createdAt: u.createdAt,
     vaultPub: u.vaultPub || '',
@@ -3288,7 +3292,7 @@ const app = express();
 app.set('etag', false);
 app.use(cors({ maxAge: 7200 }));
 app.use((req, res, next) => {
-  if (req.path === '/api/upload' || req.path === '/api/upload/part') return next();
+  if (req.path === '/api/upload' || req.path === '/api/upload/part' || req.path === '/api/bot/v1/me/avatar') return next();
   return express.json({ limit: '512mb' })(req, res, next);
 });
 app.use('/api', (req, res, next) => {
@@ -3481,8 +3485,8 @@ app.post('/api/auth/verify', (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
   const password = req.body && req.body.password;
-  const user = Object.values(users).find((u) => u.username === raw)
-    || Object.values(users).find((u) => emailMatches(raw, u.emailSalt, u.emailHash));
+  const user = Object.values(users).find((u) => u && !u.bot && u.username === raw)
+    || Object.values(users).find((u) => u && !u.bot && emailMatches(raw, u.emailSalt, u.emailHash));
   if (!user || !checkPassword(password || '', user.passwordHash)) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
@@ -4599,7 +4603,7 @@ app.delete('/api/me/passkeys/:id', auth, (req, res) => {
 app.get('/api/members', auth, (req, res) => {
   ensureGuilds();
   if (!req.query.serverId) {
-    const list = Object.values(users).map((u) => publicUser(u, req.user));
+    const list = Object.values(users).filter((u) => u && !u.bot).map((u) => publicUser(u, req.user));
     return res.json({ ok: true, members: list, badges: BADGE_DEFS, server: SERVER_NAME });
   }
   const serverId = String(req.query.serverId);
@@ -7767,6 +7771,574 @@ app.post('/api/webhooks/:id/:token', (req, res) => {
   touchAlerts();
   res.json({ ok: true, id: msg.id, message: presentMessage(msg, '') });
 });
+
+const BOTS_FILE = path.join(DATA_DIR, 'bots.json');
+let bots = load(BOTS_FILE, {});
+let botEventSeq = 0;
+const botEvents = [];
+const botWaiters = new Set();
+const botPosts = new Map();
+const botPulse = new Map();
+
+function saveBots() {
+  save(BOTS_FILE, bots);
+}
+
+function hashBotToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function makeBotToken() {
+  return 'nb_' + crypto.randomBytes(32).toString('base64url');
+}
+
+function botUsername(name, selfId) {
+  let base = String(name || '').toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 24);
+  if (!/^[a-z]/.test(base)) base = ('bot' + base).slice(0, 24);
+  if (base.length < 2) base = 'bot';
+  let candidate = base;
+  let n = 0;
+  const taken = (value) => Object.values(users).some((user) => user && user.id !== selfId && String(user.username || '').toLowerCase() === value);
+  while (taken(candidate)) {
+    n += 1;
+    candidate = (base + n).slice(0, 32);
+  }
+  return candidate;
+}
+
+function ownedBots(userId) {
+  return Object.values(bots).filter((bot) => bot && String(bot.ownerId) === String(userId));
+}
+
+function botServers(botId) {
+  const out = [];
+  for (const g of Object.values(guilds.servers || {})) {
+    if (g && g.members && g.members[botId]) out.push({ id: g.id, name: g.name || 'Server' });
+  }
+  return out;
+}
+
+function publicBot(bot, withToken) {
+  const user = users[bot.id] || {};
+  const row = {
+    id: bot.id,
+    name: bot.name,
+    username: user.username || bot.username,
+    displayName: user.displayName || bot.name,
+    bio: String(user.bio || '').slice(0, 300),
+    avatarUrl: publishedMedia(user, 'avatar') || '',
+    tokenTail: bot.tokenTail || '',
+    createdAt: bot.createdAt,
+    servers: botServers(bot.id),
+    commands: Array.isArray(bot.commands) ? bot.commands : [],
+  };
+  if (withToken) row.token = withToken;
+  return row;
+}
+
+function botView(bot) {
+  const user = users[bot.id] || {};
+  return {
+    id: bot.id,
+    username: user.username || bot.username,
+    display_name: user.displayName || bot.name,
+    displayName: user.displayName || bot.name,
+    bio: String(user.bio || '').slice(0, 300),
+    avatar_url: publishedMedia(user, 'avatar') || '',
+    bot: true,
+    owner_id: bot.ownerId,
+    name: bot.name,
+  };
+}
+
+function markBotOnline(user) {
+  if (!user) return;
+  touchLive(user);
+  const prev = botPulse.get(user.id);
+  if (prev) clearTimeout(prev);
+  botPulse.set(user.id, setTimeout(() => {
+    botPulse.delete(user.id);
+    setLive(user, false);
+  }, 50000));
+}
+
+function botAuth(req, res, next) {
+  const header = String(req.headers.authorization || '');
+  const token = header.startsWith('Bot ') ? header.slice(4).trim() : '';
+  if (!token.startsWith('nb_')) return res.status(401).json({ error: 'Missing bot token', code: 'unauthorized' });
+  const hash = hashBotToken(token);
+  const bot = Object.values(bots).find((row) => row && row.tokenHash === hash);
+  const user = bot && users[bot.id];
+  if (!bot || !user) return res.status(401).json({ error: 'Wrong token', code: 'unauthorized' });
+  req.bot = bot;
+  req.botUser = user;
+  markBotOnline(user);
+  next();
+}
+
+function botFail(res, status, error, code) {
+  return res.status(status).json({ error, code: code || 'invalid_request' });
+}
+
+function canHostBot(g, user) {
+  return !!(g && user && g.members && g.members[user.id] && (isOwner(g, user) || can(g, user, PERM.MANAGE_SERVER)));
+}
+
+function pushBotEvent(botId, type, data) {
+  const row = {
+    id: ++botEventSeq,
+    botId: String(botId),
+    type,
+    data,
+    created_at: new Date().toISOString(),
+  };
+  botEvents.push(row);
+  if (botEvents.length > 5000) botEvents.splice(0, botEvents.length - 4000);
+  for (const waiter of [...botWaiters]) {
+    if (waiter.botId === row.botId) waiter.finish();
+  }
+}
+
+function takeBotEvents(botId, after) {
+  return botEvents.filter((row) => row.botId === String(botId) && row.id > after).slice(0, 100);
+}
+
+function noteBotMessage(msg) {
+  if (!msg || msg.webhook || !msg.channelId || msg.seal) return;
+  const author = users[msg.authorId];
+  if (author && author.bot) return;
+  const found = findChannel(msg.channelId, '');
+  if (!found || found.channel.type === 'voice') return;
+  const content = String(msg.content || '');
+  for (const bot of Object.values(bots)) {
+    if (!bot || !found.guild.members || !found.guild.members[bot.id]) continue;
+    const botUser = users[bot.id];
+    if (!botUser || !can(found.guild, botUser, PERM.VIEW, found.channel)) continue;
+    const data = {
+      object: 'message',
+      id: msg.id,
+      channel_id: found.channel.id,
+      channel_name: found.channel.name,
+      server_id: found.guild.id,
+      author_id: msg.authorId,
+      author: (author && (author.displayName || author.username)) || 'Someone',
+      content,
+      created_at: msg.createdAt,
+      mentioned: content.includes('<@' + bot.id + '>'),
+      author_bot: false,
+    };
+    const matched = content.match(/^[/!]([a-z0-9_-]{1,32})(?:\s+([\s\S]*))?$/i);
+    if (matched) {
+      const name = matched[1].toLowerCase();
+      if ((bot.commands || []).some((cmd) => cmd.name === name)) {
+        data.command = name;
+        data.args = String(matched[2] || '').trim();
+      }
+    }
+    pushBotEvent(bot.id, 'message', data);
+  }
+}
+
+function botEmbeds(rows) {
+  if (!Array.isArray(rows)) return [];
+  return cleanEmbeds(rows.map((row) => {
+    if (!row || typeof row !== 'object' || typeof row.color !== 'string') return row;
+    const hex = row.color.trim().replace(/^#/, '');
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) return row;
+    return Object.assign({}, row, { color: parseInt(hex, 16) });
+  }));
+}
+
+function botLimited(id) {
+  const now = Date.now();
+  const prev = (botPosts.get(id) || []).filter((at) => now - at < 60000);
+  if (prev.length >= 30) {
+    botPosts.set(id, prev);
+    return true;
+  }
+  prev.push(now);
+  botPosts.set(id, prev);
+  return false;
+}
+
+function addBotToServer(g, bot, actor) {
+  hydrateGuild(g);
+  if (g.members[bot.id]) return { error: 'That bot is already in this server', status: 400 };
+  const here = Object.keys(g.members).filter((id) => users[id] && users[id].bot).length;
+  if (here >= 25) return { error: 'This server already has 25 bots', status: 400 };
+  g.members[bot.id] = { roles: ['everyone'], joinedAt: new Date().toISOString(), bot: true };
+  audit(g, actor, 'added the bot ' + (bot.name || 'bot'));
+  saveGuilds();
+  pushBotEvent(bot.id, 'server_add', {
+    object: 'server',
+    server_id: g.id,
+    name: g.name || 'Server',
+    member_count: memberCount(g),
+  });
+  return { ok: true };
+}
+
+function removeBotFromServer(g, bot, actor) {
+  if (!g.members || !g.members[bot.id]) return { error: 'That bot is not in this server', status: 404 };
+  delete g.members[bot.id];
+  audit(g, actor, 'removed the bot ' + (bot.name || 'bot'));
+  saveGuilds();
+  pushBotEvent(bot.id, 'server_remove', { object: 'server', server_id: g.id, name: g.name || 'Server' });
+  return { ok: true };
+}
+
+app.get('/api/bot/v1/version', (req, res) => {
+  res.set('X-Nebula-API-Version', '1.0.0');
+  res.json({ api: '1.0.0', sdk: { js: '1.0.0' } });
+});
+
+app.get('/api/me/bots', auth, (req, res) => {
+  res.json({ ok: true, bots: ownedBots(req.user.id).map((bot) => publicBot(bot)), limit: 2 });
+});
+
+app.post('/api/me/bots', auth, (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 32);
+  if (name.length < 2) return res.status(400).json({ error: 'Name the bot with at least 2 characters' });
+  if (ownedBots(req.user.id).length >= 2) return res.status(400).json({ error: 'Free accounts can have 2 bots' });
+  const id = uuidv4();
+  const token = makeBotToken();
+  const username = botUsername(name, id);
+  const now = new Date().toISOString();
+  users[id] = {
+    id,
+    username,
+    displayName: name,
+    bot: true,
+    ownerId: req.user.id,
+    avatarColor: '#5865f2',
+    accentColor: '#5865f2',
+    bio: '',
+    createdAt: now,
+    badges: [],
+  };
+  bots[id] = {
+    id,
+    name,
+    username,
+    ownerId: req.user.id,
+    tokenHash: hashBotToken(token),
+    tokenTail: token.slice(-6),
+    commands: [],
+    createdAt: now,
+  };
+  save(USERS_FILE, users);
+  saveBots();
+  res.json({ ok: true, bot: publicBot(bots[id], token) });
+});
+
+app.patch('/api/me/bots/:id', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  const user = users[bot.id];
+  if (!user) return res.status(404).json({ error: 'Bot not found' });
+  if (req.body?.name != null) {
+    const name = String(req.body.name || '').trim().slice(0, 32);
+    if (name.length < 2) return res.status(400).json({ error: 'Name the bot with at least 2 characters' });
+    bot.name = name;
+    user.displayName = name;
+  }
+  if (req.body?.displayName != null) {
+    const displayName = String(req.body.displayName || '').trim().slice(0, 32);
+    if (!displayName) return res.status(400).json({ error: 'Display name required' });
+    user.displayName = displayName;
+    bot.name = displayName;
+  }
+  if (req.body?.bio != null) user.bio = String(req.body.bio || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (req.body?.avatarUrl != null) {
+    const url = String(req.body.avatarUrl || '');
+    if (url && !url.startsWith('/uploads/') && !url.startsWith('/files/') && !/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ error: 'Use an uploaded picture' });
+    }
+    user.avatarUrl = url.slice(0, 500);
+  }
+  save(USERS_FILE, users);
+  saveBots();
+  res.json({ ok: true, bot: publicBot(bot) });
+});
+
+app.post('/api/me/bots/:id/token', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  const token = makeBotToken();
+  bot.tokenHash = hashBotToken(token);
+  bot.tokenTail = token.slice(-6);
+  saveBots();
+  res.json({ ok: true, bot: publicBot(bot, token) });
+});
+
+app.post('/api/me/bots/:id/test', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  pushBotEvent(bot.id, 'test', { object: 'test', bot: bot.id, by: req.user.id, at: new Date().toISOString(), hello: 'nebula' });
+  res.json({ ok: true });
+});
+
+app.delete('/api/me/bots/:id', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  for (const g of Object.values(guilds.servers || {})) {
+    if (g && g.members && g.members[bot.id]) delete g.members[bot.id];
+  }
+  saveGuilds();
+  delete users[bot.id];
+  delete bots[bot.id];
+  const pulse = botPulse.get(bot.id);
+  if (pulse) clearTimeout(pulse);
+  botPulse.delete(bot.id);
+  save(USERS_FILE, users);
+  saveBots();
+  res.json({ ok: true });
+});
+
+app.post('/api/me/bots/:id/servers', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  ensureGuilds();
+  const g = guilds.servers[String(req.body?.serverId || '')];
+  if (!g) return res.status(404).json({ error: 'Server not found' });
+  if (!canHostBot(g, req.user)) return res.status(403).json({ error: 'You need Manage Server there' });
+  const added = addBotToServer(g, bot, req.user);
+  if (added.error) return res.status(added.status).json({ error: added.error });
+  res.json({ ok: true, bot: publicBot(bot) });
+});
+
+app.delete('/api/me/bots/:id/servers/:serverId', auth, (req, res) => {
+  const bot = bots[req.params.id];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
+  ensureGuilds();
+  const g = guilds.servers[req.params.serverId];
+  if (!g) return res.status(404).json({ error: 'Server not found' });
+  if (!canHostBot(g, req.user)) return res.status(403).json({ error: 'You need Manage Server there' });
+  const removed = removeBotFromServer(g, bot, req.user);
+  if (removed.error) return res.status(removed.status).json({ error: removed.error });
+  res.json({ ok: true, bot: publicBot(bot) });
+});
+
+app.get('/api/servers/:id/bots', auth, (req, res) => {
+  const g = requireGuild(req, res);
+  if (!g) return;
+  if (!canHostBot(g, req.user)) return res.status(403).json({ error: 'You need Manage Server' });
+  const list = Object.keys(g.members || {})
+    .map((id) => bots[id])
+    .filter((bot) => bot && users[bot.id] && users[bot.id].bot)
+    .map((bot) => publicBot(bot));
+  const mine = ownedBots(req.user.id).map((bot) => publicBot(bot));
+  res.json({ ok: true, bots: list, mine });
+});
+
+app.post('/api/servers/:id/bots', auth, (req, res) => {
+  const g = requireGuild(req, res);
+  if (!g) return;
+  if (!canHostBot(g, req.user)) return res.status(403).json({ error: 'You need Manage Server' });
+  const bot = bots[String(req.body?.botId || '')];
+  if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'That bot is not yours' });
+  const added = addBotToServer(g, bot, req.user);
+  if (added.error) return res.status(added.status).json({ error: added.error });
+  res.json({ ok: true, bots: Object.keys(g.members).map((id) => bots[id]).filter(Boolean).map((row) => publicBot(row)) });
+});
+
+app.delete('/api/servers/:id/bots/:botId', auth, (req, res) => {
+  const g = requireGuild(req, res);
+  if (!g) return;
+  if (!canHostBot(g, req.user)) return res.status(403).json({ error: 'You need Manage Server' });
+  const bot = bots[req.params.botId];
+  if (!bot) return res.status(404).json({ error: 'Bot not found' });
+  const removed = removeBotFromServer(g, bot, req.user);
+  if (removed.error) return res.status(removed.status).json({ error: removed.error });
+  res.json({ ok: true });
+});
+
+const botApi = express.Router();
+botApi.use((req, res, next) => {
+  res.set('X-Nebula-API-Version', '1.0.0');
+  next();
+});
+botApi.use(botAuth);
+
+botApi.get('/me', (req, res) => {
+  res.json(botView(req.bot));
+});
+
+botApi.patch('/me', (req, res) => {
+  const user = req.botUser;
+  if (req.body?.display_name != null || req.body?.displayName != null) {
+    const displayName = String(req.body.display_name != null ? req.body.display_name : req.body.displayName).trim().slice(0, 32);
+    if (!displayName) return botFail(res, 400, 'Display name required');
+    user.displayName = displayName;
+    req.bot.name = displayName;
+  }
+  if (req.body?.bio != null) user.bio = String(req.body.bio || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+  save(USERS_FILE, users);
+  saveBots();
+  res.json(botView(req.bot));
+});
+
+botApi.put('/me/avatar', express.raw({ type: () => true, limit: '8mb' }), async (req, res) => {
+  const ext = sniffImage(req.body);
+  if (!ext) return botFail(res, 400, 'Use a PNG, JPG, GIF, or WebP');
+  if (req.body.length > 8 * 1024 * 1024) return botFail(res, 413, 'Pictures can be up to 8 MB', 'too_large');
+  try {
+    req.botUser.avatarUrl = await storeUpload(req.body, ext);
+  } catch (err) {
+    return botFail(res, 502, err.message || 'Could not save that picture', 'unavailable');
+  }
+  save(USERS_FILE, users);
+  res.json(Object.assign({ ok: true }, botView(req.bot)));
+});
+
+botApi.get('/commands', (req, res) => {
+  res.json({ commands: req.bot.commands || [] });
+});
+
+botApi.put('/commands', (req, res) => {
+  const rows = Array.isArray(req.body?.commands) ? req.body.commands : [];
+  if (rows.length > 100) return botFail(res, 400, 'A bot can have 100 commands');
+  const commands = [];
+  const seen = new Set();
+  for (const row of rows) {
+    const name = String(row?.name || '').trim().toLowerCase();
+    const description = String(row?.description || '').trim().slice(0, 100);
+    if (!/^[a-z0-9_-]{1,32}$/.test(name)) return botFail(res, 400, 'Command names use 1 to 32 lowercase letters, numbers, - or _');
+    if (seen.has(name)) return botFail(res, 400, 'Two commands are named ' + name);
+    seen.add(name);
+    commands.push({ name, description });
+  }
+  req.bot.commands = commands;
+  saveBots();
+  res.json({ commands });
+});
+
+botApi.get('/events', (req, res) => {
+  const after = Math.max(0, Number(req.query.after) || 0);
+  const wait = Math.max(0, Math.min(25, Number(req.query.wait) || 0));
+  const ready = takeBotEvents(req.bot.id, after);
+  const answer = (events) => {
+    const last = events.length ? events[events.length - 1].id : after;
+    res.json({ events: events.map((row) => ({ id: row.id, type: row.type, data: row.data, created_at: row.created_at })), last });
+  };
+  if (ready.length || !wait) return answer(ready);
+  let finished = false;
+  const waiter = { botId: String(req.bot.id), finish: () => {} };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    botWaiters.delete(waiter);
+    if (!res.headersSent) answer(takeBotEvents(req.bot.id, after));
+  };
+  waiter.finish = finish;
+  const timer = setTimeout(finish, wait * 1000);
+  botWaiters.add(waiter);
+  req.on('close', () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timer);
+    botWaiters.delete(waiter);
+  });
+});
+
+botApi.get('/servers', (req, res) => {
+  const servers = botServers(req.bot.id).map((row) => {
+    const g = guilds.servers[row.id];
+    return { id: row.id, name: row.name, member_count: g ? memberCount(g) : 0 };
+  });
+  res.json({ servers });
+});
+
+botApi.get('/servers/:id/channels', (req, res) => {
+  ensureGuilds();
+  const g = guilds.servers[req.params.id];
+  if (!g || !g.members || !g.members[req.bot.id]) return botFail(res, 404, 'Server not found', 'not_found');
+  const type = String(req.query.type || '');
+  const channels = visibleChannels(g, req.botUser)
+    .filter((ch) => !type || ch.type === type)
+    .map((ch) => ({ id: ch.id, name: ch.name, type: ch.type || 'text', server_id: g.id }));
+  res.json({ channels });
+});
+
+botApi.get('/channels/:id', (req, res) => {
+  const found = findChannel(req.params.id, '');
+  if (!found || !can(found.guild, req.botUser, PERM.VIEW, found.channel)) return botFail(res, 404, 'Channel not found', 'not_found');
+  res.json({ id: found.channel.id, name: found.channel.name, type: found.channel.type || 'text', server_id: found.guild.id });
+});
+
+botApi.get('/channels/:id/messages', (req, res) => {
+  const found = findChannel(req.params.id, '');
+  if (!found || !can(found.guild, req.botUser, PERM.VIEW, found.channel)) return botFail(res, 404, 'Channel not found', 'not_found');
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 50));
+  const list = (messages[found.channel.id] || []).slice(-limit);
+  res.json({
+    messages: list.map((msg) => ({
+      id: msg.id,
+      channel_id: msg.channelId,
+      author_id: msg.authorId,
+      author: (msg.author && (msg.author.displayName || msg.author.username)) || '',
+      content: msg.seal ? '' : String(msg.content || ''),
+      created_at: msg.createdAt,
+      bot: !!(msg.bot || msg.webhook),
+    })),
+  });
+});
+
+botApi.post('/channels/:id/messages', (req, res) => {
+  const found = findChannel(req.params.id, '');
+  if (!found || found.channel.type === 'voice') return botFail(res, 404, 'Channel not found', 'not_found');
+  if (!can(found.guild, req.botUser, PERM.VIEW, found.channel)) return botFail(res, 403, 'The bot cannot see that channel', 'missing_permission');
+  if (!can(found.guild, req.botUser, PERM.SEND, found.channel)) return botFail(res, 403, 'The bot cannot send messages there', 'missing_permission');
+  if (found.channel.readOnly) return botFail(res, 403, 'This channel is read-only', 'missing_permission');
+  if (botLimited(req.bot.id)) return botFail(res, 429, '30 messages a minute for this bot', 'rate_limited');
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const content = body.content == null ? '' : String(body.content).slice(0, 2000);
+  const embeds = botEmbeds(body.embeds);
+  if (!content.trim() && !embeds.length) return botFail(res, 400, 'Add a message');
+  const slow = Math.max(0, Math.min(21600, Number(found.channel.slowmode) || 0));
+  if (slow) {
+    const list = messages[found.channel.id] || [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const prev = list[i];
+      if (!prev || String(prev.authorId) !== String(req.bot.id)) continue;
+      const waited = Date.now() - Date.parse(prev.createdAt || '');
+      if (waited < slow * 1000) return botFail(res, 429, 'Slowmode is on', 'rate_limited');
+      break;
+    }
+  }
+  if (!messages[found.channel.id]) messages[found.channel.id] = [];
+  const msg = {
+    id: uuidv4(),
+    channelId: found.channel.id,
+    authorId: req.bot.id,
+    author: slimAuthor(req.botUser),
+    bot: true,
+    content,
+    embeds,
+    files: [],
+    mentions: parseMentions(found.guild, req.botUser, content),
+    replies: body.reply_to ? readReplies({ replies: [{ id: String(body.reply_to) }] }, found.channel.id) : [],
+    createdAt: new Date().toISOString(),
+  };
+  msg.reply = msg.replies[0] || null;
+  messages[found.channel.id].push(msg);
+  if (messages[found.channel.id].length > 500) messages[found.channel.id] = messages[found.channel.id].slice(-500);
+  save(MESSAGES_FILE, messages);
+  publishCreate(found.channel.id, msg);
+  touchAlerts();
+  res.json({
+    ok: true,
+    message: {
+      id: msg.id,
+      channel_id: msg.channelId,
+      content: msg.content,
+      embeds: msg.embeds,
+    },
+  });
+});
+
+app.use('/api/bot/v1', botApi);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ error: 'API route not found' });

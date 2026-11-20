@@ -3,8 +3,10 @@
   import { ArrowRight, Code2, Lock, Moon, Palette, Sun, Zap } from '@lucide/svelte';
   import { ui } from '../state.svelte.js';
   import { getApiBase } from '../api.js';
+  import DeveloperDocs from './DeveloperDocs.svelte';
 
   let theme = $state(localStorage.getItem('nebula-home-theme') === 'light' ? 'light' : 'dark');
+  let docs = $state(false);
   let online = $state(null);
   let onlineState = $state('loading');
 
@@ -64,6 +66,8 @@
   }
 
   onMount(() => {
+    const path = location.pathname.replace(/\/+$/, '');
+    if (new URLSearchParams(location.search).get('docs') === '1' || path.endsWith('/developers')) docs = true;
     loadOnline();
     const timer = setInterval(loadOnline, 60000);
     return () => clearInterval(timer);
@@ -73,17 +77,21 @@
 <div class="home" class:light={theme === 'light'}>
   <div class="sky" aria-hidden="true"></div>
   <header class="bar">
-    <button class="logo" type="button" onclick={toTop}>
+    <button class="logo" type="button" onclick={() => { docs = false; toTop(); }}>
       <img class="gem" src="./logo.webp?v=3" alt="" />
       Nebula
     </button>
     <nav class="nav" aria-label="Site">
-      <button type="button" class="on" onclick={toTop}>Home</button>
+      <button type="button" class:on={!docs} onclick={() => { docs = false; toTop(); }}>Home</button>
       {#if !desktop}
         <a href={downloadUrl} download="Nebula.exe">Download</a>
       {/if}
       {#each nav as label}
-        <span>{label}</span>
+        {#if label === 'Developers'}
+          <button type="button" class:on={docs} onclick={() => (docs = true)}>Developers</button>
+        {:else}
+          <span>{label}</span>
+        {/if}
       {/each}
     </nav>
     <div class="tools">
@@ -99,6 +107,11 @@
     </div>
   </header>
 
+  {#if docs}
+    <section class="home-docs">
+      <DeveloperDocs onback={() => (docs = false)} />
+    </section>
+  {:else}
   <section class="hero">
     <div class="copy">
       <p class="pill"><span class="dot"></span> The next generation chat platform</p>
@@ -110,6 +123,7 @@
         {/if}
         <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
         <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
+        <button class="ghost" type="button" onclick={() => (docs = true)}>Developers</button>
       </div>
       <p class="live">
         <span class="faces" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -187,6 +201,7 @@
       <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
     </div>
   </section>
+  {/if}
 </div>
 
 <style>
@@ -494,6 +509,7 @@
     font-size: 12px;
     font-weight: 700;
   }
+  .home-docs { width: min(860px, calc(100% - 32px)); margin: 28px auto 64px; }
   .join h2 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.04em; }
   .home.light .nav, .home.light .theme, .home.light .pill, .home.light .signup, .home.light .ghost, .home.light .features article, .home.light .join {
     background: rgba(255, 255, 255, 0.82);

@@ -77,6 +77,10 @@
   let reportTab = $state('open');
   let serverHooks = $state([]);
   let hookChannel = $state('');
+  let serverBots = $state([]);
+  let myBots = $state([]);
+  let botPick = $state('');
+  let botNote = $state('');
   let hookNote = $state('');
   let menuFor = $state('');
   let roleFilter = $state('');
@@ -209,6 +213,30 @@
   $effect(() => {
     if (ui.settingsPage !== 'webhooks' || !ui.serverId) return;
     loadServerHooks();
+  });
+
+  async function loadServerBots() {
+    botNote = '';
+    try {
+      const data = await api('/api/servers/' + ui.serverId + '/bots');
+      serverBots = data.bots || [];
+      myBots = data.mine || [];
+      if (!botPick || !myBots.some((bot) => bot.id === botPick)) {
+        const next = myBots.find((bot) => !serverBots.some((row) => row.id === bot.id));
+        botPick = next ? next.id : '';
+      }
+    } catch (err) {
+      serverBots = [];
+      myBots = [];
+      botNote = err.status === 404
+        ? 'Bots need the updated server. Replace server.js and start it again.'
+        : err.message;
+    }
+  }
+
+  $effect(() => {
+    if (ui.settingsPage !== 'bots' || !ui.serverId) return;
+    loadServerBots();
   });
 
   async function run(fn) {
@@ -1139,7 +1167,40 @@
 
         {:else if ui.settingsPage === 'bots'}
           <section class="gset-card">
-            {@render bear('No bots yet', 'Bots you add to this server will show up here.')}
+            <h3>Bots</h3>
+            <p class="hint">Add a bot you made in Settings → Developer. It can read and post where @everyone can.</p>
+            {#if botNote}<p class="hint">{botNote}</p>{/if}
+            <div class="gset-chan">
+              <select class="look-select" bind:value={botPick}>
+                <option value="">Your bots</option>
+                {#each myBots.filter((bot) => !serverBots.some((row) => row.id === bot.id)) as bot}
+                  <option value={bot.id}>{bot.name}</option>
+                {/each}
+              </select>
+              <button type="button" class="btn brand" disabled={!botPick} onclick={async () => {
+                try {
+                  await api('/api/servers/' + ui.serverId + '/bots', { method: 'POST', body: { botId: botPick } });
+                  await loadServerBots();
+                  toast('Bot added');
+                } catch (err) { toast(err.message); }
+              }}>Add</button>
+            </div>
+            {#each serverBots as bot (bot.id)}
+              <div class="gset-chan">
+                <div class="grow">
+                  <strong>{bot.displayName || bot.name}</strong>
+                  <div class="hint">@{bot.username}</div>
+                </div>
+                <button type="button" class="btn sm" onclick={async () => {
+                  try {
+                    await api('/api/servers/' + ui.serverId + '/bots/' + bot.id, { method: 'DELETE' });
+                    await loadServerBots();
+                  } catch (err) { toast(err.message); }
+                }}>Remove</button>
+              </div>
+            {:else}
+              {#if !botNote}{@render bear('No bots yet', 'Make one in Settings → Developer, then add it here.')}{/if}
+            {/each}
           </section>
         {/if}
       </div>

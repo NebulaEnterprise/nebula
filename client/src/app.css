@@ -3114,6 +3114,39 @@ html[data-theme="amoled"] #app { background-color: #000; }
   .ched-perm { grid-template-columns: 1fr; }
   .ched-row { align-items: flex-start; flex-direction: column; }
 }
+.home.light .home-docs { color: #1b1230; }
+.home.light .home-docs a { color: #6d28d9; }
+.home.light .home-docs pre, .home.light .home-docs .dev-token { background: rgba(255,255,255,.72); color: #1b1230; }
+.devdocs { line-height: 1.5; overflow-x: auto; }
+.devdocs h3 { margin: 22px 0 8px; }
+.devdocs p, .devdocs li { margin: 0 0 10px; }
+.devdocs ol { margin: 0 0 12px; padding-left: 1.2em; }
+.devdocs a { color: #c4b5fd; }
+.devdocs code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+.devdocs pre, .dev-token { display: block; overflow: auto; margin: 8px 0; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,.28); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
+.devdocs table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.devdocs th, .devdocs td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.1); vertical-align: top; }
+.dev-code { position: relative; }
+.dev-code .btn { position: absolute; top: 8px; right: 8px; }
+.dev-portal { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 16px 18px; border-radius: 12px; background: color-mix(in srgb, var(--brand, #7c5cff) 18%, transparent); margin-bottom: 18px; }
+.dev-portal p, .dev-block > p { margin: 4px 0 0; }
+.btn.dev-open { width: auto; min-width: 88px; }
+.dev-card, .dev-empty { margin-top: 14px; padding: 14px; border-radius: 12px; background: rgba(0,0,0,.18); }
+.dev-empty { text-align: center; }
+.dev-empty img { width: 72px; height: 72px; object-fit: contain; }
+.dev-empty p { margin: 6px auto 12px; max-width: 360px; }
+.dev-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.dev-actions.create input, .dev-actions select.look-select { flex: 1; min-width: 140px; }
+.dev-actions label.btn { position: relative; overflow: hidden; }
+.dev-actions label.btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.dev-row { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.dev-row.slim { margin-top: 8px; }
+.dev-list { display: grid; gap: 8px; margin-top: 14px; }
+.dev-bot { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,.18); color: inherit; border: 0; cursor: pointer; text-align: left; }
+.dev-bot em { display: block; font-style: normal; opacity: .7; font-size: 13px; }
+@media (max-width: 700px) {
+  .dev-portal { align-items: stretch; flex-direction: column; }
+}
 @media (max-width: 900px) {
   .set-brand { display: none; }
   .gset-bar, .gset-body { padding-left: 14px; padding-right: 14px; }

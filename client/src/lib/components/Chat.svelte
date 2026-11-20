@@ -1614,7 +1614,7 @@
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => { if (!msg.webhook) peekProfile(liveAuthor(msg.author)); }} onclick={(e) => { if (!msg.webhook) openPopout(liveAuthor(msg.author), e.clientX, e.clientY); }}><strong><Name user={liveAuthor(msg.author)} color={nameInk(msg.author)} /></strong></button>{#if msg.webhook}<span class="bot-tag">BOT</span>{/if}<NameExtras user={liveAuthor(msg.author)} /></span>
+          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => { if (!msg.webhook) peekProfile(liveAuthor(msg.author)); }} onclick={(e) => { if (!msg.webhook) openPopout(liveAuthor(msg.author), e.clientX, e.clientY); }}><strong><Name user={liveAuthor(msg.author)} color={nameInk(msg.author)} /></strong></button>{#if msg.webhook || msg.bot || msg.author?.bot}<span class="bot-tag">BOT</span>{/if}<NameExtras user={liveAuthor(msg.author)} /></span>
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>

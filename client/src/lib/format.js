@@ -130,7 +130,7 @@ export const TAG_ICONS = ['⚡', '💜', '💎', '🔥', '🌸', '💧', '💙',
 
 export const SITE_ORIGIN = 'https://nebulaapp.space';
 
-const INVITE_SKIP = new Set(['api', 'assets', 'files', 'uploads', 'index', 'index.html', 'sw', 'sw.js', 'look', 'invite', 'favicon.png', 'favicon.svg', 'icons.svg', 'logo.webp', 'space.jpg', 'space.png', 'voice.js', 'server.js', '404.html']);
+const INVITE_SKIP = new Set(['api', 'assets', 'files', 'uploads', 'index', 'index.html', 'sw', 'sw.js', 'look', 'invite', 'favicon.png', 'favicon.svg', 'icons.svg', 'logo.webp', 'space.jpg', 'space.png', 'voice.js', 'server.js', '404.html', 'developers', 'sdk']);
 
 function inviteHost(hostname) {
   const host = String(hostname || '').toLowerCase().replace(/\.$/, '');

@@ -38,7 +38,11 @@
     }
     var parts = path.split('/').filter(Boolean);
     if (root === '/nebula/') parts = parts.slice(1);
-    var skip = { api: 1, assets: 1, files: 1, uploads: 1, index: 1, 'index.html': 1, sw: 1, 'sw.js': 1, look: 1, invite: 1, preview: 1 };
+    var skip = { api: 1, assets: 1, files: 1, uploads: 1, index: 1, 'index.html': 1, sw: 1, 'sw.js': 1, look: 1, invite: 1, preview: 1, developers: 1, sdk: 1 };
+    if (parts[0] === 'developers') {
+      location.replace(root + '?docs=1');
+      return;
+    }
     var code = '';
     var old = path.match(/\/invite\/([A-Za-z0-9_-]+)/);
     if (old) code = old[1];
