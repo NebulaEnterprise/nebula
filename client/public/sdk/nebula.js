@@ -1,8 +1,9 @@
 // Nebula bot library. Node 18 or newer. No dependencies.
+// API: https://nebulaapp.space/api/bot/v1
 // The token is the one from Settings → Developer. It starts with nb_.
 
 const DEFAULT_API = (typeof process !== 'undefined' && process.env && (process.env.NEBULA_API_URL || process.env.NEBULA_API))
-  || 'https://scowling-anthill-civil.ngrok-free.dev/api/bot/v1';
+  || 'https://nebulaapp.space/api/bot/v1';
 
 export class Bot {
   constructor(token, opts = {}) {

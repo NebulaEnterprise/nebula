@@ -1,5 +1,5 @@
 <script>
-  import { getApiBase } from '../api.js';
+  import { SITE_ORIGIN } from '../format.js';
   import {
     toc,
     botObject,
@@ -21,9 +21,9 @@
 
   let { onback = null } = $props();
   let copied = $state('');
-  const origin = getApiBase();
+  const origin = SITE_ORIGIN;
   const apiBase = origin + '/api/bot/v1';
-  const site = 'https://nebulaapp.space';
+  const site = SITE_ORIGIN;
   const routes = botEndpoints(apiBase);
   const account = accountEndpoints(origin);
   const curl = curlSample(apiBase);
