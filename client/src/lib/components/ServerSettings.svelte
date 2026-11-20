@@ -394,15 +394,7 @@
 
 {#snippet bear(title, text)}
   <div class="gset-empty">
-    <svg width="78" height="64" viewBox="0 0 78 64" aria-hidden="true">
-      <circle cx="16" cy="16" r="11" fill="#f97316"/>
-      <circle cx="62" cy="16" r="11" fill="#f97316"/>
-      <circle cx="39" cy="36" r="24" fill="#f97316"/>
-      <circle cx="30" cy="32" r="3.2" fill="#1a1020"/>
-      <circle cx="48" cy="32" r="3.2" fill="#1a1020"/>
-      <ellipse cx="39" cy="42" rx="7" ry="5" fill="#1a1020"/>
-      <ellipse cx="39" cy="40" rx="3" ry="2" fill="#f97316"/>
-    </svg>
+    <img src="./logo.webp?v=3" alt="" />
     <strong>{title}</strong>
     <p>{text}</p>
   </div>

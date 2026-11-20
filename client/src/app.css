@@ -3001,6 +3001,7 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .gset-chan.head { margin-top: 8px; }
 .gset-chan .grow, .gset-member .grow, .gset-role-row .grow { flex: 1; min-width: 0; }
 .gset-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 12px 18px; }
+.gset-empty img { width: 72px; height: 72px; object-fit: contain; }
 .gset-empty strong { font-size: 16px; }
 .gset-empty p { margin: 0; color: var(--faint); max-width: 360px; }
 .gset-member { position: relative; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.05); }
