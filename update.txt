@@ -5,3 +5,20 @@ I will do the servers and user settings tomorrow >3
 /////
 
 sorry i got the flu and my body feels bad and i have no energy to do basic things  i will try to work on the website but i prolly won't achieve much 
+
+
+///
+
+November 20
+
+Bots are in. Open Settings, then Developer, name a bot, and copy the token. It starts with nb_ and it is shown once. Add it from that screen or from Server settings, then Bots. An account can have 2 bots. A server can have 25.
+
+A bot runs on your own computer. The Developers tab has nebula.js, starter.js, welcome.js, and package.json. node starter.js answers /ping and !ping. The welcome script posts a purple embed when someone joins: the server name, their @username, and which member they are. Leave that process running.
+
+The Developers page is the full bot guide. It covers the JavaScript library, every bot route, the account routes that create and delete bots, events (message, member_join, server_add, server_remove, test), embeds, a welcome bot, curl, and the limits. 30 messages a minute per bot.
+
+Bots show a BOT tag in the member list, on their messages, and on their profile.
+
+Webhook links are shown as https://nebulaapp.space/api/webhooks/...
+
+The bot API is https://scowling-anthill-civil.ngrok-free.dev/api/bot/v1.
