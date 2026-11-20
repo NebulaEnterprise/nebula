@@ -829,33 +829,34 @@ export async function loadDms() {
       return;
     }
     const unread = {};
-    let changed = false;
     for (const row of next) {
       const id = row.other && row.other.id;
       if (!id) continue;
       const key = 'dm:' + id;
-      const stamp = row.lastId || String(row.updatedAt || '');
+      const stamp = String(row.lastId || headForDm(ui.heads, id) || '');
       const viewing = (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id))
         || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
-      const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === lastSentId);
-      const readHere = !!(stamp && ((map[key] && map[key] === stamp) || (ackedDm[id] && ackedDm[id] === stamp)));
+      const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === String(lastSentId || ''));
+      const seenId = seenForDm(map, id);
+      const readHere = dmCovers(id, seenId, stamp) || (ackedDm[id] && String(ackedDm[id]) === stamp);
       const pendingCount = pendingDm.get(String(id)) ? pendingDm.get(String(id)).size : 0;
       const looking = viewing && chatInFront();
       if (looking || ((own || readHere) && pendingCount === 0)) {
-        if (row.lastId && map[key] !== row.lastId) {
-          map[key] = row.lastId;
-          changed = true;
+        if (looking && currentRoom() === key) {
+          const newest = [...ui.messages].reverse().find((msg) => msg && msg.id && !msg.pending && !msg.failed && !String(msg.id).startsWith('local-'));
+          if (newest) advanceDmSeen(id, newest.id);
         }
+        if (stamp) advanceDmSeen(id, stamp);
         pendingDm.delete(String(id));
         rememberDm(id, row.updatedAt || Date.now());
-        heardDm[id] = stamp;
-        ackedDm[id] = stamp;
+        heardDm[id] = seenForDm(seenMap(), id) || stamp;
+        ackedDm[id] = heardDm[id];
         continue;
       }
       const fromList = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
       const fromActivity = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
       const serverCount = Math.max(fromList, fromActivity);
-      const unseen = !!(stamp && (!map[key] || map[key] !== stamp));
+      const unseen = !!(stamp && !dmCovers(id, seenForDm(seenMap(), id), stamp));
       const exact = unseen ? unseenInLog(id, row.lastId || '') : null;
       let count = Math.max(serverCount, pendingCount, exact || 0);
       if (count <= 0 && unseen) count = 1;
@@ -868,7 +869,6 @@ export async function loadDms() {
       }
       heardDm[id] = stamp;
     }
-    if (changed) saveSeen(map);
     if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
     if (ui.dmUser) {
       const row = next.find((dm) => dm.other && String(dm.other.id) === String(ui.dmUser.id));
@@ -964,16 +964,13 @@ function clearDmUnread(userId, lastId) {
   if (!userId) return;
   const id = String(userId);
   const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === id);
-  const stamp = lastId || (row && row.lastId) || (ui.heads && ui.heads['dm:' + id]) || '';
+  const stamp = lastId || (row && row.lastId) || headForDm(ui.heads, id) || '';
   pendingDm.delete(id);
-  if (stamp) {
-    const map = seenMap();
-    if (map['dm:' + id] !== stamp) {
-      map['dm:' + id] = stamp;
-      saveSeen(map);
-    }
-    heardDm[id] = stamp;
-    ackedDm[id] = stamp;
+  if (stamp) advanceDmSeen(id, stamp);
+  const cursor = seenForDm(seenMap(), id) || stamp;
+  if (cursor) {
+    heardDm[id] = cursor;
+    ackedDm[id] = cursor;
   }
   rememberDm(id, Date.now());
   if (ui.activity.dms[id]) {
@@ -3274,7 +3271,82 @@ function flushReads() {
   const reads = [];
   for (const [roomId, row] of readQueue) reads.push({ roomId, messageId: row.messageId, rewind: row.rewind });
   readQueue.clear();
-  api('/api/read', { method: 'POST', body: { client: readClientId, reads } }).catch(() => {});
+  api('/api/read', { method: 'POST', body: { client: readClientId, reads } }).catch(() => {
+    for (const row of reads) readAck.delete(row.roomId + '\n' + row.messageId);
+  });
+}
+
+function dmPairKey(userId) {
+  const me = ui.me && ui.me.id;
+  if (!me || !userId) return '';
+  return 'dm:' + [String(me), String(userId)].sort().join(':');
+}
+
+function dmKeys(userId) {
+  const keys = ['dm:' + String(userId)];
+  const pair = dmPairKey(userId);
+  if (pair && pair !== keys[0]) keys.push(pair);
+  return keys;
+}
+
+function seenForDm(map, userId) {
+  if (!map || !userId) return '';
+  const pair = dmPairKey(userId);
+  return String(map['dm:' + userId] || (pair && map[pair]) || '');
+}
+
+function headForDm(heads, userId) {
+  if (!heads || !userId) return '';
+  const pair = dmPairKey(userId);
+  return String(heads['dm:' + userId] || (pair && heads[pair]) || '');
+}
+
+function logForDm(userId) {
+  const key = 'dm:' + String(userId);
+  if (currentRoom() === key && ui.messages && ui.messages.length) return ui.messages;
+  return roomLogs.get(key) || [];
+}
+
+function dmCovers(userId, seenId, latest) {
+  const seen = String(seenId || '');
+  const head = String(latest || '');
+  if (!seen || !head) return false;
+  if (seen === head) return true;
+  const list = logForDm(userId);
+  const atSeen = list.findIndex((msg) => msg && String(msg.id) === seen);
+  const atHead = list.findIndex((msg) => msg && String(msg.id) === head);
+  if (atSeen === -1 || atHead === -1) return false;
+  return atSeen >= atHead;
+}
+
+const readAck = new Set();
+
+function advanceDmSeen(userId, messageId) {
+  if (!userId || !messageId) return;
+  const id = String(userId);
+  const map = seenMap();
+  const current = seenForDm(map, id);
+  const candidate = String(messageId);
+  let next = candidate;
+  if (current && current !== candidate) {
+    if (dmCovers(id, current, candidate) || !dmCovers(id, candidate, current)) next = current;
+  }
+  let changed = false;
+  for (const key of dmKeys(id)) {
+    if (String(map[key] || '') !== next) {
+      map[key] = next;
+      changed = true;
+    }
+  }
+  if (changed) saveSeen(map);
+  heardDm[id] = next;
+  ackedDm[id] = next;
+  for (const key of dmKeys(id)) {
+    const token = key + '\n' + next;
+    if (readAck.has(token)) continue;
+    readAck.add(token);
+    queueRead(key, next, false);
+  }
 }
 
 function readIsFurther(roomKey, current, next) {
@@ -3367,21 +3439,22 @@ export function markSeen(id, messageId) {
   if (!id || !messageId || !chatInFront()) return;
   const here = currentRoom().replace(/^ch:/, '') || ui.channelId;
   if (String(here || '') !== String(id) && currentRoom() !== String(id)) return;
-  const map = seenMap();
-  if (map[id] !== messageId) {
-    map[id] = messageId;
-    saveSeen(map);
-    queueRead(id, messageId, false);
-  }
   if (String(id).startsWith('dm:')) {
     const userId = String(id).slice(3).split(':').find((part) => part && String(part) !== String(ui.me && ui.me.id)) || String(id).slice(3);
-    heardDm[userId] = messageId;
-    ackedDm[userId] = messageId;
+    advanceDmSeen(userId, messageId);
     if (serverDmNotes[userId]) {
       const notes = { ...serverDmNotes };
       delete notes[userId];
       serverDmNotes = notes;
     }
+    forgetActivity('dm:' + userId);
+    return;
+  }
+  const map = seenMap();
+  if (String(map[id] || '') !== String(messageId)) {
+    map[id] = messageId;
+    saveSeen(map);
+    queueRead(id, messageId, false);
   }
   forgetActivity(id);
 }
@@ -3451,11 +3524,16 @@ export async function pollActivity() {
     const channels = { ...(data.channels || {}) };
     const dms = { ...(data.dms || {}) };
     const headsIn = data.heads || {};
+    const readNow = new Set();
     for (const userId of Object.keys(dms)) {
-      const seenId = sentSeen['dm:' + userId];
-      const head = headsIn['dm:' + userId];
-      const openHere = ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId);
-      if (openHere || (seenId && head && String(seenId) === String(head)) || (ackedDm[userId] && head && ackedDm[userId] === String(head))) delete dms[userId];
+      const seenId = seenForDm(sentSeen, userId);
+      const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === String(userId));
+      const head = headForDm(headsIn, userId) || (row && row.lastId ? String(row.lastId) : '');
+      const openHere = chatInFront() && ((ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId)) || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(userId)));
+      if (openHere || dmCovers(userId, seenId, head) || (ackedDm[userId] && head && String(ackedDm[userId]) === String(head))) {
+        delete dms[userId];
+        readNow.add(String(userId));
+      }
     }
     if (chatInFront() && ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
       const note = channels[ui.channelId];
@@ -3468,7 +3546,10 @@ export async function pollActivity() {
         else delete servers[note.serverId];
       }
     }
-    if (chatInFront() && ui.mode === 'dm' && ui.dmUser && ui.readHold !== 'dm:' + ui.dmUser.id) delete dms[ui.dmUser.id];
+    if (chatInFront() && ui.mode === 'dm' && ui.dmUser && ui.readHold !== 'dm:' + ui.dmUser.id) {
+      delete dms[ui.dmUser.id];
+      readNow.add(String(ui.dmUser.id));
+    }
     serverDmNotes = dms;
     let mentions = 0;
     let dmUnread = 0;
@@ -3496,6 +3577,12 @@ export async function pollActivity() {
     ui.heads = data.heads || {};
     const mergedDms = { ...(ui.activity.dms || {}) };
     let dmChanged = false;
+    for (const id of readNow) {
+      if (mergedDms[id]) {
+        delete mergedDms[id];
+        dmChanged = true;
+      }
+    }
     for (const [id, note] of Object.entries(dms)) {
       const n = Number(note && note.unread) || 0;
       if (n > 0 && (!mergedDms[id] || mergedDms[id].unread !== n)) {
