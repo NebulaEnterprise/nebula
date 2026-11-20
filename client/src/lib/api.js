@@ -31,6 +31,11 @@ export function getApiBase() {
   return DEFAULT_BACKEND.replace(/\/$/, '');
 }
 
+export function webhookUrl(hook) {
+  if (!hook || !hook.id || !hook.token) return '';
+  return getApiBase() + '/api/webhooks/' + encodeURIComponent(hook.id) + '/' + encodeURIComponent(hook.token);
+}
+
 export async function api(path, opts = {}) {
   const token = localStorage.getItem('dc_token') || '';
   const headers = {

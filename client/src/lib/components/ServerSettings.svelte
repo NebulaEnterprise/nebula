@@ -1,7 +1,7 @@
 <script>
   import {
     X, Search, Image, Palette, Hash, Home, Smile, Sticker, UserRound, Bell, Shield,
-    Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, DoorOpen, Plus, ChevronLeft,
+    Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, Webhook, DoorOpen, Plus, ChevronLeft,
     ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
@@ -10,7 +10,7 @@
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
   import { readSmallImage } from '../image.js';
-  import { api } from '../api.js';
+  import { api, webhookUrl } from '../api.js';
 
   const SWATCHES = ['#f23f43', '#f97316', '#23a559', '#1abc9c', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308'];
   const NAV = [
@@ -39,6 +39,7 @@
       { id: 'requests', label: 'Join requests', icon: DoorOpen, keys: 'apply approve' },
     ]},
     { label: 'Apps', pages: [
+      { id: 'webhooks', label: 'Webhooks', icon: Webhook, keys: 'webhook url post apps' },
       { id: 'bots', label: 'Bots', icon: Bot, keys: 'apps' },
     ]},
   ];
@@ -74,6 +75,9 @@
   let startChannel = $state(ui.settings?.onboarding?.startChannelId || '');
   let questions = $state((ui.settings?.onboarding?.questions || []).map((item) => ({ ...item })));
   let reportTab = $state('open');
+  let serverHooks = $state([]);
+  let hookChannel = $state('');
+  let hookNote = $state('');
   let menuFor = $state('');
   let roleFilter = $state('');
   let memberKind = $state('all');
@@ -184,6 +188,28 @@
     if (!then) return '';
     return new Date(then).toLocaleDateString([], { month: 'short', year: 'numeric' });
   }
+
+  async function loadServerHooks() {
+    hookNote = '';
+    try {
+      const data = await api('/api/servers/' + ui.serverId + '/webhooks');
+      serverHooks = data.webhooks || [];
+      if (!hookChannel) {
+        const first = (ui.channels || []).find((ch) => ch.type !== 'voice');
+        hookChannel = first ? first.id : '';
+      }
+    } catch (err) {
+      serverHooks = [];
+      hookNote = err.status === 404
+        ? 'Webhooks need the updated server. Replace server.js and start it again.'
+        : err.message;
+    }
+  }
+
+  $effect(() => {
+    if (ui.settingsPage !== 'webhooks' || !ui.serverId) return;
+    loadServerHooks();
+  });
 
   async function run(fn) {
     try {
@@ -1066,6 +1092,48 @@
               </div>
             {:else}
               {@render bear('Nobody is waiting', 'When the server asks people to apply, their answers show up here.')}
+            {/each}
+          </section>
+
+        {:else if ui.settingsPage === 'webhooks'}
+          <section class="gset-card">
+            <h3>Webhooks</h3>
+            <p class="hint">A webhook posts into a channel without an account. Paste its URL into any app that speaks the webhook format. Anyone with the URL can post, so keep it secret. You can also make them from Edit channel.</p>
+            {#if hookNote}<p class="hint">{hookNote}</p>{/if}
+            <div class="gset-chan">
+              <select class="look-select" bind:value={hookChannel}>
+                {#each (ui.channels || []).filter((ch) => ch.type !== 'voice') as ch}
+                  <option value={ch.id}>#{ch.name}</option>
+                {/each}
+              </select>
+              <button type="button" class="btn brand" disabled={!hookChannel} onclick={async () => {
+                try {
+                  await api('/api/servers/' + ui.serverId + '/channels/' + hookChannel + '/webhooks', { method: 'POST', body: { name: (ui.channels || []).find((ch) => ch.id === hookChannel)?.name || 'webhook' } });
+                  await loadServerHooks();
+                  toast('Webhook created');
+                } catch (err) { toast(err.message); }
+              }}>New webhook</button>
+            </div>
+            {#each serverHooks as hook (hook.id)}
+              <div class="gset-chan">
+                <div class="grow">
+                  <strong>{hook.name}</strong>
+                  <div class="hint">#{hook.channelName || 'channel'}</div>
+                </div>
+                <button type="button" class="btn sm" onclick={async () => {
+                  try { await navigator.clipboard.writeText(webhookUrl(hook)); toast('Webhook URL copied'); }
+                  catch { toast(webhookUrl(hook)); }
+                }}>Copy URL</button>
+                <button type="button" class="btn sm" onclick={async () => {
+                  if (!confirm('Delete this webhook?')) return;
+                  try {
+                    await api('/api/servers/' + ui.serverId + '/webhooks/' + hook.id, { method: 'DELETE' });
+                    await loadServerHooks();
+                  } catch (err) { toast(err.message); }
+                }}>Delete</button>
+              </div>
+            {:else}
+              {#if !hookNote}{@render bear('No webhooks yet', 'Make one for a channel, then paste the URL into the app that should post there.')}{/if}
             {/each}
           </section>
 

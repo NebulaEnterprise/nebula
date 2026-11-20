@@ -1,5 +1,6 @@
 <script>
   import { X } from '@lucide/svelte';
+  import ChannelEditor from './ChannelEditor.svelte';
   import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
@@ -54,7 +55,6 @@
   }
 
   const kind = $derived(ui.dialog?.kind);
-  const channel = $derived(ui.dialog?.channel);
 
   $effect(() => {
     if (kind === 'invite') loadInvites();
@@ -68,10 +68,6 @@
         if (kind === 'discussion') name = '';
       }
     }
-    if (kind === 'edit-channel' && channel) {
-      name = channel.name || '';
-      extra = channel.topic || '';
-    }
     if (kind === 'user-report') {
       const token = (ui.dialog?.user?.id || '') + ':' + (ui.dialog?.message?.id || '');
       if (token && token !== reportToken) {
@@ -81,38 +77,6 @@
       }
     }
   });
-
-  async function saveChannel() {
-    const roles = ui.roles || [];
-    const viewOff = [];
-    const sendOff = [];
-    for (const r of roles) {
-      const v = document.querySelector(`[data-view="${r.id}"]`);
-      const s = document.querySelector(`[data-send="${r.id}"]`);
-      if (v && !v.checked) viewOff.push(r.id);
-      if (s && !s.checked) sendOff.push(r.id);
-    }
-    const map = {};
-    const touch = (id) => { if (!map[id]) map[id] = { roleId: id, allow: 0, deny: 0 }; return map[id]; };
-    if (viewOff.length) roles.forEach((r) => { const ow = touch(r.id); if (viewOff.includes(r.id)) ow.deny |= PERM.VIEW; else ow.allow |= PERM.VIEW; });
-    if (sendOff.length) roles.forEach((r) => { const ow = touch(r.id); if (sendOff.includes(r.id)) ow.deny |= PERM.SEND; else ow.allow |= PERM.SEND; });
-    const ch = ui.dialog.channel;
-    await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, {
-      method: 'PATCH',
-      body: { name: name || ch.name, topic: extra, overwrites: Object.values(map) },
-    });
-    ui.dialog = null;
-    await openServer(ui.serverId, { keepDialog: true });
-  }
-
-  async function deleteChannel() {
-    const ch = ui.dialog.channel;
-    if (!confirm('Delete this channel?')) return;
-    await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
-    if (ui.channelId === ch.id) ui.channelId = '';
-    ui.dialog = null;
-    await openServer(ui.serverId, { keepDialog: true });
-  }
 
   async function loadInvites() {
     try {
@@ -190,7 +154,7 @@
   </div>
 {:else}
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
@@ -207,7 +171,7 @@
         {:else if kind === 'mute'}Mute server
         {:else if kind === 'report'}Report a member
         {:else if kind === 'pings'}Ping roles
-        {:else if kind === 'edit-channel'}Edit #{channel?.name}
+        {:else if kind === 'edit-channel'}Edit channel
         {:else if kind === 'onboarding'}Before you chat
         {:else if kind === 'group'}{groupStep === 1 ? 'Select friends' : 'Customize your group'}
         {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
@@ -471,21 +435,7 @@
         <p class="hint">Picking a role never gives you extra permissions.</p>
 
       {:else if kind === 'edit-channel'}
-        <div class="field"><label>Name</label><input bind:value={name} placeholder={channel?.name} /></div>
-        <div class="field"><label>Topic</label><input bind:value={extra} placeholder={channel?.topic || ''} /></div>
-        <p class="label">Who can use this channel</p>
-        {#each ui.roles as r}
-          {@const deny = (channel?.overwrites || []).find((o) => o.roleId === r.id)}
-          <label class="check">
-            <input type="checkbox" data-view={r.id} checked={!(deny && (deny.deny & PERM.VIEW))} /> View
-            <input type="checkbox" data-send={r.id} checked={!(deny && (deny.deny & PERM.SEND))} /> Send
-            <span>{r.name}</span>
-          </label>
-        {/each}
-        <div class="actions" style="margin-top:12px">
-          <button class="btn brand" style="width:auto" onclick={() => go(saveChannel)}>Save</button>
-          <button class="btn danger" onclick={() => go(deleteChannel)}>Delete</button>
-        </div>
+        <ChannelEditor />
 
       {:else if kind === 'onboarding'}
         <p class="hint">Answer so you land in the right place.</p>

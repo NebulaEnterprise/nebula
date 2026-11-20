@@ -1609,12 +1609,12 @@
           {/each}
         </div>
       {/if}
-      <button type="button" class="msg-av" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}>
+      <button type="button" class="msg-av" onpointerenter={() => { if (!msg.webhook) peekProfile(liveAuthor(msg.author)); }} onclick={(e) => { if (!msg.webhook) openPopout(liveAuthor(msg.author), e.clientX, e.clientY); }}>
         <Avatar user={liveAuthor(msg.author)} size={40} dot={false} />
       </button>
       <div class="msg-body">
         <div class="msg-head">
-          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => peekProfile(liveAuthor(msg.author))} onclick={(e) => openPopout(liveAuthor(msg.author), e.clientX, e.clientY)}><strong><Name user={liveAuthor(msg.author)} color={nameInk(msg.author)} /></strong></button><NameExtras user={liveAuthor(msg.author)} /></span>
+          <span class="msg-id"><button type="button" class="msg-name" onpointerenter={() => { if (!msg.webhook) peekProfile(liveAuthor(msg.author)); }} onclick={(e) => { if (!msg.webhook) openPopout(liveAuthor(msg.author), e.clientX, e.clientY); }}><strong><Name user={liveAuthor(msg.author)} color={nameInk(msg.author)} /></strong></button>{#if msg.webhook}<span class="bot-tag">BOT</span>{/if}<NameExtras user={liveAuthor(msg.author)} /></span>
           <time>{time(msg.createdAt)}</time>
           {#if msg.editedAt}<span class="edited">(edited)</span>{/if}
         </div>
@@ -1629,6 +1629,13 @@
             <InviteCard {slug} />
           {/each}
         {/if}
+        {#each msg.embeds || [] as embed, index (`${msg.id}-embed-${index}`)}
+          <div class="hook-embed" style:border-color={embed.color ? '#' + embed.color.toString(16).padStart(6, '0') : ''}>
+            {#if embed.title}<strong>{embed.title}</strong>{/if}
+            {#if embed.description}<p>{embed.description}</p>{/if}
+            {#if embed.url}<a href={embed.url} target="_blank" rel="noopener noreferrer">{embed.url}</a>{/if}
+          </div>
+        {/each}
         {#if msg.files?.length}
           <div class="msg-files">
             {#each msg.files as file}
