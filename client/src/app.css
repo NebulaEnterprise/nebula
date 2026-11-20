@@ -3125,13 +3125,27 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .devdocs-head h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.04em; line-height: 1.05; }
 .devdocs-kicker { margin: 14px 0 0; color: #e9d5ff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .home.light .devdocs-kicker { color: #6d28d9; }
-.devdocs-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 8px; }
+.devdocs-layout { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 8px; }
 .devdocs-body { min-width: 0; }
-.dev-toc { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; }
-.dev-toc button { text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; opacity: 0.82; }
+.dev-toc { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 24px); overflow: auto; padding-right: 4px; }
+.dev-toc-label { margin: 14px 10px 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.55; }
+.dev-toc button { text-align: left; padding: 6px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; opacity: 0.82; }
 .dev-toc button:hover { background: rgba(255,255,255,0.06); opacity: 1; }
-.devdocs h3 { margin: 28px 0 8px; font-size: 20px; scroll-margin-top: 18px; }
+.devdocs h3 { margin: 28px 0 8px; font-size: 22px; scroll-margin-top: 18px; }
+.devdocs h4 { margin: 22px 0 8px; font-size: 16px; scroll-margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.devdocs h5 { margin: 14px 0 6px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.72; }
 .devdocs section:first-child h3 { margin-top: 0; }
+.dev-endpoint { margin: 8px 0 18px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.1); }
+.dev-endpoint h4 { margin-top: 8px; }
+.dev-path { min-width: 0; flex: 1 1 180px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.dev-authline { margin-top: 0; }
+.dev-method { flex: none; padding: 3px 7px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; color: #fff; }
+.dev-method.get { background: #166534; }
+.dev-method.post { background: #1d4ed8; }
+.dev-method.patch { background: #a16207; }
+.dev-method.put { background: #6d28d9; }
+.dev-method.delete { background: #b91c1c; }
+.home.light .dev-endpoint { border-top-color: rgba(27, 18, 48, 0.12); }
 .devdocs p, .devdocs li { margin: 0 0 10px; }
 .devdocs ol { margin: 0 0 12px; padding-left: 1.25em; }
 .devdocs a { color: #c4b5fd; overflow-wrap: anywhere; }

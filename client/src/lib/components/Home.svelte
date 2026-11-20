@@ -515,7 +515,7 @@
     font-weight: 700;
   }
   .home-docs {
-    width: min(1080px, calc(100% - 32px));
+    width: min(1140px, calc(100% - 32px));
     margin: 28px auto 72px;
     padding: 22px 28px 36px;
     border-radius: 28px;

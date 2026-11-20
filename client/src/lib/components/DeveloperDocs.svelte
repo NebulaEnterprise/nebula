@@ -1,83 +1,32 @@
 <script>
   import { getApiBase } from '../api.js';
+  import {
+    toc,
+    botObject,
+    channelObject,
+    historyMessage,
+    sentMessage,
+    embedObject,
+    commandObject,
+    eventEnvelope,
+    sdkRows,
+    botEndpoints,
+    accountEndpoints,
+    events,
+    starter,
+    embedSample,
+    welcome,
+    curlSample,
+  } from '../bot-docs.js';
 
   let { onback = null } = $props();
   let copied = $state('');
-  const apiBase = getApiBase() + '/api/bot/v1';
+  const origin = getApiBase();
+  const apiBase = origin + '/api/bot/v1';
   const site = 'https://nebulaapp.space';
-
-  const sections = [
-    ['dev-start', 'Start'],
-    ['dev-library', 'Library'],
-    ['dev-api', 'API'],
-    ['dev-events', 'Events'],
-    ['dev-embeds', 'Embeds'],
-    ['dev-welcome', 'Welcome bot'],
-    ['dev-limits', 'Limits'],
-  ];
-
-  const starter = `import { Bot } from './nebula.js';
-
-const bot = new Bot('nb_PASTE_YOUR_TOKEN');
-
-bot.command('ping', 'Is the bot alive?', (msg) => msg.reply('pong'));
-
-bot.on('message', (msg) => {
-  if (msg.mentioned) msg.reply('hey');
-});
-
-bot.on('ready', (me) => console.log('online as', me.username));
-bot.on('error', (err) => console.error(err));
-
-bot.start();`;
-
-  const embedSample = `msg.reply('', {
-  embeds: [{
-    title: 'Match result',
-    description: 'Blue won 3-1.',
-    color: '#7c5cff',
-  }],
-});`;
-
-  const welcome = `import { Bot } from './nebula.js';
-
-const bot = new Bot('nb_PASTE_YOUR_TOKEN');
-const rooms = new Map();
-
-async function welcomeChannel(serverId) {
-  if (rooms.has(serverId)) return rooms.get(serverId);
-  const data = await bot.api('GET', '/servers/' + encodeURIComponent(serverId) + '/channels?type=text');
-  const list = data.channels || [];
-  const named = list.find((ch) => /^(welcome|general|lobby)$/i.test(ch.name));
-  const channel = named || list[0];
-  if (!channel) return '';
-  rooms.set(serverId, channel.id);
-  return channel.id;
-}
-
-bot.command('setwelcome', 'Welcome new people in this channel', async (msg) => {
-  rooms.set(msg.server_id, msg.channel_id);
-  await msg.reply('I will welcome new people in this channel.');
-});
-
-bot.on('member_join', async (ev) => {
-  if (!ev.server_id || ev.user_id === (bot.me && bot.me.id)) return;
-  const channelId = await welcomeChannel(ev.server_id);
-  if (!channelId) return;
-  const name = ev.username ? '@' + ev.username : (ev.display_name || 'someone new');
-  const count = ev.member_count ? ' You are member ' + ev.member_count + '.' : '';
-  await bot.send(channelId, '', {
-    embeds: [{
-      title: 'Welcome to ' + (ev.server_name || 'the server'),
-      description: 'Welcome ' + name + '.' + count,
-      color: '#c084fc',
-    }],
-  });
-});
-
-bot.on('ready', (me) => console.log('welcome bot online as', me.username));
-bot.on('error', (err) => console.error(err));
-bot.start();`;
+  const routes = botEndpoints(apiBase);
+  const account = accountEndpoints(origin);
+  const curl = curlSample(apiBase);
 
   async function copy(text, key) {
     try {
@@ -103,117 +52,219 @@ bot.start();`;
   </div>
 {/snippet}
 
+{#snippet fields(rows)}
+  <div class="dev-table">
+    <table>
+      <thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+      <tbody>
+        {#each rows as row (`${row[0]}-${row[1]}`)}
+          <tr><td><code>{row[0]}</code></td><td>{row[1]}</td><td>{row[2]}</td></tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/snippet}
+
+{#snippet endpoint(ep)}
+  <article class="dev-endpoint" id={ep.id}>
+    <h4>
+      <span class="dev-method {ep.method.toLowerCase()}">{ep.method}</span>
+      <code class="dev-path">{ep.path}</code>
+    </h4>
+    <p>{ep.summary}</p>
+    <p class="dev-authline"><code>{ep.auth}</code></p>
+    {#if ep.params?.length}
+      <h5>Parameters</h5>
+      {@render fields(ep.params)}
+    {/if}
+    {#if ep.body}
+      <h5>Body</h5>
+      {@render sample(ep.id + '-body', 'JSON', ep.body)}
+    {/if}
+    {#if ep.response}
+      <h5>Response</h5>
+      {#if ep.response.includes('\n')}
+        {@render sample(ep.id + '-res', 'JSON', ep.response)}
+      {:else}
+        <p><code>{ep.response}</code></p>
+      {/if}
+    {/if}
+    {#if ep.errors?.length}
+      <h5>Errors</h5>
+      <div class="dev-table">
+        <table>
+          <thead><tr><th>Status</th><th>code</th><th>When</th></tr></thead>
+          <tbody>
+            {#each ep.errors as err (`${ep.id}-${err[0]}-${err[2]}`)}
+              <tr><td>{err[0]}</td><td>{#if err[1]}<code>{err[1]}</code>{/if}</td><td>{err[2]}</td></tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {/if}
+  </article>
+{/snippet}
+
 <article class="devdocs">
   {#if onback}
     <button type="button" class="btn sm" onclick={onback}>Back</button>
   {/if}
   <header class="devdocs-head">
-    <p class="devdocs-kicker">Developers</p>
-    <h2>Build bots on Nebula</h2>
-    <p>A bot is an account your code drives. It runs on your own computer. Nothing is hosted for you. It talks to Nebula over HTTPS with a token that starts with <code>nb_</code>. A bot uses its own account. Automating a personal account is not allowed.</p>
+    <p class="devdocs-kicker">Bot API 1.0.0</p>
+    <h2>Nebula bot documentation</h2>
+    <p>Everything a bot can call. The bot HTTP API lives at <code>{apiBase}</code>. Your own account, used by Settings, lives at <code>{origin}/api</code> and uses a session instead of a bot token.</p>
   </header>
 
   <div class="devdocs-layout">
-    <nav class="dev-toc" aria-label="Guide">
-      {#each sections as [id, label] (id)}
-        <button type="button" onclick={() => jump(id)}>{label}</button>
+    <nav class="dev-toc" aria-label="Documentation">
+      {#each toc as item, index (`${item.kind}-${item.id || item.text}-${index}`)}
+        {#if item.kind === 'label'}
+          <p class="dev-toc-label">{item.text}</p>
+        {:else}
+          <button type="button" onclick={() => jump(item.id)}>{item.text}</button>
+        {/if}
       {/each}
     </nav>
 
     <div class="devdocs-body">
+      <section id="dev-overview">
+        <h3>Overview</h3>
+        <p>A bot is its own account. Your code holds the token and talks to Nebula over HTTPS. Nebula does not host the process. The program keeps a long poll open, receives events, and posts messages back. Closing the terminal stops the bot.</p>
+        <p>A bot only sees servers it was added to, and only channels that server lets it see. It cannot sign in on the website. Its own messages are not sent back to it. Webhook messages are not sent to it either. Two bots per account. 25 bots per server. 100 commands per bot. 30 messages a minute per bot.</p>
+        <p>Download <a href="{site}/sdk/nebula.js" target="_blank" rel="noopener">nebula.js</a>, <a href="{site}/sdk/starter.js" target="_blank" rel="noopener">starter.js</a>, <a href="{site}/sdk/welcome.js" target="_blank" rel="noopener">welcome.js</a>, and <a href="{site}/sdk/package.json" target="_blank" rel="noopener">package.json</a>. You need Node 18 or newer. <code>package.json</code> sets <code>"type": "module"</code>, which is what the <code>import</code> needs.</p>
+      </section>
+
+      <section id="dev-auth">
+        <h3>Authentication</h3>
+        <p>Bot routes, except <code>GET /version</code>, require this header:</p>
+        {@render sample('auth', 'HTTP', 'Authorization: Bot nb_PASTE_YOUR_TOKEN')}
+        <p>The token is shown once, when you create the bot or when you make a new token in Settings → Developer. It starts with <code>nb_</code>. There is one current token. Making a new one kills the old one. The header must be the word <code>Bot</code>, a space, then the token. <code>Bearer</code> is the session used by the account routes, not the bot routes.</p>
+        <p>Send JSON as <code>Content-Type: application/json</code>. The avatar route is the exception: its body is the raw picture. Responses are JSON. A failed bot route looks like this:</p>
+        {@render sample('err', 'JSON', `{
+  "error": "The bot cannot send messages there",
+  "code": "missing_permission"
+}`)}
+        <p>Every bot response includes <code>X-Nebula-API-Version: 1.0.0</code>.</p>
+      </section>
+
       <section id="dev-start">
-        <h3>Start</h3>
+        <h3>Quick start</h3>
         <ol>
-          <li>In Nebula, open Settings, then Developer. Type a name and press Create. Copy the token. It is shown once.</li>
-          <li>Add the bot to a server you manage, from that same screen or from Server settings, then Bots.</li>
-          <li>Make a folder. Save <a href="{site}/sdk/nebula.js" target="_blank" rel="noopener">nebula.js</a>, <a href="{site}/sdk/starter.js" target="_blank" rel="noopener">starter.js</a>, <a href="{site}/sdk/welcome.js" target="_blank" rel="noopener">welcome.js</a>, and <a href="{site}/sdk/package.json" target="_blank" rel="noopener">package.json</a> into it. Paste the token into the script, replacing <code>nb_PASTE_YOUR_TOKEN</code>.</li>
-          <li>In a terminal in that folder, run <code>node starter.js</code>. You need Node 18 or newer. <code>package.json</code> marks the folder as a module, so the import works.</li>
+          <li>In Nebula, open Settings → Developer. Name the bot and press Create. Copy the token.</li>
+          <li>Add the bot to a server you manage, from that screen or from Server settings → Bots.</li>
+          <li>Put <code>nebula.js</code>, <code>starter.js</code>, and <code>package.json</code> in one folder. Replace <code>nb_PASTE_YOUR_TOKEN</code> in <code>starter.js</code>.</li>
+          <li>Run <code>node starter.js</code>. The terminal prints <code>online as</code> and the username.</li>
           <li>In the server, type <code>/ping</code>. The bot answers pong. <code>!ping</code> runs the same command.</li>
         </ol>
-        <p>Give it a picture from Settings, then Developer, then your bot, then Profile. From code, <code>bot.setAvatar('./avatar.png')</code> does the same thing.</p>
-        <p>The terminal should print <code>online as</code> and the bot’s username. If it does not, open the bot and press Send test event. A connected script prints that test. Keep the terminal open. Closing it stops the bot.</p>
+        <p>If nothing prints, open the bot and press Send test event. A connected script receives a <code>test</code> event. Keep the process running.</p>
         {@render sample('js', 'starter.js', starter)}
       </section>
 
-      <section id="dev-library">
-        <h3>The library</h3>
-        <p><code>nebula.js</code> is one file, with no packages to install. It registers your commands, then waits for events. Leave the token out of <code>new Bot()</code> and the library reads <code>NEBULA_BOT_TOKEN</code>. Set <code>NEBULA_API_URL</code> when the bot should use a different server than the one baked into <code>nebula.js</code>.</p>
+      <section id="dev-objects">
+        <h3>Objects</h3>
+        <h4 id="obj-bot">Bot</h4>
+        <p>Returned by <code>GET /me</code>, <code>PATCH /me</code>, and <code>PUT /me/avatar</code>.</p>
+        {@render fields(botObject)}
+        <h4 id="obj-channel">Channel</h4>
+        {@render fields(channelObject)}
+        <h4 id="obj-history">History message</h4>
+        <p>Returned by <code>GET /channels/:id/messages</code>. Shorter than the object you get from sending.</p>
+        {@render fields(historyMessage)}
+        <h4 id="obj-sent">Sent message</h4>
+        <p>The <code>message</code> inside the response from <code>POST /channels/:id/messages</code>.</p>
+        {@render fields(sentMessage)}
+        <h4 id="obj-embed">Embed</h4>
+        <p>A card on a message: a colored bar, a title, and a description. Up to 4 per message. A card needs a title, a description, or a url. The chat draws the bar from the stored number.</p>
+        {@render fields(embedObject)}
+        <h4 id="obj-command">Command</h4>
+        {@render fields(commandObject)}
+        <h4 id="obj-event">Event envelope</h4>
+        <p>One item in <code>GET /events</code>. <code>data</code> is documented under Events. The library copies <code>data</code> onto the object your listener receives and adds <code>type</code>, <code>reply</code>, and <code>say</code> when the event has a channel.</p>
+        {@render fields(eventEnvelope)}
+      </section>
+
+      <section id="dev-sdk">
+        <h3>JavaScript SDK</h3>
+        <p><code>nebula.js</code> is one file. It does not install packages. <code>bot.start()</code> registers commands, then polls. Listeners for one event run in the order you added them. A matching command runs after the <code>message</code> listeners. A thrown listener becomes an <code>error</code> event. On a failed poll the library waits 5 seconds after HTTP 429 and 2 seconds after anything else, then polls again.</p>
         <div class="dev-table">
           <table>
             <thead><tr><th>Call</th><th>What it does</th></tr></thead>
             <tbody>
-              <tr><td><code>new Bot(token)</code></td><td>Signs in with that token.</td></tr>
-              <tr><td><code>bot.command(name, description, fn)</code></td><td>A command people type as <code>/name</code>. Names are 1 to 32 letters, numbers, <code>-</code>, or <code>_</code>. Up to 100 commands. <code>msg.args</code> is the rest of the line, and <code>msg.argv</code> splits it on spaces.</td></tr>
-              <tr><td><code>bot.on(event, fn)</code></td><td><code>message</code>, <code>member_join</code>, <code>test</code>, <code>server_add</code>, <code>server_remove</code>, <code>ready</code>, and <code>error</code>.</td></tr>
-              <tr><td><code>bot.send(channelId, text, opts)</code></td><td>Posts in a channel. <code>opts.replyTo</code> quotes a message. <code>opts.embeds</code> adds up to 4 cards. Pass <code>''</code> as the text when the message is only cards.</td></tr>
-              <tr><td><code>msg.reply(text, opts)</code></td><td>Answers in the same channel and quotes the message. <code>msg.say(text, opts)</code> posts without the quote. Both accept <code>opts.embeds</code>.</td></tr>
-              <tr><td><code>bot.setProfile</code> / <code>bot.setAvatar</code></td><td>Display name, bio, and picture. A path string or raw bytes works for the picture.</td></tr>
-              <tr><td><code>bot.servers()</code></td><td>Servers this bot was added to.</td></tr>
-              <tr><td><code>bot.api(method, path, body)</code></td><td>Any bot endpoint, with the token added for you. <code>path</code> starts with <code>/me</code> or <code>/channels/…</code>.</td></tr>
-              <tr><td><code>bot.start()</code> / <code>bot.stop()</code></td><td>Registers commands, then listens until you stop it.</td></tr>
+              {#each sdkRows as row (row[0])}
+                <tr><td><code>{row[0]}</code></td><td>{row[1]}</td></tr>
+              {/each}
             </tbody>
           </table>
         </div>
+        <p><code>ready</code> and <code>error</code> are local. They are not returned by <code>GET /events</code>. <code>ready</code> receives the bot object. <code>error</code> receives an Error with <code>message</code>, <code>status</code>, and <code>code</code>.</p>
       </section>
 
-      <section id="dev-api">
-        <h3>API</h3>
-        <p>Base URL <code>{apiBase}</code>. Every request except <code>/version</code> sends <code>Authorization: Bot &lt;token&gt;</code>. Bodies and answers are JSON, except the avatar upload, which is the raw picture. A bot only sees servers it was added to, and only channels that role can see. Its own messages are not sent back to it.</p>
-        <div class="dev-table">
-          <table>
-            <thead><tr><th>Method</th><th>Path</th><th>What it does</th></tr></thead>
-            <tbody>
-              <tr><td>GET</td><td><code>/version</code></td><td>API version. No token.</td></tr>
-              <tr><td>GET</td><td><code>/me</code></td><td>The bot’s profile.</td></tr>
-              <tr><td>PATCH</td><td><code>/me</code></td><td><code>display_name</code> up to 32 characters and <code>bio</code> up to 300.</td></tr>
-              <tr><td>PUT</td><td><code>/me/avatar</code></td><td>The picture bytes. PNG, JPG, GIF, or WebP, up to 8 MB.</td></tr>
-              <tr><td>GET, PUT</td><td><code>/commands</code></td><td>Read or replace the command list. PUT body is <code>{'{'} commands: [{'{'} name, description {'}'}] {'}'}</code>.</td></tr>
-              <tr><td>GET</td><td><code>/events?after=&amp;wait=</code></td><td>Events after <code>after</code>. <code>wait</code> holds the request up to 25 seconds. Send the returned <code>last</code> back as <code>after</code>.</td></tr>
-              <tr><td>GET</td><td><code>/servers</code></td><td>Servers the bot is in.</td></tr>
-              <tr><td>GET</td><td><code>/servers/:id/channels</code></td><td>Channels the bot can see. <code>?type=text</code> keeps voice channels out.</td></tr>
-              <tr><td>GET</td><td><code>/channels/:id</code></td><td>One channel.</td></tr>
-              <tr><td>GET</td><td><code>/channels/:id/messages</code></td><td>Recent messages, oldest first. <code>limit</code> up to 100.</td></tr>
-              <tr><td>POST</td><td><code>/channels/:id/messages</code></td><td><code>content</code> up to 2000 characters, optional <code>reply_to</code> and <code>embeds</code>. Content, embeds, or both.</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <section id="dev-http">
+        <h3>Bot HTTP API</h3>
+        <p>Base URL <code>{apiBase}</code>. Paths below already include it. <code>:id</code> is a single path segment. Encode ids that contain characters other than letters, numbers, and hyphens.</p>
+        {#each routes as ep (ep.id)}
+          {@render endpoint(ep)}
+        {/each}
+      </section>
+
+      <section id="dev-account">
+        <h3>Account API</h3>
+        <p>These routes create and manage bots. They use the session from being signed in to Nebula, not the bot token. The website calls them for you from Settings → Developer and Server settings → Bots. A program that posts as the bot should use the Bot HTTP API above.</p>
+        <p>Header: <code>Authorization: Bearer &lt;session&gt;</code>. A missing or old session is <code>401</code> with <code>{'{'} error {'}'}</code> and no <code>code</code>.</p>
+        {#each account as ep (ep.id)}
+          {@render endpoint(ep)}
+        {/each}
       </section>
 
       <section id="dev-events">
         <h3>Events</h3>
-        <p>Each event has <code>type</code> and <code>data</code>. The library passes <code>data</code> to your function and adds <code>reply</code> and <code>say</code> when the event has a channel.</p>
-        <div class="dev-table">
-          <table>
-            <thead><tr><th>type</th><th>data</th></tr></thead>
-            <tbody>
-              <tr><td><code>message</code></td><td><code>id</code>, <code>channel_id</code>, <code>channel_name</code>, <code>server_id</code>, <code>author_id</code>, <code>author</code>, <code>content</code>, <code>created_at</code>, <code>mentioned</code>. When the line starts with <code>/</code> or <code>!</code> and matches a command: <code>command</code> and <code>args</code>.</td></tr>
-              <tr><td><code>member_join</code></td><td>Someone other than a bot joined a server the bot is in. <code>server_id</code>, <code>server_name</code>, <code>user_id</code>, <code>username</code>, <code>display_name</code>, <code>member_count</code>.</td></tr>
-              <tr><td><code>server_add</code></td><td>The bot was added to a server. <code>server_id</code>, <code>name</code>, <code>member_count</code>.</td></tr>
-              <tr><td><code>server_remove</code></td><td>The bot was removed. <code>server_id</code> and <code>name</code>.</td></tr>
-              <tr><td><code>test</code></td><td>Sent by the Send test event button.</td></tr>
-              <tr><td><code>ready</code></td><td>Local only. Fires after commands are registered. The argument is the bot profile.</td></tr>
-              <tr><td><code>error</code></td><td>Local only. A request failed or one of your functions threw.</td></tr>
-            </tbody>
-          </table>
-        </div>
+        <p>Events stay in memory on the server that accepted them. The newest few thousand are kept. A restart clears them and starts ids over, so a saved <code>after</code> from before the restart should be treated as 0. A bot that was offline catches up only for events the process still has, and only 100 per poll.</p>
+        {#each events as ev (ev.type)}
+          <h4 id={'ev-' + ev.type}><code>{ev.type}</code></h4>
+          <p>{ev.text}</p>
+          {@render fields(ev.fields)}
+        {/each}
       </section>
 
-      <section id="dev-embeds">
-        <h3>Embeds</h3>
-        <p>An embed is the card with a colored bar, a title, and a description. A normal text message has no card. To show the card, send <code>embeds</code> and leave <code>content</code> empty when you do not want a line of text above it. Up to 4 cards. Each can have <code>title</code> (256), <code>description</code> (2000), <code>url</code> (an http or https link), and <code>color</code> as <code>#rrggbb</code> or a number.</p>
+      <section id="dev-examples">
+        <h3>Examples</h3>
+        <h4>Embed</h4>
+        <p>Pass an empty string when you do not want a line of text above the card. <code>msg.reply</code> takes the same options as <code>bot.send</code>.</p>
         {@render sample('embed', 'embed.js', embedSample)}
-      </section>
-
-      <section id="dev-welcome">
-        <h3>Welcome bot</h3>
-        <p>Save this as <code>welcome.js</code> next to <code>nebula.js</code>, paste your token, and run <code>node welcome.js</code>. When someone joins, the bot posts an embed in <code>#welcome</code>, <code>#general</code>, or <code>#lobby</code>. Type <code>/setwelcome</code> in another channel to use that one instead. The choice lasts until you stop the process. The bot has to be in the server, and this process has to stay running.</p>
+        <h4>Welcome bot</h4>
+        <p>Save this as <code>welcome.js</code> next to <code>nebula.js</code>. It posts an embed in <code>#welcome</code>, <code>#general</code>, or <code>#lobby</code> when someone joins. <code>/setwelcome</code> in another channel uses that channel until the process stops.</p>
         {@render sample('welcome', 'welcome.js', welcome)}
+        <h4>Send with curl</h4>
+        <p>The same post, without the SDK. Replace <code>CHANNEL_ID</code> with an id from <code>GET /servers/:id/channels</code>.</p>
+        {@render sample('curl', 'curl', curl)}
       </section>
 
       <section id="dev-limits">
         <h3>Errors and limits</h3>
-        <p>Errors look like <code>{'{'} error, code {'}'}</code>. <code>401</code> means the token is missing or wrong. <code>403</code> means the bot is not in that server, or it cannot see or post in the channel. <code>429</code> means slow down: 30 messages a minute per bot. Make a new token from the bot’s Token section if you lose the old one. The old one stops working.</p>
-        <p>Two bots per account. 25 bots per server. 100 commands per bot. Events stay in memory on the server until it restarts, so a bot that was offline catches up only as far as the server still has them.</p>
+        <div class="dev-table">
+          <table>
+            <thead><tr><th>Status</th><th>code</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>400</td><td><code>invalid_request</code></td><td>The body or the command list was rejected. <code>error</code> says which rule.</td></tr>
+              <tr><td>401</td><td><code>unauthorized</code></td><td>Bot token missing or wrong. Account routes say Unauthorized or Invalid session and omit <code>code</code>.</td></tr>
+              <tr><td>403</td><td><code>missing_permission</code></td><td>The bot is not allowed to see or post, or the channel is read-only. Account routes use a plain <code>error</code> when you lack Manage Server.</td></tr>
+              <tr><td>404</td><td><code>not_found</code></td><td>That server, channel, or bot is not visible to this token.</td></tr>
+              <tr><td>413</td><td><code>too_large</code></td><td>The picture is over 8 MB.</td></tr>
+              <tr><td>429</td><td><code>rate_limited</code></td><td>30 messages in the last minute, or the channel slowmode is still running.</td></tr>
+              <tr><td>502</td><td><code>unavailable</code></td><td>The picture could not be stored.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>2 bots on one account.</li>
+          <li>25 bots in one server.</li>
+          <li>100 commands on one bot. Names are 1 to 32 of <code>a-z</code>, <code>0-9</code>, <code>-</code>, <code>_</code>.</li>
+          <li>30 messages a minute per bot. A channel can also have its own slowmode, up to 21600 seconds.</li>
+          <li>Message text is 2000 characters. Embed title 256. Embed description 2000. Embed url 500. Bio 300. Display name 32.</li>
+          <li>4 embeds per message. A channel keeps the newest 500 messages.</li>
+          <li>Event polls return at most 100 events. <code>wait</code> cannot be longer than 25 seconds.</li>
+          <li>Avatar files are PNG, JPG, GIF, or WebP, up to 8 MB.</li>
+        </ul>
       </section>
     </div>
   </div>
