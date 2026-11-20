@@ -5995,8 +5995,9 @@ function cleanReadKey(userId, key) {
   const id = String(key || '');
   if (!id || id.length > 140 || /\s/.test(id)) return '';
   if (id.startsWith('dm:')) {
-    const other = id.slice(3);
-    if (!other || other.length > 80 || !users[other]) return '';
+    const parts = id.slice(3).split(':').filter(Boolean);
+    const other = parts.find((part) => part !== String(userId) && users[part]);
+    if (!other) return '';
     return 'dm:' + other;
   }
   if (id.startsWith('group:') || id.startsWith('thread:')) return id;
@@ -6010,7 +6011,6 @@ function cleanReadKey(userId, key) {
 function cursorRank(list, messageId) {
   if (!messageId) return -1;
   const idx = (list || []).findIndex((msg) => msg && msg.id === messageId);
-  if (idx === -1) return (list || []).length;
   return idx;
 }
 
@@ -6038,7 +6038,10 @@ function mergeReadMap(userId, incoming, rewinds) {
     }
     if (!messageId || before === messageId) continue;
     const list = readList(userId, key);
-    if (before && cursorRank(list, messageId) < cursorRank(list, before)) continue;
+    const nextRank = cursorRank(list, messageId);
+    const prevRank = cursorRank(list, before);
+    if (nextRank === -1 && list.length) continue;
+    if (before && prevRank !== -1 && nextRank !== -1 && nextRank < prevRank) continue;
     book[key] = messageId;
     changed.push({ roomId: key, messageId, rewind: false });
   }
@@ -6071,7 +6074,7 @@ function dmInbox(userId, seen, seeded) {
   const heads = {};
   for (const other of others) {
     const list = messages['dm:' + dmKey(userId, other)] || [];
-    const cursor = String((seen && seen['dm:' + other]) || '');
+    const cursor = String((seen && (seen['dm:' + other] || seen['dm:' + [String(userId), String(other)].sort().join(':')])) || '');
     let start = list.length;
     if (cursor) {
       const idx = list.findIndex((msg) => msg && msg.id === cursor);

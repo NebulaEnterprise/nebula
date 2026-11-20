@@ -834,19 +834,19 @@ export async function loadDms() {
       if (!id) continue;
       const key = 'dm:' + id;
       const stamp = String(row.lastId || headForDm(ui.heads, id) || '');
-      const viewing = (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id))
-        || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
+      const viewing = dmOpen(id);
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === String(lastSentId || ''));
-      const readHere = dmIsRead(id, stamp);
       const pendingCount = pendingDm.get(String(id)) ? pendingDm.get(String(id)).size : 0;
-      const looking = viewing && chatInFront();
-      if (looking || ((own || readHere) && pendingCount === 0)) {
-        if (looking && currentRoom() === key) {
+      if (viewing || own) {
+        if (viewing && currentRoom() === key) {
           const newest = [...ui.messages].reverse().find((msg) => msg && msg.id && !msg.pending && !msg.failed && !String(msg.id).startsWith('local-'));
-          if (newest) advanceDmSeen(id, newest.id, true);
+          if (newest) {
+            advanceDmSeen(id, newest.id, true);
+            rememberCaught(id, newest.id);
+          }
         }
         if (stamp) {
-          advanceDmSeen(id, stamp, false);
+          advanceDmSeen(id, stamp, true);
           rememberCaught(id, stamp);
         }
         pendingDm.delete(String(id));
@@ -855,20 +855,22 @@ export async function loadDms() {
         ackedDm[id] = heardDm[id];
         continue;
       }
+      if (dmIsRead(id, stamp) && pendingCount === 0) {
+        heardDm[id] = stamp || heardDm[id];
+        continue;
+      }
       const fromList = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
       const fromActivity = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
-      const serverCount = dmIsRead(id, stamp) ? 0 : Math.max(fromList, fromActivity);
-      const unseen = !!(stamp && !dmIsRead(id, stamp));
-      const exact = unseen ? unseenInLog(id, row.lastId || '') : null;
-      const count = Math.max(serverCount, pendingCount, exact || 0);
+      const exact = unseenInLog(id, row.lastId || '');
+      const count = Math.max(fromList, fromActivity, pendingCount, exact || 0, stamp ? 1 : 0);
       if (count > 0) {
         unread[id] = { unread: count };
-        if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
+        if (inboxReady && stamp && heardDm[id] !== stamp) {
           const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
           if (!roomMuted('dm:' + id)) noteArrival(stamp || key, who, 'New direct message');
         }
       }
-      heardDm[id] = stamp;
+      if (stamp) heardDm[id] = stamp;
     }
     if (!sameNotes(ui.activity.dms, unread)) ui.activity = { ...ui.activity, dms: unread };
     if (ui.dmUser) {
@@ -1608,6 +1610,11 @@ function pingDm(roomId, author, messageId) {
   pendingDm.set(String(otherId), bag);
   const unread = Math.max(Number(ui.activity.dms?.[otherId]?.unread) || 0, bag.size);
   ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
+  if (stamp && heardDm[otherId] !== stamp && !roomMuted(channel)) {
+    const who = (author && (author.displayName || author.username)) || 'Someone';
+    noteArrival(stamp, who, 'New direct message');
+    heardDm[otherId] = stamp;
+  }
   warmDm(otherId);
   refreshDmCounts();
 }
@@ -3335,17 +3342,37 @@ function rememberCaught(userId, stamp) {
   const map = caughtMap();
   const id = String(userId);
   const next = String(stamp);
-  if (map[id] === next) return;
-  map[id] = next;
+  const prev = Array.isArray(map[id]) ? map[id].map(String) : (map[id] ? [String(map[id])] : []);
+  if (prev.includes(next)) return;
+  map[id] = [...prev, next].slice(-8);
   try { localStorage.setItem(accountKey('nebula-dm-caught'), JSON.stringify(map)); } catch (_) {}
+}
+
+function wasCaught(userId, stamp) {
+  const head = String(stamp || '');
+  if (!head) return false;
+  const row = caughtMap()[String(userId)];
+  if (Array.isArray(row)) return row.map(String).includes(head);
+  return String(row || '') === head;
 }
 
 function dmIsRead(userId, stamp) {
   const head = String(stamp || '');
   if (!head) return false;
   if (dmCovers(userId, seenForDm(seenMap(), userId), head)) return true;
-  if (String(caughtMap()[String(userId)] || '') === head) return true;
+  if (wasCaught(userId, head)) return true;
   if (ackedDm[userId] && String(ackedDm[userId]) === head) return true;
+  return false;
+}
+
+function dmOpen(userId) {
+  if (!userId) return false;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
+  if (ui.userSettings || ui.serverSettings) return false;
+  if (ui.phone === 'browse') return false;
+  const id = String(userId);
+  if (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === id) return true;
+  if (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === id) return true;
   return false;
 }
 
@@ -3464,13 +3491,17 @@ export function catchUpRead() {
 }
 
 export function markSeen(id, messageId) {
-  if (!id || !messageId || !chatInFront()) return;
-  const here = currentRoom().replace(/^ch:/, '') || ui.channelId;
-  if (String(here || '') !== String(id) && currentRoom() !== String(id)) return;
+  if (!id || !messageId) return;
   if (String(id).startsWith('dm:')) {
     const userId = String(id).slice(3).split(':').find((part) => part && String(part) !== String(ui.me && ui.me.id)) || String(id).slice(3);
+    if (!dmOpen(userId)) return;
     advanceDmSeen(userId, messageId, true);
     rememberCaught(userId, messageId);
+    const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === String(userId));
+    if (row && row.lastId) rememberCaught(userId, row.lastId);
+    heardDm[userId] = String(messageId);
+    ackedDm[userId] = String(messageId);
+    pendingDm.delete(String(userId));
     if (serverDmNotes[userId]) {
       const notes = { ...serverDmNotes };
       delete notes[userId];
@@ -3479,6 +3510,9 @@ export function markSeen(id, messageId) {
     forgetActivity('dm:' + userId);
     return;
   }
+  if (!chatInFront()) return;
+  const here = currentRoom().replace(/^ch:/, '') || ui.channelId;
+  if (String(here || '') !== String(id) && currentRoom() !== String(id)) return;
   const map = seenMap();
   if (String(map[id] || '') !== String(messageId)) {
     map[id] = messageId;
@@ -3554,13 +3588,34 @@ export async function pollActivity() {
     const dms = { ...(data.dms || {}) };
     const headsIn = data.heads || {};
     const readNow = new Set();
-    for (const userId of Object.keys(dms)) {
+    const dmHeads = {};
+    for (const [roomKey, messageId] of Object.entries(headsIn)) {
+      if (!String(roomKey).startsWith('dm:') || !messageId) continue;
+      const other = String(roomKey).slice(3).split(':').find((part) => part && String(part) !== String(ui.me && ui.me.id));
+      if (other) dmHeads[other] = String(messageId);
+    }
+    for (const userId of new Set([...Object.keys(dms), ...Object.keys(dmHeads)])) {
       const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === String(userId));
-      const head = headForDm(headsIn, userId) || (row && row.lastId ? String(row.lastId) : '');
-      const openHere = chatInFront() && ((ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId)) || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(userId)));
-      if (openHere || dmIsRead(userId, head)) {
+      const head = dmHeads[userId] || headForDm(headsIn, userId) || (row && row.lastId ? String(row.lastId) : '');
+      const openHere = dmOpen(userId);
+      const mine = !!(head && (String(lastSentId || '') === String(head) || (row && String(row.lastId || '') === String(head) && row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id))));
+      if (openHere || mine || dmIsRead(userId, head)) {
+        if ((openHere || mine) && head) {
+          advanceDmSeen(userId, head, true);
+          rememberCaught(userId, head);
+        }
         delete dms[userId];
         readNow.add(String(userId));
+        if (head) heardDm[userId] = head;
+      } else if (head) {
+        const note = dms[userId];
+        const count = Math.max(Number(note && note.unread) || 0, 1);
+        dms[userId] = { ...(note || {}), unread: count };
+        if (activityReady && heardDm[userId] !== head) {
+          const who = (row && row.other && (row.other.displayName || row.other.username)) || 'Someone';
+          if (!roomMuted('dm:' + userId)) noteArrival(head, who, 'New direct message');
+        }
+        heardDm[userId] = head;
       }
     }
     if (chatInFront() && ui.mode === 'chat' && ui.channelId && channels[ui.channelId] && ui.readHold !== ui.channelId) {
