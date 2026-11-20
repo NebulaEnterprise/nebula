@@ -6,7 +6,7 @@
   import Picker from './Picker.svelte';
   import PollCard from './PollCard.svelte';
   import Attachment from './Attachment.svelte';
-  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity } from '../state.svelte.js';
+  import { ui, nowClock, sendMessage, sendFiles, sendPoll, openPopout, peekProfile, noteTyping, noteKeyDown, noteKeyUp, noteTypingBlur, typingLine, mentionsMessage, loadMembers, reactTo, removeMessage, forwardMessage, dismissLocal, toast, pinMessage, muteRoom, roomMuted, channelNotify, setChannelNotify, leaveThread, developerMode, copyText, messageLink, markUnread, relation, friendAct, pollActivity, hasPerm } from '../state.svelte.js';
   import { seenPhrase } from '../seen.js';
   import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
@@ -527,7 +527,7 @@
     if (ui.serverMeta?.owner) return true;
     const mine = myRoleIds();
     if (role.id === 'everyone' || role.id === 'here') {
-      if (ui.serverPerms & PERM.ADMIN) return true;
+      if (hasPerm(PERM.ADMIN) || hasPerm(PERM.MENTION_EVERYONE)) return true;
       if (ui.me?.developer || ui.me?.staff) return true;
       if (['og', 'admin', 'manager', 'moderator', 'developer', 'owner'].some((id) => mine.has(id))) return true;
     }

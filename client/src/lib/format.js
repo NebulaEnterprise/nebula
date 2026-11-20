@@ -212,22 +212,122 @@ export function when(iso) {
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+const bit = (n) => 2 ** n;
+
 export const PERM = {
-  VIEW: 1,
-  SEND: 2,
-  MANAGE_CHANNELS: 4,
-  MANAGE_ROLES: 8,
-  INVITE: 16,
-  MANAGE_SERVER: 32,
-  ADMIN: 128,
+  VIEW: bit(0),
+  SEND: bit(1),
+  MANAGE_CHANNELS: bit(2),
+  MANAGE_ROLES: bit(3),
+  INVITE: bit(4),
+  MANAGE_SERVER: bit(5),
+  MANAGE_EMOJI: bit(6),
+  ADMIN: bit(7),
+  MANAGE_WEBHOOKS: bit(8),
+  MANAGE_EVENTS: bit(9),
+  VIEW_AUDIT: bit(10),
+  CHANGE_NICK: bit(11),
+  MANAGE_NICKS: bit(12),
+  KICK: bit(13),
+  BAN: bit(14),
+  TIMEOUT: bit(15),
+  EMBED: bit(16),
+  ATTACH: bit(17),
+  VOICE_MSG: bit(18),
+  REACT: bit(19),
+  EXTERNAL_EMOJI: bit(20),
+  POLLS: bit(21),
+  BIG_TEXT: bit(22),
+  MENTION_EVERYONE: bit(23),
+  MANAGE_MESSAGES: bit(24),
+  CREATE_THREADS: bit(25),
+  SEND_THREADS: bit(26),
+  MANAGE_THREADS: bit(27),
+  READ_HISTORY: bit(28),
+  CONNECT: bit(29),
+  SPEAK: bit(30),
+  MUTE_MEMBERS: bit(31),
+  MOVE_MEMBERS: bit(32),
 };
 
-export const ROLE_FLAGS = [
-  ['View channels', PERM.VIEW],
-  ['Send messages', PERM.SEND],
-  ['Create invite', PERM.INVITE],
-  ['Manage channels', PERM.MANAGE_CHANNELS],
-  ['Manage roles', PERM.MANAGE_ROLES],
-  ['Manage server', PERM.MANAGE_SERVER],
-  ['Administrator', PERM.ADMIN],
+export function hasBit(perms, flag) {
+  let n = Number(perms) || 0;
+  const b = Number(flag) || 0;
+  if (b <= 0) return false;
+  if (n < 0) n = n >>> 0;
+  return Math.floor(n / b) % 2 === 1;
+}
+
+export function setBit(perms, flag, on) {
+  let n = Number(perms) || 0;
+  const b = Number(flag) || 0;
+  if (b <= 0) return n;
+  if (n < 0) n = n >>> 0;
+  const has = Math.floor(n / b) % 2 === 1;
+  if (on && !has) return n + b;
+  if (!on && has) return n - b;
+  return n;
+}
+
+export const PERM_GROUPS = [
+  {
+    title: 'General Permissions',
+    items: [
+      ['Manage Channels', PERM.MANAGE_CHANNELS, 'Create, edit, reorder and delete channels.'],
+      ['Manage Roles', PERM.MANAGE_ROLES, 'Create and edit roles below their own, and give them to people.'],
+      ['Manage Emoji', PERM.MANAGE_EMOJI, 'Add and remove server emojis.'],
+      ['Manage Server', PERM.MANAGE_SERVER, 'Change the server name, icon, banner and settings.'],
+      ['Manage Webhooks', PERM.MANAGE_WEBHOOKS, 'Make, change and delete channel webhooks.'],
+      ['Manage Events', PERM.MANAGE_EVENTS, 'Create, edit, start and cancel server events.'],
+      ['View Audit Log', PERM.VIEW_AUDIT, 'See who changed what in the server.'],
+      ['Create Invite', PERM.INVITE, 'Invite people to the server.'],
+      ['Change Nickname', PERM.CHANGE_NICK, 'Change their own nickname.'],
+      ['Manage Nicknames', PERM.MANAGE_NICKS, 'Change other people’s nicknames.'],
+    ],
+  },
+  {
+    title: 'Membership Permissions',
+    items: [
+      ['Kick Members', PERM.KICK, 'Remove people; they can rejoin with an invite.'],
+      ['Ban Members', PERM.BAN, 'Remove people for good (until unbanned).'],
+      ['Timeout Members', PERM.TIMEOUT, 'Stop someone from talking for a while.'],
+    ],
+  },
+  {
+    title: 'Text Channel Permissions',
+    items: [
+      ['View Channels', PERM.VIEW, 'See channels and read what’s in them.'],
+      ['Send Messages', PERM.SEND, 'Post in text channels.'],
+      ['Embed Links', PERM.EMBED, 'Post links.'],
+      ['Attach Files', PERM.ATTACH, 'Upload pictures, videos and audio.'],
+      ['Send Voice Messages', PERM.VOICE_MSG, 'Record and send voice messages.'],
+      ['Add Reactions', PERM.REACT, 'Add new reactions. Without it people can still click ones already there.'],
+      ['Use External Emoji', PERM.EXTERNAL_EMOJI, 'Use emojis from other servers.'],
+      ['Create Polls', PERM.POLLS, 'Start polls.'],
+      ['Use Big Text', PERM.BIG_TEXT, 'Post headings (# text). Turn it off for @everyone to keep big text for the roles you pick.'],
+      ['Mention @everyone', PERM.MENTION_EVERYONE, 'Ping the whole server.'],
+      ['Manage Messages', PERM.MANAGE_MESSAGES, 'Delete and pin anyone’s messages. Moderator stuff.'],
+      ['Create Threads', PERM.CREATE_THREADS, 'Start threads in text channels. Turn it off for @everyone to keep threads to the roles you pick.'],
+      ['Send Messages in Threads', PERM.SEND_THREADS, 'Reply in threads and forum posts.'],
+      ['Manage Threads', PERM.MANAGE_THREADS, 'Close, lock, pin, rename, move and delete threads and forum posts, and post in locked ones.'],
+      ['Read Message History', PERM.READ_HISTORY, 'See messages sent before they were around.'],
+    ],
+  },
+  {
+    title: 'Voice Channel Permissions',
+    items: [
+      ['Connect', PERM.CONNECT, 'Join voice channels.'],
+      ['Speak', PERM.SPEAK, 'Talk in voice channels.'],
+      ['Mute Members', PERM.MUTE_MEMBERS, 'Mute other people in voice.'],
+      ['Move Members', PERM.MOVE_MEMBERS, 'Disconnect people from voice.'],
+    ],
+  },
+  {
+    title: 'Advanced Permissions',
+    items: [
+      ['Administrator', PERM.ADMIN, 'Every permission, and bypasses channel restrictions. Dangerous.'],
+    ],
+  },
 ];
+
+export const ROLE_FLAGS = PERM_GROUPS.flatMap((group) => group.items.map(([label, flag]) => [label, flag]));

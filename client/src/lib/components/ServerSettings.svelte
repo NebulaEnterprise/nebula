@@ -1,32 +1,46 @@
 <script>
   import {
-    X, Image, Palette, Hash, Home, Smile, Sticker, UserRound, AtSign, Shield,
-    Flag, ScrollText, Users, DoorOpen, Gavel, Ban, ChevronUp, ChevronDown, Trash2, Copy,
+    X, Search, Image, Palette, Hash, Home, Smile, Sticker, UserRound, Bell, Shield,
+    Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, DoorOpen, Plus, ChevronLeft,
+    ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal,
   } from '@lucide/svelte';
+  import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
-  import ColorWheel from './ColorWheel.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm } from '../state.svelte.js';
   import { newRoomKey } from '../vault.js';
-  import { ROLE_FLAGS, PERM, TAG_ICONS, inviteLink } from '../format.js';
+  import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api } from '../api.js';
 
-  const pages = [
-    ['overview', 'Overview', Image],
-    ['theme', 'Theme', Palette],
-    ['channels', 'Channels', Hash],
-    ['lobby', 'Lobby', Home],
-    ['emoji', 'Emoji', Smile],
-    ['stickers', 'Stickers', Sticker],
-    ['onboarding', 'Onboarding', UserRound],
-    ['pings', 'Ping roles', AtSign],
-    ['safety', 'Safety', Shield],
-    ['reports', 'Reports', Flag],
-    ['audit', 'Audit log', ScrollText],
-    ['members', 'Members', Users],
-    ['requests', 'Join requests', DoorOpen],
-    ['roles', 'Roles', Gavel],
-    ['bans', 'Bans', Ban],
+  const SWATCHES = ['#f23f43', '#f97316', '#23a559', '#1abc9c', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308'];
+  const NAV = [
+    { label: 'Overview', pages: [
+      { id: 'overview', label: 'Overview', icon: Image, keys: 'profile icon banner name tag discovery description invite vanity template links rules tickets clips transfer delete' },
+      { id: 'theme', label: 'Theme', icon: Palette, keys: 'accent colour color tint background' },
+      { id: 'channels', label: 'Channels', icon: Hash, keys: 'category reorder text voice' },
+    ]},
+    { label: 'Community', pages: [
+      { id: 'lobby', label: 'Lobby', icon: Home, keys: 'about welcome' },
+      { id: 'emoji', label: 'Emoji', icon: Smile, keys: 'emojis upload' },
+      { id: 'stickers', label: 'Stickers', icon: Sticker, keys: 'sticker upload' },
+      { id: 'onboarding', label: 'Onboarding', icon: UserRound, keys: 'questions starting channel' },
+      { id: 'pings', label: 'Ping roles', icon: Bell, keys: 'announcements mentions' },
+    ]},
+    { label: 'Safety', pages: [
+      { id: 'safety', label: 'Safety', icon: Shield, keys: 'raid lock verification join' },
+      { id: 'reports', label: 'Reports', icon: Flag, keys: 'review handled' },
+      { id: 'audit', label: 'Audit log', icon: ScrollText, keys: 'who changed' },
+      { id: 'trash', label: 'Trash', icon: Trash2, keys: 'deleted restore' },
+    ]},
+    { label: 'Members', pages: [
+      { id: 'members', label: 'Members', icon: Users, keys: 'kick ban timeout nickname' },
+      { id: 'roles', label: 'Roles', icon: Crown, keys: 'permissions administrator manage channels' },
+      { id: 'bans', label: 'Bans', icon: Ban, keys: 'unban voice' },
+      { id: 'requests', label: 'Join requests', icon: DoorOpen, keys: 'apply approve' },
+    ]},
+    { label: 'Apps', pages: [
+      { id: 'bots', label: 'Bots', icon: Bot, keys: 'apps' },
+    ]},
   ];
 
   let name = $state(ui.settings?.name || '');
@@ -42,372 +56,1053 @@
   let bannerUrl = $state('');
   let assetName = $state('');
   let q = $state('');
-  let roleName = $state('');
-  let roleColor = $state('#7c6af7');
-  let roleBits = $state(PERM.VIEW | PERM.SEND);
-  let roleUid = $state('');
-  let roleId = $state(ui.settings?.roles?.find((r) => r.id !== 'everyone' && r.id !== 'here' && r.id !== 'owner')?.id || '');
-  let banUid = $state('');
-  let banReason = $state('');
+  let navQuery = $state('');
+  let tags = $state(Array.isArray(ui.settings?.tags) ? ui.settings.tags.join(', ') : (ui.settings?.tags || ''));
+  let links = $state(Array.isArray(ui.settings?.links) ? ui.settings.links.map((item) => ({ label: item.label || '', url: item.url || '' })) : []);
+  let rulesId = $state(ui.settings?.rulesChannelId || '');
+  let tickets = $state(!!ui.settings?.tickets);
+  let clips = $state(ui.settings?.clips !== false);
   let verify = $state(ui.settings?.verification || 'none');
   let joinMode = $state(ui.settings?.joinMode || 'open');
   let joinQ = $state(ui.settings?.joinQuestions?.[0] || '');
   let raidOn = $state(!!ui.settings?.raid?.on);
-  let raidDays = $state(ui.settings?.raid?.accountDays || 3);
+  let raidJoin = $state(String(ui.settings?.raid?.joinHours || 1));
+  let newAccounts = $state(String(ui.settings?.raid?.accountDays || 0));
+  let raidFor = $state(String(ui.settings?.raid?.durationHours || 6));
   let obOn = $state(!!ui.settings?.onboarding?.enabled);
   let obMust = $state(!!ui.settings?.onboarding?.mustFinish);
+  let startChannel = $state(ui.settings?.onboarding?.startChannelId || '');
   let questions = $state((ui.settings?.onboarding?.questions || []).map((item) => ({ ...item })));
+  let reportTab = $state('open');
+  let menuFor = $state('');
+  let roleFilter = $state('');
+  let memberKind = $state('all');
+  let memberSort = $state('new');
+  let lastMove = $state(null);
+  let transferOpen = $state(false);
+  let transferQ = $state('');
+  let roleEdit = $state('');
+  let roleTab = $state('display');
+  let editName = $state('');
+  let editColor = $state('#99aab5');
+  let editBits = $state(PERM.VIEW + PERM.SEND);
+  let editIcon = $state('');
+  let editMention = $state([]);
+  let adding = $state(false);
+  let held = $state([]);
+  let addQ = $state('');
+  let banUid = $state('');
+  let banReason = $state('');
 
   const s = $derived(ui.settings || {});
-  const catOptions = $derived([{ value: '', label: 'No category' }, ...(s.categories || []).map((c) => ({ value: c.id, label: c.name }))]);
-  const members = $derived((s.members || []).filter((m) => {
-    const blob = (m.nick + ' ' + m.displayName + ' ' + m.username + ' ' + m.uid).toLowerCase();
-    return !q || blob.includes(q.toLowerCase());
-  }));
+  const ownerHere = $derived(!!ui.serverMeta?.owner);
+  const canKick = $derived(ownerHere || hasPerm(PERM.KICK));
+  const canBan = $derived(ownerHere || hasPerm(PERM.BAN));
+  const canTimeout = $derived(ownerHere || hasPerm(PERM.TIMEOUT));
+  const canNick = $derived(ownerHere || hasPerm(PERM.MANAGE_NICKS));
+  const people = $derived.by(() => {
+    const map = new Map();
+    for (const member of [...(s.members || []), ...(ui.members || [])]) {
+      if (!member?.id) continue;
+      const prev = map.get(member.id) || {};
+      map.set(member.id, { ...prev, ...member, roles: member.roles || prev.roles, roleIds: member.roleIds || prev.roleIds });
+    }
+    return [...map.values()];
+  });
+  const customRoles = $derived((s.roles || []).filter((role) => role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner'));
+  const textChannels = $derived((s.channels || []).filter((ch) => ch.type !== 'voice'));
+  const voiceChannels = $derived((s.channels || []).filter((ch) => ch.type === 'voice'));
+  const openReports = $derived((s.reports || []).filter((item) => item.status === 'open'));
+  const pageMeta = $derived(NAV.flatMap((group) => group.pages).find((page) => page.id === ui.settingsPage));
+  const visibleNav = $derived.by(() => {
+    const query = navQuery.trim().toLowerCase();
+    return NAV.map((group) => ({
+      ...group,
+      pages: group.pages.filter((page) => !query || page.label.toLowerCase().includes(query) || page.keys.includes(query)),
+    })).filter((group) => group.pages.length);
+  });
+  const shownMembers = $derived.by(() => {
+    const query = q.trim().toLowerCase();
+    let list = people.filter((member) => {
+      const blob = (member.nick + ' ' + member.displayName + ' ' + member.username + ' ' + member.uid).toLowerCase();
+      if (query && !blob.includes(query)) return false;
+      if (roleFilter && !memberRoleIds(member).includes(roleFilter)) return false;
+      if (memberKind === 'bots' && !member.bot) return false;
+      if (memberKind === 'people' && member.bot) return false;
+      return true;
+    });
+    const stamp = (member) => Date.parse(member.joinedAt || member.joined || member.createdAt || '') || 0;
+    if (memberSort === 'new') list = [...list].sort((a, b) => stamp(b) - stamp(a));
+    else if (memberSort === 'old') list = [...list].sort((a, b) => stamp(a) - stamp(b));
+    else list = [...list].sort((a, b) => displayName(a).localeCompare(displayName(b)));
+    return list;
+  });
+  const titleCount = $derived(
+    ui.settingsPage === 'members' ? people.length
+      : ui.settingsPage === 'bans' ? (s.bans || []).length
+        : ui.settingsPage === 'reports' ? openReports.length
+          : null
+  );
+  const verifyCopy = {
+    none: 'Anyone in the server can talk right away.',
+    low: 'Accounts must be older than 5 minutes.',
+    medium: 'Accounts older than 5 minutes, and in this server for 5 minutes.',
+    high: 'Medium, plus a verified email.',
+  };
+  const editing = $derived((s.roles || []).find((role) => role.id === roleEdit) || null);
+  const adminOn = $derived(hasBit(editBits, PERM.ADMIN));
+  const holders = $derived(people.filter((member) => held.includes(member.id)));
+  const outsiders = $derived(people.filter((member) => !held.includes(member.id) && member.id !== 'here'));
 
-  async function run(fn) {
-    try { await fn(); await reloadSettings(); toast('Saved'); }
-    catch (err) { toast(err.message); }
+  $effect(() => {
+    const query = navQuery.trim();
+    if (!query) return;
+    const pages = visibleNav.flatMap((group) => group.pages);
+    if (pages.length && !pages.some((page) => page.id === ui.settingsPage)) ui.settingsPage = pages[0].id;
+  });
+
+  function displayName(member) {
+    return member?.nick || member?.displayName || member?.username || 'Someone';
   }
 
-  async function saveOverview() {
-    const body = { name, color: accent, theme: { accent, tint: s.theme?.tint || '' } };
+  function memberRoleIds(member) {
+    return (member?.roles || member?.roleIds || []).map((role) => (typeof role === 'string' ? role : role?.id)).filter(Boolean);
+  }
+
+  function ago(iso) {
+    const then = Date.parse(iso || '');
+    if (!then) return '';
+    const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+    if (mins < 60) return mins + 'm ago';
+    const hours = Math.round(mins / 60);
+    if (hours < 48) return hours + 'h ago';
+    return Math.round(hours / 24) + 'd ago';
+  }
+
+  function established() {
+    const then = Date.parse(s.createdAt || '');
+    if (!then) return '';
+    return new Date(then).toLocaleDateString([], { month: 'short', year: 'numeric' });
+  }
+
+  async function run(fn) {
+    try {
+      await fn();
+      await reloadSettings();
+      toast('Saved');
+      return true;
+    } catch (err) {
+      toast(err.message);
+      return false;
+    }
+  }
+
+  async function saveProfile() {
+    const body = { name, color: accent, theme: { accent, tint: tint || s.theme?.tint || '' } };
     if (iconUrl) body.iconUrl = iconUrl;
     if (bannerUrl) body.bannerUrl = bannerUrl;
     await run(() => guildAction({ type: 'settings', ...body }));
   }
 
-  async function saveMention(role, otherId, on) {
-    const mentionBy = new Set(role.mentionBy || []);
-    if (on) mentionBy.add(otherId);
-    else mentionBy.delete(otherId);
-    await run(() => api('/api/servers/' + ui.serverId + '/roles/' + role.id, { method: 'PATCH', body: { mentionBy: [...mentionBy] } }));
+  async function saveDiscovery(next) {
+    const previous = discover;
+    discover = next;
+    const ok = await run(async () => {
+      let roomKey = s.roomKey || '';
+      if (discover && !roomKey) roomKey = newRoomKey();
+      if (discover && roomKey) keepServerKey(ui.serverId, roomKey);
+      await guildAction({ type: 'settings', discover, roomKey: discover ? roomKey : '' });
+    });
+    discover = ok ? ui.settings?.discover === true : previous;
   }
 
-  async function assignRole(action) {
+  async function pickFile(event, kind) {
     try {
-      const mem = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
-      const user = (mem.members || []).find((m) => String(m.uid) === roleUid.trim().replace(/^#/, ''));
-      if (!user) throw new Error('No member with that id');
-      await api('/api/servers/' + ui.serverId + '/members/' + user.id + '/roles', { method: 'POST', body: { roleId, action } });
+      const url = await readSmallImage(event.target.files[0]);
+      if (kind === 'icon') iconUrl = url;
+      else bannerUrl = url;
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function openRole(role) {
+    if (!role) return;
+    roleEdit = role.id;
+    roleTab = 'display';
+    adding = false;
+    editName = role.name || '';
+    editColor = role.color || '#99aab5';
+    editBits = Number(role.permissions) || 0;
+    editIcon = role.icon || '';
+    editMention = [...(role.mentionBy || [])];
+    held = people.filter((member) => memberRoleIds(member).includes(role.id)).map((member) => member.id);
+  }
+
+  async function createRole() {
+    try {
+      const data = await api('/api/servers/' + ui.serverId + '/roles', {
+        method: 'POST',
+        body: { name: 'new role', color: '#99aab5', permissions: PERM.VIEW + PERM.SEND },
+      });
+      await reloadSettings();
+      const id = data?.role?.id || data?.id;
+      const fresh = (ui.settings?.roles || []).find((role) => role.id === id)
+        || [...(ui.settings?.roles || [])].reverse().find((role) => role.name === 'new role' && role.id !== 'everyone');
+      if (fresh) openRole(fresh);
+      else toast('Role created');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function saveRole() {
+    if (!editing) return;
+    const tab = roleTab;
+    const body = { color: editColor, icon: editIcon, permissions: editBits, mentionBy: editMention };
+    if (editing.id !== 'everyone' && editing.id !== 'here') body.name = editName.trim() || editing.name;
+    const ok = await run(() => api('/api/servers/' + ui.serverId + '/roles/' + editing.id, { method: 'PATCH', body }).then(() => loadMembers()));
+    if (ok) {
+      const fresh = (ui.settings?.roles || []).find((role) => role.id === roleEdit);
+      if (fresh) {
+        openRole(fresh);
+        roleTab = tab;
+      }
+    }
+  }
+
+  async function deleteRole(role) {
+    if (!role || role.id === 'everyone' || role.id === 'here' || role.id === 'owner') return;
+    if (!confirm('Delete the ' + role.name + ' role?')) return;
+    try {
+      await api('/api/servers/' + ui.serverId + '/roles/' + role.id, { method: 'DELETE' });
+      roleEdit = '';
       await reloadSettings();
       await loadMembers();
+      toast('Role deleted');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function give(member, action) {
+    if (!editing) return;
+    try {
+      await api('/api/servers/' + ui.serverId + '/members/' + member.id + '/roles', {
+        method: 'POST',
+        body: { roleId: editing.id, action },
+      });
+      await reloadSettings();
+      await loadMembers();
+      held = action === 'add' ? [...new Set([...held, member.id])] : held.filter((id) => id !== member.id);
       toast(action === 'add' ? 'Role given' : 'Role removed');
-    } catch (err) { toast(err.message); }
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function giveAll() {
+    const pending = outsiders.slice();
+    if (!pending.length) return;
+    for (const member of pending) {
+      try {
+        await api('/api/servers/' + ui.serverId + '/members/' + member.id + '/roles', {
+          method: 'POST',
+          body: { roleId: editing.id, action: 'add' },
+        });
+        held = [...new Set([...held, member.id])];
+      } catch (err) {
+        toast(err.message);
+        break;
+      }
+    }
+    await reloadSettings();
+    await loadMembers();
+  }
+
+  async function moveChannel(ch, dir) {
+    lastMove = { id: ch.id, dir: dir === 'up' ? 'down' : 'up' };
+    await run(() => guildAction({ type: 'move-channel', channelId: ch.id, dir }));
+  }
+
+  async function uploadAsset(event) {
+    try {
+      const url = await readSmallImage(event.target.files[0]);
+      await guildAction({ type: ui.settingsPage === 'emoji' ? 'emoji' : 'sticker', name: assetName, url });
+      assetName = '';
+      await reloadSettings();
+      toast('Uploaded');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function transferTo(member) {
+    const who = displayName(member);
+    if (!confirm('Hand ' + (s.name || 'this server') + ' to ' + who + '? You stay in it with your roles.')) return;
+    try {
+      await guildAction({ type: 'transfer', userId: member.id });
+      transferOpen = false;
+      toast('Ownership transferred');
+      await reloadSettings();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function deleteServer() {
+    if (!confirm('Delete ' + (s.name || 'this server') + '? Everything in it goes too. No take-backs.')) return;
+    try {
+      await guildAction({ type: 'delete' });
+      ui.serverSettings = false;
+      await openServer('nebula-official');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  function toggleMention(otherId, on) {
+    const next = new Set(editMention);
+    if (on) next.add(otherId);
+    else next.delete(otherId);
+    editMention = [...next];
+  }
+
+  function permChecked(flag) {
+    return flag === PERM.ADMIN ? adminOn : adminOn || hasBit(editBits, flag);
   }
 </script>
 
-<div class="overlay">
-  <div class="settings" role="dialog">
-    <aside class="set-nav">
-      <div class="group">{s.name || 'Server'}</div>
-      {#each pages as [id, label, Icon]}
-        <button class:on={ui.settingsPage === id} onclick={() => (ui.settingsPage = id)}>
-          <Icon size={16} /> {label}
-        </button>
+{#snippet colors(value, set, allowNone)}
+  <div class="gset-swatches">
+    {#if allowNone}
+      <button type="button" class="swatch none" class:on={!value} aria-label="Default colour" onclick={() => set('')}></button>
+    {/if}
+    {#each SWATCHES as color}
+      <button type="button" class="swatch" class:on={String(value).toLowerCase() === color} style="background:{color}" aria-label={color} onclick={() => set(color)}></button>
+    {/each}
+    <label class="swatch rainbow" title="Custom colour">
+      <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '#7c6af7'} oninput={(e) => set(e.target.value)} />
+    </label>
+    <input class="gset-hex" placeholder="#rrggbb" value={value || ''} onchange={(e) => {
+      const raw = e.target.value.trim();
+      const next = raw.startsWith('#') ? raw : '#' + raw;
+      if (/^#[0-9a-fA-F]{6}$/.test(next)) set(next);
+    }} />
+  </div>
+{/snippet}
+
+{#snippet bear(title, text)}
+  <div class="gset-empty">
+    <svg width="78" height="64" viewBox="0 0 78 64" aria-hidden="true">
+      <circle cx="16" cy="16" r="11" fill="#f97316"/>
+      <circle cx="62" cy="16" r="11" fill="#f97316"/>
+      <circle cx="39" cy="36" r="24" fill="#f97316"/>
+      <circle cx="30" cy="32" r="3.2" fill="#1a1020"/>
+      <circle cx="48" cy="32" r="3.2" fill="#1a1020"/>
+      <ellipse cx="39" cy="42" rx="7" ry="5" fill="#1a1020"/>
+      <ellipse cx="39" cy="40" rx="3" ry="2" fill="#f97316"/>
+    </svg>
+    <strong>{title}</strong>
+    <p>{text}</p>
+  </div>
+{/snippet}
+
+{#snippet channelRow(ch)}
+  <div class="gset-chan">
+    <strong>{ch.type === 'voice' ? '🔊' : '#'} {ch.name}</strong>
+    <button type="button" class="btn icon" title="Move up" onclick={() => moveChannel(ch, 'up')}><ChevronUp size={16} /></button>
+    <button type="button" class="btn icon" title="Move down" onclick={() => moveChannel(ch, 'down')}><ChevronDown size={16} /></button>
+  </div>
+{/snippet}
+
+<div class="overlay" onclick={() => (menuFor = '')}>
+  <div class="settings" role="dialog" aria-label="Server settings">
+    <aside class="set-nav gset-nav">
+      <div class="set-brand">{s.name || 'Server'}</div>
+      {#each visibleNav as group}
+        <div class="group">{group.label}</div>
+        {#each group.pages as page}
+          {@const Icon = page.icon}
+          <button type="button" class:on={ui.settingsPage === page.id} onclick={() => { ui.settingsPage = page.id; if (page.id !== 'roles') roleEdit = ''; }}>
+            <Icon size={16} /> {page.label}
+            {#if page.id === 'reports' && openReports.length}<i class="set-badge">{openReports.length}</i>{/if}
+            {#if page.id === 'requests' && (s.requests || []).length}<i class="set-badge">{s.requests.length}</i>{/if}
+          </button>
+        {/each}
+      {:else}
+        <p class="hint">No settings match.</p>
       {/each}
     </aside>
-    <div class="set-main">
-      <div class="row" style="border:0;padding-top:0">
-        <h2>{pages.find((p) => p[0] === ui.settingsPage)?.[1]}</h2>
-        <button class="btn icon" onclick={() => (ui.serverSettings = false)}><X size={18} /></button>
+    <div class="set-main gset">
+      <div class="gset-bar">
+        <h2>
+          {pageMeta?.label || 'Settings'}
+          {#if titleCount != null}<i class="gset-count">{titleCount}</i>{/if}
+        </h2>
+        <div class="gset-tools">
+          <label class="gset-search">
+            <Search size={16} />
+            <input placeholder="Search settings" bind:value={navQuery} />
+          </label>
+          <button type="button" class="btn icon" aria-label="Close" onclick={() => (ui.serverSettings = false)}><X size={18} /></button>
+        </div>
       </div>
-
-      {#if ui.settingsPage === 'overview'}
-        <p class="hint">How the server looks in the sidebar and on invites.</p>
-        <div class="grid-2">
-          <label class="drop">
-            {#if iconUrl || s.iconUrl}<img src={iconUrl || s.iconUrl} alt="" />{:else}<strong>Server icon</strong><span>PNG, WebP, or GIF under 300 KB</span>{/if}
-            <input type="file" accept="image/*" onchange={async (e) => { try { iconUrl = await readSmallImage(e.target.files[0]); } catch (err) { toast(err.message); } }} />
-          </label>
-          <label class="drop">
-            {#if bannerUrl || s.bannerUrl}<img src={bannerUrl || s.bannerUrl} alt="" />{:else}<strong>Banner</strong><span>Shown above the channel list</span>{/if}
-            <input type="file" accept="image/*" onchange={async (e) => { try { bannerUrl = await readSmallImage(e.target.files[0]); } catch (err) { toast(err.message); } }} />
-          </label>
-        </div>
-        <div class="field"><label>Server name</label><input bind:value={name} maxlength="40" /></div>
-        {#if s.canCustomize}
-          <div class="field">
-            <label>Server link</label>
-            {#if s.official}
-              <input value="nebula" disabled />
-            {:else}
-              <input bind:value={vanity} maxlength="20" placeholder="your-server" />
-            {/if}
-            <p class="hint">{serverInvite(s.official ? 'nebula' : vanity) || 'Pick 2 or more letters. This becomes the invite link.'}</p>
-            <p class="hint">The secret after # is the server key. Anyone with the full link can read the history.</p>
-          </div>
-          <div class="field">
-            <label>Server tag</label>
-            <p class="hint">2 to 4 letters or numbers. Members can wear it next to their name.</p>
-            <input bind:value={tag} maxlength="4" placeholder="ILY" />
-          </div>
-          <p class="label">Tag icon</p>
-          <div class="tag-icons">
-            <button type="button" class:on={!tagIcon} onclick={() => (tagIcon = '')}>None</button>
-            {#each TAG_ICONS as icon}
-              <button type="button" class:on={tagIcon === icon} onclick={() => (tagIcon = icon)}>{icon}</button>
-            {/each}
-          </div>
-          {#if tag}<p class="hint">Preview <em class="tag-pill">{#if tagIcon}<i>{tagIcon}</i>{/if}{tag}</em></p>{/if}
-          <div class="look-actions">
-            <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, vanity: s.official ? 'nebula' : vanity }))}>Save tag</button>
-            <button class="btn" style="width:auto" onclick={() => { tag = ''; tagIcon = ''; run(() => guildAction({ type: 'settings', tag: '', tagIcon: '' })); }}>Remove tag</button>
-          </div>
-        {:else}
-          <p class="hint">This server needs 5 members before it can have a custom invite link or a tag. It has {s.memberCount || 0}. Invites still work. They get a random link.</p>
-        {/if}
-        <p class="label">Accent</p>
-        <ColorWheel value={accent} onpick={(c) => (accent = c)} />
-        <div style="height:14px"></div>
-        <button class="btn brand" style="width:auto" onclick={saveOverview}>Save</button>
-
-      {:else if ui.settingsPage === 'theme'}
-        <p class="hint">Everyone sees these colors while they are in this server.</p>
-        <p class="label">Accent</p>
-        <ColorWheel value={accent} onpick={(c) => (accent = c)} />
-        <p class="label" style="margin-top:14px">Background</p>
-        <ColorWheel value={tint || '#181920'} onpick={(c) => (tint = c)} />
-        {#if tint}<button type="button" class="btn sm" style="margin-top:8px" onclick={() => (tint = '')}>Default background</button>{/if}
-        <div style="height:14px"></div>
-        <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', color: accent, theme: { accent, tint } }))}>Save theme</button>
-        <button class="btn" onclick={() => run(() => guildAction({ type: 'settings', theme: { accent: '#7c6af7', tint: '' } }))}>Remove theme</button>
-
-      {:else if ui.settingsPage === 'channels'}
-        <p class="hint">Move channels up or down, or drop them into a category.</p>
-        <button class="btn brand" style="width:auto;margin-bottom:12px" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
-        {#each s.categories || [] as cat}
-          <div class="row">
-            <strong>{cat.name}</strong>
-            <button class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: cat.id }))}><Trash2 size={16} /></button>
-          </div>
-        {/each}
-        {#each s.channels || [] as ch}
-          <div class="row">
-            <strong style="width:140px">{ch.type === 'voice' ? '🔊' : '#'} {ch.name}</strong>
-            <Select value={ch.categoryId || ''} options={catOptions} onpick={(v) => run(() => guildAction({ type: 'set-category', channelId: ch.id, categoryId: v }))} />
-            <button class="btn icon" title="Move up" onclick={() => run(() => guildAction({ type: 'move-channel', channelId: ch.id, dir: 'up' }))}><ChevronUp size={16} /></button>
-            <button class="btn icon" title="Move down" onclick={() => run(() => guildAction({ type: 'move-channel', channelId: ch.id, dir: 'down' }))}><ChevronDown size={16} /></button>
-          </div>
-        {/each}
-
-      {:else if ui.settingsPage === 'lobby'}
-        <p class="hint">A short note shown above the message box.</p>
-        <label class="check"><input type="checkbox" bind:checked={discover} /> Appear in Discover</label>
-        <p class="hint">Off until you turn it on. The room key stays on the devices that have the invite. Turning this on stores that key and publishes the full invite, so anyone can join and read the history.</p>
-        <p class="hint">{serverInvite(s.slug || (s.official ? 'nebula' : vanity))}</p>
-        <button class="btn brand" style="width:auto" onclick={() => run(async () => {
-          let roomKey = s.roomKey || '';
-          if (discover && !roomKey) roomKey = newRoomKey();
-          if (discover && roomKey) keepServerKey(ui.serverId, roomKey);
-          await guildAction({ type: 'settings', discover, roomKey: discover ? roomKey : '' });
-          await reloadSettings();
-          discover = ui.settings?.discover === true;
-        })}>Save discovery</button>
-        <label class="check"><input type="checkbox" bind:checked={showLobby} /> Show the lobby</label>
-        <div class="field"><label>About</label><textarea bind:value={about} maxlength="2000" rows="5"></textarea></div>
-        <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', about, showLobby }))}>Save</button>
-
-      {:else if ui.settingsPage === 'emoji' || ui.settingsPage === 'stickers'}
-        {@const list = ui.settingsPage === 'emoji' ? (s.emoji || []) : (s.stickers || [])}
-        <p class="hint">{list.length} / {ui.settingsPage === 'emoji' ? 50 : 30}. {ui.settingsPage === 'emoji' ? 'People type :name: in chat.' : 'They show up in the sticker button.'}</p>
-        <div class="field"><label>Name</label><input bind:value={assetName} maxlength="32" placeholder="wave" /></div>
-        <label class="drop">
-          <strong>Upload {ui.settingsPage === 'emoji' ? 'emoji' : 'sticker'}</strong>
-          <span>Under 300 KB</span>
-          <input type="file" accept="image/*" onchange={async (e) => {
-            try {
-              const url = await readSmallImage(e.target.files[0]);
-              await guildAction({ type: ui.settingsPage === 'emoji' ? 'emoji' : 'sticker', name: assetName, url });
-              assetName = '';
-              await reloadSettings();
-              toast('Uploaded');
-            } catch (err) { toast(err.message); }
-          }} />
-        </label>
-        {#each list as item}
-          <div class="row">
-            <img src={item.url} alt="" style="width:36px;height:36px;object-fit:contain" />
-            <span class="grow">:{item.name}:</span>
-            <button class="btn sm danger" onclick={() => run(() => guildAction({ type: ui.settingsPage === 'emoji' ? 'emoji' : 'sticker', remove: true, id: item.id }))}>Remove</button>
-          </div>
-        {/each}
-
-      {:else if ui.settingsPage === 'onboarding'}
-        <p class="hint">New members can answer a few questions and receive a role.</p>
-        <label class="check"><input type="checkbox" bind:checked={obOn} /> Turn on onboarding</label>
-        <label class="check"><input type="checkbox" bind:checked={obMust} /> Must finish before chatting</label>
-        {#each questions as item, i}
-          <div class="row">
-            <input class="textin" bind:value={item.q} placeholder="Question" />
-            <Select
-              value={item.roleId || ''}
-              options={(s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner' && r.id !== 'here').map((r) => ({ value: r.id, label: r.name }))}
-              onpick={(v) => (questions[i].roleId = v)}
-            />
-          </div>
-        {/each}
-        <div class="actions" style="margin-top:12px">
-          <button class="btn" onclick={() => questions.push({ q: '', roleId: '' })}>Add question</button>
-          <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', onboarding: { enabled: obOn, mustFinish: obMust, questions } }))}>Save</button>
-        </div>
-
-      {:else if ui.settingsPage === 'pings'}
-        <p class="hint">Members pick these themselves. A ping role never includes manage permissions.</p>
-        <button class="btn" onclick={async () => {
-          try {
-            const names = ['Announcements', 'Giveaways', 'Updates', 'Events', 'Polls'];
-            for (const n of names) {
-              if ((s.roles || []).some((r) => r.name === n)) continue;
-              await api('/api/servers/' + ui.serverId + '/roles', { method: 'POST', body: { name: n, color: '#7c6af7', permissions: PERM.VIEW } });
-            }
-            const fresh = (await api('/api/servers/' + ui.serverId + '/settings')).settings;
-            const ids = (fresh.roles || []).filter((r) => names.includes(r.name)).map((r) => r.id);
-            await guildAction({ type: 'settings', pingRoleIds: [...new Set([...(fresh.pingRoleIds || []), ...ids])] });
-            await reloadSettings();
-            toast('Template added');
-          } catch (err) { toast(err.message); }
-        }}>Add the starter roles</button>
-        {#each (s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'owner' && r.id !== 'here') as r}
-          <label class="check">
-            <input type="checkbox" checked={(s.pingRoleIds || []).includes(r.id)} onchange={async (e) => {
-              const set = new Set(s.pingRoleIds || []);
-              if (e.target.checked) set.add(r.id); else set.delete(r.id);
-              await run(() => guildAction({ type: 'settings', pingRoleIds: [...set] }));
-            }} />
-            {r.name}
-          </label>
-        {/each}
-
-      {:else if ui.settingsPage === 'safety'}
-        <p class="hint">Lock the server, slow down raids, and choose who can join.</p>
-        <div class="actions">
-          <button class="btn sm" onclick={() => run(() => guildAction({ type: 'lock', minutes: 15 }))}>Lock 15 min</button>
-          <button class="btn sm" onclick={() => run(() => guildAction({ type: 'lock', minutes: 60 }))}>Lock 1 hour</button>
-          <button class="btn sm" onclick={() => run(() => guildAction({ type: 'lock', minutes: 1440 }))}>Lock 1 day</button>
-          <button class="btn sm" onclick={() => run(() => guildAction({ type: 'lock', minutes: 0 }))}>Unlock</button>
-        </div>
-        <label class="check"><input type="checkbox" bind:checked={raidOn} /> Raid mode for new accounts</label>
-        <div class="field"><label>Block accounts younger than (days)</label><input type="number" min="0" bind:value={raidDays} /></div>
-        <p class="label">Verification</p>
-        <Select value={verify} options={['none','low','medium','high'].map((v) => ({ value: v, label: v }))} onpick={(v) => (verify = v)} />
-        <p class="label" style="margin-top:12px">Who can join</p>
-        <Select value={joinMode} options={[{ value: 'open', label: 'Open invite' }, { value: 'apply', label: 'They apply, you approve' }]} onpick={(v) => (joinMode = v)} />
-        <div class="field" style="margin-top:12px"><label>Question on the form</label><input bind:value={joinQ} maxlength="120" /></div>
-        <button class="btn brand" style="width:auto" onclick={() => run(() => guildAction({ type: 'settings', raid: { on: raidOn, accountDays: Number(raidDays) || 0, joinHours: 1, durationHours: 6 }, verification: verify, joinMode, joinQuestions: joinQ ? [joinQ] : [] }))}>Save safety</button>
-
-      {:else if ui.settingsPage === 'reports'}
-        {#each s.reports || [] as r}
-          <div class="row">
-            <div class="grow"><strong>{r.status}</strong> {r.text}</div>
-            {#if r.status === 'open'}<button class="btn sm" onclick={() => run(() => guildAction({ type: 'report-handle', reportId: r.id }))}>Handled</button>{/if}
-          </div>
-        {:else}<p class="hint">Nothing to review.</p>{/each}
-
-      {:else if ui.settingsPage === 'audit'}
-        {#each s.audit || [] as a}
-          <div class="row"><div class="grow"><strong>{a.name}</strong> {a.text}<div class="hint">{a.at}</div></div></div>
-        {:else}<p class="hint">No changes yet.</p>{/each}
-
-      {:else if ui.settingsPage === 'members'}
-        <input class="textin" placeholder="Search by name" bind:value={q} />
-        {#each members as m}
-          <div class="row">
-            <div class="grow"><strong>{m.nick || m.displayName || m.username}</strong><div class="hint">@{m.username} · {m.uid}</div></div>
-            <div class="actions">
-              <button class="btn icon" title="Copy id" onclick={() => navigator.clipboard.writeText(String(m.uid || ''))}><Copy size={15} /></button>
-              <button class="btn icon" title="Nickname" onclick={async () => {
-                const nick = prompt('Nickname', m.nick || '');
-                if (nick == null) return;
-                await run(() => guildAction({ type: 'nick-other', userId: m.id, nick }));
-              }}><AtSign size={15} /></button>
-              <button class="btn icon" title="Time out" onclick={async () => {
-                const minutes = Number(prompt('Minutes to time out. 0 clears it.', '10'));
-                if (Number.isNaN(minutes)) return;
-                await run(() => guildAction({ type: 'timeout', userId: m.id, minutes }));
-              }}>⏱</button>
-              <button class="btn icon danger" title="Kick" onclick={() => confirm('Kick this member?') && run(() => guildAction({ type: 'kick', userId: m.id }))}><DoorOpen size={15} /></button>
-              <button class="btn icon danger" title="Ban" onclick={async () => {
-                const reason = prompt('Ban reason', '') ?? '';
-                await run(() => guildAction({ type: 'ban', userId: m.id, reason }));
-              }}><Ban size={15} /></button>
+      <div class="gset-body">
+        {#if ui.settingsPage === 'overview'}
+          <section class="gset-card">
+            <h3>Server profile</h3>
+            <p class="hint">How your server looks in invites and Discovery.</p>
+            <div class="gset-profile">
+              <div>
+                <p class="label">Server icon</p>
+                <div class="gset-icon">
+                  {#if iconUrl || s.iconUrl}<img src={iconUrl || s.iconUrl} alt="" />{:else}<span>{initial(name || s.name)}</span>{/if}
+                </div>
+                <p class="hint">A square image works best. GIFs move here too.</p>
+                <label class="btn brand gset-upload">Upload image<input type="file" accept="image/*" onchange={(e) => pickFile(e, 'icon')} /></label>
+                <p class="label">Server banner</p>
+                <p class="hint">A wide image at the top of the channel list.</p>
+                <label class="btn brand gset-upload">Upload banner<input type="file" accept="image/*" onchange={(e) => pickFile(e, 'banner')} /></label>
+                <div class="field"><label>Server name</label>
+                  <div class="gset-inline">
+                    <input bind:value={name} maxlength="40" />
+                    <button type="button" class="btn brand" onclick={saveProfile}>Save</button>
+                  </div>
+                </div>
+              </div>
+              <div class="gset-preview">
+                <div class="gset-preview-banner" style:background-image={bannerUrl || s.bannerUrl ? 'url(' + (bannerUrl || s.bannerUrl) + ')' : ''}></div>
+                <div class="gset-preview-icon">
+                  {#if iconUrl || s.iconUrl}<img src={iconUrl || s.iconUrl} alt="" />{:else}<span>{initial(name || s.name)}</span>{/if}
+                </div>
+                <strong>{name || s.name || 'Server'}</strong>
+                <p><i></i> {people.filter((member) => member.online || member.status === 'online').length} online · {s.memberCount || people.length} Members</p>
+                {#if established()}<p>Est. {established()}</p>{/if}
+              </div>
             </div>
-          </div>
-        {/each}
+          </section>
 
-      {:else if ui.settingsPage === 'requests'}
-        {#each s.requests || [] as r}
-          <div class="row">
-            <div class="grow"><strong>{r.user?.displayName || r.user?.username || 'Someone'}</strong><div class="hint">{r.message}</div></div>
-            <button class="btn sm brand" onclick={() => run(() => guildAction({ type: 'request', requestId: r.id, accept: true }))}>Accept</button>
-            <button class="btn sm" onclick={() => run(() => guildAction({ type: 'request', requestId: r.id, accept: false }))}>Decline</button>
-          </div>
-        {:else}<p class="hint">Nobody is waiting.</p>{/each}
-
-      {:else if ui.settingsPage === 'roles'}
-        {#each s.roles || [] as r}
-          <div class="role-card">
-            <div class="row"><span class="color-chip" style="background:{r.color || '#99aab5'}"></span><strong>{r.icon ? r.icon + ' ' : ''}{r.name}</strong></div>
-            {#if r.id !== 'everyone' && r.id !== 'here'}
-              <p class="label">Role icon</p>
-              <p class="hint">Shows next to the names of people with this role. The highest role with an icon wins.</p>
+          <section class="gset-card">
+            <h3>Server tag</h3>
+            <p class="hint">2 to 4 letters or numbers. Members can wear it next to their name.</p>
+            {#if s.canCustomize}
+              <div class="gset-inline">
+                <input bind:value={tag} maxlength="4" placeholder="TAG" />
+                <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, vanity: s.official ? 'nebula' : vanity }))}>Save</button>
+              </div>
               <div class="tag-icons">
-                <button type="button" class:on={!r.icon} onclick={() => run(() => api('/api/servers/' + ui.serverId + '/roles/' + r.id, { method: 'PATCH', body: { icon: '' } }).then(() => loadMembers()))}>None</button>
+                <button type="button" class:on={!tagIcon} onclick={() => (tagIcon = '')}>None</button>
                 {#each TAG_ICONS as icon}
-                  <button type="button" class:on={r.icon === icon} onclick={() => run(() => api('/api/servers/' + ui.serverId + '/roles/' + r.id, { method: 'PATCH', body: { icon } }).then(() => loadMembers()))}>{icon}</button>
+                  <button type="button" class:on={tagIcon === icon} onclick={() => (tagIcon = icon)}>{icon}</button>
                 {/each}
               </div>
+              {#if tag}<p class="hint">Preview <em class="tag-pill">{#if tagIcon}<i>{tagIcon}</i>{/if}{tag}</em></p>{/if}
+            {:else}
+              <p class="hint">This server needs 5 members before it can have a tag. It has {s.memberCount || 0}.</p>
             {/if}
-            <p class="label">Choose who can mention this role</p>
-            <div class="mention-by">
-              {#each (s.roles || []).filter((other) => other.id !== r.id && other.id !== 'here') as other}
-                <label class="check">
-                  <input type="checkbox" checked={(r.mentionBy || []).includes(other.id)} onchange={(e) => saveMention(r, other.id, e.target.checked)} />
-                  {other.name}
-                </label>
-              {/each}
+          </section>
+
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Discovery</h3>
+                <p class="hint">Public by default: anyone can find and join from the compass. Listed once you have 5 members (you have {s.memberCount || 0}).</p>
+              </div>
+              <button type="button" class="switch green" class:on={discover} role="switch" aria-checked={discover} onclick={() => saveDiscovery(!discover)}><i></i></button>
+            </div>
+            <div class="field"><label>Description</label><input bind:value={about} maxlength="120" placeholder="One line about the server (shown on the card)" /></div>
+            <div class="field"><label>Tags</label>
+              <div class="gset-inline">
+                <input bind:value={tags} maxlength="80" placeholder="Up to 5, comma-separated: gaming, music, art" />
+                <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', about, tags: tags.split(',').map((item) => item.trim()).filter(Boolean).slice(0, 5) }))}>Save</button>
+              </div>
+            </div>
+          </section>
+
+          <p class="gset-kicker">Invites and sharing</p>
+          <section class="gset-card">
+            <h3>Custom invite link</h3>
+            {#if s.canCustomize}
+              <p class="hint">Unlocks at 5 members (you have {s.memberCount || people.length || 0}).</p>
+              <div class="gset-inline">
+                <span class="gset-prefix">nebulaapp.space/</span>
+                <input bind:value={vanity} maxlength="20" placeholder="yourserver" disabled={s.official} />
+                <button type="button" class="btn brand" disabled={s.official} onclick={() => run(() => guildAction({ type: 'settings', vanity: s.official ? 'nebula' : vanity }))}>Save</button>
+              </div>
+              {#if serverInvite(s.official ? 'nebula' : vanity)}<p class="hint">{serverInvite(s.official ? 'nebula' : vanity)}</p>{/if}
+            {:else}
+              <p class="hint">This server needs 5 members before the invite can be a name. It has {s.memberCount || 0}. Invites still work. They get a random link.</p>
+            {/if}
+          </section>
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Server template</h3>
+                <p class="hint">A link to start a server with the same channels, roles and permissions. No messages or members.</p>
+              </div>
+              <button type="button" class="btn" onclick={async () => {
+                try {
+                  const data = await guildAction({ type: 'template' });
+                  const url = data?.url || data?.link || '';
+                  if (!url) throw new Error('This server cannot make a template link yet');
+                  await navigator.clipboard.writeText(url);
+                  toast('Template link copied');
+                } catch (err) { toast(err.message); }
+              }}>Create template link</button>
+            </div>
+          </section>
+          <section class="gset-card">
+            <p class="label">Links</p>
+            {#each links as link, i}
+              <div class="gset-inline">
+                <input bind:value={link.label} placeholder="Label" maxlength="40" />
+                <input bind:value={link.url} placeholder="https://" maxlength="200" />
+                <button type="button" class="btn icon" aria-label="Remove link" onclick={() => (links = links.filter((_, index) => index !== i))}><X size={15} /></button>
+              </div>
+            {/each}
+            <div class="gset-inline">
+              <button type="button" class="btn" onclick={() => (links = [...links, { label: '', url: '' }])}>+ Add link</button>
+              {#if links.length}<button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', links: links.filter((link) => link.label.trim() && link.url.trim()) }))}>Save links</button>{/if}
+            </div>
+          </section>
+
+          <p class="gset-kicker">Features</p>
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Rules channel</h3>
+                <p class="hint">Gets a book icon, only managers can post in it, and new members get a nudge to read it.</p>
+              </div>
+              <Select value={rulesId} placeholder="No rules channel" options={[{ value: '', label: 'No rules channel' }, ...textChannels.map((ch) => ({ value: ch.id, label: '# ' + ch.name }))]} onpick={(value) => { rulesId = value; run(() => guildAction({ type: 'settings', rulesChannelId: value })); }} />
+            </div>
+            <div class="gset-line">
+              <div>
+                <strong>Let members open tickets</strong>
+                <p class="hint">A private channel between one member and everyone who can manage messages.</p>
+              </div>
+              <button type="button" class="switch" class:on={tickets} role="switch" aria-checked={tickets} onclick={() => { tickets = !tickets; run(() => guildAction({ type: 'settings', tickets })); }}><i></i></button>
+            </div>
+            <div class="gset-line">
+              <div>
+                <strong>Allow clips in voice channels</strong>
+                <p class="hint">Members can save the last few seconds of a call or stream and post them.</p>
+              </div>
+              <button type="button" class="switch green" class:on={clips} role="switch" aria-checked={clips} onclick={() => { clips = !clips; run(() => guildAction({ type: 'settings', clips })); }}><i></i></button>
+            </div>
+          </section>
+          <section class="gset-card gset-danger">
+            <div class="gset-split">
+              <div>
+                <h3>Transfer ownership</h3>
+                <p class="hint">Hand the server to another member. You stay in it with your roles.</p>
+              </div>
+              <button type="button" class="btn danger-fill" onclick={() => (transferOpen = true)}>Transfer</button>
+            </div>
+          </section>
+          <section class="gset-card gset-danger">
+            <div class="gset-split">
+              <div>
+                <h3>Delete server</h3>
+                <p class="hint">Everything in it goes too. No take-backs.</p>
+              </div>
+              <button type="button" class="btn danger-fill" onclick={deleteServer}>Delete server</button>
+            </div>
+          </section>
+
+        {:else if ui.settingsPage === 'theme'}
+          <p class="hint">Give your server its own colours. Everyone sees them while they're here, unless they turned server themes off in their Appearance settings.</p>
+          <p class="label">Accent colour</p>
+          <p class="hint">Buttons, links and highlights. Very light or very dark picks get nudged so text stays readable.</p>
+          {@render colors(accent, (value) => (accent = value || '#7c6af7'), false)}
+          <p class="label">Background tint</p>
+          <p class="hint">A light wash of colour over the background.</p>
+          {@render colors(tint, (value) => (tint = value), true)}
+          <div class="gset-theme-preview">
+            <div class="gset-fake-av" style:background={accent}></div>
+            <div>
+              <strong>yapper check out <span style:color={accent}>this link</span></strong>
+              <p class="hint">Looks like this for everyone in the server.</p>
+              <button type="button" class="btn brand" style:background={accent}>Button</button>
             </div>
           </div>
-        {/each}
-        <div class="field"><label>New role</label><input bind:value={roleName} maxlength="32" placeholder="Moderator" /></div>
-        <p class="label">Role color</p>
-        <ColorWheel value={roleColor} onpick={(c) => (roleColor = c)} />
-        {#each ROLE_FLAGS as [label, bit]}
-          <label class="check"><input type="checkbox" checked={!!(roleBits & bit)} onchange={(e) => { roleBits = e.target.checked ? roleBits | bit : roleBits & ~bit; }} /> {label}</label>
-        {/each}
-        <button class="btn brand" style="width:auto" onclick={async () => {
-          try {
-            await api('/api/servers/' + ui.serverId + '/roles', { method: 'POST', body: { name: roleName, color: roleColor, permissions: roleBits } });
-            roleName = '';
-            await reloadSettings();
-          } catch (err) { toast(err.message); }
-        }}>Add role</button>
-        <div class="field" style="margin-top:16px"><label>Member user id</label><input bind:value={roleUid} placeholder="2" /></div>
-        <Select value={roleId} options={(s.roles || []).filter((r) => r.id !== 'everyone' && r.id !== 'here').map((r) => ({ value: r.id, label: r.name }))} onpick={(v) => (roleId = v)} />
-        <div class="actions" style="margin-top:8px">
-          <button class="btn sm brand" onclick={() => assignRole('add')}>Give</button>
-          <button class="btn sm" onclick={() => assignRole('remove')}>Remove</button>
-        </div>
-
-      {:else if ui.settingsPage === 'bans'}
-        {#each s.bans || [] as b}
-          <div class="row">
-            <span>{b.user?.displayName || b.user?.username || b.userId} {b.reason || ''}</span>
-            <button class="btn sm" onclick={() => run(() => guildAction({ type: 'unban', userId: b.userId }))}>Unban</button>
+          <div class="gset-inline">
+            <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', color: accent, theme: { accent, tint } }))}>Save</button>
+            <button type="button" class="btn" onclick={() => { accent = '#7c6af7'; tint = ''; run(() => guildAction({ type: 'settings', theme: { accent: '#7c6af7', tint: '' } })); }}>Remove theme</button>
           </div>
-        {:else}<p class="hint">No bans.</p>{/each}
-        <div class="field"><label>Ban by user id</label><input bind:value={banUid} placeholder="4" /></div>
-        <div class="field"><label>Reason</label><input bind:value={banReason} maxlength="200" /></div>
-        <button class="btn brand" style="width:auto" onclick={async () => {
-          try {
-            const mem = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
-            const user = (mem.members || []).find((m) => String(m.uid) === banUid.trim());
-            if (!user) throw new Error('No member with that id');
-            await guildAction({ type: 'ban', userId: user.id, reason: banReason });
-            await reloadSettings();
-          } catch (err) { toast(err.message); }
-        }}>Ban</button>
-      {/if}
+
+        {:else if ui.settingsPage === 'channels'}
+          <div class="gset-split">
+            <p class="hint">Drag isn't here yet. Use the arrows. Members see this order in the sidebar.</p>
+            <div class="gset-inline">
+              {#if lastMove}<button type="button" class="btn" onclick={() => moveChannel({ id: lastMove.id }, lastMove.dir)}><Undo2 size={14} /> Undo</button>{/if}
+              <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
+            </div>
+          </div>
+          {#each s.categories || [] as cat}
+            <div class="gset-chan head">
+              <strong>{cat.name}</strong>
+              <button type="button" class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: cat.id }))}><Trash2 size={16} /></button>
+            </div>
+            {#each (s.channels || []).filter((ch) => ch.categoryId === cat.id) as ch}
+              {@render channelRow(ch)}
+            {/each}
+          {/each}
+          <section class="gset-card">
+            <div class="gset-split"><strong>Text channels</strong><i class="gset-count">{textChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)).length}</i></div>
+            {#each textChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)) as ch}
+              {@render channelRow(ch)}
+            {/each}
+            <div class="gset-split"><strong>Voice channels</strong><i class="gset-count">{voiceChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)).length}</i></div>
+            {#each voiceChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)) as ch}
+              {@render channelRow(ch)}
+            {/each}
+          </section>
+
+        {:else if ui.settingsPage === 'lobby'}
+          <section class="gset-card">
+            <label class="check"><input type="checkbox" bind:checked={showLobby} /> Show the lobby</label>
+            <p class="hint">A short note above the message box. The description on Overview is the same line people read on the server card.</p>
+            <div class="field"><label>About</label><textarea bind:value={about} maxlength="2000" rows="5"></textarea></div>
+            <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', about, showLobby }))}>Save</button>
+          </section>
+
+        {:else if ui.settingsPage === 'emoji' || ui.settingsPage === 'stickers'}
+          {@const list = ui.settingsPage === 'emoji' ? (s.emoji || []) : (s.stickers || [])}
+          {@const cap = ui.settingsPage === 'emoji' ? 50 : 30}
+          <p class="hint">{ui.settingsPage === 'emoji' ? 'Add up to 50 emojis. Everyone in this server can use them anywhere on Nebula, other servers and DMs too.' : 'Add up to 30 stickers: PNG, WebP or GIF, up to 320 px and 512 KB. Everyone in this server can send them from the sticker tab next to GIF.'}</p>
+          <div class="gset-inline">
+            <label class="btn brand gset-upload">Upload {ui.settingsPage === 'emoji' ? 'emoji' : 'sticker'}<input type="file" accept="image/*" onchange={uploadAsset} /></label>
+            <span class="hint">{list.length} / {cap} used</span>
+          </div>
+          <div class="field"><label>Name</label><input bind:value={assetName} maxlength="32" placeholder={ui.settingsPage === 'emoji' ? 'wave' : 'hello'} /></div>
+          {#if list.length}
+            {#each list as item}
+              <div class="gset-chan">
+                <img src={item.url} alt="" />
+                <strong class="grow">:{item.name}:</strong>
+                <button type="button" class="btn sm danger" onclick={() => run(() => guildAction({ type: ui.settingsPage === 'emoji' ? 'emoji' : 'sticker', remove: true, id: item.id }))}>Remove</button>
+              </div>
+            {/each}
+          {:else}
+            <section class="gset-card">
+              {@render bear(ui.settingsPage === 'emoji' ? 'No emojis yet' : 'No stickers yet', ui.settingsPage === 'emoji' ? "Upload one and it shows up in everyone's emoji picker." : "Upload one and it shows up in everyone's sticker tab.")}
+              <label class="btn brand gset-upload">Upload {ui.settingsPage === 'emoji' ? 'emoji' : 'sticker'}<input type="file" accept="image/*" onchange={uploadAsset} /></label>
+            </section>
+          {/if}
+
+        {:else if ui.settingsPage === 'onboarding'}
+          <p class="hint">New members answer a few questions when they join. Answers can give roles, so they only see the channels they care about. Then they read the rules and land in your starting channel.</p>
+          <div class="gset-line">
+            <div><strong>Turn on onboarding</strong><p class="hint">Only people who join from now on go through it. Everyone can redo it from the server menu.</p></div>
+            <button type="button" class="switch" class:on={obOn} role="switch" aria-checked={obOn} onclick={() => (obOn = !obOn)}><i></i></button>
+          </div>
+          <div class="gset-line">
+            <div><strong>Must finish before chatting</strong><p class="hint">New members can read but not send messages until they finish.</p></div>
+            <button type="button" class="switch" class:on={obMust} role="switch" aria-checked={obMust} onclick={() => (obMust = !obMust)}><i></i></button>
+          </div>
+          <p class="label">Starting channel</p>
+          <Select value={startChannel} placeholder="Same as usual" options={[{ value: '', label: 'Same as usual' }, ...textChannels.map((ch) => ({ value: ch.id, label: '# ' + ch.name }))]} onpick={(value) => (startChannel = value)} />
+          <p class="hint">Where people land when they finish.</p>
+          <p class="label">Questions</p>
+          <p class="hint">Make some roles first (Roles tab) so answers can give them. Roles with mod powers, channel mod overrides or the Tickets support role can't be used here.</p>
+          {#each questions as item, i}
+            <div class="gset-inline">
+              <input bind:value={item.q} placeholder="Question" maxlength="120" />
+              <Select value={item.roleId || ''} placeholder="Role" options={customRoles.map((role) => ({ value: role.id, label: role.name }))} onpick={(value) => (questions[i].roleId = value)} />
+              <button type="button" class="btn icon" aria-label="Remove question" onclick={() => (questions = questions.filter((_, index) => index !== i))}><X size={15} /></button>
+            </div>
+          {/each}
+          <button type="button" class="btn gset-wide" onclick={() => (questions = [...questions, { q: '', roleId: '' }])}>Add question</button>
+          <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', onboarding: { enabled: obOn, mustFinish: obMust, startChannelId: startChannel, questions } }))}>Save</button>
+
+        {:else if ui.settingsPage === 'pings'}
+          <section class="gset-card">
+            <p class="hint">Members pick these themselves. A ping role never includes manage permissions.</p>
+            <button type="button" class="btn" onclick={async () => {
+              try {
+                const names = ['Announcements', 'Giveaways', 'Updates', 'Events', 'Polls'];
+                for (const label of names) {
+                  if ((s.roles || []).some((role) => role.name === label)) continue;
+                  await api('/api/servers/' + ui.serverId + '/roles', { method: 'POST', body: { name: label, color: '#7c6af7', permissions: PERM.VIEW } });
+                }
+                const fresh = (await api('/api/servers/' + ui.serverId + '/settings')).settings;
+                const ids = (fresh.roles || []).filter((role) => names.includes(role.name)).map((role) => role.id);
+                await guildAction({ type: 'settings', pingRoleIds: [...new Set([...(fresh.pingRoleIds || []), ...ids])] });
+                await reloadSettings();
+                toast('Template added');
+              } catch (err) { toast(err.message); }
+            }}>Add the starter roles</button>
+            {#each customRoles as role}
+              <label class="check">
+                <input type="checkbox" checked={(s.pingRoleIds || []).includes(role.id)} onchange={async (e) => {
+                  const set = new Set(s.pingRoleIds || []);
+                  if (e.target.checked) set.add(role.id); else set.delete(role.id);
+                  await run(() => guildAction({ type: 'settings', pingRoleIds: [...set] }));
+                }} />
+                {role.name}
+              </label>
+            {/each}
+          </section>
+
+        {:else if ui.settingsPage === 'safety'}
+          <section class="gset-card">
+            <h3>Raid protection</h3>
+            <p class="hint">Locked: nobody new can join and only people who can manage messages can post. Nebula also locks by itself after 60 joins in a minute.</p>
+            <div class="gset-inline">
+              <button type="button" class="btn" onclick={() => run(() => guildAction({ type: 'lock', minutes: 15 }))}>Lock for 15 min</button>
+              <button type="button" class="btn" onclick={() => run(() => guildAction({ type: 'lock', minutes: 60 }))}>Lock for 1 hour</button>
+              <button type="button" class="btn" onclick={() => run(() => guildAction({ type: 'lock', minutes: 1440 }))}>Lock for a day</button>
+              <button type="button" class="btn" onclick={() => run(() => guildAction({ type: 'lock', minutes: 0 }))}>Unlock</button>
+            </div>
+          </section>
+          <section class="gset-card">
+            <h3>Raid mode</h3>
+            <p class="hint">Flip this when a crowd shows up to spam. Members who joined recently or whose account is new can't post, start threads or upload until it ends. Mods, bots and people with a role are never blocked.</p>
+            <div class="gset-inline">
+              <Select value={raidJoin} options={[{ value: '1', label: 'Joined: under 1 hour ago' }, { value: '6', label: 'Joined: under 6 hours ago' }, { value: '24', label: 'Joined: under a day ago' }]} onpick={(value) => (raidJoin = value)} />
+              <Select value={newAccounts} options={[{ value: '0', label: 'Account: any age' }, { value: '1', label: 'Account: under 1 day old' }, { value: '3', label: 'Account: under 3 days old' }, { value: '7', label: 'Account: under 7 days old' }]} onpick={(value) => (newAccounts = value)} />
+              <Select value={raidFor} options={[{ value: '1', label: 'For 1 hour' }, { value: '6', label: 'For 6 hours' }, { value: '12', label: 'For 12 hours' }, { value: '24', label: 'For a day' }]} onpick={(value) => (raidFor = value)} />
+              <button type="button" class="btn danger-fill" onclick={() => run(() => guildAction({ type: 'settings', raid: { on: !raidOn, accountDays: Number(newAccounts) || 0, joinHours: Number(raidJoin) || 1, durationHours: Number(raidFor) || 6 } })).then(() => { raidOn = !!ui.settings?.raid?.on; })}>{raidOn ? 'Turn off raid mode' : 'Turn on raid mode'}</button>
+            </div>
+          </section>
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Verification level</h3>
+                <p class="hint">What people need before they can talk here. Mods, people with roles and bots skip it.</p>
+                <p class="hint">{verifyCopy[verify] || verifyCopy.none}</p>
+              </div>
+              <Select value={verify} options={[{ value: 'none', label: 'None' }, { value: 'low', label: 'Low' }, { value: 'medium', label: 'Medium' }, { value: 'high', label: 'High' }]} onpick={(value) => (verify = value)} />
+            </div>
+          </section>
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>New accounts</h3>
+                <p class="hint">Stops raids from freshly made accounts. Mods and Nebula staff are never blocked.</p>
+              </div>
+              <Select value={newAccounts} options={[{ value: '0', label: 'Off' }, { value: '1', label: 'Under 1 day' }, { value: '3', label: 'Under 3 days' }, { value: '7', label: 'Under 7 days' }]} onpick={(value) => (newAccounts = value)} />
+            </div>
+          </section>
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Who can join</h3>
+                <p class="hint">{joinMode === 'apply' ? 'They answer a question and you approve them.' : 'People join the moment they open the link.'}</p>
+              </div>
+              <Select value={joinMode} options={[{ value: 'open', label: 'Anyone with the link' }, { value: 'apply', label: 'They apply, you approve' }]} onpick={(value) => (joinMode = value)} />
+            </div>
+            {#if joinMode === 'apply'}
+              <div class="field"><label>Question on the form</label><input bind:value={joinQ} maxlength="120" /></div>
+            {/if}
+          </section>
+          <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', raid: { on: raidOn, accountDays: Number(newAccounts) || 0, joinHours: Number(raidJoin) || 1, durationHours: Number(raidFor) || 6 }, verification: verify, joinMode, joinQuestions: joinQ ? [joinQ] : [] }))}>Save</button>
+
+        {:else if ui.settingsPage === 'reports'}
+          <p class="hint">Messages in this server that members reported. You can delete the message, ban the person from this server, or dismiss. Reports with clear evidence also go to Nebula's admins.</p>
+          <div class="gset-inline">
+            <button type="button" class="btn" class:brand={reportTab === 'open'} onclick={() => (reportTab = 'open')}>Open</button>
+            <button type="button" class="btn" class:brand={reportTab === 'handled'} onclick={() => (reportTab = 'handled')}>Handled</button>
+          </div>
+          {#each (reportTab === 'open' ? openReports : (s.reports || []).filter((item) => item.status !== 'open')) as item}
+            <div class="gset-chan">
+              <div class="grow"><strong>{item.status}</strong> {item.text}</div>
+              {#if item.status === 'open'}<button type="button" class="btn sm" onclick={() => run(() => guildAction({ type: 'report-handle', reportId: item.id }))}>Handled</button>{/if}
+            </div>
+          {:else}
+            <p class="hint">Nothing to review.</p>
+          {/each}
+
+        {:else if ui.settingsPage === 'audit'}
+          <section class="gset-card">
+            <h3>Audit log</h3>
+            <p class="hint">Who changed what in the server.</p>
+            {#each s.audit || [] as item}
+              <div class="gset-chan">
+                <div class="grow"><strong>{item.name}</strong> {item.text}<div class="hint">{item.at}</div></div>
+              </div>
+            {:else}
+              {@render bear('No changes yet', 'Role edits, kicks, bans and setting changes show up here.')}
+            {/each}
+          </section>
+
+        {:else if ui.settingsPage === 'trash'}
+          <p class="hint">Deleted channels, categories, threads and roles stay here for 7 days, messages and permissions included. Bring them back any time before that.</p>
+          <section class="gset-card">
+            {@render bear('The trash is empty', 'Deleted channels, categories and roles wait here for 7 days.')}
+          </section>
+
+        {:else if ui.settingsPage === 'members'}
+          <section class="gset-card">
+            <h3>Members</h3>
+            <p class="hint">Search, filter and sort the whole server.</p>
+            <label class="gset-search wide"><Search size={16} /><input placeholder="Search by name or handle" bind:value={q} /></label>
+            <div class="gset-inline">
+              <Select value={roleFilter} options={[{ value: '', label: 'Any role' }, ...customRoles.map((role) => ({ value: role.id, label: role.name }))]} onpick={(value) => (roleFilter = value)} />
+              <Select value={memberKind} options={[{ value: 'all', label: 'People and bots' }, { value: 'people', label: 'People' }, { value: 'bots', label: 'Bots' }]} onpick={(value) => (memberKind = value)} />
+              <Select value={memberSort} options={[{ value: 'new', label: 'Newest first' }, { value: 'old', label: 'Oldest first' }, { value: 'name', label: 'Name' }]} onpick={(value) => (memberSort = value)} />
+            </div>
+            <p class="hint">Showing {shownMembers.length} of {people.length}</p>
+            {#each shownMembers as member}
+              <div class="gset-member">
+                <Avatar user={member} size={36} />
+                <div class="grow">
+                  <strong>{displayName(member)} {#if member.id === ui.me?.id}<em class="gset-you">YOU</em>{/if}</strong>
+                  <span>@{member.username}{#if member.uid} · {member.uid}{/if}</span>
+                </div>
+                <span class="hint">{ago(member.joinedAt || member.joined || member.createdAt)}</span>
+                <button type="button" class="btn icon" aria-label="Member actions" onclick={(e) => { e.stopPropagation(); menuFor = menuFor === member.id ? '' : member.id; }}><MoreHorizontal size={16} /></button>
+                {#if menuFor === member.id}
+                  <div class="gset-menu" role="menu" onclick={(e) => e.stopPropagation()}>
+                    <button type="button" onclick={() => { navigator.clipboard.writeText(String(member.uid || member.id || '')); menuFor = ''; toast('Copied'); }}><Copy size={15} /> Copy user ID</button>
+                    <button type="button" onclick={() => { menuFor = ''; ui.settingsPage = 'roles'; }}><Crown size={15} /> Roles...</button>
+                    {#if canNick}
+                      <button type="button" onclick={async () => {
+                        menuFor = '';
+                        const nick = prompt('Nickname', member.nick || '');
+                        if (nick == null) return;
+                        await run(() => guildAction({ type: 'nick-other', userId: member.id, nick }));
+                      }}><Pencil size={15} /> Change nickname...</button>
+                    {/if}
+                    {#if canTimeout}
+                      <button type="button" onclick={async () => {
+                        menuFor = '';
+                        const minutes = Number(prompt('Minutes to time out. 0 clears it.', '10'));
+                        if (Number.isNaN(minutes)) return;
+                        await run(() => guildAction({ type: 'timeout', userId: member.id, minutes }));
+                      }}><Clock size={15} /> Time out...</button>
+                    {/if}
+                    {#if canKick}
+                      <button type="button" class="danger" onclick={() => { menuFor = ''; if (confirm('Kick this member? They can rejoin with an invite.')) run(() => guildAction({ type: 'kick', userId: member.id })); }}><DoorOpen size={15} /> Kick from server</button>
+                    {/if}
+                    {#if canBan}
+                      <button type="button" class="danger" onclick={async () => {
+                        menuFor = '';
+                        const reason = prompt('Ban reason', '') ?? '';
+                        await run(() => guildAction({ type: 'ban', userId: member.id, reason }));
+                      }}><Ban size={15} /> Ban from server</button>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <p class="hint">No members match.</p>
+            {/each}
+            {#if shownMembers.length}<p class="hint gset-end">That's everyone.</p>{/if}
+          </section>
+
+        {:else if ui.settingsPage === 'roles'}
+          {#if !editing}
+            <section class="gset-card">
+              <div class="gset-split">
+                <div>
+                  <h3>Roles</h3>
+                  <p class="hint">Group your members and hand out permissions. Members use the colour of their highest role.</p>
+                </div>
+                <button type="button" class="btn brand" onclick={createRole}>Create role</button>
+              </div>
+              <button type="button" class="gset-role-row" onclick={() => openRole((s.roles || []).find((role) => role.id === 'everyone'))}>
+                <span class="gset-dot"></span>
+                <span class="grow"><strong>Default permissions</strong><em>@everyone · applies to all server members</em></span>
+              </button>
+              <p class="hint">Click a role to edit it. {customRoles.length} custom {customRoles.length === 1 ? 'role' : 'roles'}.</p>
+              {#each customRoles as role}
+                <button type="button" class="gset-role-row" onclick={() => openRole(role)}>
+                  <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
+                  <strong class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</strong>
+                  <span class="hint">{people.filter((member) => memberRoleIds(member).includes(role.id)).length}</span>
+                  <Pencil size={14} />
+                </button>
+              {/each}
+            </section>
+          {:else}
+            <div class="gset-role">
+              <aside class="gset-role-side">
+                <div class="gset-inline">
+                  <button type="button" class="btn" onclick={() => (roleEdit = '')}><ChevronLeft size={16} /> Back</button>
+                  <button type="button" class="btn icon" title="Create role" onclick={createRole}><Plus size={16} /></button>
+                </div>
+                {#each customRoles as role}
+                  <button type="button" class="gset-role-row" class:on={role.id === editing.id} onclick={() => openRole(role)}>
+                    <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
+                    <span>{role.name}</span>
+                  </button>
+                {/each}
+                {#if (s.roles || []).some((role) => role.id === 'everyone')}
+                  <button type="button" class="gset-role-row" class:on={editing.id === 'everyone'} onclick={() => openRole((s.roles || []).find((role) => role.id === 'everyone'))}>
+                    <span class="gset-dot"></span>
+                    <span>@everyone</span>
+                  </button>
+                {/if}
+              </aside>
+              <div>
+                <div class="gset-split">
+                  <strong>Edit role — {editName || editing.name}</strong>
+                  <div class="gset-inline">
+                    <button type="button" class="btn" onclick={() => { navigator.clipboard.writeText(String(editing.id)); toast('Copied'); }}>Copy role ID</button>
+                    {#if editing.id !== 'everyone' && editing.id !== 'here' && editing.id !== 'owner'}
+                      <button type="button" class="btn danger" onclick={() => deleteRole(editing)}>Delete role</button>
+                    {/if}
+                  </div>
+                </div>
+                <div class="gset-tabs">
+                  <button type="button" class:on={roleTab === 'display'} onclick={() => (roleTab = 'display')}>Display</button>
+                  <button type="button" class:on={roleTab === 'perms'} onclick={() => (roleTab = 'perms')}>Permissions</button>
+                  <button type="button" class:on={roleTab === 'members'} onclick={() => { roleTab = 'members'; adding = false; }}>Manage Members</button>
+                </div>
+
+                {#if roleTab === 'display'}
+                  <div class="field"><label>Role name</label><input bind:value={editName} maxlength="32" disabled={editing.id === 'everyone' || editing.id === 'here'} /></div>
+                  <p class="label">Role colour</p>
+                  <p class="hint">Members use the colour of the highest role they have on the roles list.</p>
+                  {@render colors(editColor, (value) => (editColor = value || '#99aab5'), true)}
+                  {#if editing.id !== 'everyone' && editing.id !== 'here'}
+                    <p class="label">Role icon</p>
+                    <p class="hint">Shows next to the names of people with this role. If they have a few, the highest one wins.</p>
+                    <div class="tag-icons">
+                      <button type="button" class:on={!editIcon} onclick={() => (editIcon = '')}>None</button>
+                      {#each TAG_ICONS as icon}
+                        <button type="button" class:on={editIcon === icon} onclick={() => (editIcon = icon)}>{icon}</button>
+                      {/each}
+                    </div>
+                  {/if}
+                  <p class="label">Who can mention this role</p>
+                  <div class="mention-by">
+                    {#each (s.roles || []).filter((other) => other.id !== editing.id && other.id !== 'here') as other}
+                      <label class="check">
+                        <input type="checkbox" checked={editMention.includes(other.id)} onchange={(e) => toggleMention(other.id, e.target.checked)} />
+                        {other.name}
+                      </label>
+                    {/each}
+                  </div>
+                  <p class="hint">Changes are saved when you press Save. Automatic roles are for looks. They can't carry permissions until you open Permissions.</p>
+                  <button type="button" class="btn brand" onclick={saveRole}>Save</button>
+                {:else if roleTab === 'perms'}
+                  <p class="hint">Tick what this role can do. Administrator already includes every permission.</p>
+                  {#each PERM_GROUPS as group}
+                    <h3 class="gset-kicker">{group.title}</h3>
+                    {#each group.items as [label, flag, desc]}
+                      <label class="perm-row" class:danger={flag === PERM.ADMIN}>
+                        <input type="checkbox" checked={permChecked(flag)} disabled={flag !== PERM.ADMIN && adminOn} onchange={(e) => (editBits = setBit(editBits, flag, e.target.checked))} />
+                        <span><strong>{label}</strong><em>{desc}</em></span>
+                      </label>
+                    {/each}
+                  {/each}
+                  <button type="button" class="btn brand" onclick={saveRole}>Save</button>
+                {:else}
+                  <div class="gset-split">
+                    <label class="gset-search wide"><Search size={16} /><input placeholder={adding ? 'Search members to add' : 'Search members'} bind:value={addQ} /></label>
+                    {#if adding}
+                      <button type="button" class="btn brand" onclick={() => (adding = false)}>Done</button>
+                    {:else}
+                      <button type="button" class="btn brand" onclick={() => (adding = true)}>Add members</button>
+                    {/if}
+                  </div>
+                  {#if adding}
+                    <div class="gset-split">
+                      <p class="hint">{outsiders.length} {outsiders.length === 1 ? 'member does' : 'members do'}n't have {editing.name} yet</p>
+                      <button type="button" class="btn" onclick={giveAll}>Give to everyone</button>
+                    </div>
+                    {#each outsiders.filter((member) => !addQ.trim() || displayName(member).toLowerCase().includes(addQ.trim().toLowerCase()) || String(member.username || '').toLowerCase().includes(addQ.trim().toLowerCase())) as member}
+                      <div class="gset-member">
+                        <Avatar user={member} size={32} dot={false} />
+                        <strong class="grow">{displayName(member)}</strong>
+                        <button type="button" class="btn" onclick={() => give(member, 'add')}>Add</button>
+                      </div>
+                    {:else}
+                      <p class="hint">Nobody left to add.</p>
+                    {/each}
+                  {:else if holders.length}
+                    {#each holders.filter((member) => !addQ.trim() || displayName(member).toLowerCase().includes(addQ.trim().toLowerCase())) as member}
+                      <div class="gset-member">
+                        <Avatar user={member} size={32} dot={false} />
+                        <strong class="grow">{displayName(member)}</strong>
+                        <button type="button" class="btn" onclick={() => give(member, 'remove')}>Remove</button>
+                      </div>
+                    {/each}
+                  {:else}
+                    <p class="hint">Nobody has this role yet.</p>
+                  {/if}
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+        {:else if ui.settingsPage === 'bans'}
+          <section class="gset-card">
+            <h3>Bans</h3>
+            <p class="hint">Banned people can't rejoin with any invite until you unban them.</p>
+            {#if (s.bans || []).length}
+              {#each s.bans as ban}
+                <div class="gset-chan">
+                  <span class="grow">{ban.user?.displayName || ban.user?.username || ban.userId} {ban.reason || ''}</span>
+                  <button type="button" class="btn sm" onclick={() => run(() => guildAction({ type: 'unban', userId: ban.userId }))}>Unban</button>
+                </div>
+              {/each}
+            {:else}
+              {@render bear('Nobody is banned', 'Peaceful. Bans you make show up here.')}
+            {/if}
+          </section>
+          <section class="gset-card">
+            <h3>Voice bans</h3>
+            <p class="hint">Banned from this server's calls only.</p>
+            <p class="hint">Nobody is banned from voice.</p>
+          </section>
+          <section class="gset-card">
+            <div class="field"><label>Ban by user id</label><input bind:value={banUid} placeholder="4" /></div>
+            <div class="field"><label>Reason</label><input bind:value={banReason} maxlength="200" /></div>
+            <button type="button" class="btn brand" onclick={async () => {
+              try {
+                const mem = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
+                const user = (mem.members || []).find((member) => String(member.uid) === banUid.trim());
+                if (!user) throw new Error('No member with that id');
+                await guildAction({ type: 'ban', userId: user.id, reason: banReason });
+                await reloadSettings();
+                toast('Banned');
+              } catch (err) { toast(err.message); }
+            }}>Ban</button>
+          </section>
+
+        {:else if ui.settingsPage === 'requests'}
+          <section class="gset-card">
+            {#each s.requests || [] as request}
+              <div class="gset-chan">
+                <div class="grow"><strong>{request.user?.displayName || request.user?.username || 'Someone'}</strong><div class="hint">{request.message}</div></div>
+                <button type="button" class="btn sm brand" onclick={() => run(() => guildAction({ type: 'request', requestId: request.id, accept: true }))}>Accept</button>
+                <button type="button" class="btn sm" onclick={() => run(() => guildAction({ type: 'request', requestId: request.id, accept: false }))}>Decline</button>
+              </div>
+            {:else}
+              {@render bear('Nobody is waiting', 'When the server asks people to apply, their answers show up here.')}
+            {/each}
+          </section>
+
+        {:else if ui.settingsPage === 'bots'}
+          <section class="gset-card">
+            {@render bear('No bots yet', 'Bots you add to this server will show up here.')}
+          </section>
+        {/if}
+      </div>
     </div>
   </div>
+  {#if transferOpen}
+    <div class="gset-modal" role="dialog" aria-label="Transfer ownership">
+      <div class="gset-modal-card">
+        <h3>Transfer ownership</h3>
+        <p class="hint">Pick who gets {s.name || 'this server'}.</p>
+        <label class="gset-search wide"><Search size={16} /><input placeholder="Search members" bind:value={transferQ} /></label>
+        <div class="gset-modal-list">
+          {#each people.filter((member) => member.id !== ui.me?.id && (!transferQ.trim() || displayName(member).toLowerCase().includes(transferQ.trim().toLowerCase()))) as member}
+            <button type="button" class="gset-person" onclick={() => transferTo(member)}>
+              <Avatar user={member} size={36} dot={false} />
+              <span><strong>{displayName(member)}</strong><em>@{member.username}</em></span>
+            </button>
+          {:else}
+            <p class="hint">No members to hand it to.</p>
+          {/each}
+        </div>
+        <button type="button" class="btn" onclick={() => (transferOpen = false)}>Cancel</button>
+      </div>
+    </div>
+  {/if}
 </div>

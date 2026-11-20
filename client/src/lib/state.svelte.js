@@ -2,7 +2,7 @@ import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandle
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
-import { PERM, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
+import { PERM, hasBit, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
 import { look } from './look.svelte.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
@@ -111,9 +111,9 @@ export const ui = $state({
 
 let pollTimer = null;
 
-export function hasPerm(bit) {
-  if (ui.serverPerms & PERM.ADMIN) return true;
-  return (ui.serverPerms & bit) === bit;
+export function hasPerm(flag) {
+  if (hasBit(ui.serverPerms, PERM.ADMIN)) return true;
+  return hasBit(ui.serverPerms, flag);
 }
 
 export function toast(msg) {
