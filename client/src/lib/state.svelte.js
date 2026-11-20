@@ -837,29 +837,30 @@ export async function loadDms() {
       const viewing = (ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(id))
         || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(id));
       const own = (row.lastFrom && ui.me && String(row.lastFrom) === String(ui.me.id)) || (stamp && stamp === String(lastSentId || ''));
-      const seenId = seenForDm(map, id);
-      const readHere = dmCovers(id, seenId, stamp) || (ackedDm[id] && String(ackedDm[id]) === stamp);
+      const readHere = dmIsRead(id, stamp);
       const pendingCount = pendingDm.get(String(id)) ? pendingDm.get(String(id)).size : 0;
       const looking = viewing && chatInFront();
       if (looking || ((own || readHere) && pendingCount === 0)) {
         if (looking && currentRoom() === key) {
           const newest = [...ui.messages].reverse().find((msg) => msg && msg.id && !msg.pending && !msg.failed && !String(msg.id).startsWith('local-'));
-          if (newest) advanceDmSeen(id, newest.id);
+          if (newest) advanceDmSeen(id, newest.id, true);
         }
-        if (stamp) advanceDmSeen(id, stamp);
+        if (stamp) {
+          advanceDmSeen(id, stamp, false);
+          rememberCaught(id, stamp);
+        }
         pendingDm.delete(String(id));
         rememberDm(id, row.updatedAt || Date.now());
-        heardDm[id] = seenForDm(seenMap(), id) || stamp;
+        heardDm[id] = stamp || seenForDm(seenMap(), id);
         ackedDm[id] = heardDm[id];
         continue;
       }
       const fromList = row.unread != null && row.unread !== '' ? Number(row.unread) || 0 : 0;
       const fromActivity = Number(serverDmNotes[id] && serverDmNotes[id].unread) || 0;
-      const serverCount = Math.max(fromList, fromActivity);
-      const unseen = !!(stamp && !dmCovers(id, seenForDm(seenMap(), id), stamp));
+      const serverCount = dmIsRead(id, stamp) ? 0 : Math.max(fromList, fromActivity);
+      const unseen = !!(stamp && !dmIsRead(id, stamp));
       const exact = unseen ? unseenInLog(id, row.lastId || '') : null;
-      let count = Math.max(serverCount, pendingCount, exact || 0);
-      if (count <= 0 && unseen) count = 1;
+      const count = Math.max(serverCount, pendingCount, exact || 0);
       if (count > 0) {
         unread[id] = { unread: count };
         if (inboxReady && heardDm[id] !== stamp && !viewing && !own) {
@@ -966,7 +967,10 @@ function clearDmUnread(userId, lastId) {
   const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === id);
   const stamp = lastId || (row && row.lastId) || headForDm(ui.heads, id) || '';
   pendingDm.delete(id);
-  if (stamp) advanceDmSeen(id, stamp);
+  if (stamp) {
+    advanceDmSeen(id, stamp, true);
+    rememberCaught(id, stamp);
+  }
   const cursor = seenForDm(seenMap(), id) || stamp;
   if (cursor) {
     heardDm[id] = cursor;
@@ -3321,7 +3325,31 @@ function dmCovers(userId, seenId, latest) {
 
 const readAck = new Set();
 
-function advanceDmSeen(userId, messageId) {
+function caughtMap() {
+  try { return JSON.parse(localStorage.getItem(accountKey('nebula-dm-caught')) || '{}'); }
+  catch { return {}; }
+}
+
+function rememberCaught(userId, stamp) {
+  if (!userId || !stamp) return;
+  const map = caughtMap();
+  const id = String(userId);
+  const next = String(stamp);
+  if (map[id] === next) return;
+  map[id] = next;
+  try { localStorage.setItem(accountKey('nebula-dm-caught'), JSON.stringify(map)); } catch (_) {}
+}
+
+function dmIsRead(userId, stamp) {
+  const head = String(stamp || '');
+  if (!head) return false;
+  if (dmCovers(userId, seenForDm(seenMap(), userId), head)) return true;
+  if (String(caughtMap()[String(userId)] || '') === head) return true;
+  if (ackedDm[userId] && String(ackedDm[userId]) === head) return true;
+  return false;
+}
+
+function advanceDmSeen(userId, messageId, force) {
   if (!userId || !messageId) return;
   const id = String(userId);
   const map = seenMap();
@@ -3329,7 +3357,7 @@ function advanceDmSeen(userId, messageId) {
   const candidate = String(messageId);
   let next = candidate;
   if (current && current !== candidate) {
-    if (dmCovers(id, current, candidate) || !dmCovers(id, candidate, current)) next = current;
+    if (dmCovers(id, current, candidate) || (!force && !dmCovers(id, candidate, current))) next = current;
   }
   let changed = false;
   for (const key of dmKeys(id)) {
@@ -3441,7 +3469,8 @@ export function markSeen(id, messageId) {
   if (String(here || '') !== String(id) && currentRoom() !== String(id)) return;
   if (String(id).startsWith('dm:')) {
     const userId = String(id).slice(3).split(':').find((part) => part && String(part) !== String(ui.me && ui.me.id)) || String(id).slice(3);
-    advanceDmSeen(userId, messageId);
+    advanceDmSeen(userId, messageId, true);
+    rememberCaught(userId, messageId);
     if (serverDmNotes[userId]) {
       const notes = { ...serverDmNotes };
       delete notes[userId];
@@ -3526,11 +3555,10 @@ export async function pollActivity() {
     const headsIn = data.heads || {};
     const readNow = new Set();
     for (const userId of Object.keys(dms)) {
-      const seenId = seenForDm(sentSeen, userId);
       const row = (ui.dms || []).find((dm) => dm.other && String(dm.other.id) === String(userId));
       const head = headForDm(headsIn, userId) || (row && row.lastId ? String(row.lastId) : '');
       const openHere = chatInFront() && ((ui.mode === 'dm' && ui.dmUser && String(ui.dmUser.id) === String(userId)) || (ui.quickOpen && ui.quickUser && String(ui.quickUser.id) === String(userId)));
-      if (openHere || dmCovers(userId, seenId, head) || (ackedDm[userId] && head && String(ackedDm[userId]) === String(head))) {
+      if (openHere || dmIsRead(userId, head)) {
         delete dms[userId];
         readNow.add(String(userId));
       }
