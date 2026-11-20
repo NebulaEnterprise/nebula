@@ -24,11 +24,21 @@ bot.command('setwelcome', 'Welcome new people in this channel', async (msg) => {
 
 bot.on('member_join', async (ev) => {
   if (!ev.server_id || ev.user_id === (bot.me && bot.me.id)) return;
+  console.log('member joined', ev.username || ev.display_name, 'in', ev.server_name || ev.server_id);
   const channelId = await welcomeChannel(ev.server_id);
-  if (!channelId) return;
+  if (!channelId) {
+    console.log('no welcome channel for', ev.server_id);
+    return;
+  }
   const name = ev.username ? '@' + ev.username : (ev.display_name || 'someone new');
   const count = ev.member_count ? ' You are member ' + ev.member_count + '.' : '';
-  await bot.send(channelId, 'Welcome ' + name + '.' + count);
+  await bot.send(channelId, '', {
+    embeds: [{
+      title: 'Welcome to ' + (ev.server_name || 'the server'),
+      description: 'Welcome ' + name + '.' + count,
+      color: '#c084fc',
+    }],
+  });
 });
 
 bot.on('ready', (me) => console.log('welcome bot online as', me.username));
