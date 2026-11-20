@@ -1,9 +1,8 @@
 // Nebula bot library. Node 18 or newer. No dependencies.
-// The bot runs on the same computer as server.js. The API is http://127.0.0.1:3850/api/bot/v1.
-// Set NEBULA_API_URL to point at a different server. The token starts with nb_.
+// The token is the one from Settings → Developer. It starts with nb_.
 
 const DEFAULT_API = (typeof process !== 'undefined' && process.env && (process.env.NEBULA_API_URL || process.env.NEBULA_API))
-  || 'http://127.0.0.1:3850/api/bot/v1';
+  || 'https://scowling-anthill-civil.ngrok-free.dev/api/bot/v1';
 
 export class Bot {
   constructor(token, opts = {}) {
@@ -57,7 +56,7 @@ export class Bot {
     const res = await fetch(this.apiBase + path, { method, headers, body: payload });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.error || ('Nebula answered ' + res.status + ' from ' + this.apiBase));
+      const err = new Error(data.error || ('Nebula answered ' + res.status));
       err.code = data.code || '';
       err.status = res.status;
       throw err;
