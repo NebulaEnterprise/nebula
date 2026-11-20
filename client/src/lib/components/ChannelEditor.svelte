@@ -1,6 +1,6 @@
 <script>
   import { Copy, Lock, Plus, Trash2 } from '@lucide/svelte';
-  import { api, webhookUrl } from '../api.js';
+  import { api, webhookExecuteUrl, webhookUrl } from '../api.js';
   import { PERM, hasBit, setBit } from '../format.js';
   import { openServer, toast, ui } from '../state.svelte.js';
 
@@ -257,7 +257,7 @@
     if (!content) return;
     busy = true;
     try {
-      const res = await fetch(webhookUrl(hook), {
+      const res = await fetch(webhookExecuteUrl(hook), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({ content }),

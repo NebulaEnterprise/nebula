@@ -1,4 +1,5 @@
 import { frameDataUrl } from './image.js';
+import { SITE_ORIGIN } from './format.js';
 
 const DEFAULT_BACKEND = 'https://scowling-anthill-civil.ngrok-free.dev';
 
@@ -32,6 +33,11 @@ export function getApiBase() {
 }
 
 export function webhookUrl(hook) {
+  if (!hook || !hook.id || !hook.token) return '';
+  return SITE_ORIGIN + '/api/webhooks/' + hook.id + '/' + hook.token;
+}
+
+export function webhookExecuteUrl(hook) {
   if (!hook || !hook.id || !hook.token) return '';
   return getApiBase() + '/api/webhooks/' + encodeURIComponent(hook.id) + '/' + encodeURIComponent(hook.token);
 }
