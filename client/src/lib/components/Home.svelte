@@ -43,6 +43,11 @@
     document.querySelector('.home')?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function openDocs() {
+    docs = true;
+    requestAnimationFrame(() => document.querySelector('.home')?.scrollTo({ top: 0 }));
+  }
+
   async function loadOnline() {
     try {
       const res = await fetch(`${getApiBase()}/api/online`, {
@@ -88,7 +93,7 @@
       {/if}
       {#each nav as label}
         {#if label === 'Developers'}
-          <button type="button" class:on={docs} onclick={() => (docs = true)}>Developers</button>
+          <button type="button" class:on={docs} onclick={openDocs}>Developers</button>
         {:else}
           <span>{label}</span>
         {/if}
@@ -123,7 +128,7 @@
         {/if}
         <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
         <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
-        <button class="ghost" type="button" onclick={() => (docs = true)}>Developers</button>
+        <button class="ghost" type="button" onclick={openDocs}>Developers</button>
       </div>
       <p class="live">
         <span class="faces" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -229,7 +234,7 @@
       radial-gradient(ellipse at 92% 8%, rgba(186, 140, 255, 0.34), transparent 40%),
       linear-gradient(180deg, #fcfbff 0%, #efe7ff 100%);
   }
-  .bar, .hero, .features, .join { position: relative; z-index: 1; }
+  .bar, .hero, .features, .join, .home-docs { position: relative; z-index: 1; }
   .bar {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
@@ -509,7 +514,20 @@
     font-size: 12px;
     font-weight: 700;
   }
-  .home-docs { width: min(860px, calc(100% - 32px)); margin: 28px auto 64px; }
+  .home-docs {
+    width: min(1080px, calc(100% - 32px));
+    margin: 28px auto 72px;
+    padding: 22px 28px 36px;
+    border-radius: 28px;
+    background: rgba(8, 4, 18, 0.92);
+    border: 1px solid rgba(196, 160, 255, 0.22);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+  }
+  .home.light .home-docs {
+    background: rgba(255, 255, 255, 0.94);
+    border-color: rgba(90, 40, 160, 0.14);
+    box-shadow: 0 18px 50px rgba(80, 40, 140, 0.12);
+  }
   .join h2 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.04em; }
   .home.light .nav, .home.light .theme, .home.light .pill, .home.light .signup, .home.light .ghost, .home.light .features article, .home.light .join {
     background: rgba(255, 255, 255, 0.82);
@@ -526,6 +544,8 @@
   @media (max-width: 980px) {
     .bar { grid-template-columns: auto 1fr; }
     .nav { display: none; }
+    .signup, .login { white-space: nowrap; padding: 8px 12px; }
+    .home-docs { width: calc(100% - 16px); padding: 16px 14px 28px; }
     .hero, .features { grid-template-columns: 1fr; }
     .stage { min-height: 0; }
     .window { transform: none; }

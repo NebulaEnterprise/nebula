@@ -3116,19 +3116,43 @@ html[data-theme="amoled"] #app { background-color: #000; }
   .ched-row { align-items: flex-start; flex-direction: column; }
 }
 .home.light .home-docs { color: #1b1230; }
-.home.light .home-docs a { color: #6d28d9; }
-.home.light .home-docs pre, .home.light .home-docs .dev-token { background: rgba(255,255,255,.72); color: #1b1230; }
-.devdocs { line-height: 1.5; overflow-x: auto; }
-.devdocs h3 { margin: 22px 0 8px; }
+.home.light .home-docs a, .home.light .devdocs a { color: #6d28d9; }
+.home.light .home-docs pre, .home.light .home-docs .dev-token, .home.light .dev-code { background: rgba(255,255,255,.72); color: #1b1230; }
+.home.light .devdocs th, .home.light .devdocs td { border-bottom-color: rgba(27, 18, 48, 0.12); }
+.home.light .devdocs code { background: rgba(109, 40, 217, 0.1); }
+.home.light .dev-toc button:hover { background: rgba(109, 40, 217, 0.1); }
+.devdocs { line-height: 1.55; color: inherit; }
+.devdocs-head h2 { margin: 8px 0 10px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.04em; line-height: 1.05; }
+.devdocs-kicker { margin: 14px 0 0; color: #e9d5ff; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.home.light .devdocs-kicker { color: #6d28d9; }
+.devdocs-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 8px; }
+.devdocs-body { min-width: 0; }
+.dev-toc { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.dev-toc button { text-align: left; padding: 7px 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; opacity: 0.82; }
+.dev-toc button:hover { background: rgba(255,255,255,0.06); opacity: 1; }
+.devdocs h3 { margin: 28px 0 8px; font-size: 20px; scroll-margin-top: 18px; }
+.devdocs section:first-child h3 { margin-top: 0; }
 .devdocs p, .devdocs li { margin: 0 0 10px; }
-.devdocs ol { margin: 0 0 12px; padding-left: 1.2em; }
-.devdocs a { color: #c4b5fd; }
-.devdocs code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
-.devdocs pre, .dev-token { display: block; overflow: auto; margin: 8px 0; padding: 12px 14px; border-radius: 10px; background: rgba(0,0,0,.28); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
-.devdocs table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.devdocs th, .devdocs td { text-align: left; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.1); vertical-align: top; }
-.dev-code { position: relative; }
-.dev-code .btn { position: absolute; top: 8px; right: 8px; }
+.devdocs ol { margin: 0 0 12px; padding-left: 1.25em; }
+.devdocs a { color: #c4b5fd; overflow-wrap: anywhere; }
+.devdocs code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,0.08); overflow-wrap: break-word; }
+.devdocs pre, .dev-token { display: block; overflow: auto; margin: 0; padding: 14px 16px; border-radius: 0; background: transparent; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.dev-table { overflow-x: auto; margin: 8px 0 4px; }
+.devdocs table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+.devdocs th, .devdocs td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.12); vertical-align: top; }
+.devdocs th { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.72; }
+.dev-code { margin: 12px 0 16px; border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,.38); }
+.dev-code-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px 8px 14px; background: rgba(255,255,255,0.04); font-size: 12px; font-weight: 700; }
+@media (max-width: 800px) {
+  .devdocs-layout { grid-template-columns: 1fr; gap: 12px; }
+  .dev-toc { position: static; flex-direction: row; flex-wrap: wrap; }
+  .devdocs table, .devdocs tbody, .devdocs tr, .devdocs th, .devdocs td { display: block; width: auto; min-width: 0; }
+  .devdocs thead { display: none; }
+  .devdocs tr { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+  .devdocs td { border: 0; padding: 2px 0; }
+  .devdocs td:first-child { font-weight: 700; }
+  .home.light .devdocs tr { border-bottom-color: rgba(27, 18, 48, 0.12); }
+}
 .dev-portal { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 16px 18px; border-radius: 12px; background: color-mix(in srgb, var(--brand, #7c5cff) 18%, transparent); margin-bottom: 18px; }
 .dev-portal p, .dev-block > p { margin: 4px 0 0; }
 .btn.dev-open { width: auto; min-width: 88px; }
