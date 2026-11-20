@@ -832,6 +832,38 @@ html:not(.app-blur) .thread-menu {
 .msg-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 .channel-types { display: flex; gap: 8px; margin-bottom: 12px; }
 .channel-types .btn { width: auto; flex: 1; }
+.create-channel { width: min(440px, calc(100% - 24px)); }
+.create-channel .sheet-h { align-items: flex-start; }
+.create-channel .sheet-h h3 { font-size: 20px; }
+.create-where { margin: -8px 0 0; color: var(--muted); font-size: 14px; }
+.create-label { margin: 18px 0 8px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.create-types { display: flex; flex-wrap: wrap; gap: 8px; }
+.create-types button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border: 0; border-radius: 4px;
+  background: transparent; color: var(--muted); font-weight: 650; cursor: pointer;
+}
+.create-types button.on { background: var(--brand); color: #fff; }
+.create-name {
+  display: flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 12px; border-radius: 8px;
+  background: #101117; border: 1px solid transparent;
+}
+.create-name:focus-within { border-color: var(--brand); }
+.create-name span { display: grid; place-items: center; color: var(--muted); }
+.create-name input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; outline: none; color: inherit; font: inherit; }
+.create-rule { height: 1px; margin: 16px 0; background: rgba(255,255,255,0.08); }
+.create-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.create-row strong { display: flex; align-items: center; gap: 6px; font-size: 16px; }
+.create-row p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+.create-slow {
+  appearance: none; flex: none; min-width: 108px;
+  background: #101117 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b4b7c2' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 0; color: #fff; border-radius: 8px; padding: 8px 32px 8px 12px; font-weight: 650;
+}
+.create-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 18px; }
+.create-foot .btn { width: auto; padding: 8px 16px; border-radius: 4px; }
+.create-cancel { padding: 8px 16px; border: 0; background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
 .react-flyout {
   position: absolute; left: calc(100% + 8px); top: 0; width: 280px; max-height: 280px; overflow: auto;
   display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start;

@@ -1,6 +1,7 @@
 import { api, getApiBase } from './api.js';
+import { PERM } from './format.js';
 import { openCall, sealCall } from './seal.js';
-import { ui, toast, callTone, gateCall, postCallNote, sealCallStart, writeCallNote } from './state.svelte.js';
+import { ui, toast, hasPerm, callTone, gateCall, postCallNote, sealCallStart, writeCallNote } from './state.svelte.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -737,8 +738,14 @@ export async function declineCall() {
   } catch (_) {}
 }
 
+function canSpeakOnStage() {
+  return hasPerm(PERM.MUTE_MEMBERS) || hasPerm(PERM.MANAGE_CHANNELS) || hasPerm(PERM.ADMIN);
+}
+
 export async function joinVoice(channel, opts = {}) {
   if (!channel || channel.type !== 'voice') return;
+  const stage = !!channel.stage;
+  if (stage && !opts.deafened && !canSpeakOnStage()) opts = { ...opts, muted: true };
   const same = ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId;
   if (same && stream) {
     ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: ui.streamUi?.hideChat !== false };
@@ -772,6 +779,7 @@ export async function joinVoice(channel, opts = {}) {
     serverId: ui.serverId,
     channelId: channel.id,
     name: channel.name,
+    stage,
     muted: !!(opts.muted || opts.deafened),
     deafened: !!opts.deafened,
     speakingSent: false,
@@ -945,6 +953,10 @@ export async function setWatching(on) {
 
 export async function toggleMute() {
   if (!ui.voice || !stream) return;
+  if (ui.voice.stage && ui.voice.muted && !canSpeakOnStage()) {
+    toast('A moderator has to bring you up before you can talk');
+    return;
+  }
   ui.voice.muted = !ui.voice.muted;
   stream.getAudioTracks().forEach((track) => { track.enabled = !ui.voice.muted && !ui.voice.deafened; });
   if (ui.voice.muted) speaking = false;
@@ -959,7 +971,7 @@ export async function toggleMute() {
 export async function toggleDeafen() {
   if (!ui.voice || !stream) return;
   ui.voice.deafened = !ui.voice.deafened;
-  ui.voice.muted = ui.voice.deafened;
+  ui.voice.muted = ui.voice.deafened || (ui.voice.stage && !canSpeakOnStage());
   stream.getAudioTracks().forEach((track) => { track.enabled = !ui.voice.muted; });
   applyDeaf();
   if (ui.voice.deafened) speaking = false;

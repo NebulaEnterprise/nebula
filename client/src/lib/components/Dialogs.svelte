@@ -1,5 +1,5 @@
 <script>
-  import { X } from '@lucide/svelte';
+  import { Hash, Lock, MessageSquare, Volume2, VolumeX, X } from '@lucide/svelte';
   import ChannelEditor from './ChannelEditor.svelte';
   import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
@@ -24,6 +24,31 @@
   let reportToken = '';
   let channelKind = $state('text');
   let channelToken = '';
+  let channelPrivate = $state(false);
+  let channelReadOnly = $state(false);
+  let channelSlow = $state(0);
+  let channelStage = $state(false);
+  const SLOW = [
+    [0, 'Off'],
+    [5, '5 seconds'],
+    [10, '10 seconds'],
+    [15, '15 seconds'],
+    [30, '30 seconds'],
+    [60, '1 minute'],
+    [120, '2 minutes'],
+    [300, '5 minutes'],
+    [600, '10 minutes'],
+    [900, '15 minutes'],
+    [1800, '30 minutes'],
+    [3600, '1 hour'],
+    [7200, '2 hours'],
+    [21600, '6 hours'],
+  ];
+  const channelPlace = $derived.by(() => {
+    const cat = (ui.categories || []).find((row) => row && row.id === ui.dialog?.categoryId);
+    if (cat && cat.name) return cat.name;
+    return channelKind === 'voice' ? 'Voice Channels' : 'Text Channels';
+  });
 
   const friendChoices = $derived((ui.friends || []).filter((person) => {
     const q = groupQuery.trim().toLowerCase();
@@ -65,7 +90,12 @@
       if (token !== channelToken) {
         channelToken = token;
         channelKind = kind === 'discussion' ? 'discussion' : (ui.dialog?.voice ? 'voice' : 'text');
-        if (kind === 'discussion') name = '';
+        name = '';
+        extra = '';
+        channelPrivate = false;
+        channelReadOnly = false;
+        channelSlow = 0;
+        channelStage = false;
       }
     }
     if (kind === 'user-report') {
@@ -103,6 +133,26 @@
   }
 
   function close() { ui.dialog = null; name = ''; extra = ''; when = ''; code = ''; }
+
+  function pickChannelKind(next) {
+    channelKind = next;
+    channelReadOnly = false;
+    channelSlow = 0;
+    channelStage = false;
+    if (next !== 'discussion') name = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+  }
+
+  function onChannelName(event) {
+    const value = event.currentTarget.value;
+    if (channelKind === 'discussion') {
+      name = value.slice(0, 100);
+      event.currentTarget.value = name;
+      return;
+    }
+    const next = value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9_-]/g, '').slice(0, 32);
+    name = next;
+    event.currentTarget.value = next;
+  }
 
   async function sendCallFriend() {
     const user = ui.dialog?.user;
@@ -154,13 +204,13 @@
   </div>
 {:else}
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
         {:else if kind === 'invite'}Invite people
         {:else if kind === 'events'}Events
-        {:else if kind === 'channel' || kind === 'discussion'}{channelKind === 'discussion' ? 'Create discussion' : channelKind === 'voice' ? 'Voice channel' : 'Create channel'}
+        {:else if kind === 'channel' || kind === 'discussion'}Create channel
         {:else if kind === 'category'}Create category
         {:else if kind === 'lock'}Lock server
         {:else if kind === 'notify'}Notification settings
@@ -296,41 +346,98 @@
         {/if}
 
       {:else if kind === 'channel' || kind === 'discussion'}
-        <div class="channel-types">
-          <button type="button" class="btn" class:brand={channelKind === 'text'} onclick={() => (channelKind = 'text')}># Text</button>
-          <button type="button" class="btn" class:brand={channelKind === 'voice'} onclick={() => (channelKind = 'voice')}>Voice</button>
-          <button type="button" class="btn" class:brand={channelKind === 'discussion'} onclick={() => (channelKind = 'discussion')}>Discussion</button>
+        <p class="create-where">in {channelPlace}</p>
+        <p class="create-label">Type</p>
+        <div class="create-types">
+          <button type="button" class:on={channelKind === 'text'} onclick={() => pickChannelKind('text')}><Hash size={16} /> Text</button>
+          <button type="button" class:on={channelKind === 'voice'} onclick={() => pickChannelKind('voice')}><Volume2 size={16} /> Voice</button>
+          <button type="button" class:on={channelKind === 'discussion'} onclick={() => pickChannelKind('discussion')}><MessageSquare size={16} /> Discussion</button>
         </div>
-        <div class="field"><label>{channelKind === 'discussion' ? 'Discussion name' : 'Name'}</label><input bind:value={name} maxlength={channelKind === 'discussion' ? 100 : 32} placeholder={channelKind === 'discussion' ? 'A short title' : 'new-channel'} /></div>
+        <p class="create-label">Channel name</p>
+        <label class="create-name">
+          <span aria-hidden="true">{#if channelKind === 'voice'}<Volume2 size={18} />{:else}<Hash size={18} />{/if}</span>
+          <input value={name} maxlength={channelKind === 'discussion' ? 100 : 32} placeholder={channelKind === 'voice' ? 'Gaming Lounge' : channelKind === 'discussion' ? 'A short title' : 'new-channel'} oninput={onChannelName} />
+        </label>
         {#if channelKind === 'discussion'}
-          <div class="field"><label>First message</label><input bind:value={extra} maxlength="2000" placeholder="Start the conversation" /></div>
-        {:else}
-          <div class="field"><label>Topic</label><input bind:value={extra} maxlength="200" /></div>
+          <p class="create-label">First message</p>
+          <label class="create-name">
+            <input bind:value={extra} maxlength="2000" placeholder="Start the conversation" />
+          </label>
         {/if}
-        <button class="btn brand" style="width:auto" onclick={() => go(async () => {
-          if (channelKind === 'discussion') {
-            const channelId = ui.dialog.channelId || ui.channelId || (ui.channels || []).find((row) => row.type === 'text')?.id;
-            if (!channelId) throw new Error('Add a text channel first');
-            const title = name.trim();
-            const content = extra.trim();
-            if (!title) throw new Error('Give the discussion a name');
-            if (!content) throw new Error('Write the first message');
-            const data = await api('/api/channels/' + encodeURIComponent(channelId) + '/threads', {
+        <div class="create-rule"></div>
+        <div class="create-row">
+          <div>
+            <strong>Private Channel <Lock size={15} /></strong>
+            <p>Only the roles you pick (plus the owner and server managers) can see and use it.</p>
+          </div>
+          <button type="button" class="switch" class:on={channelPrivate} role="switch" aria-checked={channelPrivate} onclick={() => (channelPrivate = !channelPrivate)}><i></i></button>
+        </div>
+        {#if channelKind === 'text'}
+          <div class="create-rule"></div>
+          <div class="create-row">
+            <div>
+              <strong>Read-only <VolumeX size={15} /></strong>
+              <p>Everyone can read and react, but only the roles you pick (plus managers) can post. Great for #announcements.</p>
+            </div>
+            <button type="button" class="switch" class:on={channelReadOnly} role="switch" aria-checked={channelReadOnly} onclick={() => (channelReadOnly = !channelReadOnly)}><i></i></button>
+          </div>
+          <div class="create-rule"></div>
+          <div class="create-row">
+            <div>
+              <strong>Slowmode</strong>
+              <p>How long people wait between messages. Moderators aren’t affected.</p>
+            </div>
+            <select class="create-slow" value={String(channelSlow)} onchange={(e) => (channelSlow = Number(e.currentTarget.value) || 0)}>
+              {#each SLOW as [value, label]}<option value={String(value)}>{label}</option>{/each}
+            </select>
+          </div>
+        {:else if channelKind === 'voice'}
+          <div class="create-rule"></div>
+          <div class="create-row">
+            <div>
+              <strong>Stage</strong>
+              <p>For Q&amp;As and events. People join as listeners and can’t unmute. People with Mute Members can always talk.</p>
+            </div>
+            <button type="button" class="switch" class:on={channelStage} role="switch" aria-checked={channelStage} onclick={() => (channelStage = !channelStage)}><i></i></button>
+          </div>
+        {/if}
+        <div class="create-foot">
+          <button type="button" class="create-cancel" onclick={close}>Cancel</button>
+          <button class="btn brand" type="button" disabled={busy} onclick={() => go(async () => {
+            if (channelKind === 'discussion') {
+              const channelId = ui.dialog.channelId || ui.channelId || (ui.channels || []).find((row) => row.type === 'text')?.id;
+              if (!channelId) throw new Error('Add a text channel first');
+              const title = name.trim();
+              const content = extra.trim();
+              if (!title) throw new Error('Give the discussion a name');
+              if (!content) throw new Error('Write the first message');
+              const data = await api('/api/channels/' + encodeURIComponent(channelId) + '/threads', {
+                method: 'POST',
+                body: { serverId: ui.serverId, name: title, content, private: channelPrivate },
+              });
+              const channelName = (ui.channels || []).find((row) => row.id === channelId)?.name || 'channel';
+              close();
+              if (data.thread) await openThread({ ...data.thread, channelName });
+              return;
+            }
+            const data = await api('/api/servers/' + ui.serverId + '/channels', {
               method: 'POST',
-              body: { serverId: ui.serverId, name: title, content },
+              body: {
+                name,
+                type: channelKind === 'voice' ? 'voice' : 'text',
+                private: channelPrivate,
+                readOnly: channelKind === 'text' && channelReadOnly,
+                slowmode: channelKind === 'text' ? channelSlow : 0,
+                stage: channelKind === 'voice' && channelStage,
+              },
             });
-            const channelName = (ui.channels || []).find((row) => row.id === channelId)?.name || 'channel';
+            if (ui.dialog.categoryId && data.channel?.id && hasPerm(PERM.MANAGE_SERVER)) {
+              await guildAction({ type: 'set-category', channelId: data.channel.id, categoryId: ui.dialog.categoryId });
+            }
             close();
-            if (data.thread) await openThread({ ...data.thread, channelName });
-            return;
-          }
-          const data = await api('/api/servers/' + ui.serverId + '/channels', { method: 'POST', body: { name, topic: extra, type: channelKind === 'voice' ? 'voice' : 'text' } });
-          if (ui.dialog.categoryId && data.channel?.id && hasPerm(PERM.MANAGE_SERVER)) {
-            await guildAction({ type: 'set-category', channelId: data.channel.id, categoryId: ui.dialog.categoryId });
-          }
-          close();
-          await openServer(ui.serverId, { keepDialog: true });
-        })}>{channelKind === 'discussion' ? 'Create discussion' : 'Create'}</button>
+            await openServer(ui.serverId, { keepDialog: true });
+          })}>Create channel</button>
+        </div>
 
       {:else if kind === 'category'}
         <div class="field"><label>Name</label><input bind:value={name} maxlength="40" placeholder="Community" /></div>

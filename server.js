@@ -1653,7 +1653,12 @@ function effectivePerms(g, user, channel) {
 
 function can(g, user, perm, channel) {
   if (!g || !user || !g.members || !g.members[user.id]) return false;
-  return (effectivePerms(g, user, channel) & perm) === perm;
+  if ((effectivePerms(g, user, channel) & perm) === perm) return true;
+  if (!channel) return false;
+  const manage = (basePerms(g, user) & PERM.MANAGE_CHANNELS) === PERM.MANAGE_CHANNELS;
+  if (perm === PERM.VIEW && channel.private && manage) return true;
+  if (perm === PERM.SEND && channel.readOnly && manage) return true;
+  return false;
 }
 
 function visibleChannels(g, user) {
@@ -5104,12 +5109,23 @@ app.post('/api/servers/:id/channels', auth, (req, res) => {
   if ((g.channels || []).some((c) => c.name === name && c.type === type)) {
     return res.status(409).json({ error: 'A channel with that name already exists' });
   }
+  const isPrivate = !!req.body?.private;
+  const readOnly = type === 'text' && !!req.body?.readOnly;
+  const slowmode = type === 'text' ? Math.max(0, Math.min(21600, Number(req.body?.slowmode) || 0)) : 0;
+  const stage = type === 'voice' && !!req.body?.stage;
+  let deny = 0;
+  if (isPrivate) deny |= PERM.VIEW;
+  if (readOnly) deny |= PERM.SEND;
   const channel = {
     id: uuidv4(),
     name,
     type,
     topic: String(req.body?.topic || '').slice(0, 200),
-    overwrites: [],
+    overwrites: deny ? [{ roleId: 'everyone', allow: 0, deny }] : [],
+    private: isPrivate,
+    readOnly,
+    slowmode,
+    stage,
   };
   g.channels.push(channel);
   saveGuilds();
@@ -6287,6 +6303,15 @@ function publicGroup(group, viewer) {
   };
 }
 
+function threadVisible(thread, user, found) {
+  if (!thread || !thread.private) return true;
+  if (!user || !found) return false;
+  const id = String(user.id);
+  if (String(thread.ownerId) === id) return true;
+  if ((thread.followers || []).map(String).includes(id)) return true;
+  return isOwner(found.guild, user) || can(found.guild, user, PERM.MANAGE_CHANNELS, found.channel);
+}
+
 function publicThread(thread) {
   const room = messages['thread:' + thread.id] || [];
   const last = room[room.length - 1];
@@ -6300,6 +6325,7 @@ function publicThread(thread) {
     messageCount: room.length,
     lastAt: last ? last.createdAt : thread.createdAt,
     closed: !!thread.closed,
+    private: !!thread.private,
     followers: (thread.followers || []).map(String),
   };
 }
@@ -6486,7 +6512,7 @@ app.get('/api/channels/:id/threads', auth, (req, res) => {
   if (!found) return res.status(404).json({ error: 'Channel not found' });
   if (!can(found.guild, req.user, PERM.VIEW, found.channel)) return res.status(403).json({ error: 'Cannot view this channel' });
   const list = Object.values(threads)
-    .filter((thread) => thread && thread.channelId === found.channel.id && !thread.closed)
+    .filter((thread) => thread && thread.channelId === found.channel.id && !thread.closed && threadVisible(thread, req.user, found))
     .sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0))
     .map(publicThread);
   res.json({ ok: true, threads: list });
@@ -6510,6 +6536,7 @@ app.post('/api/channels/:id/threads', auth, (req, res) => {
     ownerId: String(req.user.id),
     createdAt: new Date().toISOString(),
     closed: false,
+    private: !!req.body?.private,
     followers: [String(req.user.id)],
   };
   threads[id] = thread;
@@ -6523,7 +6550,7 @@ app.get('/api/threads/:id/messages', auth, (req, res) => {
   const thread = threads[req.params.id];
   if (!thread) return res.status(404).json({ error: 'Thread not found' });
   const found = findChannel(thread.channelId, thread.serverId);
-  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) {
+  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel) || !threadVisible(thread, req.user, found)) {
     return res.status(403).json({ error: 'Cannot view this thread' });
   }
   const list = messages['thread:' + thread.id] || [];
@@ -6539,7 +6566,7 @@ app.post('/api/threads/:id/messages', auth, (req, res) => {
   const thread = threads[req.params.id];
   if (!thread || thread.closed) return res.status(404).json({ error: 'Thread not found' });
   const found = findChannel(thread.channelId, thread.serverId);
-  if (!found || !can(found.guild, req.user, PERM.SEND, found.channel)) {
+  if (!found || !can(found.guild, req.user, PERM.SEND, found.channel) || !threadVisible(thread, req.user, found)) {
     return res.status(403).json({ error: 'You cannot post here' });
   }
   const made = appendRoomMessage('thread:' + thread.id, req);
@@ -6555,7 +6582,7 @@ app.post('/api/threads/:id/action', auth, (req, res) => {
   const thread = threads[req.params.id];
   if (!thread) return res.status(404).json({ error: 'Thread not found' });
   const found = findChannel(thread.channelId, thread.serverId);
-  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel)) {
+  if (!found || !can(found.guild, req.user, PERM.VIEW, found.channel) || !threadVisible(thread, req.user, found)) {
     return res.status(403).json({ error: 'Cannot view this thread' });
   }
   const type = String(req.body?.type || '');
