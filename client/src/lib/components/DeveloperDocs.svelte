@@ -21,7 +21,7 @@
 
   let { onback = null } = $props();
   let copied = $state('');
-  const origin = SITE_ORIGIN;
+  const origin = 'http://127.0.0.1:3850';
   const apiBase = origin + '/api/bot/v1';
   const site = SITE_ORIGIN;
   const routes = botEndpoints(apiBase);

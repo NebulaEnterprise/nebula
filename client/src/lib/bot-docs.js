@@ -83,7 +83,7 @@ export const eventEnvelope = [
 ];
 
 export const sdkRows = [
-  ['new Bot(token, opts)', 'token is the nb_ string. Empty reads NEBULA_BOT_TOKEN. The default API is https://nebulaapp.space/api/bot/v1. opts.api replaces that. opts.log set to false hides the online line. NEBULA_API_URL and NEBULA_API also replace the base URL.'],
+  ['new Bot(token, opts)', 'token is the nb_ string. Empty reads NEBULA_BOT_TOKEN. The default API is http://127.0.0.1:3850/api/bot/v1, the server on this computer. opts.api replaces that. opts.log set to false hides the online line. NEBULA_API_URL and NEBULA_API also replace the base URL.'],
   ['bot.command(name, description, fn)', 'Registers /name and !name. A second call with the same name replaces the first. fn receives the message. Returns the bot.'],
   ['bot.on(event, fn)', 'Adds a listener. Events: message, member_join, server_add, server_remove, test, ready, error. Returns the bot.'],
   ['bot.send(channelId, text, opts)', 'POST /channels/:id/messages. opts.replyTo becomes reply_to. opts.embeds is copied through. Returns the message object.'],
