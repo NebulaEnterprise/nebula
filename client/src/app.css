@@ -3105,7 +3105,8 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .ched-post textarea { min-height: 72px; resize: vertical; }
 .ched-foot { margin-top: 16px; }
 .ched-foot .grow { flex: 1; }
-.bot-tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; vertical-align: 1px; }
+.bot-tag { margin-left: 6px; padding: 0 4px; border-radius: 4px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: 0.04em; vertical-align: 1px; flex: none; }
+.member .bot-tag { margin-left: 4px; }
 .hook-embed { margin-top: 6px; padding: 8px 10px; border-left: 4px solid var(--brand); border-radius: 4px; background: rgba(0,0,0,0.2); }
 .hook-embed strong, .hook-embed p, .hook-embed a { display: block; }
 .hook-embed p { margin: 4px 0 0; white-space: pre-wrap; }

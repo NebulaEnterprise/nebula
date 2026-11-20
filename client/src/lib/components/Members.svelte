@@ -44,7 +44,7 @@
     <button class="member" onpointerenter={() => peekProfile(m)} onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
       <Avatar user={m} size={34} />
       <div class="meta">
-        <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong><NameExtras user={shown(m)} /></div>
+        <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong>{#if m.bot}<span class="bot-tag">BOT</span>{/if}<NameExtras user={shown(m)} /></div>
         {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
       </div>
     </button>
@@ -55,7 +55,7 @@
       <button class="member" onpointerenter={() => peekProfile(m)} onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
         <Avatar user={m} size={34} />
         <div class="meta">
-          <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong><NameExtras user={shown(m)} /></div>
+          <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong>{#if m.bot}<span class="bot-tag">BOT</span>{/if}<NameExtras user={shown(m)} /></div>
           {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
         </div>
       </button>

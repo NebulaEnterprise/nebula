@@ -184,7 +184,7 @@
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
-        <h3><Name user={u} /></h3>
+        <h3><Name user={u} />{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
         <p class="handle">
           <span>@{u.username}</span>
           {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
