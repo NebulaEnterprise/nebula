@@ -511,7 +511,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={() => (ui.userSettings = false)}>
-  <div class="settings" role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="settings" class:portal-mode={page === 'developer' || page === 'devdocs'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <aside class="set-nav">
       <div class="set-user">
         <Avatar user={ui.me} size={36} />
@@ -657,6 +657,8 @@
             <button type="button" class="btn danger" onclick={() => { deletePassword = ''; accountDialog = 'delete'; }}>Delete account</button>
           </section>
         {/if}
+      {:else if page === 'developer' || page === 'devdocs'}
+        <Developer docs={page === 'devdocs'} />
       {:else}
       <div class="grid-2" class:look-layout={page === 'look'}>
         <div>
@@ -732,8 +734,6 @@
                 <button type="button" class="switch" class:on={devOn} aria-pressed={devOn} onclick={() => { devOn = !devOn; setDeveloperMode(devOn); }}><i></i></button>
               </div>
             </div>
-          {:else if page === 'developer' || page === 'devdocs'}
-            <Developer docs={page === 'devdocs'} />
           {:else if page === 'admin'}
             <div class="report-list">
               {#each ui.staffReports.filter((report) => report.status !== 'closed') as report (report.id)}

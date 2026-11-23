@@ -32,40 +32,51 @@
   let switchBusy = $state(false);
   let switchError = $state('');
 
-  async function moderateMember(person, kind) {
+  let modBox = $state(null);
+  let modBusy = $state(false);
+
+  function moderateMember(person, kind) {
     ui.memberMenu = null;
     if (!person?.id) return;
+    modBox = {
+      kind,
+      person,
+      nick: person.nick || '',
+      reason: '',
+      minutes: '10',
+    };
+  }
+
+  async function runMod() {
+    const box = modBox;
+    if (!box || modBusy) return;
+    modBusy = true;
     try {
-      if (kind === 'voice') {
-        const reason = prompt('Ban from voice. Reason (optional)', '');
-        if (reason == null) return;
-        await guildAction({ type: 'voice-ban', userId: person.id, reason });
+      if (box.kind === 'voice') {
+        await guildAction({ type: 'voice-ban', userId: box.person.id, reason: box.reason });
         toast('Banned from voice');
-      } else if (kind === 'nick') {
-        const nick = prompt('Nickname', person.nick || person.displayName || '');
-        if (nick == null) return;
-        await guildAction({ type: 'nick-other', userId: person.id, nick });
+      } else if (box.kind === 'nick') {
+        await guildAction({ type: 'nick-other', userId: box.person.id, nick: box.nick });
         toast('Nickname updated');
         await loadMembers();
-      } else if (kind === 'timeout') {
-        const minutes = Number(prompt('Minutes to time out. 0 clears it.', '10'));
-        if (Number.isNaN(minutes)) return;
-        await guildAction({ type: 'timeout', userId: person.id, minutes });
+      } else if (box.kind === 'timeout') {
+        const minutes = Math.max(0, Number(box.minutes) || 0);
+        await guildAction({ type: 'timeout', userId: box.person.id, minutes });
         toast(minutes ? 'Timed out' : 'Timeout cleared');
-      } else if (kind === 'kick') {
-        if (!confirm('Kick this member? They can rejoin with an invite.')) return;
-        await guildAction({ type: 'kick', userId: person.id });
+      } else if (box.kind === 'kick') {
+        await guildAction({ type: 'kick', userId: box.person.id });
         toast('Kicked');
         await loadMembers();
-      } else if (kind === 'ban') {
-        const reason = prompt('Ban reason', '');
-        if (reason == null) return;
-        await guildAction({ type: 'ban', userId: person.id, reason });
+      } else if (box.kind === 'ban') {
+        await guildAction({ type: 'ban', userId: box.person.id, reason: box.reason });
         toast('Banned');
         await loadMembers();
       }
+      modBox = null;
     } catch (err) {
       toast(err.message || 'Could not do that');
+    } finally {
+      modBusy = false;
     }
   }
 
@@ -346,6 +357,47 @@
     {#if developerMode() && !self}
       <button type="button" onclick={() => copyText(person?.id, 'user ID')}>Copy User ID</button>
     {/if}
+  </div>
+{/if}
+{#if modBox}
+  {@const who = modBox.person.displayName || modBox.person.username || 'this member'}
+  <div class="overlay" role="presentation" onclick={() => { if (!modBusy) modBox = null; }}>
+    <div class="sheet mod-sheet" role="dialog" onclick={(e) => e.stopPropagation()}>
+      <div class="sheet-h">
+        <h3>
+          {#if modBox.kind === 'kick'}Kick {who}
+          {:else if modBox.kind === 'ban'}Ban {who}
+          {:else if modBox.kind === 'voice'}Ban {who} from voice
+          {:else if modBox.kind === 'timeout'}Time out {who}
+          {:else}Set nickname{/if}
+        </h3>
+        <button class="btn icon" type="button" aria-label="Close" onclick={() => { if (!modBusy) modBox = null; }}><X size={16} /></button>
+      </div>
+      <div class="body">
+        {#if modBox.kind === 'kick'}
+          <p>They can rejoin with an invite.</p>
+        {:else if modBox.kind === 'ban'}
+          <p>They cannot rejoin until someone unbans them.</p>
+          <label class="field">Reason<input bind:value={modBox.reason} maxlength="200" /></label>
+        {:else if modBox.kind === 'voice'}
+          <p>They stay in the server, but they cannot join voice.</p>
+          <label class="field">Reason<input bind:value={modBox.reason} maxlength="200" /></label>
+        {:else if modBox.kind === 'timeout'}
+          <label class="field">Minutes<input bind:value={modBox.minutes} inputmode="numeric" /> <span class="hint">0 clears a timeout.</span></label>
+        {:else}
+          <label class="field">Nickname<input bind:value={modBox.nick} maxlength="32" /></label>
+        {/if}
+        <div class="mod-acts">
+          <button type="button" class="btn" disabled={modBusy} onclick={() => (modBox = null)}>Cancel</button>
+          <button type="button" class="btn danger" disabled={modBusy} onclick={runMod}>
+            {#if modBox.kind === 'kick'}Kick
+            {:else if modBox.kind === 'ban' || modBox.kind === 'voice'}Ban
+            {:else if modBox.kind === 'timeout'}Time out
+            {:else}Save{/if}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 {/if}
 {#if ui.channelMenu}

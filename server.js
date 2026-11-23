@@ -1435,6 +1435,7 @@ function ensureGuilds() {
   for (const u of Object.values(users)) {
     if (!u) continue;
     if (!g.members[u.id]) {
+      if ((g.bans && g.bans[u.id]) || (g.kicked && g.kicked[u.id])) continue;
       g.members[u.id] = { roles: ['everyone'], joinedAt: u.createdAt || new Date().toISOString() };
       if (botJoinReady && !u.bot) noteBotJoin(g, u);
     }
@@ -1470,6 +1471,7 @@ function hydrateGuild(g) {
   if (!g.stickers) g.stickers = [];
   if (!g.events) g.events = [];
   if (!g.bans) g.bans = {};
+  if (!g.kicked) g.kicked = {};
   if (!g.voiceBans) g.voiceBans = {};
   if (!g.audit) g.audit = [];
   if (!g.reports) g.reports = [];
@@ -5352,6 +5354,7 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
       }
       return res.json({ ok: true, pending: true, server: publicServer(found, req.user) });
     }
+    if (found.kicked) delete found.kicked[req.user.id];
     found.members[req.user.id] = { roles: ['everyone'], joinedAt: new Date().toISOString(), onboarded: !found.onboarding.enabled };
     const inviteKey = inviteRecordKey(found, code);
     if (inviteKey) found.invites[inviteKey].uses = (found.invites[inviteKey].uses || 0) + 1;
@@ -7180,6 +7183,10 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (isOwner(g, users[userId])) return res.status(400).json({ error: 'You cannot remove an owner' });
     const name = users[userId] ? users[userId].username : userId;
     if (type === 'ban') g.bans[userId] = { reason: clip(req.body.reason, 200), at: new Date().toISOString() };
+    else {
+      g.kicked = g.kicked || {};
+      g.kicked[userId] = Date.now();
+    }
     delete g.members[userId];
     audit(g, req.user, (type === 'ban' ? 'banned ' : 'kicked ') + name);
     saveGuilds();
