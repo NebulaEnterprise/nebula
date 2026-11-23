@@ -1,4 +1,4 @@
-import { api, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandler } from './api.js';
+import { api, getApiBase, pinMedia, warmMedia, primeMedia, uploadFile, setUnauthorizedHandler } from './api.js';
 import { connectGateway, disconnectGateway, gatewayReady, gatewayStale, onGateway, reconnectGateway, subscribeGateway } from './gateway.js';
 import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
@@ -105,6 +105,8 @@ export const ui = $state({
   jumpTo: '',
   addingAccount: false,
   authGate: false,
+  switchPrompt: false,
+  switchHold: null,
   quickOpen: false,
   quickUser: null,
 });
@@ -195,6 +197,8 @@ export function logout() {
   ui.popout = null;
   ui.addingAccount = false;
   ui.authGate = false;
+  ui.switchPrompt = false;
+  ui.switchHold = null;
   ui.mfa = null;
   ui.auth = 'login';
   if (pollTimer) clearInterval(pollTimer);
@@ -483,10 +487,22 @@ function resetSession() {
   ui.chatLoading = true;
 }
 
-export async function switchAccount(id) {
-  const row = savedAccounts().find((item) => item.id === id);
-  if (!row) throw new Error('That account is not saved');
-  if (ui.me && row.id === ui.me.id) return;
+async function apiAs(token, path) {
+  const res = await fetch(getApiBase() + path, {
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'ngrok-skip-browser-warning': 'true',
+      'bypass-tunnel-reminder': 'true',
+    },
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error('Session expired');
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function activateSaved(row) {
   try {
     const mod = await import('./voice.js');
     await mod.leaveVoice();
@@ -495,6 +511,8 @@ export async function switchAccount(id) {
   localStorage.setItem('dc_token', row.token);
   ui.booting = true;
   ui.addingAccount = false;
+  ui.switchPrompt = false;
+  ui.switchHold = null;
   await reconnectGateway();
   try {
     const data = await api('/api/me');
@@ -512,6 +530,57 @@ export async function switchAccount(id) {
   } finally {
     ui.booting = false;
   }
+}
+
+export async function switchAccount(id) {
+  const row = savedAccounts().find((item) => item.id === id);
+  if (!row) throw new Error('That account is not saved');
+  if (ui.me && row.id === ui.me.id) return;
+  let data;
+  try {
+    data = await apiAs(row.token, '/api/me/vault');
+  } catch (err) {
+    throw new Error(err.message === 'Session expired' ? 'That account needs to log in again' : err.message);
+  }
+  const vault = data && data.vault;
+  if (!vault || !vault.wrapped || !vault.salt) {
+    await activateSaved(row);
+    return;
+  }
+  ui.switchHold = {
+    id: row.id,
+    token: row.token,
+    name: row.displayName || row.username || 'this account',
+    wrapped: vault.wrapped,
+    salt: vault.salt,
+  };
+  ui.authError = '';
+  ui.authOk = '';
+  if (ui.me) ui.switchPrompt = true;
+  else ui.auth = 'locked';
+}
+
+export async function confirmSwitch(secret) {
+  const hold = ui.switchHold;
+  if (!hold) throw new Error('Pick an account first');
+  const opened = await openVault(hold.wrapped, hold.salt, secret);
+  if (!opened) throw new Error('That recovery code or passphrase is wrong');
+  const local = loadVault(hold.id);
+  if (local) {
+    opened.servers = { ...opened.servers, ...local.servers };
+    opened.dms = { ...opened.dms, ...local.dms };
+    opened.groups = { ...opened.groups, ...local.groups };
+  }
+  rememberVault(hold.id, opened);
+  rememberSecret(hold.id, secret);
+  await activateSaved(hold);
+}
+
+export function cancelSwitch() {
+  ui.switchPrompt = false;
+  ui.switchHold = null;
+  ui.authError = '';
+  if (!ui.me && ui.auth === 'locked') ui.auth = 'login';
 }
 
 export function addAccount() {
@@ -1665,7 +1734,7 @@ async function applySocketMessage(type, data) {
     if (idx < 0) return;
     const next = ui.messages.slice();
     next[idx] = message;
-    ui.messages = next;
+    ui.messages = repairReplies(next);
     rememberLog(logKey, ui.messages);
     noteOpenDm(ui.messages);
     return;
@@ -1693,6 +1762,7 @@ async function applySocketMessage(type, data) {
     ui.seenMessageId = message.id;
     announceFresh(ui.messages, roomKey);
   }
+  ui.messages = repairReplies(ui.messages);
   rememberLog(logKey, ui.messages);
   noteOpenDm(ui.messages);
   ui.chatLoading = false;
@@ -2124,6 +2194,7 @@ function settleSent(tempId, message) {
     next[idx] = { ...carryLook(prev, message), clientKey: key, pending: false, failed: false };
     ui.messages = next.filter((msg, i) => i === idx || (msg.id !== message.id && msg.id !== tempId && msg.clientKey !== key));
   }
+  ui.messages = repairReplies(ui.messages);
   rememberLog(currentRoom(), ui.messages);
   noteOpenDm(ui.messages);
 }
@@ -2485,24 +2556,39 @@ async function revealMessage(message) {
   }
 }
 
+function previewText(content) {
+  const text = String(content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+  if (!text || isSealedText(text)) return '';
+  return text.slice(0, 140);
+}
+
+function repairReplies(list) {
+  const byId = new Map((list || []).map((msg) => [msg && msg.id, msg]));
+  return (list || []).map((msg) => {
+    if (!msg || (!msg.replies && !msg.reply)) return msg;
+    const rows = Array.isArray(msg.replies) && msg.replies.length ? msg.replies : (msg.reply ? [msg.reply] : []);
+    const replies = rows.map((reply) => {
+      if (!reply) return reply;
+      const src = byId.get(reply.id);
+      const fromSrc = src && !src.locked ? previewText(src.content) : '';
+      if (fromSrc) return { ...reply, preview: fromSrc };
+      if (!isSealedText(reply.preview)) return reply;
+      if (src && src.files && src.files.length) {
+        return { ...reply, preview: src.files.some((file) => file && file.kind === 'audio') ? 'Voice message' : 'Attachment' };
+      }
+      return { ...reply, preview: 'Message' };
+    });
+    return { ...msg, replies, reply: replies[0] || null };
+  });
+}
+
 export async function revealList(list) {
   const opened = [];
   for (const msg of list || []) {
     const next = await revealMessage(msg);
     if (next) opened.push(next);
   }
-  const byId = new Map(opened.map((msg) => [msg && msg.id, msg]));
-  return opened.map((msg) => {
-    if (!msg || (!msg.replies && !msg.reply)) return msg;
-    const fix = (reply) => {
-      const src = reply && byId.get(reply.id);
-      if (!src || src.locked || !src.content) return reply;
-      const text = String(src.content).replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim().slice(0, 140);
-      return text ? { ...reply, preview: text } : reply;
-    };
-    const replies = (msg.replies || []).map(fix);
-    return { ...msg, replies, reply: replies[0] || null };
-  });
+  return repairReplies(opened);
 }
 
 async function postMessage(payload, target) {
@@ -2707,17 +2793,18 @@ export async function sendFiles(list) {
       const blob = files[i].file;
       if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
       report(i, 5);
-      const label = files[i].name || blob.name || 'file';
+      const kind = fileKind(blob);
+      const label = kind === 'audio' ? (blob.name || 'voice-message.webm') : (files[i].name || blob.name || 'file');
       const packed = await roomMaster(target);
-      const sealed = await sealFile(masterOf(packed), await blob.arrayBuffer(), label, blob.type || '');
+      const sealed = await sealFile(masterOf(packed), await blob.arrayBuffer(), label, kind === 'audio' ? (blob.type || 'audio/webm') : (blob.type || ''));
       const data = await uploadFile(new Blob([sealed], { type: 'application/octet-stream' }), (n) => report(i, Math.max(5, n)), 'file', '/api/upload?slot=file&chat=1&name=file');
       if (!data.url) throw new Error('The file did not upload');
       saved.push({
         url: data.url,
-        name: 'file',
+        name: kind === 'audio' ? (blob.name || 'voice-message.webm') : 'file',
         enc: 1,
         spoiler: files[i].spoiler,
-        kind: 'file',
+        kind: kind === 'audio' ? 'audio' : (kind === 'image' || kind === 'video' ? kind : 'file'),
       });
       report(i, 100);
     }

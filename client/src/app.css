@@ -1744,6 +1744,9 @@ html[data-theme="amoled"] #app { background-color: #000; }
   display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0;
 }
 .sheet h2, .sheet h3 { margin: 0; letter-spacing: -0.02em; }
+.switch-lock { width: min(420px, calc(100vw - 32px)); }
+.switch-lock .body { display: flex; flex-direction: column; gap: 12px; }
+.switch-lock .btn { align-self: flex-end; }
 .sheet .body { padding: 16px; overflow: auto; }
 .wide-sheet { width: min(980px, 100%); height: min(760px, 100%); }
 .settings {

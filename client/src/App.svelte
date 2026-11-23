@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity } from './lib/state.svelte.js';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch } from './lib/state.svelte.js';
   import { answerCall, declineCall, joinVoice } from './lib/voice.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
@@ -27,6 +27,23 @@
     ui.missedCalls;
     applySiteTitle();
   });
+
+  let switchSecret = $state('');
+  let switchBusy = $state(false);
+  let switchError = $state('');
+
+  async function openSwitched() {
+    switchBusy = true;
+    switchError = '';
+    try {
+      await confirmSwitch(switchSecret.trim());
+      switchSecret = '';
+    } catch (err) {
+      switchError = err.message || 'That recovery code or passphrase is wrong';
+    } finally {
+      switchBusy = false;
+    }
+  }
 
   let callDrag = $state({ x: 0, y: 0 });
   let callDragging = $state(false);
@@ -222,6 +239,22 @@
   <Quick />
   {#if ui.switcher}<Switcher />{/if}
   {#if ui.popout}<Popout />{/if}
+  {#if ui.switchPrompt}
+    <div class="overlay" role="presentation">
+      <form class="sheet switch-lock" onsubmit={(e) => { e.preventDefault(); openSwitched(); }}>
+        <div class="sheet-h">
+          <h3>Unlock {ui.switchHold?.name || 'account'}</h3>
+          <button class="btn icon" type="button" aria-label="Close" onclick={() => { switchSecret = ''; switchError = ''; cancelSwitch(); }}><X size={16} /></button>
+        </div>
+        <div class="body">
+          <p>Enter the recovery code or passphrase for this account.</p>
+          <div class="field"><label>Recovery code or passphrase</label><input bind:value={switchSecret} type="password" autocomplete="current-password" /></div>
+          {#if switchError}<p class="hint">{switchError}</p>{/if}
+          <button class="btn brand" type="submit" disabled={switchBusy}>Open account</button>
+        </div>
+      </form>
+    </div>
+  {/if}
   {#if ui.userSettings}<UserSettings />{/if}
   {#if ui.serverSettings}<ServerSettings />{/if}
   {#if ui.dialog}<Dialogs />{/if}

@@ -315,6 +315,12 @@
     }
   }
 
+  function replyLine(text) {
+    const value = String(text || '');
+    if (value.startsWith('NEB2.')) return 'Message';
+    return value || 'Message';
+  }
+
   function previewText(msg) {
     const text = String(msg?.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
     if (text) return text.slice(0, 140);
@@ -877,9 +883,10 @@
         voiceChunks = [];
         return;
       }
-      const type = rec.mimeType || 'audio/webm';
+      const recorded = rec.mimeType || 'audio/webm';
+      const type = /mp4|m4a|aac/i.test(recorded) ? 'audio/mp4' : 'audio/webm';
       const blob = new Blob(voiceChunks, { type });
-      const ext = /mp4/i.test(type) ? 'm4a' : 'webm';
+      const ext = type === 'audio/mp4' ? 'm4a' : 'webm';
       const file = new File([blob], 'voice-message.' + ext, { type });
       voicePreview = { url: URL.createObjectURL(blob), file };
     };
@@ -1603,7 +1610,7 @@
                 <i class="reply-spine"></i>
                 <Avatar user={person} size={messageReplies(msg).length > 1 ? 12 : 16} dot={false} />
                 <strong><Name user={person} /></strong>
-                <em>{reply.preview}</em>
+                <em>{replyLine(reply.preview)}</em>
               </span>
             </button>
           {/each}

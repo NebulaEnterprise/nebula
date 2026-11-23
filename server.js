@@ -1915,7 +1915,9 @@ function readFiles(body) {
       continue;
     }
     if (row && row.enc) {
-      const file = { url, name: 'file', kind: 'file', enc: 1 };
+      const kind = row.kind === 'audio' || row.kind === 'image' || row.kind === 'video' ? row.kind : 'file';
+      const name = String(row.name || (kind === 'audio' ? 'voice-message.webm' : 'file')).replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
+      const file = { url, name, kind, enc: 1 };
       if (row.spoiler) file.spoiler = true;
       files.push(file);
       continue;
@@ -2065,8 +2067,11 @@ function readReplies(body, roomId) {
     const author = slimAuthor(live || src.author) || { displayName: 'Someone' };
     if (live) author.avatarUrl = publishedMedia(live, 'avatar');
     const name = author.displayName || author.username || 'Someone';
-    const text = src.seal ? '' : String(src.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
-    const preview = src.seal ? 'Encrypted message' : (text.slice(0, 140) || ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message')));
+    const rawText = String(src.content || '');
+    const sealed = !!src.seal || rawText.startsWith('NEB2.');
+    const text = sealed ? '' : rawText.replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+    const voice = (src.files || []).some((file) => file && file.kind === 'audio');
+    const preview = text.slice(0, 140) || (voice ? 'Voice message' : ((src.files && src.files.length) ? 'Attachment' : (src.poll ? 'Poll' : 'Message')));
     out.push({ id: src.id, name, preview, authorId: author.id || src.authorId || '', author });
   }
   return out;
@@ -4310,6 +4315,12 @@ app.use('/uploads', allowMedia, async (req, res, next) => {
 
 app.get('/api/me', auth, (req, res) => {
   res.json({ ok: true, user: withRing(req.user) });
+});
+
+app.get('/api/me/vault', auth, (req, res) => {
+  const vault = req.user.vault;
+  if (!vault || !vault.wrapped || !vault.salt) return res.json({ ok: true, setup: true });
+  res.json({ ok: true, vault: { wrapped: vault.wrapped, salt: vault.salt }, kind: req.user.recovery || 'pass' });
 });
 
 app.post('/api/seen', auth, (req, res) => {

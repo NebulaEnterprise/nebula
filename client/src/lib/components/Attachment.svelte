@@ -23,7 +23,7 @@
   let unlockedMime = $state('');
 
   const name = $derived(unlockedName || file?.name || 'File');
-  const audio = $derived(file?.kind === 'audio' || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
+  const audio = $derived(file?.kind === 'audio' || /voice[- ]message/i.test(unlockedName || file?.name || '') || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
   const video = $derived(!audio && (file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const image = $derived(!video && !audio && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const gif = $derived(/gif/i.test(unlockedMime) || /\.gif(\?|$)/i.test(unlockedName || file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));

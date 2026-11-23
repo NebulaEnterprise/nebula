@@ -1,5 +1,5 @@
 <script>
-  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey, unlockAccount, finishSetup } from '../state.svelte.js';
+  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey, unlockAccount, finishSetup, confirmSwitch, cancelSwitch } from '../state.svelte.js';
   import { recoveryCode } from '../vault.js';
   import Avatar from './Avatar.svelte';
   let email = $state('');
@@ -75,10 +75,10 @@
         <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
       {/if}
     {:else if ui.auth === 'locked'}
-      <p class="sub">Email and password were accepted. Enter the recovery code or passphrase to open the account.</p>
+      <p class="sub">{ui.switchHold ? 'Enter the recovery code or passphrase for ' + (ui.switchHold.name || 'this account') + '.' : 'Email and password were accepted. Enter the recovery code or passphrase to open the account.'}</p>
       <div class="field"><label>Recovery code or passphrase</label><input bind:value={secret} type="password" autocomplete="current-password" /></div>
-      <button class="btn brand" disabled={busy} onclick={() => run(() => unlockAccount(secret.trim()))}>Open account</button>
-      <p class="auth-switch"><button type="button" onclick={() => (ui.auth = 'login')}>Back</button></p>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => ui.switchHold ? confirmSwitch(secret.trim()) : unlockAccount(secret.trim()))}>Open account</button>
+      <p class="auth-switch"><button type="button" onclick={() => { if (ui.switchHold) cancelSwitch(); else ui.auth = 'login'; }}>Back</button></p>
     {:else if ui.auth === 'setup'}
       <p class="sub">This account needs a recovery code or passphrase before it can be opened. You will enter it every time you sign in.</p>
       <div class="field">

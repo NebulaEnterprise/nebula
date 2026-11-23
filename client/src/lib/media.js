@@ -1,7 +1,7 @@
 export function fileKind(file) {
   const name = file?.name || '';
   const type = file?.type || '';
-  if (type.startsWith('audio/') || /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(name)) return 'audio';
+  if (type.startsWith('audio/') || /^voice-message\./i.test(name) || /\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(name)) return 'audio';
   if (type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogv)$/i.test(name)) return 'video';
   if (type.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(name)) return 'image';
   return 'file';
