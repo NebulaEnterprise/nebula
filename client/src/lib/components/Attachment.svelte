@@ -5,6 +5,7 @@
   import { openFile } from '../seal.js';
   import { roomKey, ui } from '../state.svelte.js';
   import { openPackedFile } from '../vault.js';
+  import VoiceNote from './VoiceNote.svelte';
 
   let { file, room = null } = $props();
   let src = $state('');
@@ -299,9 +300,7 @@
   {:else if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if audio}
-    <div class="voice-note">
-      <audio class="file-audio" src={src || undefined} controls preload="metadata"></audio>
-    </div>
+    <VoiceNote src={src} />
   {:else if image}
     {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if (file?.lock || file?.enc) && !src}
