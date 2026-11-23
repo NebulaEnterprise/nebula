@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch } from './lib/state.svelte.js';
+  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast } from './lib/state.svelte.js';
   import { answerCall, declineCall, joinVoice } from './lib/voice.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
@@ -31,6 +31,43 @@
   let switchSecret = $state('');
   let switchBusy = $state(false);
   let switchError = $state('');
+
+  async function moderateMember(person, kind) {
+    ui.memberMenu = null;
+    if (!person?.id) return;
+    try {
+      if (kind === 'voice') {
+        const reason = prompt('Ban from voice. Reason (optional)', '');
+        if (reason == null) return;
+        await guildAction({ type: 'voice-ban', userId: person.id, reason });
+        toast('Banned from voice');
+      } else if (kind === 'nick') {
+        const nick = prompt('Nickname', person.nick || person.displayName || '');
+        if (nick == null) return;
+        await guildAction({ type: 'nick-other', userId: person.id, nick });
+        toast('Nickname updated');
+        await loadMembers();
+      } else if (kind === 'timeout') {
+        const minutes = Number(prompt('Minutes to time out. 0 clears it.', '10'));
+        if (Number.isNaN(minutes)) return;
+        await guildAction({ type: 'timeout', userId: person.id, minutes });
+        toast(minutes ? 'Timed out' : 'Timeout cleared');
+      } else if (kind === 'kick') {
+        if (!confirm('Kick this member? They can rejoin with an invite.')) return;
+        await guildAction({ type: 'kick', userId: person.id });
+        toast('Kicked');
+        await loadMembers();
+      } else if (kind === 'ban') {
+        const reason = prompt('Ban reason', '');
+        if (reason == null) return;
+        await guildAction({ type: 'ban', userId: person.id, reason });
+        toast('Banned');
+        await loadMembers();
+      }
+    } catch (err) {
+      toast(err.message || 'Could not do that');
+    }
+  }
 
   async function openSwitched() {
     switchBusy = true;
@@ -291,12 +328,22 @@
 {/if}
 {#if ui.memberMenu}
   {@const person = ui.memberMenu.user}
+  {@const self = person && String(person.id) === String(ui.me?.id)}
+  {@const mod = !self && canModerateMembers()}
   <div class="msg-menu member-menu" style="left:{ui.memberMenu.x}px;top:{ui.memberMenu.y}px">
     <button type="button" onclick={() => { openPopout(person, ui.memberMenu.x, ui.memberMenu.y); ui.memberMenu = null; }}><UserRound size={16} /> Profile</button>
-    {#if person && String(person.id) !== String(ui.me?.id)}
+    {#if !self}
       <button type="button" class="danger" onclick={() => { ui.dialog = { kind: 'user-report', user: person }; ui.memberMenu = null; }}><Flag size={16} /> Report</button>
+      {#if mod}
+        <hr />
+        <button type="button" class="danger" onclick={() => moderateMember(person, 'voice')}><MicOff size={16} /> Ban from voice...</button>
+        <button type="button" class="danger" onclick={() => moderateMember(person, 'nick')}><Pencil size={16} /> Set nickname...</button>
+        <button type="button" class="danger" onclick={() => moderateMember(person, 'timeout')}><Clock size={16} /> Time out...</button>
+        <button type="button" class="danger" onclick={() => moderateMember(person, 'kick')}><DoorOpen size={16} /> Kick from server</button>
+        <button type="button" class="danger" onclick={() => moderateMember(person, 'ban')}><Ban size={16} /> Ban from server</button>
+      {/if}
     {/if}
-    {#if developerMode()}
+    {#if developerMode() && !self}
       <button type="button" onclick={() => copyText(person?.id, 'user ID')}>Copy User ID</button>
     {/if}
   </div>

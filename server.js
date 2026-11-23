@@ -1470,6 +1470,7 @@ function hydrateGuild(g) {
   if (!g.stickers) g.stickers = [];
   if (!g.events) g.events = [];
   if (!g.bans) g.bans = {};
+  if (!g.voiceBans) g.voiceBans = {};
   if (!g.audit) g.audit = [];
   if (!g.reports) g.reports = [];
   if (!g.requests) g.requests = [];
@@ -6941,6 +6942,7 @@ function settingsView(g, user) {
     reports: g.reports,
     audit: g.audit,
     bans: Object.keys(g.bans).map((id) => ({ userId: id, reason: g.bans[id].reason, at: g.bans[id].at, user: users[id] ? publicUser(users[id]) : null })),
+    voiceBans: Object.keys(g.voiceBans || {}).map((id) => ({ userId: id, reason: (g.voiceBans[id] && g.voiceBans[id].reason) || '', at: g.voiceBans[id] && g.voiceBans[id].at, user: users[id] ? publicUser(users[id]) : null })),
     members: Object.keys(g.members).map((id) => users[id] ? memberView(g, users[id], user) : null).filter(Boolean),
   });
 }
@@ -6959,8 +6961,8 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   const manage = can(g, req.user, PERM.MANAGE_SERVER);
   const staff = staffRank(g, req.user);
   const moderate = staff >= 2
-    ? ['kick', 'ban', 'unban', 'timeout', 'nick-other', 'report-handle']
-    : (staff >= 1 ? ['kick', 'timeout', 'nick-other'] : []);
+    ? ['kick', 'ban', 'unban', 'timeout', 'nick-other', 'report-handle', 'voice-ban', 'voice-unban']
+    : (staff >= 1 ? ['kick', 'timeout', 'nick-other', 'voice-ban', 'voice-unban'] : []);
   const clip = (v, n) => String(v || '').slice(0, n);
 
   if (type === 'nick') {
@@ -7012,7 +7014,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     return res.json({ ok: true });
   }
   if (!manage && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
-  if (['kick', 'ban', 'timeout', 'nick-other'].includes(type)) {
+  if (['kick', 'ban', 'timeout', 'nick-other', 'voice-ban'].includes(type)) {
     const targetId = String(req.body.userId || '');
     if (!canStaffTouch(g, req.user, targetId)) return res.status(403).json({ error: 'That member is above you' });
   }
@@ -7191,6 +7193,22 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   if (type === 'unban') {
     delete g.bans[String(req.body.userId || '')];
     audit(g, req.user, 'removed a ban');
+    saveGuilds();
+    return res.json({ ok: true });
+  }
+  if (type === 'voice-ban') {
+    const userId = String(req.body.userId || '');
+    if (!g.members[userId]) return res.status(404).json({ error: 'Member not found' });
+    if (isOwner(g, users[userId])) return res.status(400).json({ error: 'You cannot ban an owner from voice' });
+    g.voiceBans[userId] = { reason: clip(req.body.reason, 200), at: new Date().toISOString() };
+    audit(g, req.user, 'banned ' + (users[userId] ? users[userId].username : userId) + ' from voice');
+    saveGuilds();
+    if (app.locals.dropVoiceInServer) app.locals.dropVoiceInServer(g.id, userId);
+    return res.json({ ok: true });
+  }
+  if (type === 'voice-unban') {
+    if (g.voiceBans) delete g.voiceBans[String(req.body.userId || '')];
+    audit(g, req.user, 'removed a voice ban');
     saveGuilds();
     return res.json({ ok: true });
   }
@@ -7419,6 +7437,10 @@ app.get('/api/health', (req, res) => {
       res.status(403).json({ error: 'You cannot join this channel' });
       return null;
     }
+    if (found.guild.voiceBans && found.guild.voiceBans[req.user.id]) {
+      res.status(403).json({ error: 'You are banned from voice in this server' });
+      return null;
+    }
     return found;
   }
 
@@ -7434,6 +7456,22 @@ app.get('/api/health', (req, res) => {
       if (id === exceptKey) continue;
       if (room.members.delete(userId)) noteCrowd(room);
     }
+  }
+
+  function dropVoiceInServer(serverId, userId) {
+    const prefix = String(serverId) + '\n';
+    const id = String(userId || '');
+    if (!id) return false;
+    let changed = false;
+    for (const [roomId, room] of rooms) {
+      if (!roomId.startsWith(prefix)) continue;
+      if (room.members.delete(id)) {
+        changed = true;
+        noteCrowd(room);
+      }
+    }
+    if (changed) bumpVoice();
+    return changed;
   }
 
   function dropVoiceUser(userId) {
@@ -7521,6 +7559,7 @@ app.get('/api/health', (req, res) => {
   }
 
   app.locals.dropVoiceUser = dropVoiceUser;
+  app.locals.dropVoiceInServer = dropVoiceInServer;
   app.locals.voiceSnapshot = (user) => {
     const servers = {};
     for (const guild of Object.values(guilds.servers || {})) {

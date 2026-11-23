@@ -1093,7 +1093,16 @@
           <section class="gset-card">
             <h3>Voice bans</h3>
             <p class="hint">Banned from this server's calls only.</p>
-            <p class="hint">Nobody is banned from voice.</p>
+            {#if (s.voiceBans || []).length}
+              {#each s.voiceBans as ban}
+                <div class="gset-chan">
+                  <span class="grow">{ban.user?.displayName || ban.user?.username || ban.userId} {ban.reason || ''}</span>
+                  <button type="button" class="btn sm" onclick={() => run(() => guildAction({ type: 'voice-unban', userId: ban.userId }))}>Unban</button>
+                </div>
+              {/each}
+            {:else}
+              <p class="hint">Nobody is banned from voice.</p>
+            {/if}
           </section>
           <section class="gset-card">
             <div class="field"><label>Ban by user id</label><input bind:value={banUid} placeholder="4" /></div>

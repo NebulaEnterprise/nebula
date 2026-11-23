@@ -796,7 +796,7 @@ html:not(.app-blur) .thread-menu {
 .report-cancel { width: auto; background: transparent; color: #fff; }
 .report-send { width: auto; background: #da373c; color: #fff; border: 0; border-radius: 4px; padding: 8px 16px; }
 .report-send:disabled { opacity: 0.45; }
-.member-menu { width: 180px; }
+.member-menu { width: 230px; }
 .report-slide {
   position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center;
   pointer-events: none;

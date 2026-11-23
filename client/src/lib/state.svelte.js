@@ -3976,15 +3976,27 @@ export function setDeveloperMode(on) {
   ui.devTick += 1;
 }
 
+const STAFF_ROLES = new Set(['owner', 'admin', 'manager', 'moderator', 'developer']);
+
+export function canModerateMembers() {
+  if (!ui.serverId || (ui.mode !== 'chat' && ui.mode !== 'thread')) return false;
+  if (ui.serverMeta?.owner || hasPerm(PERM.ADMIN)) return true;
+  const me = (ui.members || []).find((member) => ui.me && String(member.id) === String(ui.me.id));
+  const ids = [...(me?.roles || []), ...(me?.roleIds || [])].map((role) => (typeof role === 'string' ? role : role?.id));
+  return ids.some((id) => STAFF_ROLES.has(id));
+}
+
 export function openMemberMenu(event, user) {
   if (!user) return;
   event.preventDefault();
   event.stopPropagation();
   ui.dmMenu = null;
   ui.idMenu = null;
+  const self = ui.me && String(user.id) === String(ui.me.id);
+  const rows = self ? 1 : (canModerateMembers() ? 8 : 3);
   ui.memberMenu = {
-    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 196)),
-    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 120)),
+    x: Math.max(8, Math.min(event.clientX, window.innerWidth - 248)),
+    y: Math.max(8, Math.min(event.clientY, window.innerHeight - 16 - rows * 36)),
     user,
   };
 }
