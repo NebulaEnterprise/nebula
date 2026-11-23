@@ -27,7 +27,8 @@ function stored() {
 }
 
 const saved = stored();
-const COLOR_KEYS = ['button', 'menu', 'text', 'muted', 'rail', 'side', 'chat', 'members'];
+const COLOR_KEYS = ['button', 'secondary', 'danger', 'menu', 'outline', 'voice', 'text', 'muted', 'rail', 'side', 'chat', 'members'];
+const SOLID = new Set(['text', 'muted', 'outline', 'voice', 'button', 'secondary', 'danger']);
 const SIZES = { small: '13px', normal: '14px', large: '16px', xl: '18px' };
 
 function hexOk(value) {
@@ -79,7 +80,8 @@ function paintColor(key) {
 }
 
 export function myAccent() {
-  return paintColor('button') || look.accent || '#ff4f9a';
+  if (look.paint === 'one' && hexOk(look.one)) return look.one;
+  return look.accent || '#ff4f9a';
 }
 
 export function applyLook() {
@@ -99,19 +101,29 @@ export function applyLook() {
 
   const panel = (name, key, amount) => {
     const hex = paintColor(key);
-    if (hex) root.style.setProperty(name, key === 'text' || key === 'muted' ? hex : mix(hex, amount));
+    if (hex) root.style.setProperty(name, SOLID.has(key) ? hex : mix(hex, amount));
     else root.style.removeProperty(name);
   };
+  panel('--btn-primary', 'button', 0);
+  panel('--btn-secondary', 'secondary', 0);
+  panel('--btn-danger', 'danger', 0);
   panel('--panel-rail', 'rail', 58);
   panel('--panel-side', 'side', 46);
   panel('--panel-chat', 'chat', 32);
   panel('--panel-members', 'members', 40);
   panel('--menu-bg', 'menu', 38);
+  panel('--outline', 'outline', 0);
+  panel('--voice', 'voice', 0);
   panel('--text', 'text', 0);
   panel('--muted', 'muted', 0);
   const panels = ['rail', 'side', 'chat', 'members', 'menu'].some((key) => paintColor(key));
   root.classList.toggle('paint-panels', panels);
   root.classList.toggle('paint-text', !!paintColor('text'));
+  root.classList.toggle('paint-primary', !!paintColor('button'));
+  root.classList.toggle('paint-secondary', !!paintColor('secondary'));
+  root.classList.toggle('paint-danger', !!paintColor('danger'));
+  root.classList.toggle('paint-outline', !!paintColor('outline'));
+  root.classList.toggle('paint-voice', !!paintColor('voice'));
 }
 
 export async function saveWallpaper(file) {

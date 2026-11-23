@@ -434,15 +434,29 @@
   }
 
   const appAccents = ['#ff4f9a', '#c026d3', '#a855f7', '#3b82f6', '#22d3ee', '#22c55e', '#eab308', '#f97316', '#ef4444'];
-  const themeRows = [
-    ['button', 'Buttons'],
-    ['menu', 'Menus'],
-    ['text', 'Text'],
-    ['muted', 'Secondary text'],
-    ['rail', 'Left rail'],
-    ['side', 'Channel list'],
-    ['chat', 'Chat'],
-    ['members', 'Member list'],
+  const themeGroups = [
+    { title: 'Buttons', note: 'Each kind of button keeps its own color.', rows: [
+      ['button', 'Primary', 'Save, create, and other filled buttons'],
+      ['secondary', 'Secondary', 'The plain buttons'],
+      ['danger', 'Danger', 'Delete and other warning buttons'],
+    ]},
+    { title: 'Menus', note: 'The fill inside a menu, and the line around it.', rows: [
+      ['menu', 'Fill', 'Dropdowns, sheets, and settings'],
+      ['outline', 'Outline', 'The line around menus and panels'],
+    ]},
+    { title: 'Voice messages', note: 'The play button and the pill on a voice clip.', rows: [
+      ['voice', 'Voice message', 'No longer locked to purple'],
+    ]},
+    { title: 'Text', note: 'What you read in the app.', rows: [
+      ['text', 'Text', 'Names, messages, and labels'],
+      ['muted', 'Secondary text', 'Hints and quieter lines'],
+    ]},
+    { title: 'Panels', note: 'Each column can be its own color.', rows: [
+      ['rail', 'Left rail', 'Messages, Friends, Servers'],
+      ['side', 'Channel list', 'The list beside the chat'],
+      ['chat', 'Chat', 'The message column'],
+      ['members', 'Member list', 'The people on the right'],
+    ]},
   ];
   const textSizes = [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xl', 'Extra large']];
 
@@ -455,7 +469,7 @@
     setLook({
       paint: 'theme',
       textSize: 'normal',
-      colors: { button: '', menu: '', text: '', muted: '', rail: '', side: '', chat: '', members: '' },
+      colors: { button: '', secondary: '', danger: '', menu: '', outline: '', voice: '', text: '', muted: '', rail: '', side: '', chat: '', members: '' },
     });
   }
 
@@ -786,15 +800,24 @@
               </label>
             </div>
           {:else if look.paint === 'custom'}
-            <div class="theme-rows">
-              {#each themeRows as [key, label]}
-                <div class="theme-row">
-                  <strong>{label}</strong>
-                  <input type="color" value={look.colors[key] || '#ff4f9a'} oninput={(e) => setThemeColor(key, e.target.value)} aria-label={label} />
-                  {#if look.colors[key]}<button type="button" class="btn sm" onclick={() => setThemeColor(key, '')}>Default</button>{/if}
+            {#each themeGroups as group}
+              <div class="theme-group">
+                <h4>{group.title}</h4>
+                <p>{group.note}</p>
+                <div class="theme-rows">
+                  {#each group.rows as [key, label, hint]}
+                    <div class="theme-row">
+                      <div>
+                        <strong>{label}</strong>
+                        {#if hint}<em>{hint}</em>{/if}
+                      </div>
+                      <input type="color" value={look.colors[key] || '#ff4f9a'} oninput={(e) => setThemeColor(key, e.target.value)} aria-label={label} />
+                      {#if look.colors[key]}<button type="button" class="btn sm" onclick={() => setThemeColor(key, '')}>Default</button>{/if}
+                    </div>
+                  {/each}
                 </div>
-              {/each}
-            </div>
+              </div>
+            {/each}
           {/if}
           <div class="look-block">
             <strong>Text size</strong>

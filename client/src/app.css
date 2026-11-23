@@ -1716,14 +1716,26 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .pick-card.on { border-color: #fff; background: #2a2c38; }
 .tag-icons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .tag-icons button {
-  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 10px;
-  background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); font-size: 16px;
+  min-width: 34px; height: 34px; padding: 0 8px; border-radius: 999px;
+  background: transparent; border: 0; font-size: 18px; color: #f4ecff;
 }
-.tag-icons button:hover { background: rgba(255, 255, 255, 0.06); }
+.tag-icons button:hover { background: rgba(255, 255, 255, 0.08); }
 .tag-icons button.on {
-  outline: none; border-color: var(--brand);
-  box-shadow: 0 0 0 1px var(--brand);
-  background: color-mix(in srgb, var(--brand) 24%, transparent);
+  outline: none;
+  background: color-mix(in srgb, var(--brand) 32%, transparent);
+  box-shadow: 0 0 0 2px var(--brand);
+}
+.gset input, .gset textarea, .gset select {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  border-radius: 10px; color: #fff; padding: 10px 12px; outline: none;
+}
+.gset input:focus, .gset textarea:focus, .gset select:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
+}
+.gset-search input, .gset-upload input, .gset-swatches input {
+  background: transparent; border: 0; box-shadow: none; padding: 8px 0;
 }
 html.paint-panels .rail { background: var(--panel-rail) !important; }
 html.paint-panels .side { background: var(--panel-side) !important; }
@@ -1737,11 +1749,42 @@ html.paint-panels .attach-menu,
 html.paint-panels .sheet,
 html.paint-panels .settings { background: var(--menu-bg, var(--panel-side)) !important; }
 html.paint-text, html.paint-text .shell, html.paint-text .side, html.paint-text .main, html.paint-text .members { color: var(--text); }
+html.paint-primary .btn.brand { background: var(--btn-primary) !important; }
+html.paint-primary .invite-bar { background: var(--btn-primary); color: #fff; }
+html.paint-secondary .btn:not(.brand):not(.danger):not(.danger-fill):not(.icon):not(.ghost) {
+  background: var(--btn-secondary) !important; color: #fff; border-color: transparent;
+}
+html.paint-danger .btn.danger-fill { background: var(--btn-danger) !important; color: #fff; }
+html.paint-danger .danger { color: var(--btn-danger); }
+html.paint-outline .rail,
+html.paint-outline .side,
+html.paint-outline .main,
+html.paint-outline .members,
+html.paint-outline .settings,
+html.paint-outline .menu,
+html.paint-outline .sheet,
+html.paint-outline .composer,
+html.paint-outline .attach-menu,
+html.paint-outline .bell-menu,
+html.paint-outline .thread-menu { border-color: var(--outline) !important; }
+html.paint-voice .voice-play { background: var(--voice) !important; }
+html.paint-voice .voice-note {
+  background: color-mix(in srgb, var(--voice) 28%, rgba(12, 6, 24, 0.88));
+  border-color: color-mix(in srgb, var(--voice) 55%, transparent);
+}
+html.paint-voice .voice-wave i.on { background: var(--voice); }
 .theme-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0 14px; }
 .theme-rows { display: grid; gap: 8px; }
-.theme-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
-.theme-row strong { flex: 1; font-size: 14px; font-weight: 650; }
-.theme-row input[type="color"] { width: 36px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.theme-group { margin-top: 16px; }
+.theme-group h4 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.theme-group > p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.theme-row { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid rgba(255,255,255,0.06); }
+.theme-row > div { flex: 1; min-width: 0; }
+.theme-row strong { display: block; font-size: 14px; font-weight: 700; }
+.theme-row em { display: block; margin-top: 1px; font-style: normal; color: var(--faint); font-size: 12px; font-weight: 500; }
+.theme-row input[type="color"] {
+  width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; overflow: hidden;
+}
 .size-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 .size-picks button { padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); color: inherit; font-weight: 700; }
 .size-picks button.on { background: var(--brand); color: #fff; }
