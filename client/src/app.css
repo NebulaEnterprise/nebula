@@ -1773,6 +1773,25 @@ html.paint-voice .voice-note {
   border-color: color-mix(in srgb, var(--voice) 55%, transparent);
 }
 html.paint-voice .voice-wave i.on { background: var(--voice); }
+html.paint-highlight .msg.picked,
+html.paint-highlight .msg.mentioned.picked {
+  background: color-mix(in srgb, var(--highlight) 22%, transparent) !important;
+  box-shadow: inset 3px 0 0 var(--highlight);
+}
+html.paint-highlight .msg.flash { background: color-mix(in srgb, var(--highlight) 26%, transparent); }
+html.paint-highlight .chat-col.bubbles .msg.picked,
+html.paint-highlight .chat-col.bubbles .msg.flash {
+  background: color-mix(in srgb, var(--highlight) 34%, #2a2a32) !important;
+}
+html.paint-highlight .reply-note { box-shadow: inset 3px 0 0 var(--highlight); }
+html.paint-mention .msg.mentioned { background: color-mix(in srgb, var(--mention) 18%, transparent); }
+html.paint-mention .msg.mentioned:hover { background: color-mix(in srgb, var(--mention) 26%, transparent); }
+html.paint-mention .msg.mentioned::before { background: var(--mention); }
+html.paint-mention .msg.mentioned .mention,
+html.paint-mention .mention {
+  color: #fff;
+  background: color-mix(in srgb, var(--mention) 36%, transparent);
+}
 .theme-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0 14px; }
 .theme-rows { display: grid; gap: 8px; }
 .theme-group { margin-top: 16px; }

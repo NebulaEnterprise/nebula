@@ -447,6 +447,10 @@
     { title: 'Voice messages', note: 'The play button and the pill on a voice clip.', rows: [
       ['voice', 'Voice message', 'No longer locked to purple'],
     ]},
+    { title: 'Messages', note: 'The bars on a message you are replying to, and on one that mentions you.', rows: [
+      ['highlight', 'Highlight bar', 'The bar when you reply to a message or jump to one'],
+      ['mention', 'Mention bar', 'The bar on a message that mentions you'],
+    ]},
     { title: 'Text', note: 'What you read in the app.', rows: [
       ['text', 'Text', 'Names, messages, and labels'],
       ['muted', 'Secondary text', 'Hints and quieter lines'],
@@ -469,7 +473,7 @@
     setLook({
       paint: 'theme',
       textSize: 'normal',
-      colors: { button: '', secondary: '', danger: '', menu: '', outline: '', voice: '', text: '', muted: '', rail: '', side: '', chat: '', members: '' },
+      colors: { button: '', secondary: '', danger: '', menu: '', outline: '', voice: '', highlight: '', mention: '', text: '', muted: '', rail: '', side: '', chat: '', members: '' },
     });
   }
 

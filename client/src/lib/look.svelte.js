@@ -27,8 +27,8 @@ function stored() {
 }
 
 const saved = stored();
-const COLOR_KEYS = ['button', 'secondary', 'danger', 'menu', 'outline', 'voice', 'text', 'muted', 'rail', 'side', 'chat', 'members'];
-const SOLID = new Set(['text', 'muted', 'outline', 'voice', 'button', 'secondary', 'danger']);
+const COLOR_KEYS = ['button', 'secondary', 'danger', 'menu', 'outline', 'voice', 'highlight', 'mention', 'text', 'muted', 'rail', 'side', 'chat', 'members'];
+const SOLID = new Set(['text', 'muted', 'outline', 'voice', 'button', 'secondary', 'danger', 'highlight', 'mention']);
 const SIZES = { small: '13px', normal: '14px', large: '16px', xl: '18px' };
 
 function hexOk(value) {
@@ -114,6 +114,8 @@ export function applyLook() {
   panel('--menu-bg', 'menu', 38);
   panel('--outline', 'outline', 0);
   panel('--voice', 'voice', 0);
+  panel('--highlight', 'highlight', 0);
+  panel('--mention', 'mention', 0);
   panel('--text', 'text', 0);
   panel('--muted', 'muted', 0);
   const panels = ['rail', 'side', 'chat', 'members', 'menu'].some((key) => paintColor(key));
@@ -124,6 +126,8 @@ export function applyLook() {
   root.classList.toggle('paint-danger', !!paintColor('danger'));
   root.classList.toggle('paint-outline', !!paintColor('outline'));
   root.classList.toggle('paint-voice', !!paintColor('voice'));
+  root.classList.toggle('paint-highlight', !!paintColor('highlight'));
+  root.classList.toggle('paint-mention', !!paintColor('mention'));
 }
 
 export async function saveWallpaper(file) {
