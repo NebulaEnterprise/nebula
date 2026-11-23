@@ -1,11 +1,10 @@
 <script>
   let { src = '' } = $props();
-  const count = 42;
+  const count = 26;
   let node = $state(null);
   let playing = $state(false);
   let current = $state(0);
   let duration = $state(0);
-  let rate = $state(1);
   let menu = $state(false);
   let bars = $state(speechBars(2));
 
@@ -87,10 +86,22 @@
     current = node.currentTime;
   }
 
-  function setRate(next) {
-    rate = next;
-    if (node) node.playbackRate = next;
+  async function saveClip(event) {
+    event.stopPropagation();
     menu = false;
+    if (!src) return;
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const type = blob.type || '';
+    const ext = /mp4|m4a|aac/.test(type) ? 'm4a' : /mpeg|mp3/.test(type) ? 'mp3' : 'webm';
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'voice-message.' + ext;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   function closeMenu(event) {
@@ -108,7 +119,7 @@
     class="voice-hidden"
     src={src || undefined}
     preload="metadata"
-    onloadedmetadata={() => { duration = node?.duration || 0; if (node) node.playbackRate = rate; }}
+    onloadedmetadata={() => { duration = node?.duration || 0; }}
     ontimeupdate={() => { current = node?.currentTime || 0; }}
     onplay={() => { playing = true; }}
     onpause={() => { playing = false; }}
@@ -129,14 +140,12 @@
   <span class="voice-time">{label}</span>
   <span class="voice-rule"></span>
   <div class="voice-menu">
-    <button type="button" class="voice-more" aria-label="Playback speed" onclick={(event) => { event.stopPropagation(); menu = !menu; }}>
+    <button type="button" class="voice-more" aria-label="Voice message options" onclick={(event) => { event.stopPropagation(); menu = !menu; }}>
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="12" cy="19" r="1.7" /></svg>
     </button>
     {#if menu}
       <div class="voice-speeds">
-        {#each [1, 1.5, 2] as speed}
-          <button type="button" class:on={rate === speed} onclick={(event) => { event.stopPropagation(); setRate(speed); }}>{speed}×</button>
-        {/each}
+        <button type="button" onclick={saveClip}>Save audio clip</button>
       </div>
     {/if}
   </div>
