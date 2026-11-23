@@ -2,17 +2,19 @@
   import {
     X, Search, Image, Palette, Hash, Home, Smile, Sticker, UserRound, Bell, Shield,
     Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, Webhook, DoorOpen, Plus, ChevronLeft,
-    ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal,
+    ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal, GripVertical,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel } from '../state.svelte.js';
+  import LobbyEditor from './LobbyEditor.svelte';
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
   import { readSmallImage } from '../image.js';
   import { api, webhookUrl } from '../api.js';
 
   const SWATCHES = ['#f23f43', '#f97316', '#23a559', '#1abc9c', '#3b82f6', '#8b5cf6', '#ec4899', '#eab308'];
+  const TAG_COLORS = ['#5865f2', '#57f287', '#fee75c', '#eb459e', '#ed4245', '#f47b67', '#9b59b6', '#3498db', '#e67e22', '#1abc9c'];
   const NAV = [
     { label: 'Overview', pages: [
       { id: 'overview', label: 'Overview', icon: Image, keys: 'profile icon banner name tag discovery description invite vanity template links rules tickets clips transfer delete' },
@@ -47,6 +49,7 @@
   let name = $state(ui.settings?.name || '');
   let tag = $state(ui.settings?.tag || '');
   let tagIcon = $state(ui.settings?.tagIcon || '');
+  let tagColor = $state(ui.settings?.tagColor || '');
   let vanity = $state(ui.settings?.official ? 'nebula' : (ui.settings?.vanity || ''));
   let accent = $state(ui.settings?.theme?.accent || ui.settings?.color || '#7c6af7');
   let tint = $state(ui.settings?.theme?.tint || '');
@@ -252,7 +255,7 @@
   }
 
   async function saveProfile() {
-    const body = { name, color: accent, theme: { accent, tint: tint || s.theme?.tint || '' } };
+    const body = { name, color: accent, theme: { accent, tint: '' } };
     if (iconUrl) body.iconUrl = iconUrl;
     if (bannerUrl) body.bannerUrl = bannerUrl;
     await run(() => guildAction({ type: 'settings', ...body }));
@@ -379,6 +382,41 @@
     await run(() => guildAction({ type: 'move-channel', channelId: ch.id, dir }));
   }
 
+  let dragCh = $state('');
+  let dragCat = $state('');
+
+  async function dropChannel(target) {
+    const from = (s.channels || []).find((ch) => ch.id === dragCh) || (ui.channels || []).find((ch) => ch.id === dragCh);
+    dragCh = '';
+    if (!from || !target || from.id === target.id) return;
+    if (from.type !== target.type || (from.categoryId || '') !== (target.categoryId || '')) return;
+    try {
+      await placeChannel(from, target);
+      await reloadSettings();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function dropCategory(id) {
+    const from = dragCat;
+    dragCat = '';
+    if (!from || from === id) return;
+    const list = s.categories || [];
+    const start = list.findIndex((cat) => cat.id === from);
+    const dest = list.findIndex((cat) => cat.id === id);
+    if (start < 0 || dest < 0) return;
+    const dir = dest > start ? 'down' : 'up';
+    try {
+      for (let i = 0; i < Math.abs(dest - start); i += 1) {
+        await guildAction({ type: 'category-move', categoryId: from, dir });
+      }
+      await reloadSettings();
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
   async function uploadAsset(event) {
     try {
       const url = await readSmallImage(event.target.files[0]);
@@ -455,7 +493,8 @@
 {/snippet}
 
 {#snippet channelRow(ch)}
-  <div class="gset-chan">
+  <div class="gset-chan" draggable="true" ondragstart={() => (dragCh = ch.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropChannel(ch)}>
+    <GripVertical size={14} />
     <strong>{ch.type === 'voice' ? '🔊' : '#'} {ch.name}</strong>
     <button type="button" class="btn icon" title="Move up" onclick={() => moveChannel(ch, 'up')}><ChevronUp size={16} /></button>
     <button type="button" class="btn icon" title="Move down" onclick={() => moveChannel(ch, 'down')}><ChevronDown size={16} /></button>
@@ -535,7 +574,7 @@
             {#if s.canCustomize}
               <div class="gset-inline">
                 <input bind:value={tag} maxlength="4" placeholder="TAG" />
-                <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, vanity: s.official ? 'nebula' : vanity }))}>Save</button>
+                <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, tagColor, vanity: s.official ? 'nebula' : vanity }))}>Save</button>
               </div>
               <div class="tag-icons">
                 <button type="button" class:on={!tagIcon} onclick={() => (tagIcon = '')}>None</button>
@@ -543,7 +582,14 @@
                   <button type="button" class:on={tagIcon === icon} onclick={() => (tagIcon = icon)}>{icon}</button>
                 {/each}
               </div>
-              {#if tag}<p class="hint">Preview <em class="tag-pill">{#if tagIcon}<i>{tagIcon}</i>{/if}{tag}</em></p>{/if}
+              <p class="label">Tag colour</p>
+              <p class="hint">Pick a colour for your tag. Everyone sees it next to members' names.</p>
+              <div class="tag-colors">
+                {#each TAG_COLORS as color}
+                  <button type="button" class:on={tagColor === color} style="background:{color}" aria-label={color} onclick={() => (tagColor = color)}>{tag || 'TAG'}</button>
+                {/each}
+              </div>
+              {#if tag}<p class="hint">Preview <em class="tag-pill" style:background={tagColor || ''} style:color={tagColor ? '#fff' : ''}>{#if tagIcon}<i>{tagIcon}</i>{/if}{tag}</em></p>{/if}
             {:else}
               <p class="hint">This server needs 5 members before it can have a tag. It has {s.memberCount || 0}.</p>
             {/if}
@@ -657,13 +703,10 @@
           </section>
 
         {:else if ui.settingsPage === 'theme'}
-          <p class="hint">Give your server its own colours. Everyone sees them while they're here, unless they turned server themes off in their Appearance settings.</p>
+          <p class="hint">Give your server its own colour. Everyone sees it on the Invite people button and this server's icon.</p>
           <p class="label">Accent colour</p>
-          <p class="hint">Buttons, links and highlights. Very light or very dark picks get nudged so text stays readable.</p>
+          <p class="hint">The invite button and the server icon use this colour.</p>
           {@render colors(accent, (value) => (accent = value || '#7c6af7'), false)}
-          <p class="label">Background tint</p>
-          <p class="hint">A light wash of colour over the background.</p>
-          {@render colors(tint, (value) => (tint = value), true)}
           <div class="gset-theme-preview">
             <div class="gset-fake-av" style:background={accent}></div>
             <div>
@@ -673,20 +716,21 @@
             </div>
           </div>
           <div class="gset-inline">
-            <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', color: accent, theme: { accent, tint } }))}>Save</button>
-            <button type="button" class="btn" onclick={() => { accent = '#7c6af7'; tint = ''; run(() => guildAction({ type: 'settings', theme: { accent: '#7c6af7', tint: '' } })); }}>Remove theme</button>
+            <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', color: accent, theme: { accent, tint: '' } }))}>Save</button>
+            <button type="button" class="btn" onclick={() => { accent = '#7c6af7'; tint = ''; run(() => guildAction({ type: 'settings', color: '#7c6af7', theme: { accent: '#7c6af7', tint: '' } })); }}>Remove theme</button>
           </div>
 
         {:else if ui.settingsPage === 'channels'}
           <div class="gset-split">
-            <p class="hint">Drag isn't here yet. Use the arrows. Members see this order in the sidebar.</p>
+            <p class="hint">Drag a channel to reorder it. Members see this order in the sidebar.</p>
             <div class="gset-inline">
               {#if lastMove}<button type="button" class="btn" onclick={() => moveChannel({ id: lastMove.id }, lastMove.dir)}><Undo2 size={14} /> Undo</button>{/if}
               <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
             </div>
           </div>
           {#each s.categories || [] as cat}
-            <div class="gset-chan head">
+            <div class="gset-chan head" draggable="true" ondragstart={() => (dragCat = cat.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropCategory(cat.id)}>
+              <GripVertical size={14} />
               <strong>{cat.name}</strong>
               <button type="button" class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: cat.id }))}><Trash2 size={16} /></button>
             </div>
@@ -706,12 +750,7 @@
           </section>
 
         {:else if ui.settingsPage === 'lobby'}
-          <section class="gset-card">
-            <label class="check"><input type="checkbox" bind:checked={showLobby} /> Show the lobby</label>
-            <p class="hint">A short note above the message box. The description on Overview is the same line people read on the server card.</p>
-            <div class="field"><label>About</label><textarea bind:value={about} maxlength="2000" rows="5"></textarea></div>
-            <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', about, showLobby }))}>Save</button>
-          </section>
+          <LobbyEditor />
 
         {:else if ui.settingsPage === 'emoji' || ui.settingsPage === 'stickers'}
           {@const list = ui.settingsPage === 'emoji' ? (s.emoji || []) : (s.stickers || [])}

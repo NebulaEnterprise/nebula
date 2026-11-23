@@ -1,6 +1,7 @@
 <script>
   import { Hash, Lock, MessageSquare, Volume2, VolumeX, X } from '@lucide/svelte';
   import ChannelEditor from './ChannelEditor.svelte';
+  import Events from './Events.svelte';
   import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
@@ -119,6 +120,7 @@
     try {
       const data = await api('/api/servers/' + ui.serverId + '/settings');
       events = data.settings?.events || [];
+      ui.events = events.filter((ev) => ev.status !== 'cancelled');
     } catch (err) { toast(err.message); }
   }
   async function loadPings() {
@@ -204,7 +206,8 @@
   </div>
 {:else}
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:event-sheet={kind === 'events'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
+    {#if kind !== 'events'}
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
@@ -231,6 +234,7 @@
       </h3>
       {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
     </div>
+    {/if}
     <div class="body">
       {#if kind === 'group'}
         {#if groupStep === 1}
@@ -326,24 +330,7 @@
         })}>Copy invite link</button>
 
       {:else if kind === 'events'}
-        {#each events as ev}
-          <div class="row">
-            <div class="grow"><strong>{ev.title}</strong><div class="hint">{ev.when} {ev.description}</div></div>
-            {#if hasPerm(PERM.MANAGE_SERVER)}
-              <button class="btn sm" onclick={() => go(async () => { await guildAction({ type: 'event', remove: true, id: ev.id }); await loadEvents(); })}>Remove</button>
-            {/if}
-          </div>
-        {:else}<p class="hint">No events yet.</p>{/each}
-        {#if hasPerm(PERM.MANAGE_SERVER)}
-          <div class="field"><label>Name</label><input bind:value={name} maxlength="80" /></div>
-          <div class="field"><label>When</label><input bind:value={when} maxlength="40" placeholder="Friday 8pm" /></div>
-          <div class="field"><label>Details</label><input bind:value={extra} maxlength="400" /></div>
-          <button class="btn brand" style="width:auto" onclick={() => go(async () => {
-            await guildAction({ type: 'event', title: name, when, description: extra });
-            name = ''; when = ''; extra = '';
-            await loadEvents();
-          })}>Create event</button>
-        {/if}
+        <Events />
 
       {:else if kind === 'channel' || kind === 'discussion'}
         <p class="create-where">in {channelPlace}</p>

@@ -59,6 +59,11 @@ export const ui = $state({
   bannerUrl: '',
   about: '',
   showLobby: false,
+  links: [],
+  events: [],
+  lobby: null,
+  lobbyOpen: false,
+  rulesChannelId: '',
   emoji: [],
   stickers: [],
   onboarding: null,
@@ -211,8 +216,7 @@ function applyTheme() {
   const accent = look.accent || '#ff4f9a';
   root.style.setProperty('--brand', accent);
   root.style.setProperty('--brand-2', accent);
-  if (ui.mode === 'chat' && ui.theme?.tint) root.style.setProperty('--bg-main', ui.theme.tint);
-  else root.style.removeProperty('--bg-main');
+  root.style.removeProperty('--bg-main');
 }
 
 export function notifyMode() {
@@ -1319,6 +1323,11 @@ export async function openServer(id, opts = {}) {
   ui.bannerUrl = data.bannerUrl || '';
   ui.about = data.about || '';
   ui.showLobby = !!data.showLobby;
+  ui.links = data.links || [];
+  ui.events = data.events || [];
+  ui.lobby = data.lobby || null;
+  ui.rulesChannelId = data.rulesChannelId || '';
+  if (id && id !== fromServer) ui.lobbyOpen = false;
   ui.emoji = data.emoji || [];
   ui.stickers = data.stickers || [];
   ui.onboarding = data.onboarding || null;
@@ -1378,6 +1387,11 @@ function snapServer(id) {
     bannerUrl: ui.bannerUrl,
     about: ui.about,
     showLobby: ui.showLobby,
+    links: (ui.links || []).slice(),
+    events: (ui.events || []).slice(),
+    lobby: ui.lobby,
+    lobbyOpen: ui.lobbyOpen,
+    rulesChannelId: ui.rulesChannelId,
     emoji: ui.emoji.slice(),
     stickers: ui.stickers.slice(),
     onboarding: ui.onboarding,
@@ -1398,6 +1412,11 @@ function restoreServer(id) {
   ui.bannerUrl = snap.bannerUrl;
   ui.about = snap.about;
   ui.showLobby = snap.showLobby;
+  ui.links = (snap.links || []).slice();
+  ui.events = (snap.events || []).slice();
+  ui.lobby = snap.lobby;
+  ui.lobbyOpen = !!snap.lobbyOpen;
+  ui.rulesChannelId = snap.rulesChannelId || '';
   ui.emoji = snap.emoji.slice();
   ui.stickers = snap.stickers.slice();
   ui.onboarding = snap.onboarding;
@@ -1564,6 +1583,7 @@ export async function openVoiceRoom(voiceChannel) {
 
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
+  ui.lobbyOpen = false;
   ui.voiceStage = null;
   phoneChat();
   if (ch.id === ui.channelId && ui.mode === 'chat') return;

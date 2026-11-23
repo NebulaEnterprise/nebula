@@ -2,7 +2,7 @@
   import {
     ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Search, X, MessageSquare,
     Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    MicOff, PhoneOff,
+    MicOff, PhoneOff, Home,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
@@ -85,8 +85,14 @@
   });
 
   function onVoice(ch) {
+    ui.lobbyOpen = false;
     ui.voiceStage = { id: ch.id, name: ch.name };
     joinVoice(ch);
+  }
+
+  function hostOf(url) {
+    try { return new URL(url).host.replace(/^www\./, ''); }
+    catch (_) { return url; }
   }
 
   function dmSharing(other) {
@@ -186,11 +192,14 @@
 
 <aside class="side" class:inbox-side={ui.mode !== 'chat'}>
   {#if ui.mode === 'chat'}
+    <div class="side-top">
     <button class="side-head title" class:open={ui.menuOpen} onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
       <span>{ui.serverMeta?.name || 'Server'}</span>
       {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
       <ChevronDown size={18} />
     </button>
+    <button type="button" class="side-cal" title="Events" onclick={() => (ui.dialog = { kind: 'events' })}><Calendar size={18} /></button>
+    </div>
     {#if ui.menuOpen}
       <div class="menu">
         {#each items as item, i}
@@ -202,9 +211,25 @@
       </div>
     {/if}
     {#if hasPerm(PERM.INVITE)}
-      <button type="button" class="invite-bar" onclick={() => (ui.dialog = { kind: 'invite' })}>
+      <button type="button" class="invite-bar" style:background={ui.serverMeta?.color || undefined} style:color={ui.serverMeta?.color ? '#fff' : undefined} onclick={() => (ui.dialog = { kind: 'invite' })}>
         <Link size={16} />
         Invite people
+      </button>
+    {/if}
+    {#if (ui.links || []).length}
+      <div class="side-links">
+        {#each ui.links as link}
+          <a href={link.url} target="_blank" rel="noreferrer">
+            <span>{link.label}</span>
+            <em>{hostOf(link.url)}</em>
+          </a>
+        {/each}
+      </div>
+    {/if}
+    {#if ui.showLobby || hasPerm(PERM.MANAGE_SERVER)}
+      <button type="button" class="channel lobby-jump" class:on={ui.lobbyOpen} onclick={() => { ui.lobbyOpen = true; ui.menuOpen = false; phoneChat(); }}>
+        <Home size={16} />
+        <span class="ch-name">Lobby</span>
       </button>
     {/if}
     <div class="scroll" oncontextmenu={(e) => { if (e.target === e.currentTarget) openChannelMenu(e); }}>

@@ -1470,6 +1470,10 @@ function hydrateGuild(g) {
   if (!g.emoji) g.emoji = [];
   if (!g.stickers) g.stickers = [];
   if (!g.events) g.events = [];
+  if (!Array.isArray(g.links)) g.links = [];
+  if (!g.tagColor) g.tagColor = '';
+  if (!g.rulesChannelId) g.rulesChannelId = '';
+  if (!g.lobby || typeof g.lobby !== 'object') g.lobby = defaultLobby();
   if (!g.bans) g.bans = {};
   if (!g.kicked) g.kicked = {};
   if (!g.voiceBans) g.voiceBans = {};
@@ -1546,6 +1550,97 @@ function cleanTag(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
 }
 
+const LOBBY_IDS = ['top', 'about', 'channels', 'live', 'giveaways', 'feed', 'faq', 'leaderboard', 'roles', 'rules', 'staff', 'links'];
+const LOBBY_SIDE = new Set(['leaderboard', 'roles', 'rules', 'staff', 'links']);
+
+function defaultLobby() {
+  return {
+    tagline: '',
+    buttons: [],
+    channelIds: [],
+    faqs: [],
+    boards: ['week'],
+    showBots: false,
+    hiddenIds: [],
+    feedName: '',
+    feedId: '',
+    feedToken: '',
+    posts: [],
+    sections: LOBBY_IDS.map((id) => ({ id, on: true, place: LOBBY_SIDE.has(id) ? 'side' : 'main' })),
+  };
+}
+
+function sanitizeLobby(raw, prev) {
+  const base = defaultLobby();
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const old = prev && typeof prev === 'object' ? prev : {};
+  const clip = (v, n) => String(v || '').slice(0, n);
+  base.tagline = clip(src.tagline != null ? src.tagline : old.tagline, 120);
+  base.buttons = (Array.isArray(src.buttons) ? src.buttons : []).slice(0, 4).map((button) => ({
+    label: clip(button.label, 32).trim(),
+    kind: button.kind === 'channel' ? 'channel' : 'url',
+    url: clip(button.url, 200).trim(),
+    channelId: clip(button.channelId, 80),
+  })).filter((button) => button.label && (button.kind === 'channel' ? button.channelId : /^https:\/\//i.test(button.url)));
+  base.channelIds = (Array.isArray(src.channelIds) ? src.channelIds : []).map((id) => clip(id, 80)).filter(Boolean).slice(0, 6);
+  base.faqs = (Array.isArray(src.faqs) ? src.faqs : []).slice(0, 10).map((item) => ({
+    q: clip(item.q, 160).trim(),
+    a: clip(item.a, 600).trim(),
+  })).filter((item) => item.q);
+  const boards = (Array.isArray(src.boards) ? src.boards : []).filter((id) => ['levels', 'week', 'invites'].includes(id));
+  base.boards = boards.length ? boards : ['week'];
+  base.showBots = !!src.showBots;
+  base.hiddenIds = (Array.isArray(src.hiddenIds) ? src.hiddenIds : []).map((id) => clip(id, 80)).filter(Boolean).slice(0, 40);
+  base.feedName = clip(src.feedName != null ? src.feedName : old.feedName, 60);
+  base.feedId = old.feedId || '';
+  base.feedToken = old.feedToken || '';
+  base.posts = Array.isArray(old.posts) ? old.posts.slice(0, 20) : [];
+  const seen = new Set();
+  const sections = [];
+  for (const row of Array.isArray(src.sections) ? src.sections : []) {
+    if (!LOBBY_IDS.includes(row.id) || seen.has(row.id) || row.id === 'top') continue;
+    seen.add(row.id);
+    sections.push({ id: row.id, on: row.on !== false, place: row.place === 'side' ? 'side' : 'main' });
+  }
+  for (const id of LOBBY_IDS) {
+    if (id === 'top' || seen.has(id)) continue;
+    sections.push({ id, on: true, place: LOBBY_SIDE.has(id) ? 'side' : 'main' });
+  }
+  base.sections = [{ id: 'top', on: true, place: 'main' }, ...sections];
+  return base;
+}
+
+function publicLobby(g) {
+  const lobby = g.lobby && typeof g.lobby === 'object' ? g.lobby : defaultLobby();
+  return {
+    tagline: lobby.tagline || '',
+    buttons: lobby.buttons || [],
+    channelIds: lobby.channelIds || [],
+    faqs: lobby.faqs || [],
+    boards: lobby.boards || ['week'],
+    showBots: !!lobby.showBots,
+    feedName: lobby.feedName || '',
+    posts: (lobby.posts || []).slice(0, 12).map((post) => ({
+      title: post.title || '',
+      text: post.text || '',
+      url: post.url || '',
+      image: post.image || '',
+    })),
+    sections: lobby.sections || defaultLobby().sections,
+  };
+}
+
+const FEED_HOSTS = ['youtube.com', 'youtu.be', 'ytimg.com', 'twitch.tv', 'jtvnw.net', 'imgur.com', 'discordapp.com', 'discordapp.net', 'nebulaapp.space'];
+
+function hostOk(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    return FEED_HOSTS.some((item) => host === item || host.endsWith('.' + item));
+  } catch (_) {
+    return false;
+  }
+}
+
 function cleanSlug(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20);
 }
@@ -1589,7 +1684,7 @@ function showcaseOf(u) {
   if (!u || !u.showcaseServerId || !guilds.servers) return null;
   const g = guilds.servers[u.showcaseServerId];
   if (!g || !g.tag || !g.members || !g.members[u.id] || !canCustomize(g)) return null;
-  return { serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '' };
+  return { serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '', color: g.tagColor || '' };
 }
 
 function tagChoices(u) {
@@ -1597,7 +1692,7 @@ function tagChoices(u) {
   const out = [];
   for (const g of Object.values(guilds.servers)) {
     if (!g || !g.tag || !g.members || !g.members[u.id] || !canCustomize(g)) continue;
-    out.push({ serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '' });
+    out.push({ serverId: g.id, name: g.name || '', tag: g.tag, icon: g.tagIcon || '', color: g.tagColor || '' });
   }
   return out;
 }
@@ -1682,7 +1777,7 @@ function publicServer(g, user) {
     id: g.id,
     name: g.name,
     icon: g.icon || (g.name || 'S').charAt(0).toUpperCase(),
-    color: g.color || '#7c5cff',
+    color: (g.theme && g.theme.accent) || g.color || '#7c5cff',
     iconUrl: g.iconUrl || '',
     about: g.about || '',
     owner: user ? isOwner(g, user) : false,
@@ -4728,7 +4823,10 @@ app.get('/api/channels', auth, (req, res) => {
     onboarding: (g.onboarding && g.onboarding.enabled && g.members[req.user.id] && g.members[req.user.id].onboarded === false) ? g.onboarding : null,
     showLobby: !!g.showLobby,
     about: g.about || '',
-    events: (g.events || []).slice(0, 12),
+    links: Array.isArray(g.links) ? g.links : [],
+    rulesChannelId: g.rulesChannelId || '',
+    lobby: publicLobby(g),
+    events: (g.events || []).filter((ev) => ev.status !== 'cancelled').slice(0, 12),
     emoji: (g.emoji || []).map((e) => ({ id: e.id, name: e.name, url: e.url })),
     stickers: (g.stickers || []).map((e) => ({ id: e.id, name: e.name, url: e.url })),
   });
@@ -6913,6 +7011,10 @@ function settingsView(g, user) {
     bannerUrl: g.bannerUrl || '',
     tag: g.tag || '',
     tagIcon: g.tagIcon || '',
+    tagColor: g.tagColor || '',
+    links: Array.isArray(g.links) ? g.links : [],
+    rulesChannelId: g.rulesChannelId || '',
+    lobby: publicLobby(g),
     vanity: g.id === OFFICIAL_ID ? 'nebula' : (g.vanity || ''),
     memberCount: memberCount(g),
     canCustomize: canCustomize(g),
@@ -6936,7 +7038,9 @@ function settingsView(g, user) {
     myNick: (g.members[user.id] && g.members[user.id].nick) || '',
   };
   if (!manage) return base;
+  const lobby = g.lobby && typeof g.lobby === 'object' ? g.lobby : {};
   return Object.assign(base, {
+    lobby: Object.assign(publicLobby(g), { feedId: lobby.feedId || '', feedToken: lobby.feedToken || '' }),
     raid: g.raid,
     verification: g.verification,
     joinMode: g.joinMode,
@@ -7016,6 +7120,90 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     wakeGuild(g);
     return res.json({ ok: true });
   }
+  if (type === 'event') {
+    const fresh = () => (g.events || []).filter((ev) => ev.status !== 'cancelled').slice(0, 30);
+    const found = () => (g.events || []).find((ev) => ev.id === String(req.body.id || ''));
+    const canEdit = (ev) => manage || (ev && String(ev.hostId) === String(req.user.id));
+    if (req.body.cancel || req.body.remove) {
+      const ev = found();
+      if (!ev) return res.status(404).json({ error: 'Event not found' });
+      if (!canEdit(ev)) return res.status(403).json({ error: 'You do not have permission' });
+      g.events = g.events.filter((row) => row.id !== ev.id);
+      saveGuilds();
+      return res.json({ ok: true, events: fresh() });
+    }
+    if (req.body.interest) {
+      const ev = found();
+      if (!ev) return res.status(404).json({ error: 'Event not found' });
+      const id = String(req.user.id);
+      const list = Array.isArray(ev.interested) ? ev.interested.map(String) : [];
+      ev.interested = list.includes(id) ? list.filter((row) => row !== id) : list.concat(id).slice(0, 500);
+      saveGuilds();
+      return res.json({ ok: true, events: fresh() });
+    }
+    if (req.body.startNow) {
+      const ev = found();
+      if (!ev) return res.status(404).json({ error: 'Event not found' });
+      if (!canEdit(ev)) return res.status(403).json({ error: 'You do not have permission' });
+      ev.status = 'live';
+      ev.start = new Date().toISOString();
+      saveGuilds();
+      if (ev.announceChannelId) {
+        try {
+          const channel = (g.channels || []).find((ch) => ch.id === ev.announceChannelId && ch.type !== 'voice');
+          if (channel) {
+            if (!messages[channel.id]) messages[channel.id] = [];
+            const msg = {
+              id: uuidv4(),
+              channelId: channel.id,
+              authorId: req.user.id,
+              author: slimAuthor(req.user),
+              content: 'Event started: ' + (ev.title || 'Event'),
+              files: [],
+              createdAt: new Date().toISOString(),
+            };
+            messages[channel.id].push(msg);
+            if (messages[channel.id].length > 500) messages[channel.id] = messages[channel.id].slice(-500);
+            save(MESSAGES_FILE, messages);
+            publishCreate(channel.id, msg);
+          }
+        } catch (_) {}
+      }
+      return res.json({ ok: true, events: fresh() });
+    }
+    const title = clip(req.body.title, 80).trim();
+    if (!title) return res.status(400).json({ error: 'Event name required' });
+    const existing = req.body.id ? found() : null;
+    if (req.body.id && !existing) return res.status(404).json({ error: 'Event not found' });
+    if (existing && !canEdit(existing)) return res.status(403).json({ error: 'You do not have permission' });
+    const next = {
+      id: existing ? existing.id : uuidv4(),
+      title,
+      description: clip(req.body.description, 400),
+      where: req.body.where === 'elsewhere' ? 'elsewhere' : 'voice',
+      channelId: clip(req.body.channelId, 80),
+      elsewhere: clip(req.body.elsewhere, 80),
+      start: clip(req.body.start, 40),
+      end: clip(req.body.end, 40),
+      repeat: 'once',
+      announceChannelId: clip(req.body.announceChannelId, 80),
+      coverUrl: clip(req.body.coverUrl, 2000000),
+      hostId: existing ? existing.hostId : req.user.id,
+      hostName: existing ? (existing.hostName || req.user.displayName || req.user.username || 'Member') : (req.user.displayName || req.user.username || 'Member'),
+      interested: existing && Array.isArray(existing.interested) ? existing.interested : [],
+      status: existing && existing.status === 'live' ? 'live' : 'scheduled',
+      at: existing ? existing.at : new Date().toISOString(),
+      when: clip(req.body.when, 40),
+    };
+    if (existing) g.events = g.events.map((row) => row.id === existing.id ? next : row);
+    else {
+      g.events.unshift(next);
+      g.events = g.events.slice(0, 30);
+    }
+    audit(g, req.user, (existing ? 'updated the event ' : 'created the event ') + title);
+    saveGuilds();
+    return res.json({ ok: true, events: fresh() });
+  }
   if (!manage && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
   if (['kick', 'ban', 'timeout', 'nick-other', 'voice-ban'].includes(type)) {
     const targetId = String(req.body.userId || '');
@@ -7032,7 +7220,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (b.icon != null) g.icon = clip(b.icon, 2) || g.icon;
     if (b.iconUrl != null) g.iconUrl = clip(b.iconUrl, 2000000);
     if (b.bannerUrl != null) g.bannerUrl = clip(b.bannerUrl, 2000000);
-    if (b.tag != null || b.tagIcon != null || b.vanity != null) {
+    if (b.tag != null || b.tagIcon != null || b.vanity != null || b.tagColor != null) {
       const nextTag = b.tag != null ? cleanTag(b.tag) : (g.tag || '');
       const nextIcon = b.tagIcon != null ? String(b.tagIcon || '') : (g.tagIcon || '');
       if (b.tag != null && nextTag && nextTag.length < 2) return res.status(400).json({ error: 'A tag is 2 to 4 letters or numbers' });
@@ -7043,6 +7231,10 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
       }
       if (b.tag != null) g.tag = nextTag;
       if (b.tagIcon != null) g.tagIcon = nextIcon && TAG_ICONS.includes(nextIcon) ? nextIcon : '';
+      if (b.tagColor != null) {
+        const color = String(b.tagColor || '').trim();
+        g.tagColor = /^#[0-9a-fA-F]{6}$/.test(color) ? color.toLowerCase() : '';
+      }
       if (g.id === OFFICIAL_ID) g.vanity = 'nebula';
       else if (b.vanity != null) {
         const slug = cleanSlug(b.vanity);
@@ -7055,6 +7247,22 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     }
     if (b.about != null) g.about = clip(b.about, 2000);
     if (b.showLobby != null) g.showLobby = !!b.showLobby;
+    if (Array.isArray(b.links)) {
+      g.links = b.links.slice(0, 8).map((item) => ({
+        label: clip(item && item.label, 40).trim(),
+        url: clip(item && item.url, 200).trim(),
+      })).filter((item) => item.label && /^https?:\/\//i.test(item.url));
+    }
+    if (b.rulesChannelId != null) {
+      const id = String(b.rulesChannelId || '');
+      g.rulesChannelId = id && (g.channels || []).some((ch) => ch.id === id) ? id : '';
+    }
+    if (b.lobby && typeof b.lobby === 'object') g.lobby = sanitizeLobby(b.lobby, g.lobby);
+    if (b.makeFeed) {
+      g.lobby = g.lobby && typeof g.lobby === 'object' ? g.lobby : defaultLobby();
+      if (!g.lobby.feedId) g.lobby.feedId = uuidv4();
+      if (!g.lobby.feedToken) g.lobby.feedToken = crypto.randomBytes(18).toString('hex');
+    }
     if (b.discover != null) {
       g.discover = !!b.discover;
       if (g.discover) {
@@ -7069,7 +7277,9 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     }
     if (b.color != null) g.color = clip(b.color, 20);
     if (b.theme && typeof b.theme === 'object') {
-      g.theme = { accent: clip(b.theme.accent, 20) || g.theme.accent, tint: clip(b.theme.tint, 20) };
+      const accent = clip(b.theme.accent, 20) || (g.theme && g.theme.accent) || g.color || '#7c6af7';
+      g.theme = { accent, tint: '' };
+      g.color = accent;
     }
     if (b.verification != null) g.verification = ['none', 'low', 'medium', 'high'].includes(b.verification) ? b.verification : g.verification;
     if (b.joinMode != null) g.joinMode = b.joinMode === 'apply' ? 'apply' : 'open';
@@ -7124,6 +7334,16 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     saveGuilds();
     return res.json({ ok: true });
   }
+  if (type === 'category-move') {
+    const idx = (g.categories || []).findIndex((c) => c.id === req.body.categoryId);
+    const next = idx + (req.body.dir === 'up' ? -1 : 1);
+    if (idx < 0 || next < 0 || next >= g.categories.length) return res.json({ ok: true });
+    const tmp = g.categories[idx];
+    g.categories[idx] = g.categories[next];
+    g.categories[next] = tmp;
+    saveGuilds();
+    return res.json({ ok: true });
+  }
   if (type === 'set-category') {
     const ch = (g.channels || []).find((c) => c.id === req.body.channelId);
     if (!ch) return res.status(404).json({ error: 'Channel not found' });
@@ -7160,20 +7380,6 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (!name || !url) return res.status(400).json({ error: 'Name and image required' });
     list.push({ id: uuidv4(), name, url });
     audit(g, req.user, 'uploaded a ' + type + ' :' + name + ':');
-    saveGuilds();
-    return res.json({ ok: true });
-  }
-  if (type === 'event') {
-    if (req.body.remove) {
-      g.events = g.events.filter((e) => e.id !== req.body.id);
-      saveGuilds();
-      return res.json({ ok: true });
-    }
-    const title = clip(req.body.title, 80).trim();
-    if (!title) return res.status(400).json({ error: 'Event name required' });
-    g.events.unshift({ id: uuidv4(), title, when: clip(req.body.when, 40), description: clip(req.body.description, 400), at: new Date().toISOString() });
-    g.events = g.events.slice(0, 30);
-    audit(g, req.user, 'created the event ' + title);
     saveGuilds();
     return res.json({ ok: true });
   }
@@ -7838,6 +8044,36 @@ app.delete('/api/servers/:id/webhooks/:hookId', auth, (req, res) => {
   if (!hook) return res.status(404).json({ error: 'Webhook not found' });
   g.webhooks = g.webhooks.filter((row) => row.id !== hook.id);
   audit(g, req.user, 'deleted the webhook ' + hook.name);
+  saveGuilds();
+  res.json({ ok: true });
+});
+
+app.post('/api/feeds/:id', (req, res) => {
+  ensureGuilds();
+  const token = String(req.query.token || req.get('x-nebula-token') || '');
+  let found = null;
+  for (const g of Object.values(guilds.servers || {})) {
+    if (g.lobby && g.lobby.feedId === req.params.id && g.lobby.feedToken && tokensMatch(g.lobby.feedToken, token)) {
+      found = g;
+      break;
+    }
+  }
+  if (!found) return res.status(404).json({ error: 'Unknown feed' });
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const embed = Array.isArray(body.embeds) ? (body.embeds[0] || {}) : {};
+  const title = String(body.title || embed.title || '').slice(0, 120);
+  const text = String(body.text || body.content || embed.description || '').slice(0, 500);
+  const url = String(body.url || embed.url || '').slice(0, 300);
+  const image = String(body.image || (embed.image && embed.image.url) || '').slice(0, 300);
+  if (!title && !text) return res.status(400).json({ error: 'Add a title or text' });
+  if (url && !/^https:\/\//i.test(url)) return res.status(400).json({ error: 'Links need https' });
+  found.lobby.posts = [{
+    title,
+    text,
+    url: /^https:\/\//i.test(url) ? url : '',
+    image: /^https:\/\//i.test(image) && hostOk(image) ? image : '',
+    at: new Date().toISOString(),
+  }, ...(found.lobby.posts || [])].slice(0, 20);
   saveGuilds();
   res.json({ ok: true });
 });
