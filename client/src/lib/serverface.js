@@ -1,9 +1,12 @@
+import { look, myAccent } from './look.svelte.js';
+
 export function serverFace(server) {
   const iconUrl = server?.iconUrl || '';
   const icon = String(server?.icon || '');
   const image = iconUrl || (/^(https?:|data:|blob:)/.test(icon) ? icon : '');
   const mark = image ? '' : (Array.from(icon || server?.name || 'S')[0] || 'S').toUpperCase();
-  return { image, mark, color: server?.color || '#7c6af7' };
+  const color = look.ignoreServerAccent ? myAccent() : (server?.color || '#7c6af7');
+  return { image, mark, color };
 }
 
 export function memberLine(server) {

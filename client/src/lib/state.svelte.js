@@ -4,7 +4,7 @@ import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM, hasBit, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
-import { look } from './look.svelte.js';
+import { applyLook } from './look.svelte.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
 import {
   createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, lockSecret, newRoomKey,
@@ -210,11 +210,7 @@ export function logout() {
 setUnauthorizedHandler(logout);
 
 function applyTheme() {
-  const root = document.documentElement;
-  const accent = look.accent || '#ff4f9a';
-  root.style.setProperty('--brand', accent);
-  root.style.setProperty('--brand-2', accent);
-  root.style.removeProperty('--bg-main');
+  applyLook();
 }
 
 export function notifyMode() {

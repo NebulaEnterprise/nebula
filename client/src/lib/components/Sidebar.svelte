@@ -9,6 +9,7 @@
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
+  import { look } from '../look.svelte.js';
   import { PERM } from '../format.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
@@ -205,7 +206,7 @@
       </div>
     {/if}
     {#if hasPerm(PERM.INVITE)}
-      <button type="button" class="invite-bar" style:background={ui.serverMeta?.color || undefined} style:color={ui.serverMeta?.color ? '#fff' : undefined} onclick={() => (ui.dialog = { kind: 'invite' })}>
+      <button type="button" class="invite-bar" style:background={!look.ignoreServerAccent && ui.serverMeta?.color ? ui.serverMeta.color : undefined} style:color={!look.ignoreServerAccent && ui.serverMeta?.color ? '#fff' : undefined} onclick={() => (ui.dialog = { kind: 'invite' })}>
         <Link size={16} />
         Invite people
       </button>

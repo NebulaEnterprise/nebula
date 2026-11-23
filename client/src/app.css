@@ -159,7 +159,7 @@ img { max-width: 100%; }
 
 .shell {
   height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden;
-  font-size: 14px;
+  font-size: var(--ui-size, 14px);
   gap: 8px; padding: 48px 8px 8px;
   background: transparent;
 }
@@ -1716,10 +1716,37 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .pick-card.on { border-color: #fff; background: #2a2c38; }
 .tag-icons { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .tag-icons button {
-  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 8px;
-  background: #1e1f22; font-size: 16px;
+  min-width: 36px; height: 36px; padding: 0 8px; border-radius: 10px;
+  background: transparent; border: 1px solid rgba(255, 255, 255, 0.1); font-size: 16px;
 }
-.tag-icons button.on { outline: 2px solid #f23f43; }
+.tag-icons button:hover { background: rgba(255, 255, 255, 0.06); }
+.tag-icons button.on {
+  outline: none; border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+  background: color-mix(in srgb, var(--brand) 24%, transparent);
+}
+html.paint-panels .rail { background: var(--panel-rail) !important; }
+html.paint-panels .side { background: var(--panel-side) !important; }
+html.paint-panels .main { background: var(--panel-chat) !important; }
+html.paint-panels .members { background: var(--panel-members) !important; }
+html.paint-panels .menu,
+html.paint-panels .msg-menu,
+html.paint-panels .bell-menu,
+html.paint-panels .thread-menu,
+html.paint-panels .attach-menu,
+html.paint-panels .sheet,
+html.paint-panels .settings { background: var(--menu-bg, var(--panel-side)) !important; }
+html.paint-text, html.paint-text .shell, html.paint-text .side, html.paint-text .main, html.paint-text .members { color: var(--text); }
+.theme-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0 14px; }
+.theme-rows { display: grid; gap: 8px; }
+.theme-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.theme-row strong { flex: 1; font-size: 14px; font-weight: 650; }
+.theme-row input[type="color"] { width: 36px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.size-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.size-picks button { padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); color: inherit; font-weight: 700; }
+.size-picks button.on { background: var(--brand); color: #fff; }
+.swatches .rainbow { position: relative; overflow: hidden; background: conic-gradient(#f23f43, #eab308, #22c55e, #22d3ee, #3b82f6, #a855f7, #f23f43); }
+.swatches .rainbow input { position: absolute; inset: -8px; opacity: 0; cursor: pointer; }
 .member .meta, .friend .meta { min-width: 0; flex: 1; padding-top: 2px; }
 .friend .meta strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member .name-row strong { display: block; font-size: 14px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

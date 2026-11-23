@@ -72,7 +72,7 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -434,6 +434,30 @@
   }
 
   const appAccents = ['#ff4f9a', '#c026d3', '#a855f7', '#3b82f6', '#22d3ee', '#22c55e', '#eab308', '#f97316', '#ef4444'];
+  const themeRows = [
+    ['button', 'Buttons'],
+    ['menu', 'Menus'],
+    ['text', 'Text'],
+    ['muted', 'Secondary text'],
+    ['rail', 'Left rail'],
+    ['side', 'Channel list'],
+    ['chat', 'Chat'],
+    ['members', 'Member list'],
+  ];
+  const textSizes = [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xl', 'Extra large']];
+
+  function setThemeColor(key, value) {
+    const next = /^#[0-9a-fA-F]{6}$/.test(value || '') ? value : '';
+    setLook({ paint: 'custom', colors: { ...look.colors, [key]: next } });
+  }
+
+  function resetThemeColors() {
+    setLook({
+      paint: 'theme',
+      textSize: 'normal',
+      colors: { button: '', menu: '', text: '', muted: '', rail: '', side: '', chat: '', members: '' },
+    });
+  }
 
   function pickWallpaper() {
     const input = document.createElement('input');
@@ -523,6 +547,7 @@
       <div class="group">User settings</div>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
       <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
+      <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
       <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
@@ -536,7 +561,7 @@
       <button class:on={page === 'accounts'} onclick={() => (ui.userPage = 'accounts')}><Users size={16} /> Switch accounts</button>
       <button class="danger set-logout" onclick={logout}>Sign out</button>
     </aside>
-    <div class="set-main" class:look-main={page === 'look'}>
+    <div class="set-main" class:look-main={page === 'look' || page === 'theme'}>
       <div class="set-head">
         {#if page === 'look' && lookOpen === 'badges'}
           <div class="look-intro">
@@ -552,7 +577,15 @@
             <i class="look-mark"><Palette size={18} /></i>
             <div>
               <h2>Appearance</h2>
-              <p>Change the look and feel of Nebula.</p>
+              <p>How your profile looks on Nebula.</p>
+            </div>
+          </div>
+        {:else if page === 'theme'}
+          <div class="look-intro">
+            <i class="look-mark"><Sparkles size={18} /></i>
+            <div>
+              <h2>Theme</h2>
+              <p>Colors, panels, menus, and type for the whole app.</p>
             </div>
           </div>
         {:else}
@@ -659,6 +692,120 @@
         {/if}
       {:else if page === 'developer' || page === 'devdocs'}
         <Developer docs={page === 'devdocs'} />
+      {:else if page === 'theme'}
+        <section class="look-sec app-card">
+          <h3><Sparkles size={16} class="sec-ico" /> App theme</h3>
+          <p class="look-note">The colors and wallpaper of Nebula itself.</p>
+          <div class="app-split">
+            <div>
+              <strong>Base</strong>
+              <div class="app-themes">
+                <button type="button" class="theme-card" class:on={look.theme === 'dark'} onclick={() => setLook({ theme: 'dark' })}>
+                  {#if look.theme === 'dark'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Moon size={22} />
+                  Dark
+                </button>
+                <button type="button" class="theme-card" class:on={look.theme === 'light'} onclick={() => setLook({ theme: 'light' })}>
+                  {#if look.theme === 'light'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Sun size={22} />
+                  Light
+                </button>
+                <button type="button" class="theme-card" class:on={look.theme === 'amoled'} onclick={() => setLook({ theme: 'amoled' })}>
+                  {#if look.theme === 'amoled'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+                  <Circle size={22} />
+                  AMOLED
+                </button>
+              </div>
+            </div>
+            <div>
+              <strong>Accent</strong>
+              <div class="swatches app-swatches">
+                {#each appAccents as hex}
+                  <button type="button" class="swatch" class:on={sameHex(look.accent, hex)} style="background:{hex}" aria-label={hex} onclick={() => setLook({ accent: hex })}></button>
+                {/each}
+              </div>
+            </div>
+          </div>
+          <div class="app-bg">
+            <span class="bg-thumb app-bg-thumb" style:background-image="var(--app-wallpaper)"></span>
+            <div class="copy">
+              <strong>Background</strong>
+              <em>{look.background ? 'Your picture sits behind the panels.' : 'Nebula’s space picture sits behind the panels.'}</em>
+            </div>
+            <button type="button" class="btn sm" onclick={pickWallpaper}>Change Background</button>
+            {#if look.background}<button type="button" class="btn sm" onclick={() => setLook({ background: '' })}>Remove</button>{/if}
+          </div>
+          <div class="look-line">
+            <div class="copy">
+              <strong>Blur background</strong>
+              <em>Soften the wallpaper behind the panels.</em>
+            </div>
+            <button type="button" class="switch" class:on={look.blur} aria-pressed={look.blur} onclick={() => setLook({ blur: !look.blur })}><i></i></button>
+          </div>
+          <div class="look-line">
+            <div class="copy">
+              <strong>Animations</strong>
+              <em>Motion when panels and buttons change.</em>
+            </div>
+            <button type="button" class="switch" class:on={look.motion} aria-pressed={look.motion} onclick={() => setLook({ motion: !look.motion })}><i></i></button>
+          </div>
+          <div class="look-line">
+            <div class="copy">
+              <strong>Ignore server accent</strong>
+              <em>A server’s accent colors its invite button and icon. Turn this on to keep your theme instead.</em>
+            </div>
+            <button type="button" class="switch" class:on={look.ignoreServerAccent} aria-pressed={look.ignoreServerAccent} onclick={() => setLook({ ignoreServerAccent: !look.ignoreServerAccent })}><i></i></button>
+          </div>
+        </section>
+        <section class="look-sec app-card">
+          <h3><Palette size={16} class="sec-ico" /> Colors</h3>
+          <p class="look-note">Use the base theme, wash everything in one color, or set each part yourself.</p>
+          <div class="theme-modes">
+            <button type="button" class="theme-card" class:on={look.paint === 'theme'} onclick={() => setLook({ paint: 'theme' })}>
+              {#if look.paint === 'theme'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+              Theme
+            </button>
+            <button type="button" class="theme-card" class:on={look.paint === 'one'} onclick={() => setLook({ paint: 'one' })}>
+              {#if look.paint === 'one'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+              One color
+            </button>
+            <button type="button" class="theme-card" class:on={look.paint === 'custom'} onclick={() => setLook({ paint: 'custom' })}>
+              {#if look.paint === 'custom'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
+              Custom
+            </button>
+          </div>
+          {#if look.paint === 'one'}
+            <strong>One color</strong>
+            <p class="look-note">Panels, menus, and buttons follow this color.</p>
+            <div class="swatches">
+              {#each appAccents as hex}
+                <button type="button" class="swatch" class:on={sameHex(look.one, hex)} style="background:{hex}" aria-label={hex} onclick={() => setLook({ one: hex, paint: 'one' })}></button>
+              {/each}
+              <label class="swatch rainbow" title="Custom color">
+                <input type="color" value={look.one} oninput={(e) => setLook({ one: e.target.value, paint: 'one' })} />
+              </label>
+            </div>
+          {:else if look.paint === 'custom'}
+            <div class="theme-rows">
+              {#each themeRows as [key, label]}
+                <div class="theme-row">
+                  <strong>{label}</strong>
+                  <input type="color" value={look.colors[key] || '#ff4f9a'} oninput={(e) => setThemeColor(key, e.target.value)} aria-label={label} />
+                  {#if look.colors[key]}<button type="button" class="btn sm" onclick={() => setThemeColor(key, '')}>Default</button>{/if}
+                </div>
+              {/each}
+            </div>
+          {/if}
+          <div class="look-block">
+            <strong>Text size</strong>
+            <div class="size-picks">
+              {#each textSizes as [id, label]}
+                <button type="button" class:on={look.textSize === id} onclick={() => setLook({ textSize: id })}>{label}</button>
+              {/each}
+            </div>
+          </div>
+          <button type="button" class="btn" onclick={resetThemeColors}>Reset colors</button>
+        </section>
       {:else}
       <div class="grid-2" class:look-layout={page === 'look'}>
         <div>
@@ -816,63 +963,6 @@
             </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {:else if page === 'look'}
-            <section class="look-sec app-card">
-              <h3><Sparkles size={16} class="sec-ico" /> App Appearance</h3>
-              <p class="look-note">The colors and wallpaper of Nebula itself.</p>
-              <div class="app-split">
-                <div>
-                  <strong>Theme</strong>
-                  <div class="app-themes">
-                    <button type="button" class="theme-card" class:on={look.theme === 'dark'} onclick={() => setLook({ theme: 'dark' })}>
-                      {#if look.theme === 'dark'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                      <Moon size={22} />
-                      Dark
-                    </button>
-                    <button type="button" class="theme-card" class:on={look.theme === 'light'} onclick={() => setLook({ theme: 'light' })}>
-                      {#if look.theme === 'light'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                      <Sun size={22} />
-                      Light
-                    </button>
-                    <button type="button" class="theme-card" class:on={look.theme === 'amoled'} onclick={() => setLook({ theme: 'amoled' })}>
-                      {#if look.theme === 'amoled'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
-                      <Circle size={22} />
-                      AMOLED
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <strong>Accent Color</strong>
-                  <div class="swatches app-swatches">
-                    {#each appAccents as hex}
-                      <button type="button" class="swatch" class:on={sameHex(look.accent, hex)} style="background:{hex}" aria-label={hex} onclick={() => setLook({ accent: hex })}></button>
-                    {/each}
-                  </div>
-                </div>
-              </div>
-              <div class="app-bg">
-                <span class="bg-thumb app-bg-thumb" style:background-image="var(--app-wallpaper)"></span>
-                <div class="copy">
-                  <strong>Background</strong>
-                  <em>{look.background ? 'Your picture sits behind the panels.' : 'Nebula’s space picture sits behind the panels.'}</em>
-                </div>
-                <button type="button" class="btn sm" onclick={pickWallpaper}>Change Background</button>
-                {#if look.background}<button type="button" class="btn sm" onclick={() => setLook({ background: '' })}>Remove</button>{/if}
-              </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Blur Background</strong>
-                  <em>Soften the wallpaper behind the panels.</em>
-                </div>
-                <button type="button" class="switch" class:on={look.blur} aria-pressed={look.blur} onclick={() => setLook({ blur: !look.blur })}><i></i></button>
-              </div>
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Animations</strong>
-                  <em>Motion when panels and buttons change.</em>
-                </div>
-                <button type="button" class="switch" class:on={look.motion} aria-pressed={look.motion} onclick={() => setLook({ motion: !look.motion })}><i></i></button>
-              </div>
-            </section>
             <section class="look-sec">
               <h3><Palette size={16} class="sec-ico" /> Profile theme</h3>
               <p class="look-note">How your profile card is colored. This is separate from the app theme above.</p>
