@@ -4,11 +4,12 @@
   import Name from './Name.svelte';
   import { ui, markAllRead, openMention, openServer, pickChannel, friendAct, showFriends } from '../state.svelte.js';
 
-  let { embedded = false } = $props();
+  let { embedded = false, panel = false } = $props();
   let tab = $state('you');
 
   function closeInbox() {
     ui.inboxOpen = false;
+    if (panel) ui.dock = '';
     if (embedded) ui.userSettings = false;
   }
 
@@ -55,13 +56,15 @@
   }
 </script>
 
-<div class="inbox-pop" class:inbox-page={embedded} onclick={(e) => e.stopPropagation()}>
+<div class="inbox-pop" class:inbox-page={embedded} class:inbox-panel={panel} onclick={(e) => e.stopPropagation()}>
+  {#if !panel}
   <div class="inbox-h">
     <strong><Inbox size={16} /> Inbox</strong>
     {#if !embedded}
       <button class="btn icon" title="Close" onclick={() => (ui.inboxOpen = false)}><X size={16} /></button>
     {/if}
   </div>
+  {/if}
   <div class="inbox-tabs">
     <button type="button" class:on={tab === 'you'} onclick={() => (tab = 'you')}>For you {#if ui.incoming.length || (ui.missedCalls || []).length}<em>{count(ui.incoming.length + (ui.missedCalls || []).length)}</em>{/if}</button>
     <button type="button" class:on={tab === 'mentions'} onclick={() => (tab = 'mentions')}>Mentions {#if mentionCount}<em>{count(mentionCount)}</em>{/if}</button>

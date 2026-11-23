@@ -1,5 +1,5 @@
 <script>
-  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, Check, AudioLines, Scissors, Volume2, Square } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, AudioLines, Scissors, Volume2, Square } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -10,7 +10,6 @@
   import { seenPhrase } from '../seen.js';
   import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
-  import Inbox from './Inbox.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
@@ -182,9 +181,11 @@
   let bell = $state(false);
   const inboxBadge = $derived((ui.incoming || []).length + (ui.missedCalls || []).length + Object.values(ui.activity.channels || {}).reduce((sum, row) => sum + (Number(row?.mentions) || 0), 0));
   function toggleInbox() {
-    ui.inboxOpen = !ui.inboxOpen;
     bell = false;
-    if (ui.inboxOpen) pollActivity();
+    ui.inboxOpen = false;
+    const opening = ui.dock !== 'inbox';
+    toggleDock('inbox');
+    if (opening) pollActivity();
   }
   let threadMenu = $state(false);
   let renaming = $state(false);
@@ -1283,12 +1284,6 @@
     return d.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' }) + ', ' + clock;
   }
 
-  function clock(iso) {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-
   async function openStagePop(kind) {
     stagePop = stagePop === kind ? '' : kind;
     if (stagePop === 'device') {
@@ -1319,14 +1314,10 @@
     }
   }
 
-  function mineMsg(msg) {
-    const id = msg?.author?.id || msg?.authorId;
-    return !!(ui.me && id && String(id) === String(ui.me.id));
-  }
 </script>
 
 <div class="chat-frame">
-<div class="chat-col" class:bubbles={ui.mode === 'dm'} class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
+<div class="chat-col" class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 <div class="top" class:dm-bar={ui.mode === 'dm'}>
   <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}
@@ -1364,13 +1355,10 @@
     <button class="btn icon" title="Thread options" onclick={() => (threadMenu = !threadMenu)}><MoreHorizontal size={16} /></button>
   {/if}
   <div class="top-tools">
-    <div class="inbox-anchor">
-      <button type="button" class="bar-tool inbox-btn" class:on={ui.inboxOpen} title="Inbox" onclick={toggleInbox}>
-        <AtSign size={18} />
-        {#if inboxBadge}<em class="inbox-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}
-      </button>
-      {#if ui.inboxOpen}<Inbox />{/if}
-    </div>
+    <button type="button" class="bar-tool inbox-btn" class:on={ui.dock === 'inbox'} title="Inbox" onclick={toggleInbox}>
+      <AtSign size={18} />
+      {#if inboxBadge}<em class="inbox-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}
+    </button>
     <button type="button" class="bar-tool switcher-btn" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /><kbd>Ctrl K</kbd></button>
     {#if ui.mode === 'dm' || ui.mode === 'group'}
       <button type="button" class="bar-tool" title="Start a call" onclick={startCall}><Phone size={18} /></button>
@@ -1592,7 +1580,7 @@
         <time>{time(msg.createdAt)}</time>
       </div>
     {:else}
-    <article class="msg" class:mine={ui.mode === 'dm' && mineMsg(msg)} class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }} onpointerdown={(e) => pressStart(e, msg)} onpointerup={pressEnd} onpointercancel={pressEnd} onpointerleave={pressEnd}>
+    <article class="msg" class:has-reply={messageReplies(msg).length > 0} class:many={messageReplies(msg).length > 1} class:mentioned={mentionsMessage(msg)} class:picked={replyTargets.some((row) => row.id === msg.id)} class:menu-open={menu?.id === msg.id} class:pending={msg.pending} class:flash={flashId === msg.id} data-id={msg.id} onclick={(e) => onMessageClick(e, msg)} oncontextmenu={(e) => { if (!msg.pending && !msg.failed) openMenu(e, msg); }} onpointerdown={(e) => pressStart(e, msg)} onpointerup={pressEnd} onpointercancel={pressEnd} onpointerleave={pressEnd}>
       {#if !msg.pending && !msg.failed}
       <div class="msg-tools">
         {#each quickReacts as glyph}
@@ -1679,12 +1667,6 @@
           </div>
         {/if}
       </div>
-      {#if ui.mode === 'dm'}
-        <time class="bubble-when">{clock(msg.createdAt)}{msg.editedAt ? ' · edited' : ''}</time>
-        {#if mineMsg(msg) && !msg.pending && !msg.failed}
-          <span class="ticks" aria-label="Sent"><Check size={13} /></span>
-        {/if}
-      {/if}
     </article>
     {/if}
     {/if}

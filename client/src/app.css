@@ -2635,6 +2635,12 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .empty-act { width: auto; min-width: 120px; margin-top: 8px; background: #f97316; }
 .dm-empty { padding-top: 18px; }
 .friend-hit { cursor: pointer; }
+.dock-body.dock-fill { padding: 0; gap: 0; overflow: hidden; }
+.dock .inbox-panel {
+  position: static; left: auto; right: auto; top: auto; bottom: auto;
+  width: 100%; max-height: none; flex: 1; min-height: 0; z-index: auto;
+  background: transparent; border: 0; border-radius: 0; box-shadow: none;
+}
 .inbox-anchor { position: relative; }
 .inbox-anchor .inbox-pop {
   position: absolute; top: calc(100% + 8px); right: 0; left: auto; bottom: auto;

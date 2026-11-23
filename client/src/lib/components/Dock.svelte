@@ -7,6 +7,7 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import Attachment from './Attachment.svelte';
+  import Inbox from './Inbox.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
@@ -28,6 +29,7 @@
   const title = $derived(
     ui.dock === 'pins' ? 'Pinned messages'
       : ui.dock === 'media' ? 'Media'
+        : ui.dock === 'inbox' ? 'Inbox'
         : ui.dock === 'search' ? 'Search'
           : ui.dock === 'threads' ? 'Threads'
             : ui.dock === 'group' ? 'Group details'
@@ -53,7 +55,7 @@
 
   async function load() {
     const kind = ui.dock;
-    if (!kind || kind === 'profile' || kind === 'group') return;
+    if (!kind || kind === 'profile' || kind === 'group' || kind === 'inbox') return;
     try {
       if (kind === 'pins') {
         const data = await api('/api/room/pins?' + roomQuery());
@@ -188,8 +190,10 @@
     <button class="btn icon" title="Close" onclick={() => (ui.dock = '')}><X size={16} /></button>
   </div>
   {/if}
-  <div class="dock-body">
-    {#if ui.dock === 'pins'}
+  <div class="dock-body" class:dock-fill={ui.dock === 'inbox'}>
+    {#if ui.dock === 'inbox'}
+      <Inbox panel />
+    {:else if ui.dock === 'pins'}
       {#if pins.length}
         {#each pins as msg (msg.id)}
           <article class="dock-card">
