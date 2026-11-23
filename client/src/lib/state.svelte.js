@@ -264,10 +264,18 @@ async function enterApp() {
   await openSharedLink();
   if (pollTimer) clearInterval(pollTimer);
   let dmPollBusy = false;
+  let quietSkips = 0;
   pollTimer = setInterval(() => {
     if (dmPollBusy || !localStorage.getItem('dc_token') || document.hidden) return;
+    // New messages, typing, and calls already arrive on the gateway. This timer is only a backup.
+    if (gatewayReady()) {
+      quietSkips += 1;
+      if (quietSkips < 5) return;
+    }
+    quietSkips = 0;
     dmPollBusy = true;
-    pollActivity().then(() => loadDms()).finally(() => { dmPollBusy = false; });
+    const live = gatewayReady();
+    pollActivity().then((changed) => { if (!live || changed) return loadDms(); }).finally(() => { dmPollBusy = false; });
   }, 4000);
   watchChat();
   startClocks();
@@ -792,15 +800,28 @@ export async function loadGroups() {
   } catch (_) {}
 }
 
+let seenUploaded = '';
+let activityListSig = '';
+
+function seenStamp() {
+  try { return localStorage.getItem(accountKey('nebula-seen')) || '{}'; }
+  catch { return '{}'; }
+}
+
 export async function loadDms() {
   const serial = ++dmSerial;
   hydrateClosed();
   try {
     const seen = seenMap();
+    const stamp = seenStamp();
     const seeded = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     let data;
     try {
-      data = await api('/api/dms', { method: 'POST', body: { seen, seeded, client: readClientId } });
+      if (stamp === seenUploaded) data = await api('/api/dms');
+      else {
+        data = await api('/api/dms', { method: 'POST', body: { seen, seeded, client: readClientId } });
+        seenUploaded = stamp;
+      }
     } catch (_) {
       data = await api('/api/dms');
     }
@@ -3547,10 +3568,11 @@ export async function pollActivity() {
   const serial = ++activitySerial;
   try {
     const sentSeen = seenMap();
-    const data = await api('/api/activity', {
-      method: 'POST',
-      body: { seen: sentSeen, seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1', client: readClientId },
-    });
+    const stamp = seenStamp();
+    const body = { seeded: localStorage.getItem(accountKey('nebula-dm-baseline')) === '1', client: readClientId };
+    if (stamp !== seenUploaded) body.seen = sentSeen;
+    const data = await api('/api/activity', { method: 'POST', body });
+    if (body.seen) seenUploaded = stamp;
     const calls = data.calls || {};
     const ringing = (calls.incoming || []).filter((call) => !call.at || Date.now() - Number(call.at) < 22000);
     ui.incomingCall = ringing[0] || null;
@@ -3697,8 +3719,13 @@ export async function pollActivity() {
         warmDm(id);
       }
     }
+    const listSig = JSON.stringify({ heads: data.heads || {}, dms: data.dms || {} });
+    const listChanged = listSig !== activityListSig;
+    activityListSig = listSig;
+    return listChanged;
   } catch (err) {
     if (err && err.status === 404) activityMissing = true;
+    return false;
   }
 }
 
