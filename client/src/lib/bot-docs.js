@@ -1,4 +1,4 @@
-// Nebula Bot API 1.0.0. Field notes match server.js and sdk/nebula.js.
+// Nebula Bot API 1.1.0. Field notes match server.js and sdk/nebula.js.
 
 export const toc = [
   { kind: 'link', id: 'dev-overview', text: 'Overview' },
@@ -20,6 +20,15 @@ export const toc = [
   { kind: 'link', id: 'ep-channel', text: 'GET /channels/:id' },
   { kind: 'link', id: 'ep-history', text: 'GET messages' },
   { kind: 'link', id: 'ep-send', text: 'POST messages' },
+  { kind: 'link', id: 'ep-server', text: 'GET /servers/:id' },
+  { kind: 'link', id: 'ep-members', text: 'Members' },
+  { kind: 'link', id: 'ep-roles', text: 'Roles' },
+  { kind: 'link', id: 'ep-mod', text: 'Kick, ban, timeout' },
+  { kind: 'link', id: 'ep-voice', text: 'Voice' },
+  { kind: 'link', id: 'ep-make-channel', text: 'Create a channel' },
+  { kind: 'link', id: 'ep-threads', text: 'Threads' },
+  { kind: 'link', id: 'ep-react', text: 'Reactions' },
+  { kind: 'link', id: 'ep-hooks', text: 'Webhooks' },
   { kind: 'label', text: 'More' },
   { kind: 'link', id: 'dev-account', text: 'Account API' },
   { kind: 'link', id: 'dev-events', text: 'Events' },
@@ -44,6 +53,12 @@ export const channelObject = [
   ['name', 'string', 'Channel name without the #.'],
   ['type', 'string', 'text or voice. Voice channels reject new messages.'],
   ['server_id', 'string', 'Server that owns the channel.'],
+  ['topic', 'string', 'Channel topic. Empty when unset.'],
+  ['category_id', 'string or null', 'Category id, or null.'],
+  ['private', 'boolean', 'Hidden from people without an overwrite.'],
+  ['read_only', 'boolean', 'Text channels that reject new messages unless the sender can manage channels.'],
+  ['slowmode', 'number', 'Seconds between messages. 0 means off. Maximum 21600.'],
+  ['stage', 'boolean', 'Voice channels where listeners join muted.'],
 ];
 
 export const historyMessage = [
@@ -68,6 +83,8 @@ export const embedObject = [
   ['description', 'string', 'Up to 2000 characters. Optional.'],
   ['url', 'string', 'Optional http or https link, up to 500 characters. Other schemes are dropped.'],
   ['color', 'string or number', 'Send #rrggbb or a number such as 12615932. The stored value is a number. 0 means no custom bar.'],
+  ['fields', 'array', 'Up to 6. Each field needs name and value. inline sits them in a row.'],
+  ['footer', 'object or string', 'Send { text }. The stored value is that text, up to 200 characters.'],
 ];
 
 export const commandObject = [
@@ -77,7 +94,7 @@ export const commandObject = [
 
 export const eventEnvelope = [
   ['id', 'number', 'Increases by 1 for each event on this server process. Send it back as after.'],
-  ['type', 'string', 'message, member_join, server_add, server_remove, or test.'],
+  ['type', 'string', 'message, message_update, message_delete, member_join, member_leave, reaction_add, reaction_remove, server_add, server_remove, or test.'],
   ['data', 'object', 'Payload for that type. Listed under Events.'],
   ['created_at', 'string', 'ISO time on the server.'],
 ];
@@ -85,8 +102,21 @@ export const eventEnvelope = [
 export const sdkRows = [
   ['new Bot(token, opts)', 'token is the nb_ string. Empty reads NEBULA_BOT_TOKEN. The default API is https://scowling-anthill-civil.ngrok-free.dev/api/bot/v1. opts.api replaces that. opts.log set to false hides the online line. NEBULA_API_URL and NEBULA_API also replace the base URL.'],
   ['bot.command(name, description, fn)', 'Registers /name and !name. A second call with the same name replaces the first. fn receives the message. Returns the bot.'],
-  ['bot.on(event, fn)', 'Adds a listener. Events: message, member_join, server_add, server_remove, test, ready, error. Returns the bot.'],
+  ['bot.on(event, fn)', 'Adds a listener. Events: message, message_update, message_delete, member_join, member_leave, reaction_add, reaction_remove, server_add, server_remove, test, ready, error. Returns the bot.'],
   ['bot.send(channelId, text, opts)', 'POST /channels/:id/messages. opts.replyTo becomes reply_to. opts.embeds is copied through. Returns the message object.'],
+  ['bot.server(id) / bot.members(id, after?) / bot.member(id, userId)', 'One server, a page of members, or one member with roles and nickname.'],
+  ['bot.roles / bot.createRole / bot.addRole / bot.removeRole / bot.deleteRole', 'List, create, give, take, and delete roles. Needs Manage Roles. permissions is a number or { view_channel, send_messages, manage_channels, manage_roles, create_invite, manage_server, administrator }.'],
+  ['bot.kick / bot.ban / bot.unban / bot.bans / bot.timeout', 'Needs Manage Server. timeout minutes 0 clears it. 40320 minutes is 28 days.'],
+  ['bot.setNickname(server, user, nick)', 'Needs Manage Server. An empty nick clears it.'],
+  ['bot.channels / bot.channel / bot.createChannel / bot.editChannel / bot.deleteChannel', 'Channels the bot can see. Creating and editing needs Manage Channels. createChannel(server, name, { type, private, readOnly, slowmode, categoryId, stage }).'],
+  ['bot.createCategory / bot.deleteCategory', 'Manage Channels. Deleting a category leaves its channels in place.'],
+  ['bot.messages / bot.message / bot.edit / bot.delete / bot.bulkDelete', 'Read, edit the bot’s own message, delete (its own, or anyone’s with Manage Channels), or delete up to 100 ids.'],
+  ['bot.pin / bot.unpin / bot.react / bot.unreact / bot.reactions', 'Pin needs Manage Channels. react takes a unicode emoji.'],
+  ['bot.threads / bot.createThread', 'List threads, or start one with { content }. content is the first message.'],
+  ['bot.voice(serverId)', 'Who is in voice: [{ channel_id, user_ids }].'],
+  ['bot.invites(serverId)', 'Invite codes the bot is allowed to see.'],
+  ['bot.user(id)', 'Public profile of someone who shares a server with the bot.'],
+  ['bot.webhooks / bot.createWebhook / bot.deleteWebhook', 'Needs Manage Channels. createWebhook returns the secret url once.'],
   ['bot.setProfile({ displayName, bio })', 'PATCH /me. Omitted fields stay as they are. Returns the bot object and stores it on bot.me.'],
   ['bot.setAvatar(file)', 'PUT /me/avatar. file is a path string or raw bytes. Returns the bot object.'],
   ['bot.servers()', 'GET /servers. Returns the servers array, not the wrapper object.'],
@@ -106,10 +136,10 @@ export function botEndpoints(base) {
       method: 'GET',
       path: base + '/version',
       auth: 'No token.',
-      summary: 'Reports the API version. Also sets the response header X-Nebula-API-Version to 1.0.0. Every other bot route sets that header too.',
+      summary: 'Reports the API version. Also sets the response header X-Nebula-API-Version to 1.1.0. Every other bot route sets that header too.',
       response: `{
-  "api": "1.0.0",
-  "sdk": { "js": "1.0.0" }
+  "api": "1.1.0",
+  "sdk": { "js": "1.1.0" }
 }`,
     },
     {
@@ -326,6 +356,78 @@ export function botEndpoints(base) {
         ['429', 'rate_limited', '30 messages a minute for this bot, or the channel slowmode has not elapsed.'],
       ],
     },
+    {
+      id: 'ep-server',
+      method: 'GET',
+      path: base + '/servers/:id',
+      auth: 'Authorization: Bot <token>',
+      summary: 'One server the bot is in: id, name, member_count, icon. GET /servers/:id/counts returns member_count only.',
+      errors: [['404', 'not_found', 'The bot is not in that server.']],
+    },
+    {
+      id: 'ep-members',
+      method: 'GET',
+      path: base + '/servers/:id/members',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Members sorted by id, 100 a page, up to 200 with limit. Pass the last id as after. GET /servers/:id/members/:uid is one member. PATCH that path with { nickname } needs Manage Server.',
+    },
+    {
+      id: 'ep-roles',
+      method: 'GET',
+      path: base + '/servers/:id/roles',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Roles, highest first. POST creates one. PATCH /roles/:rid edits name, color, or permissions. DELETE removes it. PUT /members/:uid/roles/:rid gives a role. DELETE that path takes it away. Creating, editing, and assigning need Manage Roles.',
+    },
+    {
+      id: 'ep-mod',
+      method: 'POST',
+      path: base + '/servers/:id/kick',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Body { user_id }. Also POST /bans with { user_id, reason }, GET /bans, DELETE /bans/:uid, and POST /timeouts with { user_id, minutes }. All need Manage Server. Owners cannot be kicked or banned.',
+    },
+    {
+      id: 'ep-voice',
+      method: 'GET',
+      path: base + '/servers/:id/voice',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Who is in voice right now: { voice: [{ channel_id, user_ids }] } for channels the bot can see.',
+    },
+    {
+      id: 'ep-make-channel',
+      method: 'POST',
+      path: base + '/servers/:id/channels',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Creates a channel. Body { name, type: "text" or "voice", topic, category_id, private, read_only, slowmode, stage }. PATCH /channels/:id edits those fields. DELETE /channels/:id removes it. POST /servers/:id/categories { name } and DELETE /servers/:id/categories/:cid. Needs Manage Channels.',
+    },
+    {
+      id: 'ep-threads',
+      method: 'GET',
+      path: base + '/channels/:id/threads',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Threads in a text channel. POST { name, content, private } starts one. content is the first message and is required.',
+    },
+    {
+      id: 'ep-react',
+      method: 'PUT',
+      path: base + '/channels/:id/messages/:mid/reactions/:emoji',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Adds the bot’s reaction. DELETE the same path removes it. GET /channels/:id/messages/:mid/reactions lists them. GET, PATCH, and DELETE /channels/:id/messages/:mid read, edit, or delete one message. POST /messages/bulk-delete takes { ids } up to 100. PUT and DELETE .../pin pin or unpin. Editing is only the bot’s own message. Deleting someone else’s, bulk delete, and pins need Manage Channels.',
+    },
+    {
+      id: 'ep-hooks',
+      method: 'GET',
+      path: base + '/channels/:id/webhooks',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Webhooks in a channel, without their tokens. POST { name } creates one and returns the secret url once. DELETE /webhooks/:id removes one the bot made, or any in a channel it can manage. Needs Manage Channels. Posting still uses POST /api/webhooks/:id/:token on the account host, not this bot prefix.',
+    },
+    {
+      id: 'ep-user',
+      method: 'GET',
+      path: base + '/users/:id',
+      auth: 'Authorization: Bot <token>',
+      summary: 'Public profile of someone who shares a server with the bot: id, username, display_name, bot, avatar_url.',
+      errors: [['404', 'not_found', 'No such user, or the bot does not share a server with them.']],
+    },
   ];
 }
 
@@ -472,6 +574,29 @@ export const events = [
     ],
   },
   {
+    type: 'message_update',
+    text: 'Someone edited a message the bot can see. The bot’s own edits and webhook edits are not sent.',
+    fields: [
+      ['object', 'string', 'message'],
+      ['id', 'string', 'Message id.'],
+      ['channel_id', 'string', 'Channel id.'],
+      ['server_id', 'string', 'Server id.'],
+      ['author_id', 'string', 'Who edited it.'],
+      ['content', 'string', 'The text after the edit. Empty when the message is sealed.'],
+    ],
+  },
+  {
+    type: 'message_delete',
+    text: 'A message the bot could see was deleted. The text is not included.',
+    fields: [
+      ['object', 'string', 'message'],
+      ['id', 'string', 'Deleted message id.'],
+      ['channel_id', 'string', 'Channel id.'],
+      ['server_id', 'string', 'Server id.'],
+      ['author_id', 'string', 'Who wrote it.'],
+    ],
+  },
+  {
     type: 'member_join',
     text: 'A person joined a server the bot is in. Other bots joining do not fire this. The joining bot does not receive it for itself.',
     fields: [
@@ -482,6 +607,33 @@ export const events = [
       ['username', 'string', 'Their username, without @.'],
       ['display_name', 'string', 'Name shown in the member list.'],
       ['member_count', 'number', 'Members after they joined, including bots.'],
+    ],
+  },
+  {
+    type: 'member_leave',
+    text: 'A person left a server the bot is in, or was kicked or banned. The leaving bot does not receive this for itself. A kicked or banned bot gets server_remove instead.',
+    fields: [
+      ['object', 'string', 'member'],
+      ['server_id', 'string', 'Server they left.'],
+      ['server_name', 'string', 'That server’s name.'],
+      ['user_id', 'string', 'Their account id.'],
+      ['username', 'string', 'Their username.'],
+      ['display_name', 'string', 'Name shown in the member list.'],
+      ['member_count', 'number', 'Members after they left.'],
+    ],
+  },
+  {
+    type: 'reaction_add',
+    text: 'Someone reacted in a channel the bot can see. reaction_remove is the same object when they take it off.',
+    fields: [
+      ['object', 'string', 'reaction'],
+      ['message_id', 'string', 'Message they reacted to.'],
+      ['channel_id', 'string', 'Channel id.'],
+      ['server_id', 'string', 'Server id.'],
+      ['user_id', 'string', 'Who reacted.'],
+      ['username', 'string', 'Their username.'],
+      ['emoji', 'string', 'The emoji.'],
+      ['added', 'boolean', 'True on reaction_add, false on reaction_remove.'],
     ],
   },
   {

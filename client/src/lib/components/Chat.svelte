@@ -1633,6 +1633,14 @@
           <div class="hook-embed" style:border-color={embed.color ? '#' + embed.color.toString(16).padStart(6, '0') : ''}>
             {#if embed.title}<strong>{embed.title}</strong>{/if}
             {#if embed.description}<p>{embed.description}</p>{/if}
+            {#if embed.fields?.length}
+              <div class="hook-fields">
+                {#each embed.fields as field, fieldIndex (`${msg.id}-field-${index}-${fieldIndex}`)}
+                  <div><strong>{field.name}</strong><p>{field.value}</p></div>
+                {/each}
+              </div>
+            {/if}
+            {#if embed.footer}<span class="hook-foot">{embed.footer}</span>{/if}
             {#if embed.url}<a href={embed.url} target="_blank" rel="noopener noreferrer">{embed.url}</a>{/if}
           </div>
         {/each}

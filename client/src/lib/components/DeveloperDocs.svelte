@@ -110,7 +110,7 @@
     <button type="button" class="btn sm" onclick={onback}>Back</button>
   {/if}
   <header class="devdocs-head">
-    <p class="devdocs-kicker">Bot API 1.0.0</p>
+    <p class="devdocs-kicker">Bot API 1.1.0</p>
     <h2>Nebula bot documentation</h2>
     <p>Everything a bot can call. The bot HTTP API lives at <code>{apiBase}</code>. Your own account, used by Settings, lives at <code>{origin}/api</code> and uses a session instead of a bot token.</p>
   </header>
@@ -131,6 +131,7 @@
         <h3>Overview</h3>
         <p>A bot is its own account. Your code holds the token and talks to Nebula over HTTPS. Nebula does not host the process. The program keeps a long poll open, receives events, and posts messages back. Closing the terminal stops the bot.</p>
         <p>A bot only sees servers it was added to, and only channels that server lets it see. It cannot sign in on the website. Its own messages are not sent back to it. Webhook messages are not sent to it either. Two bots per account. 25 bots per server. 100 commands per bot. 30 messages a minute per bot.</p>
+        <p>From code a bot can post and edit messages, send embed cards, react, pin, read who is in voice, open threads, create channels and categories, give roles, change nicknames, kick, ban, and time people out. Those actions use the same permissions a member would: Manage Channels, Manage Roles, or Manage Server. There is no gateway socket, no hosted bot process, and no site login for other apps. Events arrive by polling <code>GET /events</code>.</p>
         <p>Download <a href="{site}/sdk/nebula.js" target="_blank" rel="noopener">nebula.js</a>, <a href="{site}/sdk/starter.js" target="_blank" rel="noopener">starter.js</a>, <a href="{site}/sdk/welcome.js" target="_blank" rel="noopener">welcome.js</a>, and <a href="{site}/sdk/package.json" target="_blank" rel="noopener">package.json</a>. You need Node 18 or newer. <code>package.json</code> sets <code>"type": "module"</code>, which is what the <code>import</code> needs.</p>
       </section>
 
@@ -144,7 +145,7 @@
   "error": "The bot cannot send messages there",
   "code": "missing_permission"
 }`)}
-        <p>Every bot response includes <code>X-Nebula-API-Version: 1.0.0</code>.</p>
+        <p>Every bot response includes <code>X-Nebula-API-Version: 1.1.0</code>.</p>
       </section>
 
       <section id="dev-start">
@@ -264,6 +265,8 @@
           <li>4 embeds per message. A channel keeps the newest 500 messages.</li>
           <li>Event polls return at most 100 events. <code>wait</code> cannot be longer than 25 seconds.</li>
           <li>Avatar files are PNG, JPG, GIF, or WebP, up to 8 MB.</li>
+          <li>Kick, ban, timeout, and nicknames need Manage Server. Roles need Manage Roles. Channels, pins, bulk delete, and webhooks need Manage Channels. Named permission keys are <code>view_channel</code>, <code>send_messages</code>, <code>manage_channels</code>, <code>manage_roles</code>, <code>create_invite</code>, <code>manage_server</code>, and <code>administrator</code>.</li>
+          <li>Bulk delete takes at most 100 ids. A channel can have 10 webhooks. Embed fields are 6 per card, each value up to 1024 characters.</li>
         </ul>
       </section>
     </div>

@@ -3143,6 +3143,10 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .hook-embed strong, .hook-embed p, .hook-embed a { display: block; }
 .hook-embed p { margin: 4px 0 0; white-space: pre-wrap; }
 .hook-embed a { margin-top: 4px; color: #00a8fc; word-break: break-all; }
+.hook-fields { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; }
+.hook-fields div { min-width: 120px; }
+.hook-fields p { margin: 2px 0 0; }
+.hook-foot { display: block; margin-top: 8px; color: var(--faint); font-size: 12px; }
 @media (max-width: 720px) {
   .ched-perm { grid-template-columns: 1fr; }
   .ched-row { align-items: flex-start; flex-direction: column; }
