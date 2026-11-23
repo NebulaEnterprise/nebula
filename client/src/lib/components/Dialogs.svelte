@@ -1,7 +1,6 @@
 <script>
   import { Hash, Lock, MessageSquare, Volume2, VolumeX, X } from '@lucide/svelte';
   import ChannelEditor from './ChannelEditor.svelte';
-  import Events from './Events.svelte';
   import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
@@ -14,7 +13,6 @@
   let code = $state('');
   let invites = $state([]);
   let vanity = $state('');
-  let events = $state([]);
   let pingRoles = $state([]);
   let mine = $state(new Set());
   let busy = $state(false);
@@ -84,7 +82,6 @@
 
   $effect(() => {
     if (kind === 'invite') loadInvites();
-    if (kind === 'events') loadEvents();
     if (kind === 'pings') loadPings();
     if ((kind === 'channel' || kind === 'discussion')) {
       const token = kind + ':' + (ui.dialog?.voice ? 'voice' : 'text') + ':' + (ui.dialog?.channelId || '');
@@ -115,13 +112,6 @@
       invites = data.invites || [];
       vanity = data.vanity || '';
     } catch (err) { toast(err.message); ui.dialog = null; }
-  }
-  async function loadEvents() {
-    try {
-      const data = await api('/api/servers/' + ui.serverId + '/settings');
-      events = data.settings?.events || [];
-      ui.events = events.filter((ev) => ev.status !== 'cancelled');
-    } catch (err) { toast(err.message); }
   }
   async function loadPings() {
     try {
@@ -206,13 +196,11 @@
   </div>
 {:else}
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} class:event-sheet={kind === 'events'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
-    {#if kind !== 'events'}
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
         {:else if kind === 'invite'}Invite people
-        {:else if kind === 'events'}Events
         {:else if kind === 'channel' || kind === 'discussion'}Create channel
         {:else if kind === 'category'}Create category
         {:else if kind === 'lock'}Lock server
@@ -234,7 +222,6 @@
       </h3>
       {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
     </div>
-    {/if}
     <div class="body">
       {#if kind === 'group'}
         {#if groupStep === 1}
@@ -328,9 +315,6 @@
           toast('Copied');
           close();
         })}>Copy invite link</button>
-
-      {:else if kind === 'events'}
-        <Events />
 
       {:else if kind === 'channel' || kind === 'discussion'}
         <p class="create-where">in {channelPlace}</p>

@@ -1,8 +1,8 @@
 <script>
   import {
     ChevronDown, Hash, Volume2, Plus, UserPlus, Settings, LogOut, Search, X, MessageSquare,
-    Link, Calendar, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
-    MicOff, PhoneOff, Home,
+    Link, Megaphone, FolderPlus, Lock, Bell, AtSign, Pencil, BellOff, Flag, Trash2,
+    MicOff, PhoneOff,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
@@ -55,7 +55,6 @@
     if (!ownsServer) {
       const list = [
         { act: 'invite', label: 'Invite people', icon: Link },
-        { act: 'events', label: 'Events', icon: Calendar },
         { act: 'notify', label: 'Notification settings', icon: Bell },
         { act: 'nick', label: 'Change Nickname', icon: Pencil },
         { act: 'server-profile', label: 'Edit Server Profile', icon: UserPlus },
@@ -69,7 +68,6 @@
     const manage = hasPerm(PERM.MANAGE_SERVER);
     const channels = hasPerm(PERM.MANAGE_CHANNELS);
     if (hasPerm(PERM.INVITE)) list.push({ act: 'invite', label: 'Invite people', icon: Link });
-    list.push({ act: 'events', label: 'Events', icon: Calendar });
     if (manage) list.push({ act: 'settings', label: 'Server settings', icon: Settings });
     if (hasPerm(PERM.INVITE)) list.push({ act: 'promote', label: 'Promote server', icon: Megaphone });
     if (channels) list.push({ act: 'channel', label: 'Create channel', icon: Hash });
@@ -85,7 +83,6 @@
   });
 
   function onVoice(ch) {
-    ui.lobbyOpen = false;
     ui.voiceStage = { id: ch.id, name: ch.name };
     joinVoice(ch);
   }
@@ -192,14 +189,11 @@
 
 <aside class="side" class:inbox-side={ui.mode !== 'chat'}>
   {#if ui.mode === 'chat'}
-    <div class="side-top">
     <button class="side-head title" class:open={ui.menuOpen} onclick={() => (ui.menuOpen = !ui.menuOpen)} oncontextmenu={(e) => openIdMenu(e, [{ label: 'Server ID', value: ui.serverId }])}>
       <span>{ui.serverMeta?.name || 'Server'}</span>
       {#if serverMuted()}<em class="muted-pill">Muted</em>{/if}
       <ChevronDown size={18} />
     </button>
-    <button type="button" class="side-cal" title="Events" onclick={() => (ui.dialog = { kind: 'events' })}><Calendar size={18} /></button>
-    </div>
     {#if ui.menuOpen}
       <div class="menu">
         {#each items as item, i}
@@ -225,12 +219,6 @@
           </a>
         {/each}
       </div>
-    {/if}
-    {#if ui.showLobby || hasPerm(PERM.MANAGE_SERVER)}
-      <button type="button" class="channel lobby-jump" class:on={ui.lobbyOpen} onclick={() => { ui.lobbyOpen = true; ui.menuOpen = false; phoneChat(); }}>
-        <Home size={16} />
-        <span class="ch-name">Lobby</span>
-      </button>
     {/if}
     <div class="scroll" oncontextmenu={(e) => { if (e.target === e.currentTarget) openChannelMenu(e); }}>
       {#each groups as cat}

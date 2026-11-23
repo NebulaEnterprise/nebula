@@ -215,7 +215,6 @@
     </div>
   {:else}
     <div class="event-empty">
-      <button type="button" class="btn icon event-x" title="Close" onclick={() => (ui.dialog = null)}><X size={16} /></button>
       {#if events.length}
         <div class="event-list">
           {#each events as ev (ev.id)}

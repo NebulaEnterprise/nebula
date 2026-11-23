@@ -61,8 +61,6 @@ export const ui = $state({
   showLobby: false,
   links: [],
   events: [],
-  lobby: null,
-  lobbyOpen: false,
   rulesChannelId: '',
   emoji: [],
   stickers: [],
@@ -1325,9 +1323,7 @@ export async function openServer(id, opts = {}) {
   ui.showLobby = !!data.showLobby;
   ui.links = data.links || [];
   ui.events = data.events || [];
-  ui.lobby = data.lobby || null;
   ui.rulesChannelId = data.rulesChannelId || '';
-  if (id && id !== fromServer) ui.lobbyOpen = false;
   ui.emoji = data.emoji || [];
   ui.stickers = data.stickers || [];
   ui.onboarding = data.onboarding || null;
@@ -1389,8 +1385,6 @@ function snapServer(id) {
     showLobby: ui.showLobby,
     links: (ui.links || []).slice(),
     events: (ui.events || []).slice(),
-    lobby: ui.lobby,
-    lobbyOpen: ui.lobbyOpen,
     rulesChannelId: ui.rulesChannelId,
     emoji: ui.emoji.slice(),
     stickers: ui.stickers.slice(),
@@ -1414,8 +1408,6 @@ function restoreServer(id) {
   ui.showLobby = snap.showLobby;
   ui.links = (snap.links || []).slice();
   ui.events = (snap.events || []).slice();
-  ui.lobby = snap.lobby;
-  ui.lobbyOpen = !!snap.lobbyOpen;
   ui.rulesChannelId = snap.rulesChannelId || '';
   ui.emoji = snap.emoji.slice();
   ui.stickers = snap.stickers.slice();
@@ -1583,7 +1575,6 @@ export async function openVoiceRoom(voiceChannel) {
 
 export function pickChannel(ch) {
   if (!ch || ch.type !== 'text') return;
-  ui.lobbyOpen = false;
   ui.voiceStage = null;
   phoneChat();
   if (ch.id === ui.channelId && ui.mode === 'chat') return;

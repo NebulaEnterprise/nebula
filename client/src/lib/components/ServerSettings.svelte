@@ -1,13 +1,13 @@
 <script>
   import {
-    X, Search, Image, Palette, Hash, Home, Smile, Sticker, UserRound, Bell, Shield,
+    X, Search, Image, Palette, Hash, Calendar, Smile, Sticker, UserRound, Bell, Shield,
     Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, Webhook, DoorOpen, Plus, ChevronLeft,
     ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal, GripVertical,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
   import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel } from '../state.svelte.js';
-  import LobbyEditor from './LobbyEditor.svelte';
+  import Events from './Events.svelte';
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
   import { readSmallImage } from '../image.js';
@@ -22,7 +22,7 @@
       { id: 'channels', label: 'Channels', icon: Hash, keys: 'category reorder text voice' },
     ]},
     { label: 'Community', pages: [
-      { id: 'lobby', label: 'Lobby', icon: Home, keys: 'about welcome' },
+      { id: 'events', label: 'Events', icon: Calendar, keys: 'event calendar game night' },
       { id: 'emoji', label: 'Emoji', icon: Smile, keys: 'emojis upload' },
       { id: 'stickers', label: 'Stickers', icon: Sticker, keys: 'sticker upload' },
       { id: 'onboarding', label: 'Onboarding', icon: UserRound, keys: 'questions starting channel' },
@@ -54,7 +54,6 @@
   let accent = $state(ui.settings?.theme?.accent || ui.settings?.color || '#7c6af7');
   let tint = $state(ui.settings?.theme?.tint || '');
   let about = $state(ui.settings?.about || '');
-  let showLobby = $state(!!ui.settings?.showLobby);
   let discover = $state(ui.settings?.discover === true);
   let iconUrl = $state('');
   let bannerUrl = $state('');
@@ -749,8 +748,8 @@
             {/each}
           </section>
 
-        {:else if ui.settingsPage === 'lobby'}
-          <LobbyEditor />
+        {:else if ui.settingsPage === 'events'}
+          <Events />
 
         {:else if ui.settingsPage === 'emoji' || ui.settingsPage === 'stickers'}
           {@const list = ui.settingsPage === 'emoji' ? (s.emoji || []) : (s.stickers || [])}

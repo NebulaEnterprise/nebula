@@ -1,5 +1,5 @@
 <script>
-  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, AudioLines, Scissors, Volume2, Square, Home } from '@lucide/svelte';
+  import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, AudioLines, Scissors, Volume2, Square } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
@@ -10,7 +10,6 @@
   import { seenPhrase } from '../seen.js';
   import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
-  import Lobby from './Lobby.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
@@ -204,7 +203,7 @@
     ui.mode === 'dm' ? (ui.dmUser?.displayName || ui.dmUser?.username || 'Message')
       : ui.mode === 'group' ? (ui.group?.name || 'Group')
         : ui.mode === 'thread' ? (ui.thread?.name || 'Thread')
-          : ui.lobbyOpen ? 'Lobby' : (voiceChat?.name || channel?.name || 'channel')
+          : (voiceChat?.name || channel?.name || 'channel')
   );
 
   let holdTimer = 0;
@@ -1318,13 +1317,11 @@
 </script>
 
 <div class="chat-frame">
-<div class="chat-col" class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard} class:lobby-on={ui.lobbyOpen}>
+<div class="chat-col" class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
 <div class="top" class:dm-bar={ui.mode === 'dm'}>
   <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}
     <button class="crumb" title="Back to channel" onclick={leaveThread}><ChevronLeft size={16} /> #{ui.thread?.channelName || channel?.name || 'channel'}</button>
-  {:else if ui.lobbyOpen}
-    <Home size={18} />
   {:else if ui.mode !== 'dm' && ui.mode !== 'group'}
     <Hash size={18} />
   {/if}
@@ -1344,8 +1341,6 @@
     <h2>{titleName}</h2>
     {#if ui.mode === 'group'}
       <span class="topic">{ui.group?.memberCount || (ui.group?.members || []).length || 0} members</span>
-    {:else if ui.lobbyOpen}
-      <span class="topic">{ui.serverMeta?.name || ''}</span>
     {:else if ui.mode !== 'thread'}
       <span class="topic">{voiceChat ? 'Voice chat' : (channel?.topic || '')}</span>
     {:else}
@@ -1519,9 +1514,7 @@
   </div>
 {/if}
 <div class="messages" bind:this={box} onscroll={trackScroll}>
-  {#if ui.lobbyOpen}
-    <Lobby />
-  {:else if ui.chatLoading && !ui.messages.length}
+  {#if ui.chatLoading && !ui.messages.length}
     <div class="skel-list" aria-hidden="true">
       {#each [78, 64, 86, 58, 72, 48] as width}
         <div class="skel">
