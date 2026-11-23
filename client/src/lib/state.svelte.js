@@ -1733,7 +1733,7 @@ async function applySocketMessage(type, data) {
   if (type === 'MESSAGE_UPDATE') {
     if (idx < 0) return;
     const next = ui.messages.slice();
-    next[idx] = message;
+    next[idx] = keepLocalMedia(ui.messages[idx], message);
     ui.messages = repairReplies(next);
     rememberLog(logKey, ui.messages);
     noteOpenDm(ui.messages);
@@ -1747,7 +1747,7 @@ async function applySocketMessage(type, data) {
   if (localIdx >= 0) {
     const prev = ui.messages[localIdx];
     const next = ui.messages.slice();
-    next[localIdx] = { ...carryLook(prev, message), clientKey: prev.clientKey || prev.id, pending: false, failed: false };
+    next[localIdx] = { ...keepLocalMedia(prev, carryLook(prev, message)), clientKey: prev.clientKey || prev.id, pending: false, failed: false };
     ui.messages = next.filter((msg, i) => i === localIdx || msg.id !== message.id);
     if (mine) {
       if (message.author && message.author.id) ui.typers = ui.typers.filter((row) => String(row.id) !== String(message.author.id));
@@ -2183,6 +2183,28 @@ function carryLook(prev, message) {
   };
 }
 
+function keepLocalMedia(prev, message) {
+  if (!prev || !message) return message;
+  const prevFiles = Array.isArray(prev.files) ? prev.files : [];
+  const nextFiles = Array.isArray(message.files) ? message.files : [];
+  if (!nextFiles.length) return prevFiles.length ? { ...message, files: prevFiles } : message;
+  const files = nextFiles.map((file, index) => {
+    const local = prevFiles[index];
+    if (!local) return file;
+    const voice = !!(local.voice || local.kind === 'audio' || file.voice || file.kind === 'audio');
+    const next = { ...file };
+    if (String(local.url || '').startsWith('blob:')) next.localUrl = local.localUrl || local.url;
+    else if (local.localUrl) next.localUrl = local.localUrl;
+    if (voice) {
+      next.kind = 'audio';
+      next.voice = 1;
+      next.name = 'Voice message';
+    }
+    return next;
+  });
+  return { ...message, files };
+}
+
 function settleSent(tempId, message) {
   const next = ui.messages.slice();
   let idx = next.findIndex((msg) => msg && (msg.id === tempId || msg.clientKey === tempId || msg.id === message.id));
@@ -2191,7 +2213,7 @@ function settleSent(tempId, message) {
   } else {
     const prev = next[idx];
     const key = prev.clientKey || tempId || prev.id;
-    next[idx] = { ...carryLook(prev, message), clientKey: key, pending: false, failed: false };
+    next[idx] = { ...keepLocalMedia(prev, carryLook(prev, message)), clientKey: key, pending: false, failed: false };
     ui.messages = next.filter((msg, i) => i === idx || (msg.id !== message.id && msg.id !== tempId && msg.clientKey !== key));
   }
   ui.messages = repairReplies(ui.messages);
@@ -2753,6 +2775,7 @@ export async function sendFiles(list) {
       name: String(item.name || item.file?.name || 'file').slice(0, 80),
       alt: String(item.alt || '').slice(0, 300),
       spoiler: !!item.spoiler,
+      voice: !!item.voice || item.name === 'Voice message',
     };
   }).filter((item) => item.file);
   if (!files.length) return false;
@@ -2769,7 +2792,8 @@ export async function sendFiles(list) {
     name: item.name,
     alt: item.alt,
     spoiler: item.spoiler,
-    kind: fileKind(item.file),
+    kind: item.voice || item.name === 'Voice message' || fileKind(item.file) === 'audio' ? 'audio' : fileKind(item.file),
+    voice: item.voice || item.name === 'Voice message' || fileKind(item.file) === 'audio' ? 1 : undefined,
     progress: 1,
   }));
   ui.messages = [...ui.messages, {
@@ -2794,17 +2818,20 @@ export async function sendFiles(list) {
       if (blob.size > 25 * 1024 * 1024) throw new Error('Files can be up to 25 MB');
       report(i, 5);
       const kind = fileKind(blob);
-      const label = kind === 'audio' ? (blob.name || 'voice-message.webm') : (files[i].name || blob.name || 'file');
+      const voice = kind === 'audio' || files[i].voice || files[i].name === 'Voice message' || /^voice-message\./i.test(blob.name || '');
+      const voiceType = /mp4|m4a|aac/i.test(blob.type || blob.name || '') ? 'audio/mp4' : 'audio/webm';
+      const label = voice ? (voiceType === 'audio/mp4' ? 'voice-message.m4a' : 'voice-message.webm') : (files[i].name || blob.name || 'file');
       const packed = await roomMaster(target);
-      const sealed = await sealFile(masterOf(packed), await blob.arrayBuffer(), label, kind === 'audio' ? (blob.type || 'audio/webm') : (blob.type || ''));
+      const sealed = await sealFile(masterOf(packed), await blob.arrayBuffer(), label, voice ? voiceType : (blob.type || ''));
       const data = await uploadFile(new Blob([sealed], { type: 'application/octet-stream' }), (n) => report(i, Math.max(5, n)), 'file', '/api/upload?slot=file&chat=1&name=file');
       if (!data.url) throw new Error('The file did not upload');
       saved.push({
         url: data.url,
-        name: kind === 'audio' ? (blob.name || 'voice-message.webm') : 'file',
+        name: voice ? 'Voice message' : 'file',
         enc: 1,
         spoiler: files[i].spoiler,
-        kind: kind === 'audio' ? 'audio' : (kind === 'image' || kind === 'video' ? kind : 'file'),
+        kind: voice ? 'audio' : (kind === 'image' || kind === 'video' ? kind : 'file'),
+        voice: voice ? 1 : undefined,
       });
       report(i, 100);
     }

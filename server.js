@@ -1915,9 +1915,11 @@ function readFiles(body) {
       continue;
     }
     if (row && row.enc) {
-      const kind = row.kind === 'audio' || row.kind === 'image' || row.kind === 'video' ? row.kind : 'file';
-      const name = String(row.name || (kind === 'audio' ? 'voice-message.webm' : 'file')).replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file';
+      const voice = !!row.voice || row.kind === 'audio';
+      const kind = voice ? 'audio' : (row.kind === 'image' || row.kind === 'video' ? row.kind : 'file');
+      const name = voice ? 'Voice message' : (String(row.name || 'file').replace(/[^\w.\- ()]+/g, '').slice(0, 80) || 'file');
       const file = { url, name, kind, enc: 1 };
+      if (voice) file.voice = 1;
       if (row.spoiler) file.spoiler = true;
       files.push(file);
       continue;

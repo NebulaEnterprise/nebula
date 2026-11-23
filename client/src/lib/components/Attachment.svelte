@@ -22,8 +22,8 @@
   let unlockedName = $state('');
   let unlockedMime = $state('');
 
-  const name = $derived(unlockedName || file?.name || 'File');
-  const audio = $derived(file?.kind === 'audio' || /voice[- ]message/i.test(unlockedName || file?.name || '') || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
+  const name = $derived(file?.voice || file?.kind === 'audio' ? 'Voice message' : (unlockedName || file?.name || 'File'));
+  const audio = $derived(!!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(unlockedName || file?.name || '') || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
   const video = $derived(!audio && (file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const image = $derived(!video && !audio && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const gif = $derived(/gif/i.test(unlockedMime) || /\.gif(\?|$)/i.test(unlockedName || file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
@@ -78,13 +78,18 @@
     if ((lock || file?.enc) && url && !String(url).startsWith('blob:')) {
       let stop = false;
       let made = '';
+      const local = String(file?.localUrl || '');
+      if (local.startsWith('blob:') && (file?.voice || file?.kind === 'audio')) src = local;
       unlock(url, lock).then((next) => {
         if (stop) URL.revokeObjectURL(next);
         else {
           made = next;
           src = next;
         }
-      }).catch(() => { if (!stop) src = ''; });
+      }).catch(() => {
+        if (stop) return;
+        src = local.startsWith('blob:') ? local : '';
+      });
       return () => {
         stop = true;
         if (made) URL.revokeObjectURL(made);
@@ -292,11 +297,11 @@
       <span>SPOILER</span>
     </button>
   {:else if video}
-    {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{/if}
+    {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if audio}
     {#if src}<audio class="file-audio" src={src} controls preload="metadata"></audio>{:else}<span class="file-chip">Voice message</span>{/if}
   {:else if image}
-    {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{/if}
+    {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if (file?.lock || file?.enc) && !src}
     <span class="file-chip">Encrypted file</span>
   {:else}

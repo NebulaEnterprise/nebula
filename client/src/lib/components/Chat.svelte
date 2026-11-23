@@ -911,7 +911,7 @@
     voicePreview = null;
     if (url) URL.revokeObjectURL(url);
     sendingFiles = true;
-    try { await sendFiles([{ file, name: 'Voice message', alt: '', spoiler: false }]); }
+    try { await sendFiles([{ file, name: 'Voice message', alt: '', spoiler: false, voice: true }]); }
     finally { sendingFiles = false; }
   }
 
