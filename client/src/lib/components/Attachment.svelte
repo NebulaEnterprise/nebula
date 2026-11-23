@@ -3,8 +3,8 @@
   import { api, fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
   import { formatSize, imageLayout } from '../image-view.js';
   import { openFile } from '../seal.js';
-  import { ui } from '../state.svelte.js';
-  import { loadVault, openPackedFile } from '../vault.js';
+  import { roomKey, ui } from '../state.svelte.js';
+  import { openPackedFile } from '../vault.js';
 
   let { file, room = null } = $props();
   let src = $state('');
@@ -23,7 +23,7 @@
   let unlockedMime = $state('');
 
   const name = $derived(file?.voice || file?.kind === 'audio' ? 'Voice message' : (unlockedName || file?.name || 'File'));
-  const audio = $derived(!!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(unlockedName || file?.name || '') || /^audio\//i.test(unlockedMime) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
+  const audio = $derived(!!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(unlockedName || file?.name || '') || /^audio\//i.test(unlockedMime) || (file?.kind !== 'video' && file?.enc && /^video\/webm/i.test(unlockedMime)) || /\.(mp3|m4a|wav|ogg|aac|flac)(\?|$)/i.test(unlockedName || file?.name || ''));
   const video = $derived(!audio && (file?.kind === 'video' || /^video\//i.test(unlockedMime) || /\.(mp4|webm|mov|m4v|ogv)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const image = $derived(!video && !audio && (file?.kind === 'image' || /^image\//i.test(unlockedMime) || /\.(png|jpe?g|gif|webp|avif|bmp)(\?|$)/i.test(unlockedName || file?.url || file?.name || '')));
   const gif = $derived(/gif/i.test(unlockedMime) || /\.gif(\?|$)/i.test(unlockedName || file?.name || '') || /\.gif(\?|$)/i.test(file?.url || ''));
@@ -44,19 +44,19 @@
     if (!res.ok) throw new Error('locked');
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (file?.enc) {
-      const vault = loadVault(ui.me?.id);
       const mode = room?.mode || ui.mode;
       const otherId = room?.dmUserId || ui.dmUser?.id || '';
-      const dmId = ui.me && otherId ? [ui.me.id, otherId].sort().join(':') : '';
       const groupId = room?.groupId || ui.group?.id || '';
       const serverId = room?.serverId || ui.serverId;
-      const serverKey = vault?.servers?.[serverId] || '';
-      const master = mode === 'dm' ? vault?.dms?.[dmId] : (mode === 'group' ? vault?.groups?.[groupId] : serverKey);
-      if (!master) throw new Error('locked');
-      const opened = await openPackedFile(master, bytes);
-      const blob = new Blob([opened.bytes], { type: opened.type || 'application/octet-stream' });
+      const key = await roomKey({ mode, dmUserId: otherId, groupId, serverId });
+      if (!key) throw new Error('locked');
+      const opened = await openPackedFile(key, bytes);
+      const voice = !!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(opened.name || '');
+      let type = opened.type || '';
+      if (voice && !/^audio\//i.test(type)) type = /mp4|m4a/i.test(type + opened.name) ? 'audio/mp4' : 'audio/webm';
+      const blob = new Blob([opened.bytes], { type: type || 'application/octet-stream' });
       unlockedName = opened.name || 'file';
-      unlockedMime = opened.type || '';
+      unlockedMime = type || opened.type || '';
       return URL.createObjectURL(blob);
     }
     const opened = await openFile(lock, bytes, ui.me?.id);
@@ -299,7 +299,9 @@
   {:else if video}
     {#if src}<video class="file-video" src={src} poster={poster || undefined} controls playsinline preload="metadata" crossorigin="anonymous" onerror={failed}></video>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if audio}
-    {#if src}<audio class="file-audio" src={src} controls preload="metadata"></audio>{:else}<span class="file-chip">Voice message</span>{/if}
+    <div class="voice-note">
+      <audio class="file-audio" src={src || undefined} controls preload="metadata"></audio>
+    </div>
   {:else if image}
     {#if src}<button type="button" class="file-open" class:gif-crop={gif} title={label} onclick={showImage}><img class="file-img" class:gif-crop={gif} src={src} alt={label} decoding="async" crossorigin="anonymous" onload={rememberSize} onerror={failed} /></button>{:else}<span class="file-chip">{name}</span>{/if}
   {:else if (file?.lock || file?.enc) && !src}

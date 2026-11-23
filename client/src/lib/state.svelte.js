@@ -2445,6 +2445,10 @@ function masterOf(value) {
   return value && typeof value === 'object' ? value.key : value;
 }
 
+export async function roomKey(where) {
+  return masterOf(await roomMaster(where));
+}
+
 export async function prepareRoom(where) {
   try { await roomMaster(where); } catch (_) {}
 }
@@ -2621,6 +2625,7 @@ async function postMessage(payload, target) {
   const where = target || { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', threadId: ui.thread?.id || '' };
   const typingToken = stopTyping(false);
   const body = { typingToken };
+  if (where.serverId) body.serverId = where.serverId;
   if (content) {
     const blocked = shareProblem(content, files, peopleFor(where), where);
     if (blocked) throw new Error(blocked);
@@ -2785,7 +2790,7 @@ export async function sendFiles(list) {
   ui.composer = '';
   ui.reply = null;
   const roomKey = currentRoom() || ui.channelId;
-  const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '' };
+  const target = { mode: ui.mode, channelId: ui.channelId, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', serverId: ui.serverId || '' };
   const tempId = 'local-' + Math.random().toString(36).slice(2, 10);
   const locals = files.map((item) => ({
     url: URL.createObjectURL(item.file),

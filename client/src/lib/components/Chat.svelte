@@ -1654,7 +1654,7 @@
         {#if msg.files?.length}
           <div class="msg-files">
             {#each msg.files as file}
-              <Attachment file={file} />
+              <Attachment file={file} room={{ mode: ui.mode, dmUserId: ui.dmUser?.id || '', groupId: ui.group?.id || '', serverId: ui.serverId || '' }} />
             {/each}
           </div>
         {/if}
