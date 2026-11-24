@@ -22,6 +22,7 @@
   const canManageRoles = $derived(ui.mode === 'chat' && !!ui.serverId && hasPerm(PERM.MANAGE_ROLES));
   const offerRoles = $derived((ui.roles || []).filter((role) => role && role.id && role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner' && !roles.some((have) => have.id === role.id)));
   let roleOpen = $state(false);
+  let rolesOpen = $state(false);
   const rel = $derived(u ? relation(u.id) : 'none');
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');
@@ -51,6 +52,7 @@
     faceFor = id;
     turned = false;
     roleOpen = false;
+    rolesOpen = false;
     storyAt = -1;
     photoAt = -1;
   });
@@ -85,6 +87,7 @@
         body: { roleId: role.id, action: 'remove' },
       });
       const have = (u.roles || []).filter((row) => row && row.id !== role.id);
+      if (have.filter((row) => row && row.id !== 'everyone' && row.id !== 'owner').length <= 3) rolesOpen = false;
       if (ui.popout && ui.popout.user && ui.popout.user.id === u.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, roles: have } };
       ui.members = (ui.members || []).map((member) => member && member.id === u.id ? { ...member, roles: have } : member);
       toast('Removed ' + role.name);
@@ -249,23 +252,23 @@
       </div>
       {#if roles.length || canManageRoles}
         <div class="pop-role-list profile-roles">
-          {#each roles as r (r.id)}
-            <em class="pop-role" class:can-drop={canManageRoles}>
-              {#if canManageRoles}
-                <button type="button" class="role-x" title={'Remove ' + r.name} aria-label={'Remove ' + r.name} disabled={busy === r.id} onclick={(event) => { event.stopPropagation(); removeRole(r); }}>
-                  <i style="background:{r.color || '#99aab5'}"></i>
-                  <X size={9} />
-                </button>
-              {:else}
-                <i style="background:{r.color || '#99aab5'}"></i>
-              {/if}
-              {r.name}
-            </em>
+          {#each roles.slice(0, 3) as r (r.id)}
+            {@render rolePill(r)}
           {/each}
+          {#if roles.length > 3}
+            <button type="button" class="role-more" class:on={rolesOpen} onclick={(event) => { event.stopPropagation(); rolesOpen = !rolesOpen; if (rolesOpen) roleOpen = false; }}>more</button>
+          {/if}
           {#if canManageRoles}
-            <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={(event) => { event.stopPropagation(); roleOpen = !roleOpen; }}><Plus size={14} /></button>
+            <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={(event) => { event.stopPropagation(); roleOpen = !roleOpen; if (roleOpen) rolesOpen = false; }}><Plus size={14} /></button>
           {/if}
         </div>
+        {#if rolesOpen}
+          <div class="role-bag" onclick={(event) => event.stopPropagation()}>
+            {#each roles as r (r.id)}
+              {@render rolePill(r)}
+            {/each}
+          </div>
+        {/if}
         {#if roleOpen}
           <div class="role-add-menu" onclick={(event) => event.stopPropagation()}>
             {#each offerRoles as role (role.id)}
@@ -278,6 +281,19 @@
           </div>
         {/if}
       {/if}
+      {#snippet rolePill(r)}
+        <em class="pop-role" class:can-drop={canManageRoles}>
+          {#if canManageRoles}
+            <button type="button" class="role-x" title={'Remove ' + r.name} aria-label={'Remove ' + r.name} disabled={busy === r.id} onclick={(event) => { event.stopPropagation(); removeRole(r); }}>
+              <i style="background:{r.color || '#99aab5'}"></i>
+              <X size={9} />
+            </button>
+          {:else}
+            <i style="background:{r.color || '#99aab5'}"></i>
+          {/if}
+          {r.name}
+        </em>
+      {/snippet}
       <section class="profile-panel">
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
