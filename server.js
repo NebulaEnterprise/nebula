@@ -7531,7 +7531,9 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     saveGuilds();
     return res.json({ ok: true, events: fresh() });
   }
-  if (!manage && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
+  const channelOps = ['category', 'category-delete', 'category-move', 'set-category', 'move-channel'];
+  const canChannels = can(g, req.user, PERM.MANAGE_CHANNELS);
+  if (!manage && !(canChannels && channelOps.includes(type)) && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
   if (['kick', 'ban', 'timeout', 'nick-other', 'voice-ban'].includes(type)) {
     const targetId = String(req.body.userId || '');
     if (!canStaffTouch(g, req.user, targetId)) return res.status(403).json({ error: 'That member is above you' });

@@ -223,11 +223,15 @@
       {#each groups as cat}
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
-        {#if cat.id && !texts.length && !voices.length}
-          <!-- empty category stays out of the sidebar -->
-        {:else}
-          {#if cat.name}<div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}><span>{cat.name}</span></div>{/if}
-          {#if texts.length || !cat.id}
+        {#if cat.name}
+          <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
+            <span>{cat.name}</span>
+            {#if canChannels}
+              <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', categoryId: cat.id })}><Plus size={16} /></button>
+            {/if}
+          </div>
+        {/if}
+        {#if texts.length || !cat.id}
             <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
               <span>{cat.name ? t('text') : t('text channels')}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
@@ -286,7 +290,6 @@
               {/each}
             {/each}
           {/if}
-        {/if}
       {/each}
     </div>
   {:else}

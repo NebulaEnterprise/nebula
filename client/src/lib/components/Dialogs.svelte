@@ -1,7 +1,7 @@
 <script>
   import { Hash, Lock, MessageSquare, Volume2, VolumeX, X } from '@lucide/svelte';
   import ChannelEditor from './ChannelEditor.svelte';
-  import { ui, guildAction, openServer, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
+  import { ui, guildAction, openServer, reloadSettings, toast, notifyMode, serverMuted, loadMembers, openDm, openGroup, relation, friendAct, keepServerKey, serverInvite, openThread, channelNotify, setChannelNotify } from '../state.svelte.js';
   import { api, uploadFile } from '../api.js';
   import { PERM, inviteSlug } from '../format.js';
   import { keyInLink, newRoomKey } from '../vault.js';
@@ -403,7 +403,7 @@
                 stage: channelKind === 'voice' && channelStage,
               },
             });
-            if (ui.dialog.categoryId && data.channel?.id && hasPerm(PERM.MANAGE_SERVER)) {
+            if (ui.dialog.categoryId && data.channel?.id && hasPerm(PERM.MANAGE_CHANNELS)) {
               await guildAction({ type: 'set-category', channelId: data.channel.id, categoryId: ui.dialog.categoryId });
             }
             close();
@@ -416,7 +416,7 @@
         <button class="btn brand" style="width:auto" onclick={() => go(async () => {
           await guildAction({ type: 'category', name });
           close();
-          await openServer(ui.serverId, { keepDialog: true });
+          await reloadSettings();
         })}>Create</button>
 
       {:else if kind === 'lock'}
