@@ -1,6 +1,6 @@
 <script>
   import { Plus, X, LayoutGrid, KeyRound, BookOpen, Braces, CircleHelp, Code } from '@lucide/svelte';
-  import { ui, toast } from '../state.svelte.js';
+  import { ui, toast, developerMode, setDeveloperMode } from '../state.svelte.js';
   import { api } from '../api.js';
   import { PERM, hasBit } from '../format.js';
   import DeveloperDocs from './DeveloperDocs.svelte';
@@ -21,6 +21,7 @@
   let ask = $state('');
   let profileName = $state('');
   let profileBio = $state('');
+  let devOn = $state(developerMode());
 
   const openBot = $derived(bots.find((bot) => bot.id === openId) || null);
   const manageable = $derived(servers.filter((server) => server.owner || hasBit(server.permissions || 0, PERM.MANAGE_SERVER)));
@@ -162,6 +163,13 @@
 
 {#if !portal && !docs}
   <div class="dev-home">
+    <article class="dev-portal-card dev-mode">
+      <div>
+        <h3>Developer Mode</h3>
+        <p>Adds Copy Server, Channel, Category, Message and User ID to right-click menus, for building bots with the Nebula API.</p>
+      </div>
+      <button type="button" class="switch" class:on={devOn} aria-pressed={devOn} onclick={() => { devOn = !devOn; setDeveloperMode(devOn); }}><i></i></button>
+    </article>
     <article class="dev-portal-card">
       <div>
         <h3>Developer Portal</h3>

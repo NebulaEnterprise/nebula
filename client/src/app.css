@@ -3423,6 +3423,8 @@ html.paint-mention .mention {
 .dev-portal-card {
   padding: 16px 18px; border-radius: 12px; background: #1a1b20; border: 1px solid rgba(255,255,255,0.06);
 }
+.dev-mode { margin-bottom: 14px; }
+.dev-mode .switch { flex-shrink: 0; }
 .dev-portal-card h3, .dev-home-head h2 { margin: 0; font-size: 18px; }
 .dev-portal-card p, .dev-home-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
 .dev-home-head { margin: 22px 0 8px; align-items: flex-start; }

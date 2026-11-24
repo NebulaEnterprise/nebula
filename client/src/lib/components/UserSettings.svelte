@@ -1,6 +1,6 @@
 <script>
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, playPing, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -72,7 +72,7 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', advanced: 'Advanced', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -84,7 +84,6 @@
     }
   }
   const reasonLabel = { harassment: 'Harassment or bullying', hate: 'Hate speech or slurs', sexual: 'Sexual content', child: 'Child safety', threats: 'Threats or violence', 'self-harm': 'Self-harm or suicide', spam: 'Spam or scams', illegal: 'Something illegal', other: 'Something else' };
-  let devOn = $state(developerMode());
   let viewing = $state(null);
   let accountDialog = $state('');
   let accountBusy = $state(false);
@@ -223,7 +222,7 @@
   }
   let portalOpen = $state(false);
   let profilePart = $state('identity');
-  const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage);
+  const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage === 'advanced' ? 'developer' : ui.userPage);
   $effect(() => {
     if (page !== 'account') securityOpen = false;
     if (page !== 'profile') lookOpen = '';
@@ -632,7 +631,6 @@
       {/if}
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
-      <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
       <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => { portalOpen = false; ui.userPage = 'developer'; }}><Code size={16} /> Developer</button>
       {#if ui.me?.canAdmin}
         <div class="group">Nebula staff</div>
@@ -922,16 +920,6 @@
               <label>Notification sound</label>
               <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
               <p class="hint">Plays a sound for every new message and every mention, including while this tab is in the background.</p>
-            </div>
-          {:else if page === 'advanced'}
-            <div class="field">
-              <div class="look-line">
-                <div class="copy">
-                  <strong>Developer Mode</strong>
-                  <em>Adds Copy Server, Channel, Category, Message and User ID to right-click menus, for building bots with the Nebula API.</em>
-                </div>
-                <button type="button" class="switch" class:on={devOn} aria-pressed={devOn} onclick={() => { devOn = !devOn; setDeveloperMode(devOn); }}><i></i></button>
-              </div>
             </div>
           {:else if page === 'admin'}
             <div class="report-list">
