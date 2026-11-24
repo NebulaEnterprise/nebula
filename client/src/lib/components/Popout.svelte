@@ -1,5 +1,5 @@
 <script>
-  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X, Gamepad2, Crown } from '@lucide/svelte';
+  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X, Gamepad2, Crown, Shield } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -205,6 +205,21 @@
 </script>
 
 {#if u}
+  {#snippet rolePill(r)}
+    <em class="pop-role" class:can-drop={canManageRoles}>
+      {#if canManageRoles}
+        <button type="button" class="role-x" title={'Remove ' + r.name} aria-label={'Remove ' + r.name} disabled={busy === r.id} onclick={(event) => { event.stopPropagation(); removeRole(r); }}>
+          {#if r.icon}<i class="role-emoji">{r.icon}</i>{:else}<i style="background:{r.color || '#99aab5'}"></i>{/if}
+          <X size={9} />
+        </button>
+      {:else if r.icon}
+        <i class="role-emoji">{r.icon}</i>
+      {:else}
+        <i style="background:{r.color || '#99aab5'}"></i>
+      {/if}
+      {r.name}
+    </em>
+  {/snippet}
   <div class="pop-backdrop"></div>
   <div class="pop profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
     <div class="pop-spin" class:show-back={turned} style="transform: rotateY({turned ? 180 : 0}deg)" onclick={flipCard}>
@@ -262,13 +277,6 @@
             <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={(event) => { event.stopPropagation(); roleOpen = !roleOpen; if (roleOpen) rolesOpen = false; }}><Plus size={14} /></button>
           {/if}
         </div>
-        {#if rolesOpen}
-          <div class="role-bag" onclick={(event) => event.stopPropagation()}>
-            {#each roles as r (r.id)}
-              {@render rolePill(r)}
-            {/each}
-          </div>
-        {/if}
         {#if roleOpen}
           <div class="role-add-menu" onclick={(event) => event.stopPropagation()}>
             {#each offerRoles as role (role.id)}
@@ -281,19 +289,6 @@
           </div>
         {/if}
       {/if}
-      {#snippet rolePill(r)}
-        <em class="pop-role" class:can-drop={canManageRoles}>
-          {#if canManageRoles}
-            <button type="button" class="role-x" title={'Remove ' + r.name} aria-label={'Remove ' + r.name} disabled={busy === r.id} onclick={(event) => { event.stopPropagation(); removeRole(r); }}>
-              <i style="background:{r.color || '#99aab5'}"></i>
-              <X size={9} />
-            </button>
-          {:else}
-            <i style="background:{r.color || '#99aab5'}"></i>
-          {/if}
-          {r.name}
-        </em>
-      {/snippet}
       <section class="profile-panel">
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>
         <div class="profile-row"><span><AtSign size={14} /> Username</span><strong>@{u.username}</strong></div>
@@ -417,6 +412,20 @@
         <button type="button" onclick={() => copyText(u.id, 'user ID')}>Copy user ID</button>
         <button type="button" class="danger" onclick={() => { const person = u; more = false; ui.popout = null; ui.dialog = { kind: 'user-report', user: person }; }}>Report</button>
         {#if rel !== 'blocked'}<button type="button" class="danger" onclick={() => act('block')}>Block</button>{/if}
+      </div>
+    {/if}
+    {#if rolesOpen}
+      <button type="button" class="role-box-shade" aria-label="Close roles" onclick={() => (rolesOpen = false)}></button>
+      <div class="role-box" onclick={(event) => event.stopPropagation()}>
+        <div class="role-box-head">
+          <strong><Shield size={16} /> Roles</strong>
+          <button type="button" class="role-box-x" aria-label="Close" onclick={() => (rolesOpen = false)}><X size={16} /></button>
+        </div>
+        <div class="role-box-list">
+          {#each roles as r (r.id)}
+            {@render rolePill(r)}
+          {/each}
+        </div>
       </div>
     {/if}
   </div>
