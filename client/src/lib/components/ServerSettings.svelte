@@ -2,7 +2,7 @@
   import {
     X, Search, Image, Palette, Hash, Calendar, Smile, Sticker, UserRound, Bell, Shield,
     Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, Webhook, DoorOpen, Plus, ChevronLeft,
-    ChevronUp, ChevronDown, Copy, Pencil, Clock, Undo2, MoreHorizontal, GripVertical,
+    Copy, Pencil, Clock, MoreHorizontal, GripVertical,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
@@ -88,7 +88,6 @@
   let roleFilter = $state('');
   let memberKind = $state('all');
   let memberSort = $state('new');
-  let lastMove = $state(null);
   let transferOpen = $state(false);
   let transferQ = $state('');
   let roleEdit = $state('');
@@ -435,11 +434,6 @@
     await loadMembers();
   }
 
-  async function moveChannel(ch, dir) {
-    lastMove = { id: ch.id, dir: dir === 'up' ? 'down' : 'up' };
-    await run(() => guildAction({ type: 'move-channel', channelId: ch.id, dir }));
-  }
-
   let dragCh = $state('');
   let dragCat = $state('');
   let dragRole = $state('');
@@ -588,8 +582,6 @@
   <div class="gset-chan" draggable="true" ondragstart={() => (dragCh = ch.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropChannel(ch)}>
     <GripVertical size={14} />
     <strong>{ch.type === 'voice' ? '🔊' : '#'} {ch.name}</strong>
-    <button type="button" class="btn icon" title="Move up" onclick={() => moveChannel(ch, 'up')}><ChevronUp size={16} /></button>
-    <button type="button" class="btn icon" title="Move down" onclick={() => moveChannel(ch, 'down')}><ChevronDown size={16} /></button>
   </div>
 {/snippet}
 
@@ -831,10 +823,7 @@
         {:else if ui.settingsPage === 'channels'}
           <div class="gset-split">
             <p class="hint">Drag a channel to reorder it. Members see this order in the sidebar.</p>
-            <div class="gset-inline">
-              {#if lastMove}<button type="button" class="btn" onclick={() => moveChannel({ id: lastMove.id }, lastMove.dir)}><Undo2 size={14} /> Undo</button>{/if}
-              <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
-            </div>
+            <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
           </div>
           {#each s.categories || [] as cat}
             <div class="gset-chan head" draggable="true" ondragstart={() => (dragCat = cat.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropCategory(cat.id)}>
