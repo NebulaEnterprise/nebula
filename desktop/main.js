@@ -1,17 +1,74 @@
-const { app, BaseWindow, BrowserWindow, WebContentsView, Menu, shell, session, desktopCapturer, ipcMain } = require('electron');
-const { spawn } = require('child_process');
+const { app, BaseWindow, BrowserWindow, WebContentsView, Menu, Tray, nativeImage, shell, session, desktopCapturer, ipcMain } = require('electron');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { resolveLink, pageUrl, DEFAULT_URL } = require('./link');
 
 const BAR = 40;
 const ICON = path.join(__dirname, 'build', 'icon.png');
+const GAMES = [
+  [/roblox/i, 'Roblox'],
+  [/minecraft/i, 'Minecraft'],
+  [/fortnite/i, 'Fortnite'],
+  [/valorant/i, 'Valorant'],
+  [/league of legends|leagueclient/i, 'League of Legends'],
+  [/(^|[^a-z])cs2([^a-z]|$)|csgo/i, 'Counter-Strike 2'],
+  [/gta5|gta v|gtav/i, 'GTA V'],
+  [/r5apex/i, 'Apex Legends'],
+  [/overwatch/i, 'Overwatch'],
+  [/rocketleague/i, 'Rocket League'],
+  [/osu!/i, 'osu!'],
+  [/among us|amongus/i, 'Among Us'],
+  [/terraria/i, 'Terraria'],
+  [/stardew/i, 'Stardew Valley'],
+  [/eldenring/i, 'Elden Ring'],
+  [/cyberpunk2077/i, 'Cyberpunk 2077'],
+  [/baldursgate3|bg3/i, "Baldur's Gate 3"],
+  [/helldivers2/i, 'Helldivers 2'],
+  [/dota2/i, 'Dota 2'],
+  [/wow\.exe|world of warcraft/i, 'World of Warcraft'],
+  [/ffxiv/i, 'Final Fantasy XIV'],
+  [/genshinimpact/i, 'Genshin Impact'],
+  [/destiny2/i, 'Destiny 2'],
+  [/rustclient|rust\.exe/i, 'Rust'],
+  [/escapefromtarkov/i, 'Escape from Tarkov'],
+  [/league of legends/i, 'League of Legends'],
+];
+
+function settingsPath() {
+  try { return path.join(app.getPath('userData'), 'desktop-settings.json'); }
+  catch (_) { return ''; }
+}
+
+function readSettings() {
+  const defaults = {
+    startWithWindows: false,
+    startInTray: false,
+    closeToTray: true,
+    hardwareAcceleration: true,
+    showPlaying: false,
+  };
+  try {
+    const file = settingsPath();
+    if (!file || !fs.existsSync(file)) return defaults;
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return { ...defaults, ...(saved && typeof saved === 'object' ? saved : {}) };
+  } catch (_) {
+    return defaults;
+  }
+}
+
+const settings = readSettings();
+if (!settings.hardwareAcceleration) app.disableHardwareAcceleration();
 
 app.setName('Nebula');
 app.setAppUserModelId('lol.nebulaspace.desktop');
 
 let mainWindow = null;
 let contentView = null;
+let tray = null;
+let quitting = false;
+let playTimer = null;
 let barHeight = BAR;
 let pickerWindow = null;
 let loadedScript = '';
@@ -177,7 +234,8 @@ function createWindow() {
   });
   contents.on('did-finish-load', async () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (!mainWindow.isVisible()) mainWindow.show();
+    const stayHidden = process.argv.includes('--hidden') && settings.startInTray;
+    if (!mainWindow.isVisible() && !stayHidden) mainWindow.show();
     if (!isSiteUrl(contents.getURL())) return;
     loadedScript = await currentScript();
     contents.focus();
@@ -189,6 +247,11 @@ function createWindow() {
   mainWindow.on('unmaximize', sendChromeState);
   mainWindow.on('enter-full-screen', () => { barHeight = 0; sendChromeState(); });
   mainWindow.on('leave-full-screen', () => { barHeight = BAR; sendChromeState(); });
+  mainWindow.on('close', (event) => {
+    if (quitting || !settings.closeToTray) return;
+    event.preventDefault();
+    mainWindow.hide();
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
     contentView = null;
@@ -356,6 +419,122 @@ ipcMain.on('win-max', () => {
 });
 ipcMain.on('win-close', () => { if (mainWindow) mainWindow.close(); });
 
+function writeSettings() {
+  const file = settingsPath();
+  if (!file) return;
+  try { fs.writeFileSync(file, JSON.stringify(settings)); } catch (_) {}
+}
+
+function applyLogin() {
+  try {
+    const hidden = !!(settings.startWithWindows && settings.startInTray);
+    app.setLoginItemSettings({
+      openAtLogin: !!settings.startWithWindows,
+      openAsHidden: hidden,
+      args: hidden ? ['--hidden'] : [],
+    });
+  } catch (_) {}
+}
+
+function showMain() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function ensureTray() {
+  const want = !!(settings.closeToTray || settings.startInTray);
+  if (!want) {
+    if (tray) {
+      tray.destroy();
+      tray = null;
+    }
+    return;
+  }
+  if (tray) return;
+  let image = nativeImage.createFromPath(ICON);
+  if (image.isEmpty()) image = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.ico'));
+  image = image.resize({ width: 16, height: 16 });
+  tray = new Tray(image);
+  tray.setToolTip('Nebula');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Nebula', click: showMain },
+    { type: 'separator' },
+    { label: 'Quit Nebula', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', showMain);
+}
+
+function listProcesses() {
+  return new Promise((resolve) => {
+    const done = (err, stdout) => resolve(err ? '' : String(stdout || ''));
+    if (process.platform === 'win32') {
+      execFile('tasklist', ['/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 8000, maxBuffer: 4 * 1024 * 1024 }, done);
+      return;
+    }
+    execFile('ps', ['-ax', '-o', 'comm='], { timeout: 8000, maxBuffer: 4 * 1024 * 1024 }, done);
+  });
+}
+
+function gameFromProcesses(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  for (const line of lines) {
+    const cell = line.split(',')[0].replace(/^"|"$/g, '').trim();
+    const base = cell.split(/[\\/]/).pop() || cell;
+    if (!base || /nebula|electron|chrome|code|cursor/i.test(base)) continue;
+    for (const [pattern, label] of GAMES) {
+      if (pattern.test(base)) return label;
+    }
+  }
+  return '';
+}
+
+function pushPlaying(name) {
+  const contents = page();
+  if (!contents || contents.isDestroyed()) return;
+  contents.send('playing', name || '');
+}
+
+async function scanPlaying() {
+  if (!settings.showPlaying) {
+    pushPlaying('');
+    return '';
+  }
+  const name = gameFromProcesses(await listProcesses());
+  pushPlaying(name);
+  return name;
+}
+
+function armPlaying() {
+  if (playTimer) clearInterval(playTimer);
+  playTimer = null;
+  if (!settings.showPlaying) {
+    pushPlaying('');
+    return;
+  }
+  scanPlaying();
+  playTimer = setInterval(scanPlaying, 20000);
+}
+
+const SETTING_KEYS = new Set(['startWithWindows', 'startInTray', 'closeToTray', 'hardwareAcceleration', 'showPlaying']);
+
+ipcMain.handle('desktop-settings', () => ({ ...settings }));
+ipcMain.handle('desktop-setting', (_event, payload) => {
+  const key = payload && payload.key;
+  if (!SETTING_KEYS.has(key)) return { ...settings };
+  settings[key] = !!payload.value;
+  writeSettings();
+  if (key === 'startWithWindows' || key === 'startInTray') applyLogin();
+  if (key === 'closeToTray' || key === 'startInTray') ensureTray();
+  if (key === 'showPlaying') armPlaying();
+  return { ...settings };
+});
+ipcMain.handle('desktop-playing', () => scanPlaying());
+
 app.on('second-instance', () => {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
@@ -401,12 +580,18 @@ if (gotLock) {
     });
 
     buildMenu();
+    applyLogin();
+    ensureTray();
     createWindow();
+    armPlaying();
   });
 }
 
+app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (quitting || !settings.closeToTray) {
+    if (process.platform !== 'darwin') app.quit();
+  }
 });
 
 app.on('activate', () => {

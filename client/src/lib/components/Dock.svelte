@@ -1,5 +1,5 @@
 <script>
-  import { X, Pin, Image as ImageIcon, Search, UserPlus, User, AtSign, Tags, Smile, Clock, Circle } from '@lucide/svelte';
+  import { X, Pin, Image as ImageIcon, Search, UserPlus, User, AtSign, Tags, Smile, Clock, Circle, Gamepad2 } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
@@ -9,7 +9,7 @@
   import Attachment from './Attachment.svelte';
   import Inbox from './Inbox.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges } from '../format.js';
+  import { shortBio, visibleBadges, playingName } from '../format.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
   import { profileSeen, localClock } from '../seen.js';
   import { api, uploadFile, fileUrl } from '../api.js';
@@ -318,7 +318,11 @@
                 <SongButton file={person.songFile} start={person.songStart} />
               </div>
               <i class="profile-dot" style="background:{statusColor[person.status] || statusColor.offline}"></i>
-              {#if shortBio(person.bio)}<div class="bio-bubble"><span>{shortBio(person.bio)}</span></div>{/if}
+              {#if playingName(person)}
+                <div class="bio-bubble"><span>Playing {playingName(person)}</span></div>
+              {:else if shortBio(person.bio)}
+                <div class="bio-bubble"><span>{shortBio(person.bio)}</span></div>
+              {/if}
             </div>
             <h3><Name user={person} />{#if person.bot}<span class="bot-tag">BOT</span>{/if}</h3>
             <div class="profile-idline">
@@ -329,7 +333,11 @@
                 {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
               </span>
             </div>
-            {#if person.aboutMe}<p class="profile-status">{person.aboutMe}</p>{/if}
+            {#if playingName(person)}
+              <p class="profile-status playing"><Gamepad2 size={14} /> Playing {playingName(person)}</p>
+            {:else if person.aboutMe}
+              <p class="profile-status">{person.aboutMe}</p>
+            {/if}
           </div>
           <section class="profile-panel">
             <div class="profile-row"><span><User size={14} /> Display name</span><strong>{person.displayName || person.username}</strong></div>

@@ -1,12 +1,12 @@
 <script>
-  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X } from '@lucide/svelte';
+  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X, Gamepad2 } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges } from '../format.js';
+  import { shortBio, visibleBadges, playingName } from '../format.js';
   import { api, fileUrl, uploadFile } from '../api.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia } from '../state.svelte.js';
   import { profileSeen, localClock } from '../seen.js';
@@ -182,7 +182,11 @@
             <SongButton file={u.songFile} start={u.songStart} />
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
-          {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
+          {#if playingName(u)}
+            <div class="bio-bubble"><span>Playing {playingName(u)}</span></div>
+          {:else if shortBio(u.bio)}
+            <div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>
+          {/if}
         </div>
         <h3><Name user={u} />{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
         <div class="profile-idline">
@@ -193,7 +197,11 @@
             {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
           </span>
         </div>
-        {#if u.aboutMe}<p class="profile-status">{u.aboutMe}</p>{/if}
+        {#if playingName(u)}
+          <p class="profile-status playing"><Gamepad2 size={14} /> Playing {playingName(u)}</p>
+        {:else if u.aboutMe}
+          <p class="profile-status">{u.aboutMe}</p>
+        {/if}
       </div>
       {#if roles.length}
         <div class="pop-role-list profile-roles">

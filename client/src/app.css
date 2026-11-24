@@ -1833,6 +1833,8 @@ html.paint-mention .mention {
 .friend .meta strong { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member .name-row strong { display: block; font-size: 14px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member .meta > span, .friend .meta > span { display: block; margin-top: 1px; color: var(--muted); font-size: 12px; line-height: 1.35; white-space: normal; word-break: break-word; }
+.playing { display: flex; align-items: center; gap: 5px; color: var(--text); }
+.profile-status.playing { justify-content: center; }
 .member .name-extras, .friend .name-extras,
 .member .name-extras span, .friend .name-extras span {
   display: inline-flex; align-items: center; justify-content: center;

@@ -263,8 +263,9 @@ async function enterApp() {
     loadDms(),
     openServer(ui.serverId || 'nebula-official'),
   ]);
-  await consumeInvite();
+    await consumeInvite();
   await openSharedLink();
+  wirePlaying();
   if (pollTimer) clearInterval(pollTimer);
   let dmPollBusy = false;
   let quietSkips = 0;
@@ -3936,6 +3937,31 @@ async function watchAlerts() {
       else await sleep(1500);
     }
   }
+}
+
+let playingWired = false;
+let lastActivity = null;
+
+export async function syncActivity(name) {
+  if (!ui.me || !localStorage.getItem('dc_token')) return;
+  const next = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (lastActivity === next && !next) return;
+  lastActivity = next;
+  try {
+    const data = await api('/api/me', { method: 'PATCH', body: { activity: next } });
+    const activity = data.user && data.user.activity ? data.user.activity : '';
+    ui.me = { ...ui.me, activity };
+    ui.members = ui.members.map((member) => member.id === ui.me.id ? { ...member, activity } : member);
+    if (ui.popout?.user?.id === ui.me.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, activity } };
+  } catch (_) {}
+}
+
+function wirePlaying() {
+  const desk = typeof window !== 'undefined' ? window.nebulaDesktop : null;
+  if (!desk || playingWired || typeof desk.onPlaying !== 'function') return;
+  playingWired = true;
+  desk.onPlaying((name) => { syncActivity(name); });
+  if (typeof desk.currentPlaying === 'function') desk.currentPlaying().then((name) => syncActivity(name)).catch(() => {});
 }
 
 export async function saveMe(body) {

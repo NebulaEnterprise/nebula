@@ -2887,6 +2887,14 @@ function liveStories(list) {
   return out.slice(-8);
 }
 
+function playingName(u) {
+  if (!u || u.bot || !u.activity || typeof u.activity !== 'object') return '';
+  const name = String(u.activity.name || '').replace(/[\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (!name) return '';
+  if (Date.now() - Number(u.activity.at || 0) > 70000) return '';
+  return name;
+}
+
 function clearBotMarks(row, u) {
   if (!row || !u || !u.bot) return row;
   row.badges = [];
@@ -2897,6 +2905,7 @@ function clearBotMarks(row, u) {
   row.showcase = null;
   row.showcaseServerId = '';
   row.roleIcon = '';
+  row.activity = '';
   return row;
 }
 
@@ -2965,6 +2974,7 @@ function publicUser(u, viewer) {
     showcase: showcaseOf(u),
     tagChoices: tagChoices(u),
     bot: !!u.bot,
+    activity: playingName(u),
     server: SERVER_NAME,
     createdAt: u.createdAt,
     vaultPub: u.vaultPub || '',
@@ -4509,6 +4519,11 @@ app.patch('/api/me', auth, (req, res) => {
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
   if (timezone !== undefined) req.user.timezone = cleanZone(timezone);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
+  if (req.body && req.body.activity !== undefined) {
+    const raw = req.body.activity;
+    const text = String(raw && typeof raw === 'object' ? raw.name : raw || '').replace(/[\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    req.user.activity = text ? { name: text, at: Date.now() } : null;
+  }
   let presenceChanged = false;
   if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) {
     const prev = req.user.status || 'online';

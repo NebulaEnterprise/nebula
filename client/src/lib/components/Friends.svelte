@@ -1,9 +1,10 @@
 <script>
-  import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal, UserPlus, Users, Search } from '@lucide/svelte';
+  import { ChevronLeft, MessageSquare, Check, X, MoreHorizontal, UserPlus, Users, Search, Gamepad2 } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import { ui, nowClock, showFriends, showAddFriend, openDm, openPopout, peekProfile, friendAct, toast } from '../state.svelte.js';
   import { seenPhrase, presenceDot } from '../seen.js';
+  import { playingName } from '../format.js';
   import { api } from '../api.js';
   let q = $state('');
   let name = $state('');
@@ -172,7 +173,11 @@
         <button type="button" class="friend-name" title="Profile" onclick={() => openPopout(u)}><Avatar user={u} size={40} /></button>
         <div class="meta">
           <button type="button" class="friend-name" onclick={() => openPopout(u)}><strong><Name user={u} /></strong></button>
-          <span>{u.customStatus || seenPhrase(u, nowClock.t)}</span>
+          {#if playingName(u)}
+            <span class="playing"><Gamepad2 size={12} /> Playing {playingName(u)}</span>
+          {:else}
+            <span>{u.customStatus || seenPhrase(u, nowClock.t)}</span>
+          {/if}
         </div>
         <button class="btn icon" title="Message" onclick={() => openDm(u)}><MessageSquare size={16} /></button>
         <button class="btn icon" title="More" onclick={(event) => { event.stopPropagation(); moreId = moreId === u.id ? '' : u.id; }}><MoreHorizontal size={16} /></button>

@@ -2,6 +2,13 @@ export function shortBio(text) {
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 29);
 }
 
+export function playingName(user) {
+  const value = user && user.activity;
+  if (!value) return '';
+  const name = String(typeof value === 'string' ? value : value.name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  return name;
+}
+
 export function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;')

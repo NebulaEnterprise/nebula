@@ -22,6 +22,7 @@
   import Sounds from './Sounds.svelte';
   import Keybinds from './Keybinds.svelte';
   import VoiceAudio from './VoiceAudio.svelte';
+  import DesktopApp from './DesktopApp.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook, savedThemes, createTheme, deleteTheme, useTheme, themeShareLink } from '../look.svelte.js';
@@ -70,7 +71,8 @@
     }
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds', desktop: 'Desktop app' };
+  const desktopApp = typeof window !== 'undefined' && !!window.nebulaDesktop;
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -643,6 +645,9 @@
       <button class:on={page === 'sounds'} onclick={() => (ui.userPage = 'sounds')}><Volume2 size={16} /> Sounds</button>
       <button class:on={page === 'voice'} onclick={() => (ui.userPage = 'voice')}><Headphones size={16} /> Voice & Audio</button>
       <button class:on={page === 'keybinds'} onclick={() => (ui.userPage = 'keybinds')}><Keyboard size={16} /> Keybinds</button>
+      {#if desktopApp}
+        <button class:on={page === 'desktop'} onclick={() => (ui.userPage = 'desktop')}><Monitor size={16} /> Desktop app</button>
+      {/if}
       <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => { portalOpen = false; ui.userPage = 'developer'; }}><Code size={16} /> Developer</button>
       {#if ui.me?.canAdmin}
         <div class="group">Nebula staff</div>
@@ -787,6 +792,8 @@
         <VoiceAudio />
       {:else if page === 'keybinds'}
         <Keybinds />
+      {:else if page === 'desktop'}
+        <DesktopApp />
       {:else if page === 'theme'}
         <section class="look-sec app-card">
           <h3><Sparkles size={16} class="sec-ico" /> App theme</h3>

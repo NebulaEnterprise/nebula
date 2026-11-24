@@ -1,9 +1,9 @@
 <script>
-  import { ChevronLeft } from '@lucide/svelte';
+  import { ChevronLeft, Gamepad2 } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
   import NameExtras from './NameExtras.svelte';
-  import { shortBio } from '../format.js';
+  import { shortBio, playingName } from '../format.js';
   import { ui, nowClock, openPopout, peekProfile, openMemberMenu } from '../state.svelte.js';
   import { presenceDot } from '../seen.js';
   function shown(m) {
@@ -18,6 +18,7 @@
         avatarUrl: ui.me.avatarUrl || m.avatarUrl,
         avatarColor: ui.me.avatarColor || m.avatarColor,
         bio: ui.me.bio ?? m.bio,
+        activity: ui.me.activity || m.activity || '',
         roleIcon: m.roleIcon || '',
         showcase: ui.me.showcase || m.showcase || null,
         showcaseBadge: ui.me.showcaseBadge || '',
@@ -45,7 +46,11 @@
       <Avatar user={m} size={34} />
       <div class="meta">
         <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong>{#if m.bot}<span class="bot-tag">BOT</span>{/if}<NameExtras user={shown(m)} /></div>
-        {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
+        {#if playingName(shown(m))}
+          <span class="playing"><Gamepad2 size={12} /> Playing {playingName(shown(m))}</span>
+        {:else if shortBio(shown(m).bio)}
+          <span>{shortBio(shown(m).bio)}</span>
+        {/if}
       </div>
     </button>
   {/each}
@@ -56,7 +61,11 @@
         <Avatar user={m} size={34} />
         <div class="meta">
           <div class="name-row"><strong><Name user={shown(m)} color={nameInk(m)} /></strong>{#if m.bot}<span class="bot-tag">BOT</span>{/if}<NameExtras user={shown(m)} /></div>
-          {#if shortBio(m.bio)}<span>{shortBio(m.bio)}</span>{/if}
+          {#if playingName(shown(m))}
+            <span class="playing"><Gamepad2 size={12} /> Playing {playingName(shown(m))}</span>
+          {:else if shortBio(shown(m).bio)}
+            <span>{shortBio(shown(m).bio)}</span>
+          {/if}
         </div>
       </button>
     {/each}
