@@ -98,6 +98,7 @@
   let editBits = $state(PERM.VIEW + PERM.SEND);
   let editIcon = $state('');
   let editMention = $state([]);
+  let editHoist = $state(false);
   let adding = $state(false);
   let held = $state([]);
   let addQ = $state('');
@@ -342,6 +343,7 @@
     editColor = role.color || '#99aab5';
     editBits = Number(role.permissions) || 0;
     editIcon = role.icon || '';
+    editHoist = !!role.hoist;
     editMention = [...(role.mentionBy || [])];
     held = people.filter((member) => memberRoleIds(member).includes(role.id)).map((member) => member.id);
   }
@@ -366,7 +368,7 @@
   async function saveRole() {
     if (!editing) return;
     const tab = roleTab;
-    const body = { color: editColor, icon: editIcon, permissions: editBits, mentionBy: editMention };
+    const body = { color: editColor, icon: editIcon, permissions: editBits, mentionBy: editMention, hoist: editing.id !== 'everyone' && editing.id !== 'here' && editing.id !== 'owner' && editHoist };
     if (editing.id !== 'everyone' && editing.id !== 'here') body.name = editName.trim() || editing.name;
     const ok = await run(() => api('/api/servers/' + ui.serverId + '/roles/' + editing.id, { method: 'PATCH', body }).then(() => loadMembers()));
     if (ok) {
@@ -1129,6 +1131,15 @@
                       {#each TAG_ICONS as icon}
                         <button type="button" class:on={editIcon === icon} onclick={() => (editIcon = icon)}>{icon}</button>
                       {/each}
+                    </div>
+                  {/if}
+                  {#if editing.id !== 'everyone' && editing.id !== 'here' && editing.id !== 'owner'}
+                    <div class="gset-line">
+                      <div>
+                        <strong>Display role members separately from online members</strong>
+                        <p class="hint">Online members with this role show under the role name in the member list. The highest role like this wins.</p>
+                      </div>
+                      <button type="button" class="switch" class:on={editHoist} role="switch" aria-checked={editHoist} aria-label="Display role members separately from online members" onclick={() => (editHoist = !editHoist)}><i></i></button>
                     </div>
                   {/if}
                   <p class="label">Who can mention this role</p>

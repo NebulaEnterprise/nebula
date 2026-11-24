@@ -1856,7 +1856,7 @@ function memberView(g, u, viewer) {
   const roles = memberRoles(g, u).slice().sort((a, b) => (b.position || 0) - (a.position || 0));
   const top = roles.find((r) => r.id !== 'everyone' && r.id !== 'owner');
   const mem = (g.members && g.members[u.id]) || {};
-  pub.roles = roles.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position || 0, icon: r.icon || '' }));
+  pub.roles = roles.filter((r) => r.id !== 'owner').map((r) => ({ id: r.id, name: r.name, color: r.color, position: r.position || 0, icon: r.icon || '', hoist: !!r.hoist }));
   const iconRole = roles.find((r) => r.icon && r.id !== 'everyone' && r.id !== 'here' && r.id !== 'owner');
   pub.roleIcon = iconRole ? iconRole.icon : '';
   pub.staff = staffKey(g, u);
@@ -5438,6 +5438,7 @@ app.patch('/api/servers/:id/roles/:roleId', auth, (req, res) => {
     role.icon = icon;
   }
   if (req.body?.permissions != null && role.id !== 'owner') role.permissions = Number(req.body.permissions) || 0;
+  if (req.body?.hoist != null && role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner') role.hoist = !!req.body.hoist;
   if (Array.isArray(req.body?.mentionBy)) {
     const ids = new Set((g.roles || []).map((r) => r.id));
     role.mentionBy = [...new Set(req.body.mentionBy.map((id) => String(id || '')).filter((id) => ids.has(id) && id !== role.id))].slice(0, 40);
