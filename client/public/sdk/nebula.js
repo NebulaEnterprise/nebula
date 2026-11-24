@@ -14,6 +14,8 @@ export class Bot {
     this.running = false;
     this.me = null;
     this._after = 0;
+    this._session = Math.floor(Math.random() * 1e9);
+    this._poll = 0;
   }
 
   command(name, description, fn) {
@@ -168,10 +170,20 @@ export class Bot {
       commands: this.commands.map((row) => ({ name: row.name, description: row.description })),
     });
     if (this.log) console.log('online as', this.me.username || this.me.display_name);
+    if (!this._signals && typeof process !== 'undefined') {
+      this._signals = true;
+      const bye = () => {
+        this.running = false;
+        this.api('POST', '/offline', {}).catch(() => {}).finally(() => process.exit(0));
+      };
+      process.once('SIGINT', bye);
+      process.once('SIGTERM', bye);
+    }
     await this.emit('ready', this.me);
     while (this.running) {
       try {
-        const data = await this.api('GET', '/events?after=' + this._after + '&wait=25');
+        this._poll += 1;
+        const data = await this.api('GET', '/events?after=' + this._after + '&wait=25&poll=' + this._session + '-' + this._poll);
         if (typeof data.last === 'number') this._after = data.last;
         for (const ev of data.events || []) {
           if (ev.id) this._after = ev.id;
@@ -193,6 +205,7 @@ export class Bot {
 
   stop() {
     this.running = false;
+    return this.api('POST', '/offline', {}).catch(() => {});
   }
 
   wrap(ev) {

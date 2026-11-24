@@ -8389,15 +8389,70 @@ function botView(bot) {
   };
 }
 
-function markBotOnline(user) {
+const botHolds = new Map();
+const botPolls = new Map();
+
+function releaseBotHold(user) {
   if (!user) return;
-  touchLive(user);
-  const prev = botPulse.get(user.id);
+  const id = String(user.id);
+  const left = (botHolds.get(id) || 1) - 1;
+  if (left > 0) botHolds.set(id, left);
+  else botHolds.delete(id);
+  const prev = botPulse.get(id);
   if (prev) clearTimeout(prev);
-  botPulse.set(user.id, setTimeout(() => {
-    botPulse.delete(user.id);
+  botPulse.set(id, setTimeout(() => {
+    botPulse.delete(id);
+    if ((botHolds.get(id) || 0) > 0) return;
     setLive(user, false);
-  }, 50000));
+  }, 3000));
+}
+
+function holdBot(user, req, res) {
+  const id = String(user.id);
+  botHolds.set(id, (botHolds.get(id) || 0) + 1);
+  const prev = botPulse.get(id);
+  if (prev) clearTimeout(prev);
+  botPulse.delete(id);
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    if (req.socket) req.socket.off('close', release);
+    releaseBotHold(user);
+  };
+  res.on('finish', release);
+  req.on('aborted', release);
+  if (req.socket) req.socket.on('close', release);
+}
+
+function freshBotPoll(user, raw) {
+  const text = String(raw || '');
+  if (!text) return true;
+  const id = String(user.id);
+  const last = botPolls.get(id) || '';
+  if (last === text) return false;
+  const [session, seq] = text.split('-');
+  const [prevSession, prevSeq] = String(last).split('-');
+  if (last && session === prevSession && Number(seq) <= Number(prevSeq)) return false;
+  botPolls.set(id, text);
+  return true;
+}
+
+function markBotOnline(user, req, res) {
+  if (!user) return;
+  if (req && !freshBotPoll(user, req.query && req.query.poll)) return;
+  touchLive(user);
+  if (req && res) holdBot(user, req, res);
+}
+
+function dropBotOnline(user) {
+  if (!user) return;
+  const id = String(user.id);
+  botHolds.delete(id);
+  const prev = botPulse.get(id);
+  if (prev) clearTimeout(prev);
+  botPulse.delete(id);
+  setLive(user, false);
 }
 
 function botAuth(req, res, next) {
@@ -8410,7 +8465,8 @@ function botAuth(req, res, next) {
   if (!bot || !user) return res.status(401).json({ error: 'Wrong token', code: 'unauthorized' });
   req.bot = bot;
   req.botUser = user;
-  markBotOnline(user);
+  if (req.method === 'POST' && (req.path === '/offline' || req.path === '/api/bot/v1/offline')) return next();
+  markBotOnline(user, req, res);
   next();
 }
 
@@ -8737,11 +8793,10 @@ app.delete('/api/me/bots/:id', auth, (req, res) => {
     if (g && g.members && g.members[bot.id]) delete g.members[bot.id];
   }
   saveGuilds();
+  const gone = users[bot.id];
+  if (gone) dropBotOnline(gone);
   delete users[bot.id];
   delete bots[bot.id];
-  const pulse = botPulse.get(bot.id);
-  if (pulse) clearTimeout(pulse);
-  botPulse.delete(bot.id);
   save(USERS_FILE, users);
   saveBots();
   res.json({ ok: true });
@@ -8811,6 +8866,11 @@ botApi.use((req, res, next) => {
   next();
 });
 botApi.use(botAuth);
+
+botApi.post('/offline', (req, res) => {
+  dropBotOnline(req.botUser);
+  res.json({ ok: true });
+});
 
 botApi.get('/me', (req, res) => {
   res.json(botView(req.bot));
@@ -8886,7 +8946,7 @@ botApi.get('/events', (req, res) => {
   waiter.finish = finish;
   const timer = setTimeout(finish, wait * 1000);
   botWaiters.add(waiter);
-  req.on('close', () => {
+  req.on('aborted', () => {
     if (finished) return;
     finished = true;
     clearTimeout(timer);
