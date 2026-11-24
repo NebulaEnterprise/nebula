@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Search, Shield, Users, Server, Activity, AlertTriangle, Bot, Ban, Clock, VolumeX, MessageSquareWarning, UserX, X, Copy, Download } from '@lucide/svelte';
+  import { Search, Shield, Users, Server, Activity, AlertTriangle, Bot, Ban, Clock, VolumeX, UserX, X, Copy, Download, Zap, Lock, Trash2, RefreshCw, BadgeCheck, Crown, Mail, Calendar, StickyNote, Settings, Gavel, FileText } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
   import { toast, staffReport } from '../state.svelte.js';
@@ -45,16 +45,27 @@
   ];
 
   const tiles = [
-    ['global-ban', 'Ban user', 'Platform-wide', true],
-    ['suspend', 'Suspend', 'Timed lockout', true],
-    ['warn', 'Warn user', 'Add a warning', true],
-    ['mute', 'Mute user', 'Stop their messages', false],
-    ['kick', 'Kick', 'One server', true],
-    ['server-ban', 'Server ban', 'One community', true],
-    ['delete-messages', 'Delete messages', 'Their posts', true],
-    ['lock', 'Lock account', 'No new messages', true],
-    ['logout', 'Force logout', 'Every session', false],
+    { action: 'global-ban', title: 'Ban user', blurb: 'Platform-wide', icon: Ban, tone: 'bad' },
+    { action: 'suspend', title: 'Timeout user', blurb: 'Restrict for a period', icon: Clock, tone: 'warn' },
+    { action: 'warn', title: 'Warn user', blurb: 'Send a warning', icon: AlertTriangle, tone: 'warn' },
+    { action: 'mute', title: 'Mute user', blurb: 'Stop their messages', icon: VolumeX, tone: 'bad' },
+    { action: 'kick', title: 'Kick user', blurb: 'Remove from a server', icon: UserX, tone: 'warn' },
+    { action: 'delete-messages', title: 'Delete messages', blurb: 'Remove their posts', icon: Trash2, tone: 'bad' },
+    { action: 'delete', title: 'Delete account', blurb: 'Can be restored', icon: Trash2, tone: 'bad' },
+    { action: 'reset-username', title: 'Reset username', blurb: 'Set a spare name', icon: RefreshCw, tone: 'neutral' },
+    { action: 'verify-email', title: 'Verify account', blurb: 'Mark email verified', icon: BadgeCheck, tone: 'good' },
   ];
+
+  const moreTiles = [
+    { action: 'server-ban', title: 'Server ban', blurb: 'One community', icon: Ban, tone: 'bad' },
+    { action: 'lock', title: 'Lock account', blurb: 'No new messages', icon: Lock, tone: 'warn' },
+    { action: 'logout', title: 'Force logout', blurb: 'Every session', icon: Lock, tone: 'neutral' },
+    { action: 'unmute', title: 'Unmute', blurb: 'Allow messages', icon: VolumeX, tone: 'good' },
+    { action: 'global-unban', title: 'Remove platform ban', blurb: 'Global only', icon: Shield, tone: 'good' },
+    { action: 'unban', title: 'Remove server ban', blurb: 'One community', icon: Shield, tone: 'good' },
+  ];
+
+  const tabIcons = { actions: Zap, roles: Users, permissions: Shield, activity: Activity, reports: FileText, moderation: Gavel, notes: StickyNote, settings: Settings };
 
   const selected = $derived(people.find((user) => user.id === selectedId) || null);
   const shown = $derived.by(() => {
@@ -81,8 +92,8 @@
 
   function stamp(value) {
     const time = typeof value === 'number' ? value : Date.parse(value || '');
-    if (!time) return 'Not recorded';
-    return new Date(time).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    if (!time) return '—';
+    return new Date(time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
   function pill(user) {
@@ -228,7 +239,7 @@
     <div class="adm-mark"><Shield size={18} /></div>
     <div>
       <h2>Admin Panel</h2>
-      <p>Manage accounts, roles, and the official server.</p>
+      <p>Manage your platform, users and server settings.</p>
     </div>
     <span class="adm-live"><i></i> All systems operational</span>
   </header>
@@ -238,19 +249,42 @@
   {/if}
 
   <div class="adm-stats">
-    <article><Users size={16} /><b>{counts.accounts.toLocaleString()}</b><span>Accounts</span><small>{counts.people.toLocaleString()} people</small></article>
-    <article><Server size={16} /><b>{counts.servers.toLocaleString()}</b><span>Servers</span><small>Communities on Nebula</small></article>
-    <article><Activity size={16} /><b>{counts.online.toLocaleString()}</b><span>Online now</span><small>From the directory</small></article>
-    <article><AlertTriangle size={16} /><b>{counts.reports.toLocaleString()}</b><span>Open reports</span><small>{counts.disabled.toLocaleString()} restricted</small></article>
+    <article>
+      <span class="stat-ico"><Users size={16} /></span>
+      <b>{counts.accounts.toLocaleString()}</b>
+      <span>Total users</span>
+      <small>{counts.people.toLocaleString()} people · {counts.bots.toLocaleString()} bots</small>
+    </article>
+    <article>
+      <span class="stat-ico"><Server size={16} /></span>
+      <b>{counts.servers.toLocaleString()}</b>
+      <span>Total servers</span>
+      <small>Communities on Nebula</small>
+    </article>
+    <article>
+      <span class="stat-ico"><Activity size={16} /></span>
+      <b>{counts.online.toLocaleString()}</b>
+      <span>Online now</span>
+      <small>Signed in right now</small>
+    </article>
+    <article>
+      <span class="stat-ico warn"><AlertTriangle size={16} /></span>
+      <b>{counts.reports.toLocaleString()}</b>
+      <span>Reports</span>
+      <small>{counts.disabled.toLocaleString()} restricted</small>
+    </article>
   </div>
 
   <div class="adm-grid">
-    <section class="adm-card adm-users">
+    <section class="adm-card">
       <div class="adm-card-top">
-        <h3>User management</h3>
-        <span>{shown.length}</span>
+        <span class="stat-ico"><Users size={15} /></span>
+        <div>
+          <h3>User management</h3>
+          <small>Search and manage platform users.</small>
+        </div>
       </div>
-      <label class="adm-search"><Search size={14} /><input bind:value={q} placeholder="Search username or id" /></label>
+      <label class="adm-search"><Search size={15} /><input bind:value={q} placeholder="Search users by username, ID..." /></label>
       <div class="adm-filters">
         {#each [['all', 'All'], ['people', 'People'], ['online', 'Online'], ['held', 'Restricted'], ['bots', 'Bots']] as [id, label]}
           <button type="button" class:on={filter === id} onclick={() => (filter = id)}>{label}</button>
@@ -265,11 +299,12 @@
           {#each shown as user (user.id)}
             {@const tag = pill(user)}
             <button type="button" class="adm-row" class:on={selectedId === user.id} onclick={() => choose(user)}>
-              <Avatar {user} size={36} />
-              <span>
+              <Avatar {user} size={40} />
+              <span class="who">
                 <strong>{user.displayName || user.username}</strong>
-                <small>@{user.username} · id {user.uid || '—'}</small>
+                <small>@{user.username} · ID {user.uid || '—'}</small>
               </span>
+              <i class="presence" class:off={user.status !== 'online'} class:held={user.globalBan || user.disabled || user.deleted}></i>
               <em class={tag[1]}>{tag[0]}</em>
             </button>
           {/each}
@@ -279,45 +314,72 @@
 
     <div class="adm-side">
       <section class="adm-card">
-        <div class="adm-card-top"><h3>Servers</h3></div>
+        <div class="adm-card-top">
+          <span class="stat-ico"><Server size={15} /></span>
+          <div>
+            <h3>Server management</h3>
+            <small>Communities on Nebula.</small>
+          </div>
+        </div>
+        {#if servers[0]}
+          <div class="adm-nebula" aria-hidden="true"></div>
+          <div class="adm-feature">
+            <strong>{servers[0].name}</strong>
+            <small>{servers[0].members.toLocaleString()} members</small>
+          </div>
+        {/if}
+        {#each servers.slice(1) as server (server.id)}
+          <div class="adm-server">
+            <strong>{server.name}</strong>
+            <small>{server.members.toLocaleString()} members</small>
+          </div>
+        {/each}
         {#if !servers.length}
           <p class="adm-empty">No servers yet.</p>
-        {:else}
-          {#each servers as server (server.id)}
-            <div class="adm-server">
-              <strong>{server.name}</strong>
-              <small>{server.members.toLocaleString()} members</small>
-            </div>
-          {/each}
         {/if}
       </section>
+
       <section class="adm-card">
-        <div class="adm-card-top"><h3>Moderation</h3><small>Pick a user, then confirm</small></div>
+        <div class="adm-card-top">
+          <span class="stat-ico"><Gavel size={15} /></span>
+          <div>
+            <h3>Moderation tools</h3>
+            <small>Pick a user, then confirm.</small>
+          </div>
+        </div>
         <div class="adm-tools">
-          <button type="button" onclick={() => arm('global-ban')}><Ban size={15} /> Global ban</button>
-          <button type="button" onclick={() => arm('server-ban')}><Ban size={15} /> Server ban</button>
-          <button type="button" onclick={() => arm('kick')}><UserX size={15} /> Kick</button>
-          <button type="button" onclick={() => arm('timeout')}><Clock size={15} /> Timeout</button>
-          <button type="button" onclick={() => arm('warn')}><MessageSquareWarning size={15} /> Warn</button>
-          <button type="button" onclick={() => arm('mute')}><VolumeX size={15} /> Mute</button>
+          <button type="button" onclick={() => arm('global-ban')}><Ban size={16} /><span>Ban</span></button>
+          <button type="button" onclick={() => arm('kick')}><UserX size={16} /><span>Kick</span></button>
+          <button type="button" onclick={() => arm('timeout')}><Clock size={16} /><span>Timeout</span></button>
+          <button type="button" onclick={() => arm('delete-messages')}><Trash2 size={16} /><span>Messages</span></button>
+          <button type="button" onclick={() => arm('warn')}><AlertTriangle size={16} /><span>Warn</span></button>
+          <button type="button" onclick={() => arm('mute')}><VolumeX size={16} /><span>Mute</span></button>
         </div>
       </section>
+
       <section class="adm-card">
-        <div class="adm-card-top"><h3>Audit log</h3></div>
+        <div class="adm-card-top">
+          <span class="stat-ico"><FileText size={15} /></span>
+          <div>
+            <h3>Audit log</h3>
+            <small>Recent staff actions.</small>
+          </div>
+        </div>
         {#if !audit.length}
           <p class="adm-empty">Staff actions will show up here.</p>
         {:else}
           {#each audit as row (row.id)}
             <div class="adm-audit">
-              <strong>{row.actorName}</strong>
-              <span>{row.action}{row.targetName ? ' · ' + row.targetName : ''}</span>
+              <span class="stat-ico"><Shield size={13} /></span>
+              <span><b>{row.actorName}</b> {row.action}{row.targetName ? ' · ' + row.targetName : ''}</span>
               <small>{when(row.at)}</small>
             </div>
           {/each}
         {/if}
       </section>
+
       <section class="adm-card adm-bot">
-        <Bot size={22} />
+        <span class="stat-ico"><Bot size={16} /></span>
         <div>
           <strong>Nebula bot</strong>
           <small>{counts.bots.toLocaleString()} bot {counts.bots === 1 ? 'account' : 'accounts'}</small>
@@ -327,48 +389,49 @@
   </div>
 
   {#if open && selected}
-    <div class="adm-shade" role="presentation" onclick={() => (open = false)}>
-      <div class="adm-modal" role="dialog" aria-label="User admin" onclick={(event) => event.stopPropagation()}>
+    {@const tag = pill(selected)}
+    <div class="adm-shade" role="presentation" onclick={() => (open = false)} onkeydown={(event) => { if (event.key === 'Escape') open = false; }}>
+      <div class="adm-modal" role="dialog" aria-label="User admin" tabindex="-1" onclick={(event) => event.stopPropagation()} onkeydown={(event) => event.stopPropagation()}>
         <header class="adm-modal-top">
-          <strong>{selected.displayName || selected.username}</strong>
           <div class="adm-tabs">
             {#each tabs as [id, label]}
-              <button type="button" class:on={tab === id} onclick={() => (tab = id)}>{label}</button>
+              {@const Icon = tabIcons[id]}
+              <button type="button" class:on={tab === id} onclick={() => (tab = id)}><Icon size={14} /> {label}</button>
             {/each}
           </div>
           <button type="button" class="adm-x" onclick={() => (open = false)} aria-label="Close"><X size={16} /></button>
         </header>
+
         <div class="adm-modal-body">
-          <aside>
-            <Avatar user={selected} size={84} />
+          <aside class="adm-profile">
+            <Avatar user={selected} size={96} />
             <h3>{selected.displayName || selected.username}</h3>
-            <p>@{selected.username}</p>
-            <p>ID {selected.uid || '—'}</p>
-            {#if selected.protected}
-              <em class="warn">Permissions do not apply</em>
-            {:else}
-              {@const tag = pill(selected)}
+            <p class="handle">@{selected.username}</p>
+            <p class="uid">ID {selected.uid || '—'}</p>
+            <div class="adm-pills">
+              {#if selected.protected}<em class="warn">Protected</em>{/if}
+              {#if selected.premium}<em class="premium"><Crown size={12} /> Premium</em>{/if}
+              {#if selected.emailVerified}<em class="good"><BadgeCheck size={12} /> Verified</em>{/if}
               <em class={tag[1]}>{tag[0]}</em>
-            {/if}
-            <dl>
-              <div><dt>Servers</dt><dd>{selected.servers.length}</dd></div>
-              <div><dt>Last seen</dt><dd>{stamp(selected.lastSeen)}</dd></div>
-              <div><dt>Joined</dt><dd>{stamp(selected.createdAt)}</dd></div>
-            </dl>
+            </div>
+            <div class="adm-facts">
+              <div><Server size={14} /><span>Servers</span><b>{selected.servers.length}</b></div>
+              <div><Activity size={14} /><span>Last seen</span><b>{stamp(selected.lastSeen)}</b></div>
+              <div><Calendar size={14} /><span>Joined</span><b>{stamp(selected.createdAt)}</b></div>
+            </div>
             {#if owner && selected.email}
-              <p class="adm-mail">{selected.email}</p>
+              <p class="adm-mail"><Mail size={14} /> {selected.email}</p>
             {:else if Number(selected.uid) === 1}
-              <p class="adm-mail">Email hidden</p>
+              <p class="adm-mail"><Mail size={14} /> Email hidden</p>
             {/if}
           </aside>
+
           <div class="adm-main">
             {#if formError}<p class="adm-error">{formError}</p>{/if}
-            {#if tempPassword}
-              <p class="adm-pass">Temporary password: <code>{tempPassword}</code></p>
-            {/if}
+            {#if tempPassword}<p class="adm-pass">Temporary password <code>{tempPassword}</code></p>{/if}
             {#if pending}
               <form class="adm-confirm" onsubmit={(event) => { event.preventDefault(); run(pending); }}>
-                <strong>{pending.replace('-', ' ')}</strong>
+                <strong>{pending.replaceAll('-', ' ')}</strong>
                 {#if pending === 'suspend'}
                   <label>Hours <input type="number" min="1" max="720" bind:value={hours} /></label>
                 {/if}
@@ -378,9 +441,7 @@
                 {#if ['kick', 'server-ban', 'timeout', 'unban'].includes(pending)}
                   <label>Server
                     <select bind:value={serverId}>
-                      {#each servers as server}
-                        <option value={server.id}>{server.name}</option>
-                      {/each}
+                      {#each servers as server}<option value={server.id}>{server.name}</option>{/each}
                     </select>
                   </label>
                 {/if}
@@ -391,41 +452,86 @@
                   <label>Type @{selected.username} <input bind:value={deleteText} /></label>
                 {/if}
                 <label>Reason <input bind:value={reason} placeholder="Why this is happening" /></label>
-                <div>
-                  <button type="submit" disabled={!!busy}>Confirm</button>
+                <div class="adm-inline">
+                  <button type="submit" class="primary" disabled={!!busy}>Confirm</button>
                   <button type="button" class="ghost" onclick={() => (pending = '')}>Cancel</button>
                 </div>
               </form>
             {/if}
 
             {#if tab === 'actions'}
-              <div class="adm-tiles">
-                {#each tiles as [action, title, blurb]}
-                  <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask(action)}>
-                    <strong>{title}</strong><small>{blurb}</small>
-                  </button>
-                {/each}
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('unmute') }><strong>Unmute</strong><small>Allow messages</small></button>
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('global-unban')}><strong>Remove platform ban</strong><small>Global only</small></button>
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('unban')}><strong>Remove server ban</strong><small>One community</small></button>
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('logout')}><strong>Revoke sessions</strong><small>Sign out everywhere</small></button>
+              <div class="adm-section">
+                <h3><Zap size={15} /> User actions</h3>
+                <p>Perform actions on this account.</p>
+                <div class="adm-tiles">
+                  {#each tiles as tile}
+                    {@const Icon = tile.icon}
+                    <button type="button" class="adm-tile" disabled={!selected.canEdit || !!busy} onclick={() => ask(tile.action)}>
+                      <span class="ico {tile.tone}"><Icon size={15} /></span>
+                      <strong>{tile.title}</strong>
+                      <small>{tile.blurb}</small>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <div class="adm-section">
+                <h3><Settings size={15} /> Account options</h3>
+                <div class="adm-optgrid">
+                  <label>Display name
+                    <span class="adm-field"><input bind:value={nextDisplay} disabled={!selected.canEdit} /><button type="button" disabled={!selected.canEdit || !!busy} onclick={() => run('display-name')}>Save</button></span>
+                  </label>
+                  <label>Username
+                    <span class="adm-field"><input bind:value={nextName} disabled={!selected.canEdit} /><button type="button" disabled={!selected.canEdit || !!busy} onclick={() => run('username')}>Save</button></span>
+                  </label>
+                  <label>Server
+                    <select bind:value={serverId}>
+                      {#each servers as server}<option value={server.id}>{server.name}</option>{/each}
+                    </select>
+                  </label>
+                  <label>Add role
+                    <select bind:value={roleId} onchange={() => roleId && run('role', { serverId, roleId, remove: false })} disabled={!selected.canEdit}>
+                      <option value="">Select role</option>
+                      {#each (servers.find((server) => server.id === serverId)?.roles || []) as role}
+                        <option value={role.id}>{role.name}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <div class="adm-switch">
+                    <div><strong>Disable account</strong><small>Stop them from signing in</small></div>
+                    <button type="button" class="switch" class:on={selected.disabled} disabled={!selected.canModerate || !!busy} onclick={() => ask(selected.disabled ? 'enable' : 'disable')} aria-label="Disable account"></button>
+                  </div>
+                  <div class="adm-switch">
+                    <div><strong>Force logout</strong><small>Sign them out of every device</small></div>
+                    <button type="button" class="texty" disabled={!selected.canEdit || !!busy} onclick={() => ask('logout')}>Sign out</button>
+                  </div>
+                </div>
+              </div>
+              <div class="adm-section">
+                <h3><Shield size={15} /> More actions</h3>
+                <div class="adm-tiles">
+                  {#each moreTiles as tile}
+                    {@const Icon = tile.icon}
+                    <button type="button" class="adm-tile" disabled={!selected.canEdit || !!busy} onclick={() => ask(tile.action)}>
+                      <span class="ico {tile.tone}"><Icon size={15} /></span>
+                      <strong>{tile.title}</strong>
+                      <small>{tile.blurb}</small>
+                    </button>
+                  {/each}
+                </div>
               </div>
             {:else if tab === 'roles'}
-              {#if !selected.roles.length}
-                <p class="adm-empty">Not in a server.</p>
-              {/if}
+              {#if !selected.roles.length}<p class="adm-empty">Not in a server.</p>{/if}
               {#each selected.roles as membership (membership.id)}
-                <div class="adm-block">
-                  <strong>{membership.name}</strong>
-                  {#if membership.banned}<em class="bad">Banned</em>{/if}
+                <div class="adm-section">
+                  <h3>{membership.name} {#if membership.banned}<em class="bad">Banned</em>{/if}</h3>
                   <div class="adm-chips">
                     {#each membership.roles as role (role.id)}
                       <button type="button" disabled={!selected.canEdit || role.id === 'everyone' || !!busy} onclick={() => run('role', { serverId: membership.id, roleId: role.id, remove: true })}>{role.name} ×</button>
                     {/each}
                   </div>
                   <label>Add role
-                    <select bind:value={roleId} onchange={() => roleId && run('role', { serverId: membership.id, roleId, remove: false })}>
-                      <option value="">Select</option>
+                    <select onchange={(event) => { const id = event.currentTarget.value; if (id) run('role', { serverId: membership.id, roleId: id, remove: false }); event.currentTarget.value = ''; }} disabled={!selected.canEdit}>
+                      <option value="">Select role</option>
                       {#each (servers.find((server) => server.id === membership.id)?.roles || []) as role}
                         <option value={role.id}>{role.name}</option>
                       {/each}
@@ -434,51 +540,53 @@
                 </div>
               {/each}
             {:else if tab === 'permissions'}
-              <div class="adm-tiles">
-                {#each [['messages', 'Messages', selected.restrictMessages], ['images', 'Images', selected.restrictImages], ['files', 'Files', selected.restrictFiles], ['voice', 'Voice', selected.restrictVoice]] as [flag, label, on]}
-                  <button type="button" class:on disabled={!selected.canEdit || !!busy} onclick={() => run('restrict', { flag })}>
-                    <strong>{label}</strong><small>{on ? 'Restricted' : 'Allowed'}</small>
-                  </button>
-                {/each}
+              <div class="adm-section">
+                <h3><Shield size={15} /> Restrictions</h3>
+                <p>A global ban covers every server. A server ban only removes them from the community you pick.</p>
+                <div class="adm-tiles">
+                  {#each [['messages', 'Messages', selected.restrictMessages], ['images', 'Images', selected.restrictImages], ['files', 'Files', selected.restrictFiles], ['voice', 'Voice', selected.restrictVoice]] as [flag, label, on]}
+                    <button type="button" class="adm-tile" class:held={on} disabled={!selected.canEdit || !!busy} onclick={() => run('restrict', { flag })}>
+                      <strong>{label}</strong>
+                      <small>{on ? 'Restricted' : 'Allowed'}</small>
+                    </button>
+                  {/each}
+                </div>
               </div>
-              <p class="adm-note">A global ban covers every server. A server ban only removes them from the community you pick.</p>
             {:else if tab === 'activity'}
-              <div class="adm-block">
-                <strong>Previous usernames</strong>
-                {#if !selected.nameHistory.length}<p>None recorded.</p>{:else}
-                  {#each selected.nameHistory as row}<p>@{row.name} · {when(row.at)}</p>{/each}
+              <div class="adm-section">
+                <h3>Previous usernames</h3>
+                {#if !selected.nameHistory.length}<p class="adm-empty">None recorded.</p>{:else}
+                  {#each selected.nameHistory as row}<p class="adm-line">@{row.name} <small>{when(row.at)}</small></p>{/each}
                 {/if}
               </div>
-              <div class="adm-block">
-                <strong>Previous display names</strong>
-                {#if !selected.displayHistory.length}<p>None recorded.</p>{:else}
-                  {#each selected.displayHistory as row}<p>{row.name} · {when(row.at)}</p>{/each}
+              <div class="adm-section">
+                <h3>Previous display names</h3>
+                {#if !selected.displayHistory.length}<p class="adm-empty">None recorded.</p>{:else}
+                  {#each selected.displayHistory as row}<p class="adm-line">{row.name} <small>{when(row.at)}</small></p>{/each}
                 {/if}
               </div>
-              <div class="adm-block">
-                <strong>Servers</strong>
-                {#each selected.servers as server}<p>{server.name}</p>{/each}
-                {#if !selected.servers.length}<p>None.</p>{/if}
+              <div class="adm-section">
+                <h3>Servers</h3>
+                {#each selected.servers as server}<p class="adm-line">{server.name}</p>{/each}
+                {#if !selected.servers.length}<p class="adm-empty">None.</p>{/if}
               </div>
               {#if owner}
-                <div class="adm-block">
-                  <strong>Sessions</strong>
-                  <p>{selected.sessions} active. IP addresses are not stored.</p>
-                  {#each selected.sessionList as row}<p>{(row.id || '').slice(0, 8)} · seen {stamp(row.lastSeen)}</p>{/each}
+                <div class="adm-section">
+                  <h3>Sessions</h3>
+                  <p class="adm-empty">{selected.sessions} active. IP addresses are not stored.</p>
+                  {#each selected.sessionList as row}<p class="adm-line">{(row.id || '').slice(0, 8)} <small>{stamp(row.lastSeen)}</small></p>{/each}
                 </div>
               {/if}
             {:else if tab === 'reports'}
-              {#if !selected.reports.length}
-                <p class="adm-empty">No reports against this account.</p>
-              {/if}
+              {#if !selected.reports.length}<p class="adm-empty">No reports against this account.</p>{/if}
               {#each selected.reports as report (report.id)}
-                <div class="adm-block">
-                  <strong>{report.reason || 'Report'}</strong>
+                <div class="adm-section">
+                  <h3>{report.reason || 'Report'}</h3>
                   <p>{report.text}</p>
                   <small>{report.status} · {when(report.at)}</small>
                   {#if report.status !== 'closed' && report.status !== 'handled'}
                     <div class="adm-inline">
-                      <button type="button" disabled={!!busy} onclick={() => closeReport(report.id, 'handle')}>Resolve</button>
+                      <button type="button" class="primary" disabled={!!busy} onclick={() => closeReport(report.id, 'handle')}>Resolve</button>
                       <button type="button" class="ghost" disabled={!!busy} onclick={() => closeReport(report.id, 'close')}>Dismiss</button>
                     </div>
                   {/if}
@@ -486,60 +594,77 @@
               {/each}
             {:else if tab === 'moderation'}
               <div class="adm-inline">
-                <button type="button" disabled={!selected.canEdit} onclick={() => arm('warn')}>Warn</button>
-                <button type="button" disabled={!selected.canEdit} onclick={() => arm('case')}>Create case</button>
+                <button type="button" class="primary" disabled={!selected.canEdit} onclick={() => arm('warn')}>Warn</button>
+                <button type="button" class="primary" disabled={!selected.canEdit} onclick={() => arm('case')}>Create case</button>
                 <button type="button" disabled={!selected.canEdit} onclick={() => ask('unsuspend')}>Clear suspension</button>
               </div>
-              <div class="adm-block">
-                <strong>Warnings</strong>
-                {#if !selected.warnings.length}<p>None.</p>{/if}
-                {#each selected.warnings as row}<p>{row.text} · {row.by} · {when(row.at)}</p>{/each}
+              <div class="adm-section">
+                <h3>Warnings</h3>
+                {#if !selected.warnings.length}<p class="adm-empty">None.</p>{/if}
+                {#each selected.warnings as row}<p class="adm-line">{row.text} <small>{row.by} · {when(row.at)}</small></p>{/each}
               </div>
-              <div class="adm-block">
-                <strong>Cases</strong>
-                {#if !selected.cases.length}<p>None.</p>{/if}
-                {#each selected.cases as row}<p>{row.text} · {row.by} · {when(row.at)}</p>{/each}
+              <div class="adm-section">
+                <h3>Cases</h3>
+                {#if !selected.cases.length}<p class="adm-empty">None.</p>{/if}
+                {#each selected.cases as row}<p class="adm-line">{row.text} <small>{row.by} · {when(row.at)}</small></p>{/each}
               </div>
             {:else if tab === 'notes'}
-              <form class="adm-confirm" onsubmit={(event) => { event.preventDefault(); run('note'); }}>
-                <label>Private staff note <textarea bind:value={note} rows="3" placeholder="Only staff can see this"></textarea></label>
-                <button type="submit" disabled={!!busy || !selected.canEdit}>Add note</button>
+              <form class="adm-section" onsubmit={(event) => { event.preventDefault(); run('note'); }}>
+                <h3>Private staff note</h3>
+                <textarea bind:value={note} rows="3" placeholder="Only staff can see this"></textarea>
+                <button type="submit" class="primary" disabled={!!busy || !selected.canEdit}>Add note</button>
               </form>
               {#each selected.notes as row (row.id)}
-                <div class="adm-block"><p>{row.text}</p><small>{row.by} · {when(row.at)}</small></div>
+                <div class="adm-section"><p>{row.text}</p><small>{row.by} · {when(row.at)}</small></div>
               {/each}
             {:else}
-              <div class="adm-fields">
-                <label>Username <input bind:value={nextName} disabled={!selected.canEdit} /></label>
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => run('username')}>Save username</button>
+              <div class="adm-section adm-settings">
+                <h3>Profile</h3>
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('reset-username')}>Reset username</button>
-                <label>Display name <input bind:value={nextDisplay} disabled={!selected.canEdit} /></label>
-                <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => run('display-name')}>Save display name</button>
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('reset-display')}>Reset display name</button>
-                {#if owner}
-                  <label>Email <input bind:value={nextEmail} disabled={!selected.canModerate} /></label>
-                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => run('email')}>Change email</button>
-                  <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('verify-email')}>{selected.emailVerified ? 'Unverify email' : 'Verify email'}</button>
-                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('password')}>Reset password</button>
-                {/if}
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('reset-avatar')}>Reset avatar</button>
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('reset-banner')}>Reset banner</button>
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('clear-status')}>Remove status</button>
                 <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('clear-effects')}>Remove effects</button>
-                <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('badge')}>{selected.early ? 'Remove early badge' : 'Grant early badge'}</button>
-                <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('premium')}>{selected.premium ? 'Revoke premium' : 'Grant premium'}</button>
-                <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask(selected.disabled ? 'enable' : 'disable')}>{selected.disabled ? 'Enable account' : 'Disable account'}</button>
-                <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask(selected.deleted ? 'restore' : 'delete')}>{selected.deleted ? 'Restore account' : 'Delete account'}</button>
-                <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('purge')}>Permanently delete</button>
+                {#if owner}
+                  <h3>Account</h3>
+                  <label>Email <input bind:value={nextEmail} disabled={!selected.canModerate} /></label>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => run('email')}>Change email</button>
+                  <button type="button" disabled={!selected.canEdit || !!busy} onclick={() => ask('verify-email')}>{selected.emailVerified ? 'Unverify email' : 'Verify email'}</button>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('password')}>Reset password</button>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('badge')}>{selected.early ? 'Remove early badge' : 'Grant early badge'}</button>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('premium')}>{selected.premium ? 'Revoke premium' : 'Grant premium'}</button>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask(selected.deleted ? 'restore' : 'delete')}>{selected.deleted ? 'Restore account' : 'Delete account'}</button>
+                  <button type="button" disabled={!selected.canModerate || !!busy} onclick={() => ask('purge')}>Permanently delete</button>
+                {/if}
               </div>
             {/if}
           </div>
-          <aside class="adm-quick">
+
+          <aside class="adm-rail">
+            <h4>User status</h4>
+            <p class="adm-status"><i class="presence" class:off={selected.status !== 'online'} class:held={selected.globalBan || selected.disabled || selected.deleted}></i> {selected.globalBan ? 'Banned' : selected.deleted ? 'Deleted' : selected.disabled ? 'Disabled' : selected.status === 'online' ? 'Online' : 'Offline'}</p>
+            <div class="adm-premium">
+              <Crown size={16} />
+              <div>
+                <strong>{selected.premium ? 'Premium' : tag[0]}</strong>
+                <small>{selected.premium ? 'Premium is on' : 'No premium'}</small>
+              </div>
+            </div>
+            <h4>Account flags</h4>
+            <div class="adm-flags">
+              {#if selected.emailVerified}<em class="good">Verified</em>{/if}
+              {#if selected.premium}<em class="premium">Premium</em>{/if}
+              {#if selected.early}<em class="premium">Early</em>{/if}
+              {#if selected.mfa}<em class="good">2FA</em>{/if}
+              {#if selected.locked || selected.muted}<em class="warn">Restricted</em>{/if}
+              {#if !selected.emailVerified && !selected.premium && !selected.early && !selected.mfa && !selected.locked && !selected.muted}<em class="neutral">None</em>{/if}
+            </div>
             <h4>Quick tools</h4>
-            <button type="button" onclick={copyId}><Copy size={14} /> Copy user id</button>
+            <button type="button" onclick={copyId}><Copy size={14} /> Copy user ID</button>
             <button type="button" onclick={exportUser}><Download size={14} /> Export user data</button>
-            <button type="button" onclick={() => (tab = 'notes')}>Add staff note</button>
-            <button type="button" onclick={() => arm('case')}>Create case</button>
+            <button type="button" onclick={() => (tab = 'notes')}><StickyNote size={14} /> Add note</button>
+            <button type="button" onclick={() => arm('case')}><AlertTriangle size={14} /> Create case</button>
             <p>Destructive actions need a reason and are written to the audit log. Passwords are shown once and are not logged.</p>
           </aside>
         </div>
@@ -549,66 +674,108 @@
 </section>
 
 <style>
-  .adm { display: flex; flex-direction: column; gap: 16px; min-width: 0; color: #f4e9ff; }
-  .adm-head, .adm-card-top, .adm-modal-top, .adm-inline, .adm-quick button, .adm-tools button, .adm-row, .adm-server, .adm-audit, .adm-bot { display: flex; align-items: center; gap: 10px; }
-  .adm-head h2, .adm h3, .adm h4 { margin: 0; }
-  .adm-head p, .adm-card-top small, .adm-empty, .adm-note, .adm-quick p, .adm-mail { color: #c4b5d4; margin: 0; }
-  .adm-mark { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(180deg, #c026d3, #7c3aed); }
-  .adm-live { margin-left: auto; color: #86efac; font-size: 13px; }
-  .adm-live i { width: 8px; height: 8px; border-radius: 99px; background: #4ade80; display: inline-block; margin-right: 6px; }
-  .adm-stats, .adm-grid, .adm-tiles, .adm-tools { display: grid; gap: 12px; }
+  .adm { display: flex; flex-direction: column; gap: 14px; min-width: 0; color: #f6edff; }
+  .adm-head { display: flex; align-items: center; gap: 12px; }
+  .adm-head h2, .adm h3, .adm h4 { margin: 0; font-weight: 650; }
+  .adm-head p, .adm-card-top small, .adm-empty, .adm-section > p, .adm-rail p, .adm-mail, .adm-switch small { color: #b9a4cc; margin: 0; }
+  .adm-mark, .stat-ico { width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: linear-gradient(180deg, #c026d3, #7c3aed); color: white; flex: none; }
+  .stat-ico.warn { background: linear-gradient(180deg, #e11d48, #9f1239); }
+  .adm-live { margin-left: auto; color: #86efac; font-size: 13px; white-space: nowrap; }
+  .adm-live i, .presence { width: 8px; height: 8px; border-radius: 99px; background: #4ade80; display: inline-block; }
+  .adm-live i { margin-right: 6px; }
+  .presence.off { background: #6b6280; }
+  .presence.held { background: #fb7185; }
+  .adm-stats, .adm-grid, .adm-tiles, .adm-tools, .adm-optgrid { display: grid; gap: 12px; }
   .adm-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .adm-stats article, .adm-card, .adm-modal { background: rgba(28, 10, 48, 0.72); border: 1px solid rgba(192, 132, 252, 0.28); border-radius: 18px; }
-  .adm-stats article { padding: 14px; display: flex; flex-direction: column; gap: 4px; }
-  .adm-stats b { font-size: 28px; }
-  .adm-stats small, .adm-row small, .adm-server small, .adm-audit small, .adm-tiles small, .adm-bot small { color: #b9a6cc; }
-  .adm-grid { grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.8fr); }
+  .adm-stats article, .adm-card, .adm-modal, .adm-section, .adm-tile, .adm-confirm { background: #1a1028; border: 1px solid rgba(168, 85, 247, 0.28); border-radius: 18px; }
+  .adm-stats article { padding: 14px 16px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 118px; }
+  .adm-stats b { font-size: 32px; line-height: 1.1; margin-top: 8px; }
+  .adm-stats small, .adm-row small, .adm-server small, .adm-audit small, .adm-tile small, .adm-bot small, .adm-feature small { color: #b9a4cc; }
+  .adm-grid { grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr); align-items: start; }
   .adm-card { padding: 14px; }
+  .adm-card-top, .adm-feature, .adm-server, .adm-audit, .adm-bot, .adm-row, .adm-inline, .adm-mail, .adm-premium, .adm-rail button { display: flex; align-items: center; gap: 10px; }
+  .adm-card-top { margin-bottom: 12px; }
+  .adm-card-top .stat-ico { width: 32px; height: 32px; }
   .adm-side { display: flex; flex-direction: column; gap: 12px; }
-  .adm-search { display: flex; gap: 8px; align-items: center; background: rgba(0, 0, 0, 0.25); border-radius: 12px; padding: 8px 10px; margin: 10px 0; }
-  .adm-search input, .adm-confirm input, .adm-confirm select, .adm-confirm textarea, .adm-fields input, .adm-block select { width: 100%; border: 0; background: transparent; color: inherit; outline: none; }
+  .adm-search { display: flex; gap: 8px; align-items: center; background: #12091c; border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+  .adm-search input, .adm-confirm input, .adm-confirm select, .adm-section input, .adm-section select, .adm-section textarea, .adm-field input { width: 100%; border: 0; background: transparent; color: inherit; outline: none; font: inherit; }
   .adm-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-  .adm-filters button, .adm-tabs button, .adm-inline button, .adm-fields button, .adm-confirm button, .adm-chips button, .adm-quick button, .adm-tools button { border: 0; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: inherit; padding: 6px 10px; cursor: pointer; }
-  .adm-filters button.on, .adm-tabs button.on, .adm-tiles button.on { background: #c026d3; }
-  .adm-list { display: flex; flex-direction: column; gap: 6px; max-height: 460px; overflow: auto; }
-  .adm-row, .adm-tools button, .adm-tiles button, .adm-fields button, .adm-quick button { text-align: left; }
-  .adm-row { width: 100%; background: transparent; border: 0; color: inherit; border-radius: 12px; padding: 6px; cursor: pointer; }
-  .adm-row.on, .adm-row:hover { background: rgba(192, 38, 211, 0.16); }
-  .adm-row span, .adm-tiles button, .adm-bot div { display: flex; flex-direction: column; min-width: 0; }
-  .adm-row strong, .adm-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .adm-row em, aside em { margin-left: auto; font-style: normal; font-size: 12px; border-radius: 999px; padding: 3px 8px; }
+  .adm-filters button, .adm-tabs button, .adm-inline button, .adm-chips button, .adm-rail button, .adm-settings button, .adm-field button, .texty { border: 0; border-radius: 999px; background: #241433; color: inherit; padding: 7px 12px; cursor: pointer; font: inherit; }
+  .adm-filters button.on, .adm-tabs button.on, .primary, .adm-field button { background: #c026d3; }
+  .adm-list { display: flex; flex-direction: column; gap: 4px; max-height: 520px; overflow: auto; }
+  .adm-row { width: 100%; background: transparent; border: 0; color: inherit; border-radius: 14px; padding: 8px; cursor: pointer; text-align: left; }
+  .adm-row.on, .adm-row:hover { background: rgba(192, 38, 211, 0.18); }
+  .who { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .who strong, .who small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adm-row em, .adm-pills em, .adm-flags em { font-style: normal; font-size: 12px; border-radius: 999px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; }
   .good { background: rgba(74, 222, 128, 0.16); color: #86efac; }
-  .bad { background: rgba(244, 63, 94, 0.16); color: #fda4af; }
+  .bad { background: rgba(244, 63, 94, 0.18); color: #fda4af; }
   .warn { background: rgba(251, 191, 36, 0.16); color: #fde68a; }
-  .neutral { background: rgba(255, 255, 255, 0.08); }
-  .adm-tools { grid-template-columns: 1fr 1fr; }
-  .adm-server, .adm-audit { justify-content: space-between; padding: 7px 0; }
-  .adm-audit span { color: #d8c4ea; flex: 1; }
-  .adm-shade { position: fixed; inset: 0; background: rgba(8, 2, 16, 0.62); display: grid; place-items: center; z-index: 40; padding: 24px; }
-  .adm-modal { width: min(1080px, 100%); max-height: min(820px, 100%); overflow: auto; }
-  .adm-modal-top { padding: 12px 14px; gap: 12px; position: sticky; top: 0; background: rgba(28, 10, 48, 0.96); }
-  .adm-tabs { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; }
-  .adm-x { margin-left: auto; }
-  .adm-modal-body { display: grid; grid-template-columns: 220px minmax(0, 1fr) 200px; gap: 14px; padding: 14px; }
-  aside { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-  aside h3, aside p { margin: 0; }
-  dl { margin: 8px 0 0; width: 100%; }
-  dl div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
-  dt { color: #b9a6cc; }
+  .premium { background: rgba(192, 38, 211, 0.22); color: #f0abfc; }
+  .neutral { background: rgba(255, 255, 255, 0.08); color: #ddd; }
+  .adm-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .adm-tools button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 72px; border: 0; border-radius: 14px; background: #12091c; color: inherit; cursor: pointer; font: inherit; }
+  .adm-tools button:hover, .adm-tile:hover { border-color: rgba(232, 121, 249, 0.7); }
+  .adm-server, .adm-audit { justify-content: space-between; padding: 8px 0; }
+  .adm-audit { gap: 8px; }
+  .adm-audit span { flex: 1; min-width: 0; color: #eadff5; }
+  .adm-audit .stat-ico, .adm-bot .stat-ico { width: 28px; height: 28px; border-radius: 9px; }
+  .adm-nebula { height: 108px; border-radius: 14px; margin-bottom: 10px; background:
+    radial-gradient(circle at 32% 42%, rgba(250, 232, 255, 0.95), transparent 16%),
+    radial-gradient(circle at 58% 58%, rgba(192, 132, 252, 0.85), transparent 26%),
+    radial-gradient(circle at 74% 28%, rgba(244, 114, 182, 0.45), transparent 18%),
+    linear-gradient(160deg, #3b0764, #12081f); }
+  .adm-feature { justify-content: space-between; }
+  .adm-shade { position: fixed; inset: 0; background: rgba(6, 2, 14, 0.72); display: grid; place-items: center; z-index: 120; padding: 28px; }
+  .adm-modal { width: min(1140px, 100%); max-height: min(860px, 100%); overflow: auto; background: #140a20; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
+  .adm-modal-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; position: sticky; top: 0; z-index: 2; background: #140a20; border-bottom: 1px solid rgba(168, 85, 247, 0.18); }
+  .adm-tabs { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
+  .adm-tabs button { display: inline-flex; align-items: center; gap: 6px; }
+  .adm-x { width: 34px; height: 34px; border-radius: 10px; border: 0; background: #241433; color: inherit; cursor: pointer; }
+  .adm-modal-body { display: grid; grid-template-columns: 250px minmax(0, 1fr) 230px; gap: 16px; padding: 16px; }
+  .adm-profile, .adm-rail { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+  .adm-profile h3, .handle, .uid { margin: 0; }
+  .handle, .uid { color: #c4b0d6; }
+  .adm-pills, .adm-flags, .adm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .adm-facts { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+  .adm-facts div { display: grid; grid-template-columns: 16px minmax(72px, auto) minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
+  .adm-facts span { color: #b9a4cc; }
+  .adm-facts b { font-weight: 600; text-align: right; white-space: nowrap; }
+  .adm-mail { width: 100%; font-size: 13px; word-break: break-all; }
+  .adm-section { padding: 14px; margin-bottom: 12px; }
+  .adm-section h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .adm-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .adm-tiles button, .adm-block, .adm-confirm, .adm-fields { background: rgba(0, 0, 0, 0.22); border-radius: 14px; }
-  .adm-tiles button { padding: 12px; }
-  .adm-block, .adm-confirm, .adm-fields { padding: 12px; margin-bottom: 10px; }
-  .adm-fields, .adm-confirm { display: flex; flex-direction: column; gap: 8px; }
-  .adm-confirm input, .adm-confirm select, .adm-confirm textarea, .adm-fields input, .adm-block select { background: rgba(255, 255, 255, 0.05); border-radius: 8px; padding: 8px; }
-  .adm-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
-  .adm-error { color: #fda4af; }
+  .adm-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 104px; padding: 14px; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+  .adm-tile.held { outline: 1px solid #c026d3; }
+  .ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; margin-bottom: 6px; }
+  .ico.bad { background: rgba(244, 63, 94, 0.16); color: #fb7185; }
+  .ico.warn { background: rgba(251, 191, 36, 0.16); color: #fbbf24; }
+  .ico.good { background: rgba(74, 222, 128, 0.16); color: #4ade80; }
+  .ico.neutral { background: rgba(192, 132, 252, 0.16); color: #e9d5ff; }
+  .adm-optgrid { grid-template-columns: 1fr 1fr; }
+  .adm-optgrid label, .adm-confirm label, .adm-settings label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #c4b0d6; }
+  .adm-field, .adm-optgrid select, .adm-confirm input, .adm-confirm select, .adm-settings input, .adm-section textarea { display: flex; align-items: center; gap: 8px; background: #12091c; border: 1px solid rgba(168, 85, 247, 0.22); border-radius: 12px; padding: 8px 10px; }
+  .adm-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #12091c; border-radius: 14px; padding: 12px; }
+  .adm-switch strong, .adm-switch small { display: block; }
+  .switch { width: 44px; height: 26px; border-radius: 99px; border: 0; background: #3b2a4d; position: relative; cursor: pointer; }
+  .switch:after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 99px; background: white; transition: transform 0.15s ease; }
+  .switch.on { background: #c026d3; }
+  .switch.on:after { transform: translateX(18px); }
+  .adm-confirm, .adm-settings { display: flex; flex-direction: column; gap: 8px; }
+  .adm-line { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; }
+  .adm-status { text-transform: capitalize; }
+  .adm-premium { width: 100%; background: linear-gradient(90deg, #6d28d9, #c026d3); border-radius: 14px; padding: 12px; }
+  .adm-premium small { color: #f3e8ff; }
+  .adm-rail { gap: 8px; }
+  .adm-rail h4 { margin-top: 8px; }
+  .adm-rail button { width: 100%; justify-content: flex-start; border-radius: 12px; }
+  .adm-error { color: #fda4af; margin: 0 0 8px; }
   .adm-pass { background: rgba(74, 222, 128, 0.12); padding: 8px 10px; border-radius: 10px; }
-  .adm-quick { gap: 8px; }
   .ghost { background: transparent !important; }
   button:disabled { opacity: 0.45; cursor: default; }
-  @media (max-width: 900px) {
-    .adm-stats, .adm-grid, .adm-modal-body, .adm-tiles { grid-template-columns: 1fr; }
+  @media (max-width: 980px) {
+    .adm-stats, .adm-grid, .adm-modal-body, .adm-tiles, .adm-optgrid { grid-template-columns: 1fr; }
     .adm-live { display: none; }
   }
 </style>
+
