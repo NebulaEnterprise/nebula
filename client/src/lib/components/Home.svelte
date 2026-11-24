@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { ArrowRight, Code2, Lock, Moon, Palette, Sun, Zap } from '@lucide/svelte';
   import { ui } from '../state.svelte.js';
-  import { t, languages, locale, applyLanguage } from '../i18n.svelte.js';
+  import { t } from '../i18n.svelte.js';
   import { getApiBase } from '../api.js';
   import DeveloperDocs from './DeveloperDocs.svelte';
 
@@ -11,7 +11,6 @@
   let online = $state(null);
   let onlineState = $state('loading');
 
-  const nav = ['Developers', 'Plus', 'About'];
   const desktop = typeof window !== 'undefined' && (!!window.nebulaDesktop || /Electron/i.test(navigator.userAgent));
   const downloadUrl = 'https://github.com/NebulaEnterprise/nebula/releases/latest/download/Nebula.exe';
   const features = $derived([
@@ -92,13 +91,7 @@
       {#if !desktop}
         <a href={downloadUrl} download="Nebula.exe">{t('Download')}</a>
       {/if}
-      {#each nav as label}
-        {#if label === 'Developers'}
-          <button type="button" class:on={docs} onclick={openDocs}>{t('Developers')}</button>
-        {:else}
-          <span>{label}</span>
-        {/if}
-      {/each}
+      <button type="button" class:on={docs} onclick={openDocs}>{t('Developers')}</button>
     </nav>
     <div class="tools">
       <button class="theme" type="button" onclick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}>
@@ -108,14 +101,6 @@
           <Moon size={16} />
         {/if}
       </button>
-      <label class="home-lang">
-        <span class="sr">{t('Language')}</span>
-        <select value={locale.code} onchange={(event) => applyLanguage(event.currentTarget.value)}>
-          {#each languages as row (row.code)}
-            <option value={row.code}>{row.native}</option>
-          {/each}
-        </select>
-      </label>
       <button class="signup" type="button" onclick={() => openAuth('register')}>{t('Sign up')}</button>
       <button class="login" type="button" onclick={() => openAuth('login')}>{t('Login')} <ArrowRight size={15} /></button>
     </div>
@@ -304,11 +289,6 @@
     color: #1a1028;
   }
   .tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
-  .home-lang select {
-    height: 36px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16);
-    background: rgba(255,255,255,0.06); color: inherit; padding: 0 12px; max-width: 180px;
-  }
-  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .theme {
     width: 36px;
     height: 36px;
