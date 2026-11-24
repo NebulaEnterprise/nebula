@@ -731,7 +731,7 @@ function lineOf(msg) {
     if (Number(msg.callSeconds) > 0) return 'Call ended';
     return 'Call';
   }
-  if (msg.locked) return 'Encrypted message';
+  if (msg.locked || isSealedText(msg.content)) return '';
   const text = String(msg.content || '').replace(/\[\[(?:gif|sticker|call):[^\]]+\]\]/g, '').trim();
   if (text) return text.slice(0, 140);
   if (msg.files && msg.files.length) return msg.files[0].name || 'Attachment';
@@ -1250,7 +1250,8 @@ export async function leaveThread() {
 
 export async function pinMessage(id, on) {
   const data = await api('/api/messages/' + encodeURIComponent(id) + '/pin', { method: 'POST', body: { on } });
-  if (data.message) ui.messages = ui.messages.map((msg) => msg.id === id ? data.message : msg);
+  const opened = data.message ? await revealMessage(data.message) : null;
+  if (opened && !isSealedText(opened.content)) ui.messages = ui.messages.map((msg) => msg.id === id ? opened : msg);
 }
 
 export function roomMuted(key) {
@@ -1363,7 +1364,9 @@ function currentRoom() {
 
 function stashRoom(id) {
   if (!id) return;
-  roomLogs.set(id, ui.messages.filter((msg) => msg && !msg.pending && !msg.failed));
+  const clean = ui.messages.filter((msg) => msg && !msg.pending && !msg.failed && !isSealedText(msg.content));
+  if (clean.length) roomLogs.set(id, clean);
+  else if (roomLogs.has(id) && !logReady(roomLogs.get(id))) roomLogs.delete(id);
 }
 
 function leaveChat() {
@@ -1420,22 +1423,29 @@ function restoreServer(id) {
   return snap.channelId || '';
 }
 
+function logReady(list) {
+  return !(list || []).some((msg) => msg && isSealedText(msg.content));
+}
+
 function showCached(id) {
   ui.typers = [];
-  if (id && roomLogs.has(id)) {
-    ui.messages = roomLogs.get(id).slice();
+  const cached = id ? roomLogs.get(id) : null;
+  if (cached && logReady(cached)) {
+    ui.messages = cached.slice();
     ui.chatLoading = false;
     return;
   }
+  if (cached) roomLogs.delete(id);
   ui.messages = [];
   ui.chatLoading = true;
 }
 
 function rememberLog(id, list) {
   if (!id) return;
-  const clean = (list || []).filter((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-'));
+  const clean = (list || []).filter((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-') && !isSealedText(msg.content));
   const prev = roomLogs.get(id);
-  if (!clean.length && prev && prev.length) return;
+  if (!clean.length && prev && prev.length && logReady(prev)) return;
+  if (!logReady(clean)) return;
   roomLogs.set(id, clean);
 }
 
@@ -1473,13 +1483,15 @@ function warmRoom(key, path) {
   if (!key || roomLogs.has(key) || warmSeen.has(key)) return;
   warmSeen.add(key);
   warmTail = warmTail.then(async () => {
-    if (roomLogs.has(key)) return;
+    if (roomLogs.has(key) && logReady(roomLogs.get(key))) return;
     try {
       const data = await api(path);
-      if (!roomLogs.has(key)) roomLogs.set(key, data.messages || []);
-      for (const msg of (data.messages || []).slice(-15)) {
-        if (msg && (msg.kind === 'call' || isSealedText(msg.content))) revealMessage(msg).catch(() => {});
+      const list = await revealList(data.messages || []);
+      if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) {
+        warmSeen.delete(key);
+        return;
       }
+      if (!roomLogs.has(key) || !logReady(roomLogs.get(key))) roomLogs.set(key, list);
     } catch (_) {
       warmSeen.delete(key);
     }
@@ -2591,6 +2603,7 @@ async function revealMessage(message) {
     else where = { mode: 'chat', serverId: ui.serverId };
     const key = masterOf(await roomMaster(where));
     content = await openText(key, content);
+    if (isSealedText(content)) return { ...message, content: '', locked: true };
     return decorateCall(message, content) || { ...message, content, locked: false };
   } catch (_) {
     return { ...message, content: '', locked: true };
@@ -2740,7 +2753,8 @@ export async function sendMessage() {
 
 export async function reactTo(messageId, emoji) {
   const data = await api('/api/messages/' + encodeURIComponent(messageId) + '/reactions', { method: 'POST', body: { emoji } });
-  if (data.message) ui.messages = ui.messages.map((msg) => msg.id === messageId ? data.message : msg);
+  const opened = data.message ? await revealMessage(data.message) : null;
+  if (opened && !isSealedText(opened.content)) ui.messages = ui.messages.map((msg) => msg.id === messageId ? opened : msg);
 }
 
 export async function removeMessage(messageId) {

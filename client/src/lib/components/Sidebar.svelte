@@ -35,6 +35,11 @@
     const note = ui.activity?.servers?.[id];
     return !!(note && (Number(note.unread) || Number(note.mentions)));
   }
+  function dmLine(text) {
+    const value = String(text || '');
+    if (!value || value.startsWith('NEB2.')) return 'No messages yet';
+    return value;
+  }
   function dmWhen(ts) {
     const n = Number(ts) || 0;
     if (!n) return '';
@@ -352,7 +357,7 @@
               {#if ui.dmTyping && ui.dmTyping[dm.other.id]}<span class="msg-preview">is typing...</span>
               {:else if dmSharing(dm.other)}<span class="msg-preview">Sharing their screen</span>
               {:else if partnerInCall(dm.other)}<span class="msg-preview">In a call</span>
-              {:else}<span class="msg-preview">{dm.preview || 'No messages yet'}</span>{/if}
+              {:else}<span class="msg-preview">{dmLine(dm.preview)}</span>{/if}
             </span>
             <button class="dm-x" title="Close conversation" onclick={(e) => { e.stopPropagation(); closeConversation('dm:' + dm.other.id, dm.lastId); }}><X size={14} /></button>
             {#if note && ui.dmUser?.id !== dm.other?.id}

@@ -12,6 +12,7 @@
   import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
+  import { isSealedText } from '../vault.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
   import { videoPoster } from '../media.js';
@@ -47,6 +48,10 @@
     while (i < list.length) {
       if (!authorBlocked(list[i])) {
         const msg = list[i];
+        if (msg && isSealedText(msg.content)) {
+          i += 1;
+          continue;
+        }
         out.push({ kind: 'msg', key: msg.clientKey || msg.id, msg, index: i });
         i += 1;
         continue;
@@ -325,6 +330,7 @@
 
   function previewText(msg) {
     const text = String(msg?.content || '').replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+    if (isSealedText(text)) return 'Message';
     if (text) return text.slice(0, 140);
     if (msg?.files?.length) return msg.files[0].name || 'Attachment';
     if (msg?.poll) return msg.poll.question || 'Poll';
@@ -457,6 +463,7 @@
   }
 
   function beginEdit(msg) {
+    if (!msg || isSealedText(msg.content)) return;
     ui.reply = null;
     ui.editing = { id: msg.id };
     ui.composer = msg.content || '';
@@ -468,7 +475,7 @@
     const onEdit = () => {
       if (String(ui.composer || '').trim()) return;
       const me = String(ui.me?.id || '');
-      const mine = [...(ui.messages || [])].reverse().find((msg) => msg && String(msg.authorId || msg.author?.id || '') === me && msg.content);
+      const mine = [...(ui.messages || [])].reverse().find((msg) => msg && String(msg.authorId || msg.author?.id || '') === me && msg.content && !isSealedText(msg.content));
       if (mine) beginEdit(mine);
     };
     const onClip = () => saveClip();
@@ -1634,7 +1641,7 @@
         {/if}
         {#if msg.locked}
           <p class="msg-locked">Encrypted message</p>
-        {:else if msg.content}
+        {:else if msg.content && !isSealedText(msg.content)}
           <div class="msg-content" class:jumbo={emojiScale(msg.content) === 'jumbo'} class:jumbo-mid={emojiScale(msg.content) === 'jumbo-mid'} class:jumbo-sm={emojiScale(msg.content) === 'jumbo-sm'}>{@html formatContent(msg.content, emoji, stickers, namesFor(msg))}</div>
           {#each inviteSlugs(msg.content) as slug (slug)}
             <InviteCard {slug} />

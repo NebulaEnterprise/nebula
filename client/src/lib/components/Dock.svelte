@@ -10,7 +10,8 @@
   import Inbox from './Inbox.svelte';
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges, playingName } from '../format.js';
-  import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
+  import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile, revealList } from '../state.svelte.js';
+  import { isSealedText } from '../vault.js';
   import { profileSeen, localClock } from '../seen.js';
   import { api, uploadFile, fileUrl } from '../api.js';
 
@@ -43,6 +44,12 @@
     return 'channelId=' + encodeURIComponent(ui.channelId || '') + '&serverId=' + encodeURIComponent(ui.serverId || '');
   }
 
+  function plainLine(msg) {
+    const text = String(msg?.content || '').trim();
+    if (!text || isSealedText(text)) return '';
+    return text;
+  }
+
   function when(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
@@ -59,13 +66,13 @@
     try {
       if (kind === 'pins') {
         const data = await api('/api/room/pins?' + roomQuery());
-        pins = data.messages || [];
+        pins = await revealList(data.messages || []);
       } else if (kind === 'media') {
         const data = await api('/api/room/media?' + roomQuery() + '&kind=' + mediaKind + '&user=' + encodeURIComponent(mediaWho));
         files = data.files || [];
       } else if (kind === 'search') {
         const data = await api('/api/room/search?' + roomQuery() + '&q=' + encodeURIComponent(ui.dockQuery || ''));
-        hits = data.messages || [];
+        hits = await revealList(data.messages || []);
       } else if (kind === 'threads' && ui.channelId) {
         const data = await api('/api/channels/' + encodeURIComponent(ui.channelId) + '/threads?serverId=' + encodeURIComponent(ui.serverId || ''));
         threads = data.threads || [];
@@ -198,7 +205,7 @@
         {#each pins as msg (msg.id)}
           <article class="dock-card">
             <div class="dock-who"><Avatar user={msg.author} size={28} dot={false} /><Name user={msg.author} /><time>{when(msg.createdAt)}</time></div>
-            <p>{msg.content || (msg.files?.[0]?.name || 'Attachment')}</p>
+            <p>{plainLine(msg) || (msg.files?.[0]?.name || 'Attachment')}</p>
             <button class="btn sm" onclick={() => pinMessage(msg.id, false)}>Unpin</button>
           </article>
         {/each}
@@ -242,7 +249,7 @@
         {#each hits as msg (msg.id)}
           <article class="dock-card">
             <div class="dock-who"><Name user={msg.author} /><time>{when(msg.createdAt)}</time></div>
-            <p>{msg.content || 'Attachment'}</p>
+            <p>{plainLine(msg) || 'Attachment'}</p>
           </article>
         {/each}
       {:else}

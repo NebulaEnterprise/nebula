@@ -34,6 +34,12 @@
     return rows;
   });
 
+  function mentionLine(text) {
+    const value = String(text || '').trim();
+    if (!value || value.startsWith('NEB2.')) return 'Mentioned you';
+    return value;
+  }
+
   function ago(iso) {
     const then = typeof iso === 'number' ? iso : Date.parse(iso || '');
     if (!then) return '';
@@ -110,7 +116,7 @@
           <div class="inbox-copy">
             <strong><Name user={row.author} /></strong>
             <span>{row.serverName} · #{row.channelName} · {ago(row.at)}</span>
-            <p>{row.content || 'Mentioned you'}</p>
+            <p>{mentionLine(row.content)}</p>
           </div>
           <i class="inbox-dot"></i>
         </button>

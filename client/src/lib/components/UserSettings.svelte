@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
@@ -71,7 +71,7 @@
     }
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds', desktop: 'Desktop app' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds', desktop: 'Desktop app' };
   const desktopApp = typeof window !== 'undefined' && !!window.nebulaDesktop;
 
   async function useSaved(id) {
@@ -224,7 +224,7 @@
   }
   let portalOpen = $state(false);
   let profilePart = $state('identity');
-  const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage === 'advanced' ? 'developer' : ui.userPage);
+  const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage === 'advanced' ? 'developer' : ui.userPage === 'notify' ? 'sounds' : ui.userPage);
   $effect(() => {
     if (page !== 'account') {
       securityOpen = false;
@@ -641,7 +641,6 @@
       {/if}
       <button class:on={page === 'media'} onclick={() => (ui.userPage = 'media')}><Images size={16} /> Media</button>
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
-      <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'sounds'} onclick={() => (ui.userPage = 'sounds')}><Volume2 size={16} /> Sounds</button>
       <button class:on={page === 'voice'} onclick={() => (ui.userPage = 'voice')}><Headphones size={16} /> Voice & Audio</button>
       <button class:on={page === 'keybinds'} onclick={() => (ui.userPage = 'keybinds')}><Keyboard size={16} /> Keybinds</button>
@@ -952,13 +951,7 @@
       {:else}
       <div class="grid-2" class:look-layout={page === 'profile'}>
         <div>
-          {#if page === 'notify'}
-            <div class="field">
-              <label>Sounds</label>
-              <p class="hint">Message, call, and voice sounds each have their own switch.</p>
-              <button type="button" class="btn brand" onclick={() => (ui.userPage = 'sounds')}>Open Sounds</button>
-            </div>
-          {:else if page === 'admin'}
+          {#if page === 'admin'}
             <div class="report-list">
               {#each ui.staffReports.filter((report) => report.status !== 'closed') as report (report.id)}
                 <article class="report-row">
