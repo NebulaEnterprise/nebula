@@ -3,7 +3,7 @@
   import { api, fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
   import { formatSize, imageLayout } from '../image-view.js';
   import { openFile } from '../seal.js';
-  import { fileRoomKeys, ui } from '../state.svelte.js';
+  import { fileRoomKeys, toast, ui } from '../state.svelte.js';
   import { openPackedFile } from '../vault.js';
   import VoiceNote from './VoiceNote.svelte';
 
@@ -285,16 +285,20 @@
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }
-    const blob = await fetch(url).then((res) => res.blob());
-    const type = /^image\//i.test(blob.type || '') ? blob.type : 'image/jpeg';
-    const saved = await api('/api/preview', { method: 'POST', body: blob, headers: { 'Content-Type': type } });
-    const pretty = 'https://nebulaapp.space' + saved.url;
-    const desktop = window.nebulaDesktop;
-    if (/Electron/i.test(navigator.userAgent || '') && !(desktop && desktop.pictureLinks)) {
-      window.open(fileUrl(saved.url), '_blank', 'noopener,noreferrer');
-      return;
+    const popup = window.open('', '_blank');
+    try {
+      const blob = await fetch(url).then((res) => res.blob());
+      if (!blob || !blob.size) throw new Error('Could not open that picture');
+      const type = /^image\//i.test(blob.type || '') ? blob.type : 'image/png';
+      const saved = await api('/api/preview', { method: 'POST', body: blob, headers: { 'Content-Type': type } });
+      if (!saved || !saved.url) throw new Error('Could not open that picture');
+      const pretty = 'https://nebulaapp.space' + saved.url;
+      if (popup && !popup.closed) popup.location.replace(pretty);
+      else window.open(pretty, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      if (popup && !popup.closed) popup.close();
+      toast(err.message || 'Could not open that picture');
     }
-    window.open(pretty, '_blank', 'noopener,noreferrer');
   }
 
   $effect(() => {

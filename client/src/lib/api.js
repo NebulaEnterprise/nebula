@@ -292,6 +292,41 @@ export function pinMedia(url, file) {
   }).catch(() => {});
 }
 
+async function blobFrom(src, extra) {
+  if (!src) return null;
+  try {
+    const res = await fetch(src, src.startsWith('blob:') || src.startsWith('data:') ? undefined : { headers: { ...TUNNEL_HEADERS, ...(extra || {}) }, cache: 'no-store' });
+    if (!res.ok) return null;
+    const type = res.headers.get('content-type') || '';
+    if (/text\/html|application\/json/i.test(type)) return null;
+    const blob = await res.blob();
+    if (!blob.size || /text\/html|application\/json/i.test(blob.type || '')) return null;
+    return blob;
+  } catch (_) {
+    return null;
+  }
+}
+
+export async function mediaBlob(url) {
+  const source = String(url || '');
+  if (!source) return null;
+  const fullGif = bannerGif(source);
+  const resolved = await resolveMedia(fullGif);
+  const direct = await blobFrom(resolved && (resolved.startsWith('blob:') || resolved.startsWith('data:')) ? resolved : '');
+  if (direct) return direct;
+  const fetched = await blobFrom(fileUrl(fullGif));
+  if (fetched) return fetched;
+  if (fullGif !== source) {
+    const again = await blobFrom(fileUrl(source));
+    if (again) return again;
+  }
+  const auth = { Authorization: 'Bearer ' + (localStorage.getItem('dc_token') || '') };
+  const owned = await blobFrom(getApiBase() + '/api/media/raw?url=' + encodeURIComponent(fullGif), auth);
+  if (owned) return owned;
+  if (fullGif === source) return null;
+  return blobFrom(getApiBase() + '/api/media/raw?url=' + encodeURIComponent(source), auth);
+}
+
 export function resolveMedia(url) {
   if (!url) return Promise.resolve('');
   if (isSongFile(url)) return Promise.resolve(fileUrl(url));

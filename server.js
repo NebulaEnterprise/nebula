@@ -4480,6 +4480,91 @@ app.post('/api/upload', auth, express.raw({ type: () => true, limit: '512mb' }),
   res.json({ ok: true, url });
 });
 
+const pictureLinks = new Map();
+const PICTURE_TTL = 15 * 60 * 1000;
+
+function rememberPicture(name, buf, type) {
+  const now = Date.now();
+  for (const [key, row] of pictureLinks) {
+    if (now - row.at > PICTURE_TTL) pictureLinks.delete(key);
+  }
+  while (pictureLinks.size >= 40) pictureLinks.delete(pictureLinks.keys().next().value);
+  pictureLinks.set(name, { buf, type, at: now });
+}
+
+app.post('/api/preview', auth, express.raw({ type: () => true, limit: '20mb' }), (req, res) => {
+  const buf = req.body;
+  const ext = sniffImage(buf);
+  if (!ext || !Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'Use a photo' });
+  if (buf.length > 20 * 1024 * 1024) return res.status(413).json({ error: 'That picture is too large' });
+  const name = crypto.randomBytes(18).toString('hex') + (ext === '.jpeg' ? '.jpg' : ext);
+  rememberPicture(name, buf, mediaType(name));
+  res.json({ ok: true, url: '/preview/' + name });
+});
+
+app.get('/preview/:name/raw', (req, res) => {
+  const name = String(req.params.name || '');
+  if (!/^[a-f0-9]{36}\.(?:png|jpe?g|gif|webp)$/i.test(name)) return res.status(404).end();
+  const row = pictureLinks.get(name);
+  if (!row || Date.now() - row.at > PICTURE_TTL) {
+    pictureLinks.delete(name);
+    return res.status(404).end();
+  }
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Cache-Control', 'private, max-age=300');
+  res.set('Content-Type', row.type);
+  res.end(row.buf);
+});
+
+function localMediaFile(rel) {
+  if (!/^(avatars|banners)\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(rel)) return '';
+  const sized = rel.match(/^(banners\/[A-Za-z0-9_-]+\/)(.+?)\.(?:s)?(?:32|128|512)\.gif$/i);
+  const picked = sized && fs.existsSync(path.join(FILES_DIR, sized[1] + sized[2] + '.gif')) ? sized[1] + sized[2] + '.gif' : rel;
+  const file = path.resolve(FILES_DIR, picked);
+  const root = path.resolve(FILES_DIR);
+  if (file !== root && !file.startsWith(root + path.sep)) return '';
+  return fs.existsSync(file) ? file : '';
+}
+
+app.get('/api/media/raw', auth, async (req, res) => {
+  const raw = String(req.query.url || '').split(/[?#]/)[0];
+  let buf = null;
+  let name = 'image';
+  try {
+    if (raw.startsWith('/files/')) {
+      const file = localMediaFile(raw.slice('/files/'.length));
+      if (!file) return res.status(404).end();
+      buf = fs.readFileSync(file);
+      name = path.basename(file);
+    } else if (/^\/uploads\/[A-Za-z0-9._-]+$/.test(raw)) {
+      const file = path.join(UPLOAD_DIR, path.basename(raw));
+      if (!fs.existsSync(file)) return res.status(404).end();
+      buf = fs.readFileSync(file);
+      if (isSealedFile(buf)) buf = openSealedBytes(buf);
+      name = path.basename(file);
+    } else {
+      const cfg = r2Config();
+      if (!cfg || !raw.startsWith(cfg.publicBase + '/')) return res.status(404).end();
+      let key = decodeURIComponent(raw.slice(cfg.publicBase.length + 1));
+      if (!key || key.includes('..') || !/^(avatars|banners|uploads)\//.test(key)) return res.status(404).end();
+      const sized = key.match(/^(banners\/[A-Za-z0-9_-]+\/)(.+?)\.(?:s)?(?:32|128|512)\.gif$/i);
+      buf = await r2Get(cfg, key);
+      if (!buf && sized) buf = await r2Get(cfg, sized[1] + sized[2] + '.gif');
+      if (sized && buf) key = sized[1] + sized[2] + '.gif';
+      if (!buf) return res.status(404).end();
+      name = key.split('/').pop();
+    }
+  } catch (_) {
+    return res.status(404).end();
+  }
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.set('Cache-Control', 'private, no-store');
+  res.set('Content-Type', mediaType(name));
+  res.end(buf);
+});
+
 function allowMedia(req, res, next) {
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');

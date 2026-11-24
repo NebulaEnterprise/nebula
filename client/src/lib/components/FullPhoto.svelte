@@ -1,11 +1,14 @@
 <script>
   import { Download } from '@lucide/svelte';
   import Photo from './Photo.svelte';
-  import { bannerGif, resolveMedia } from '../api.js';
+  import { mediaBlob } from '../api.js';
+  import { toast } from '../state.svelte.js';
 
   let { url = '', label = 'Photo', onclose } = $props();
   let node = $state(null);
   let saving = $state(false);
+  let fileBlob = $state(null);
+  let fileLabel = $state('profile-picture.png');
 
   function fileName(source, type) {
     const kind = /banner/i.test(label) ? 'banner' : 'profile-picture';
@@ -24,20 +27,41 @@
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setTimeout(() => URL.revokeObjectURL(local), 2000);
+    setTimeout(() => URL.revokeObjectURL(local), 4000);
   }
+
+  $effect(() => {
+    const source = url;
+    let stop = false;
+    fileBlob = null;
+    fileLabel = fileName(source, '');
+    if (!source) return;
+    mediaBlob(source).then((blob) => {
+      if (stop || !blob) return;
+      fileBlob = blob;
+      fileLabel = fileName(source, blob.type);
+    });
+    return () => { stop = true; };
+  });
 
   async function download(event) {
     event.preventDefault();
     event.stopPropagation();
-    if (saving || !url) return;
+    if (saving) return;
+    if (fileBlob) {
+      saveBlob(fileBlob, fileLabel);
+      return;
+    }
     saving = true;
     try {
-      const source = bannerGif(url);
-      const src = await resolveMedia(source);
-      if (!src) return;
-      const blob = await fetch(src).then((res) => res.blob());
-      saveBlob(blob, fileName(source, blob.type));
+      const blob = await mediaBlob(url);
+      if (!blob) {
+        toast('Could not download that picture');
+        return;
+      }
+      fileBlob = blob;
+      fileLabel = fileName(url, blob.type);
+      saveBlob(blob, fileLabel);
     } finally {
       saving = false;
     }
