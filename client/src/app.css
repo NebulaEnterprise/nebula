@@ -3563,6 +3563,12 @@ button.portal-card:hover, a.portal-card:hover { background: #35373c; }
 .portal-row.name-row { margin: 18px 0; }
 .portal-row input, .portal-row select, .portal-card label input, .portal-card label select { background: #1e1f22; color: #f2f3f5; border: 1px solid #3f4147; border-radius: 8px; padding: 8px 10px; }
 .portal-card label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; color: #b5bac1; font-size: 13px; font-weight: 650; }
+.bot-color { width: 72px; height: 36px; padding: 4px; }
+.bot-look { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; margin-top: 12px; }
+.bot-face, .bot-banner { border-radius: 16px; overflow: hidden; background: #5865f2; }
+.bot-face { width: 72px; height: 72px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 24px; }
+.bot-banner { height: 72px; display: grid; place-items: center; color: rgba(255,255,255,0.8); font-weight: 700; }
+.bot-face img, .bot-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .portal-back { color: #b5bac1; font-weight: 650; margin-bottom: 8px; }
 .portal-bots { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .portal-bot { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: #2b2d31; border-radius: 12px; padding: 12px; }

@@ -110,6 +110,7 @@
     : nameStatus === 'yours' ? 'This is your current username.'
     : nameStatus === 'checking' ? 'Checking that username…'
     : nameStatus === 'invalid' ? 'Use letters, numbers, dots, or underscores.'
+    : nameStatus === 'reserved' ? 'Usernames cannot end with _bot.'
     : ''
   );
   const nameReady = $derived(nameStatus === 'available' || nameStatus === 'yours');
@@ -131,6 +132,7 @@
     const username = cleanName(draftUser);
     if (!username) return toast('Username required');
     if (nameStatus === 'taken') return toast('That username is taken');
+    if (nameStatus === 'reserved') return toast('Usernames cannot end with _bot');
     if (nameStatus === 'checking') return;
     accountBusy = true;
     try {
@@ -243,6 +245,10 @@
     }
     if (clean === (ui.me?.username || '')) {
       nameStatus = 'yours';
+      return;
+    }
+    if (clean.endsWith('_bot')) {
+      nameStatus = 'reserved';
       return;
     }
     nameStatus = 'checking';
@@ -1387,17 +1393,17 @@
         </div>
         {#if accountDialog === 'username'}
           <p class="hint">This is the name people use to find you.</p>
-          <div class="field name-check" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid'}>
+          <div class="field name-check" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid' || nameStatus === 'reserved'}>
             <label>Username</label>
             <div class="name-field">
               <input bind:value={draftUser} maxlength="32" autocomplete="off" spellcheck="false" />
               {#if nameStatus === 'available' || nameStatus === 'yours'}
                 <span class="name-mark ok" aria-label="Available"><Check size={14} strokeWidth={3} /></span>
-              {:else if nameStatus === 'taken' || nameStatus === 'invalid'}
+              {:else if nameStatus === 'taken' || nameStatus === 'invalid' || nameStatus === 'reserved'}
                 <span class="name-mark bad" aria-label="Unavailable"><X size={14} strokeWidth={3} /></span>
               {/if}
             </div>
-            {#if nameMessage}<p class="name-status" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid'}>{nameMessage}</p>{/if}
+            {#if nameMessage}<p class="name-status" class:ok={nameStatus === 'available' || nameStatus === 'yours'} class:bad={nameStatus === 'taken' || nameStatus === 'invalid' || nameStatus === 'reserved'}>{nameMessage}</p>{/if}
           </div>
           <div class="modify-actions">
             <button type="button" class="btn" onclick={() => (accountDialog = '')}>Cancel</button>

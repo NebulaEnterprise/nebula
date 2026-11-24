@@ -106,13 +106,14 @@ export function formatContent(text, emoji, stickers, namesList) {
 export const MOON_CUTOFF = Date.UTC(2026, 11, 31, 23, 59, 59);
 
 export function hasMoonBadge(user) {
-  if (!user) return false;
+  if (!user || user.bot) return false;
   if ((user.badges || []).includes('early')) return true;
   const created = Date.parse(user.createdAt || '');
   return Number.isFinite(created) && created <= MOON_CUTOFF;
 }
 
 export function ownedBadges(user) {
+  if (!user || user.bot) return [];
   const list = [];
   if (hasMoonBadge(user)) list.push('early');
   if (user?.staff) list.push('staff');

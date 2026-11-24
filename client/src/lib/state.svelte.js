@@ -398,6 +398,8 @@ export async function loginWithPasskey() {
 
 export async function requestCode(email, username, password, secret, kind) {
   ui.authError = '';
+  const cleanUser = String(username || '').trim().toLowerCase().replace(/[^a-z0-9._]/g, '');
+  if (cleanUser.endsWith('_bot')) throw new Error('Usernames cannot end with _bot');
   const made = await createVault(secret);
   const view = await lockSecret(password, secret);
   ui.pendingVault = { vault: made.vault, secret, wrapped: made.wrapped, salt: made.salt, check: made.check, pub: made.pub, kind, view };

@@ -1815,7 +1815,7 @@ function memberView(g, u, viewer) {
   pub.roleColor = top && top.color ? top.color : '';
   pub.nick = mem.nick || '';
   pub.serverOwner = isOwner(g, u);
-  return pub;
+  return clearBotMarks(pub, u);
 }
 
 function requireGuild(req, res, perm, channel) {
@@ -1962,7 +1962,7 @@ function storeImage(value) {
 
 function slimAuthor(u) {
   if (!u) return null;
-  return {
+  const row = {
     id: u.id,
     username: u.username,
     displayName: u.displayName || u.username,
@@ -1977,6 +1977,7 @@ function slimAuthor(u) {
     developer: hasDeveloper(guilds.servers && guilds.servers[OFFICIAL_ID], u),
     bot: !!u.bot,
   };
+  return clearBotMarks(row, u);
 }
 
 function cleanLock(lock) {
@@ -2886,11 +2887,24 @@ function liveStories(list) {
   return out.slice(-8);
 }
 
+function clearBotMarks(row, u) {
+  if (!row || !u || !u.bot) return row;
+  row.badges = [];
+  row.staff = '';
+  row.developer = false;
+  row.shownBadges = [];
+  row.showcaseBadge = '';
+  row.showcase = null;
+  row.showcaseServerId = '';
+  row.roleIcon = '';
+  return row;
+}
+
 function publicUser(u, viewer) {
   if (!u) return null;
   const seen = seenFor(u, viewer || u);
   const self = !viewer || String(viewer.id) === String(u.id);
-  return {
+  const row = {
     id: u.id,
     uid: u.uid || null,
     username: u.username,
@@ -2959,6 +2973,7 @@ function publicUser(u, viewer) {
     passkeyCount: Array.isArray(u.passkeys) ? u.passkeys.length : 0,
     sessionCount: security.sessionCount(u),
   };
+  return clearBotMarks(row, u);
 }
 
 unpackImages();
@@ -3369,6 +3384,10 @@ function normalizeUsername(name) {
     .slice(0, 32);
 }
 
+function endsWithBotTag(name) {
+  return String(name || '').toLowerCase().endsWith('_bot');
+}
+
 function cleanAliases(list) {
   const out = [];
   const seen = new Set();
@@ -3441,6 +3460,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   const cleanUser = String(username).trim().toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 32);
   const cleanEmail = String(email).trim().toLowerCase();
   if (cleanUser.length < 1) return res.status(400).json({ error: 'Username required' });
+  if (endsWithBotTag(cleanUser)) return res.status(400).json({ error: 'Usernames cannot end with _bot' });
   if (!cleanEmail.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -3462,7 +3482,9 @@ app.post('/api/auth/request-code', async (req, res) => {
     view: cleanView(req.body || {}),
   };
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-    return res.json(createAccount(entry, req));
+    const made = createAccount(entry, req);
+    if (made.error) return res.status(made.status || 400).json({ error: made.error });
+    return res.json(made);
   }
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
@@ -3548,6 +3570,7 @@ function sessionFor(user, req) {
 }
 
 function createAccount(entry, req) {
+  if (endsWithBotTag(entry && entry.username)) return { error: 'Usernames cannot end with _bot', status: 400 };
   const id = uuidv4();
   const uid = nextUid();
   const badges = [];
@@ -3606,7 +3629,9 @@ app.post('/api/auth/verify', (req, res) => {
     return res.status(400).json({ error: 'Invalid code' });
   }
   entry.codeId = found[0];
-  res.json(createAccount(entry, req));
+  const made = createAccount(entry, req);
+  if (made.error) return res.status(made.status || 400).json({ error: made.error });
+  res.json(made);
 });
 
 app.post('/api/auth/login', (req, res) => {
@@ -4445,6 +4470,7 @@ app.get('/api/username-available', auth, (req, res) => {
   const clean = normalizeUsername(req.query.name);
   if (!clean) return res.json({ ok: true, username: '', available: false, reason: 'invalid' });
   if (clean === req.user.username) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
+  if (endsWithBotTag(clean) && !req.user.bot) return res.json({ ok: true, username: clean, available: false, reason: 'reserved' });
   const taken = Object.values(users).some((u) => u && u.id !== req.user.id && u.username === clean);
   res.json({ ok: true, username: clean, available: !taken, reason: taken ? 'taken' : 'available' });
 });
@@ -4468,6 +4494,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (username !== undefined) {
     const clean = normalizeUsername(username);
     if (clean.length < 1) return res.status(400).json({ error: 'Username required' });
+    if (endsWithBotTag(clean) && !req.user.bot) return res.status(400).json({ error: 'Usernames cannot end with _bot' });
     if (clean !== req.user.username) {
       const taken = Object.values(users).some((u) => u.id !== req.user.id && u.username === clean);
       if (taken) return res.status(409).json({ error: 'Username taken' });
@@ -8156,17 +8183,50 @@ function makeBotToken() {
 }
 
 function botUsername(name, selfId) {
-  let base = String(name || '').toLowerCase().replace(/[^a-z0-9._]/g, '').slice(0, 24);
-  if (!/^[a-z]/.test(base)) base = ('bot' + base).slice(0, 24);
-  if (base.length < 2) base = 'bot';
-  let candidate = base;
-  let n = 0;
+  let stem = String(name || '').toLowerCase().replace(/[^a-z0-9._]/g, '').replace(/_bot$/, '');
+  if (!/^[a-z]/.test(stem)) stem = ('bot' + stem).replace(/_bot$/, '');
+  stem = stem.slice(0, 28);
+  if (stem.length < 2) stem = 'bot';
   const taken = (value) => Object.values(users).some((user) => user && user.id !== selfId && String(user.username || '').toLowerCase() === value);
+  let n = 0;
+  let candidate = stem + '_bot';
   while (taken(candidate)) {
     n += 1;
-    candidate = (base + n).slice(0, 32);
+    const extra = String(n);
+    candidate = stem.slice(0, Math.max(2, 28 - extra.length)) + extra + '_bot';
   }
-  return candidate;
+  return candidate.slice(0, 32);
+}
+
+function ensureBotUsernames() {
+  let usersChanged = false;
+  let botsChanged = false;
+  const rows = new Map();
+  for (const bot of Object.values(bots)) if (bot && bot.id) rows.set(bot.id, bot);
+  for (const user of Object.values(users)) if (user && user.bot) rows.set(user.id, rows.get(user.id) || null);
+  for (const [id, bot] of rows) {
+    const user = users[id];
+    const current = String((user && user.username) || (bot && bot.username) || (bot && bot.name) || 'bot');
+    if (current.endsWith('_bot')) {
+      if (bot && bot.username !== current) {
+        bot.username = current;
+        botsChanged = true;
+      }
+      continue;
+    }
+    const next = botUsername(current, id);
+    if (user && user.username !== next) {
+      user.username = next;
+      user.bot = true;
+      usersChanged = true;
+    }
+    if (bot && bot.username !== next) {
+      bot.username = next;
+      botsChanged = true;
+    }
+  }
+  if (usersChanged) save(USERS_FILE, users);
+  if (botsChanged) saveBots();
 }
 
 function ownedBots(userId) {
@@ -8190,6 +8250,11 @@ function publicBot(bot, withToken) {
     displayName: user.displayName || bot.name,
     bio: String(user.bio || '').slice(0, 300),
     avatarUrl: publishedMedia(user, 'avatar') || '',
+    bannerUrl: publishedMedia(user, 'banner') || '',
+    avatarColor: user.avatarColor || '#5865f2',
+    accentColor: user.accentColor || user.avatarColor || '#5865f2',
+    bannerColor: user.bannerColor || user.accentColor || '#5865f2',
+    profileColors: profileShades(user.profileColors),
     tokenTail: bot.tokenTail || '',
     createdAt: bot.createdAt,
     servers: botServers(bot.id),
@@ -8208,6 +8273,10 @@ function botView(bot) {
     displayName: user.displayName || bot.name,
     bio: String(user.bio || '').slice(0, 300),
     avatar_url: publishedMedia(user, 'avatar') || '',
+    banner_url: publishedMedia(user, 'banner') || '',
+    avatar_color: user.avatarColor || '#5865f2',
+    accent_color: user.accentColor || user.avatarColor || '#5865f2',
+    banner_color: user.bannerColor || user.accentColor || '#5865f2',
     bot: true,
     owner_id: bot.ownerId,
     name: bot.name,
@@ -8491,6 +8560,8 @@ app.post('/api/me/bots', auth, (req, res) => {
   res.json({ ok: true, bot: publicBot(bots[id], token) });
 });
 
+ensureBotUsernames();
+
 app.patch('/api/me/bots/:id', auth, (req, res) => {
   const bot = bots[req.params.id];
   if (!bot || String(bot.ownerId) !== String(req.user.id)) return res.status(404).json({ error: 'Bot not found' });
@@ -8510,11 +8581,25 @@ app.patch('/api/me/bots/:id', auth, (req, res) => {
   }
   if (req.body?.bio != null) user.bio = String(req.body.bio || '').replace(/\s+/g, ' ').trim().slice(0, 300);
   if (req.body?.avatarUrl != null) {
-    const url = String(req.body.avatarUrl || '');
-    if (url && !url.startsWith('/uploads/') && !url.startsWith('/files/') && !/^https?:\/\//i.test(url)) {
-      return res.status(400).json({ error: 'Use an uploaded picture' });
-    }
-    user.avatarUrl = url.slice(0, 500);
+    const raw = String(req.body.avatarUrl || '');
+    const url = storeImage(raw);
+    if (raw && !url) return res.status(400).json({ error: 'Use an uploaded picture' });
+    user.avatarUrl = String(url || '').slice(0, 500);
+  }
+  if (req.body?.bannerUrl != null) {
+    const raw = String(req.body.bannerUrl || '');
+    const url = storeImage(raw);
+    if (raw && !url) return res.status(400).json({ error: 'Use an uploaded picture' });
+    user.bannerUrl = String(url || '').slice(0, 500);
+  }
+  const paint = req.body?.accentColor || req.body?.avatarColor || req.body?.bannerColor || (Array.isArray(req.body?.profileColors) ? req.body.profileColors[0] : '');
+  if (paint) {
+    const hex = String(paint).trim().slice(0, 9);
+    if (!/^#[0-9a-fA-F]{3,8}$/.test(hex)) return res.status(400).json({ error: 'Use a color like #5865f2' });
+    user.avatarColor = hex;
+    user.accentColor = hex;
+    user.bannerColor = hex;
+    user.profileColors = [hex, hex];
   }
   save(USERS_FILE, users);
   saveBots();

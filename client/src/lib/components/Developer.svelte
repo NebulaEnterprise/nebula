@@ -21,6 +21,9 @@
   let ask = $state('');
   let profileName = $state('');
   let profileBio = $state('');
+  let profileColor = $state('#5865f2');
+  let profileAvatar = $state('');
+  let profileBanner = $state('');
   let devOn = $state(developerMode());
 
   const openBot = $derived(bots.find((bot) => bot.id === openId) || null);
@@ -47,6 +50,9 @@
   $effect(() => {
     profileName = openBot?.displayName || openBot?.name || '';
     profileBio = openBot?.bio || '';
+    profileColor = openBot?.accentColor || openBot?.avatarColor || '#5865f2';
+    profileAvatar = openBot?.avatarUrl || '';
+    profileBanner = openBot?.bannerUrl || '';
   });
 
   async function createBot() {
@@ -88,7 +94,14 @@
   async function saveProfile() {
     if (!openBot) return;
     try {
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { displayName: profileName, bio: profileBio } });
+      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: {
+        displayName: profileName,
+        bio: profileBio,
+        accentColor: profileColor,
+        avatarColor: profileColor,
+        bannerColor: profileColor,
+        profileColors: [profileColor, profileColor],
+      } });
       await load();
       toast('Profile saved');
     } catch (err) {
@@ -96,20 +109,49 @@
     }
   }
 
+  async function uploadBotImage(file) {
+    const data = await api('/api/upload?slot=file&name=' + encodeURIComponent(file.name || 'image.png'), {
+      method: 'POST',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+    if (!data.url) throw new Error('The picture did not save');
+    return data.url;
+  }
+
   async function pickAvatar(event) {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';
     if (!file || !openBot) return;
     try {
-      const data = await api('/api/upload?slot=file&name=' + encodeURIComponent(file.name || 'avatar.png'), {
-        method: 'POST',
-        body: file,
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-      });
-      if (!data.url) throw new Error('The picture did not save');
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { avatarUrl: data.url } });
+      const url = await uploadBotImage(file);
+      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { avatarUrl: url } });
       await load();
       toast('Picture saved');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function pickBanner(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file || !openBot) return;
+    try {
+      const url = await uploadBotImage(file);
+      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { bannerUrl: url } });
+      await load();
+      toast('Banner saved');
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function clearBotImage(field) {
+    if (!openBot) return;
+    try {
+      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { [field]: '' } });
+      await load();
     } catch (err) {
       toast(err.message);
     }
@@ -236,6 +278,7 @@
         <section class="portal-card wide">
           <h3>{openBot.displayName || openBot.name}</h3>
           <p>@{openBot.username} · id {openBot.id}</p>
+          <p>The username ends with _bot.</p>
           {#if freshToken}
             <p>Copy this token now. Nebula will not show it again.</p>
             <code class="dev-token">{freshToken}</code>
@@ -260,9 +303,21 @@
           <h3>Profile</h3>
           <label>Display name<input bind:value={profileName} maxlength="32" /></label>
           <label>Bio<input bind:value={profileBio} maxlength="300" /></label>
+          <label>Profile color<input class="bot-color" type="color" bind:value={profileColor} /></label>
+          <div class="bot-look">
+            <div class="bot-face" style="background:{profileColor}">
+              {#if profileAvatar}<img src={profileAvatar} alt="" />{:else}{(profileName || 'B').charAt(0).toUpperCase()}{/if}
+            </div>
+            <div class="bot-banner" style="background:{profileColor}">
+              {#if profileBanner}<img src={profileBanner} alt="" />{:else}<span>Banner</span>{/if}
+            </div>
+          </div>
           <div class="portal-row">
             <button type="button" class="portal-go" onclick={saveProfile}>Save</button>
             <label class="portal-quiet">Picture<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickAvatar} /></label>
+            <label class="portal-quiet">Banner<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickBanner} /></label>
+            {#if profileAvatar}<button type="button" class="portal-quiet" onclick={() => clearBotImage('avatarUrl')}>Remove picture</button>{/if}
+            {#if profileBanner}<button type="button" class="portal-quiet" onclick={() => clearBotImage('bannerUrl')}>Remove banner</button>{/if}
           </div>
         </section>
         <section class="portal-card wide">
