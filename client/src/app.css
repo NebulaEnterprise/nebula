@@ -2532,6 +2532,23 @@ html.paint-mention .mention {
   font-size: 12px; font-weight: 650; font-style: normal; color: var(--text);
 }
 .pop-role i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.role-add {
+  width: 28px; height: 28px; padding: 0; border-radius: 999px; cursor: pointer;
+  display: inline-grid; place-items: center; color: rgba(255, 255, 255, 0.82);
+  background: transparent; border: 1px dashed rgba(255, 255, 255, 0.38);
+}
+.role-add:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.role-add-menu {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+  margin: 8px auto 0; max-width: 280px;
+}
+.role-add-menu button {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; border-radius: 8px; padding: 4px 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.08); color: var(--text); font-weight: 650;
+}
+.role-add-menu button i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.role-add-menu p { margin: 0; color: var(--muted); font-size: 12px; }
 .pop h3, .pop p { margin: 0; }
 .pop .handle, .preview-card .handle {
   display: inline-flex; align-items: center; gap: 6px;

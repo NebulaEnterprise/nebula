@@ -6,9 +6,9 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges, playingName } from '../format.js';
+  import { shortBio, visibleBadges, playingName, PERM } from '../format.js';
   import { api, fileUrl, uploadFile } from '../api.js';
-  import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia } from '../state.svelte.js';
+  import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia, hasPerm } from '../state.svelte.js';
   import { profileSeen, localClock } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
@@ -19,6 +19,9 @@
     return shown;
   });
   const roles = $derived(ui.mode === 'chat' ? (u?.roles || []).filter((r) => r && r.id !== 'everyone' && r.id !== 'owner').slice().sort((a, b) => (b.position || 0) - (a.position || 0)) : []);
+  const canManageRoles = $derived(ui.mode === 'chat' && !!ui.serverId && hasPerm(PERM.MANAGE_ROLES));
+  const offerRoles = $derived((ui.roles || []).filter((role) => role && role.id && role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner' && !roles.some((have) => have.id === role.id)));
+  let roleOpen = $state(false);
   const rel = $derived(u ? relation(u.id) : 'none');
   const shades = $derived(Array.isArray(u?.profileColors) && u.profileColors.length >= 2 ? u.profileColors : ['#7c3aed', '#c084fc']);
   const skin = $derived(['solid', 'glow', 'rainbow'].includes(u?.profileStyle) ? u.profileStyle : 'gradient');
@@ -47,9 +50,31 @@
     if (id === faceFor) return;
     faceFor = id;
     turned = false;
+    roleOpen = false;
     storyAt = -1;
     photoAt = -1;
   });
+
+  async function grantRole(role) {
+    if (!role || !u || !ui.serverId || busy) return;
+    busy = role.id;
+    try {
+      await api('/api/servers/' + encodeURIComponent(ui.serverId) + '/members/' + encodeURIComponent(u.id) + '/roles', {
+        method: 'POST',
+        body: { roleId: role.id, action: 'add' },
+      });
+      const next = { id: role.id, name: role.name, color: role.color || '', position: role.position || 0, icon: role.icon || '' };
+      const have = [...(u.roles || []).filter((row) => row && row.id !== role.id), next];
+      if (ui.popout && ui.popout.user && ui.popout.user.id === u.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, roles: have } };
+      ui.members = (ui.members || []).map((member) => member && member.id === u.id ? { ...member, roles: have } : member);
+      roleOpen = false;
+      toast('Added ' + role.name);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      busy = '';
+    }
+  }
 
   function flipCard(event) {
     if (event.target.closest('button, a, input, label, video, .ig-view')) return;
@@ -203,12 +228,26 @@
           <p class="profile-status">{u.aboutMe}</p>
         {/if}
       </div>
-      {#if roles.length}
+      {#if roles.length || canManageRoles}
         <div class="pop-role-list profile-roles">
           {#each roles as r}
             <em class="pop-role"><i style="background:{r.color || '#99aab5'}"></i>{r.name}</em>
           {/each}
+          {#if canManageRoles}
+            <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={(event) => { event.stopPropagation(); roleOpen = !roleOpen; }}><Plus size={14} /></button>
+          {/if}
         </div>
+        {#if roleOpen}
+          <div class="role-add-menu" onclick={(event) => event.stopPropagation()}>
+            {#each offerRoles as role (role.id)}
+              <button type="button" disabled={busy === role.id} onclick={() => grantRole(role)}>
+                <i style="background:{role.color || '#99aab5'}"></i>{role.name}
+              </button>
+            {:else}
+              <p>Every role is already on this profile.</p>
+            {/each}
+          </div>
+        {/if}
       {/if}
       <section class="profile-panel">
         <div class="profile-row"><span><User size={14} /> Display name</span><strong>{u.displayName || u.username}</strong></div>

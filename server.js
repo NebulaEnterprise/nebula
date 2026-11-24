@@ -1334,7 +1334,28 @@ function hereRole() {
 }
 
 function ogRole() {
-  return { id: 'og', name: 'og', color: '#e3b34c', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 40 };
+  return { id: 'og', name: 'OG', color: '#e3b34c', permissions: PERM.VIEW | PERM.SEND | PERM.INVITE, position: 40 };
+}
+
+function grantOfficialPerks(user, member) {
+  if (!user || user.bot || !member) return false;
+  let changed = false;
+  member.roles = Array.isArray(member.roles) ? member.roles : ['everyone'];
+  if (!member.roles.includes('everyone')) member.roles.push('everyone');
+  if (!member.roles.includes('og')) {
+    member.roles.push('og');
+    changed = true;
+  }
+  if (!Array.isArray(user.badges)) user.badges = [];
+  if (!user.badges.includes('early')) {
+    user.badges.push('early');
+    changed = true;
+  }
+  if (Array.isArray(user.shownBadges) && !user.shownBadges.includes('early')) {
+    user.shownBadges.push('early');
+    changed = true;
+  }
+  return changed;
 }
 
 function adminRole() {
@@ -1422,6 +1443,8 @@ function ensureGuilds() {
   if (!g.roles.some((r) => r.id === 'everyone')) g.roles.unshift(everyoneRole());
   if (!g.roles.some((r) => r.id === 'owner')) g.roles.push(ownerRole());
   if (!g.roles.some((r) => r.id === 'og')) g.roles.push(ogRole());
+  const og = g.roles.find((r) => r.id === 'og');
+  if (og) og.name = 'OG';
   for (const fresh of [adminRole(), managerRole(), moderatorRole(), developerRole()]) {
     const role = g.roles.find((r) => r.id === fresh.id);
     if (!role) {
@@ -1433,6 +1456,7 @@ function ensureGuilds() {
     role.position = fresh.position;
     if (!role.color) role.color = fresh.color;
   }
+  let perksChanged = false;
   for (const u of Object.values(users)) {
     if (!u) continue;
     if (!g.members[u.id]) {
@@ -1450,6 +1474,7 @@ function ensureGuilds() {
       g.members[u.id].roles = g.members[u.id].roles.filter((id) => id !== 'owner');
     }
     if (Number(u.uid) === 1 && !g.members[u.id].roles.includes('developer')) g.members[u.id].roles.push('developer');
+    if (g.members[u.id] && grantOfficialPerks(u, g.members[u.id])) perksChanged = true;
   }
   g.ownerIds = g.ownerIds.filter((id) => {
     const u = users[id];
@@ -1464,6 +1489,7 @@ function ensureGuilds() {
     }
   }
   save(GUILDS_FILE, guilds);
+  if (perksChanged) save(USERS_FILE, users);
 }
 
 function hydrateGuild(g) {
@@ -1548,7 +1574,7 @@ function canCustomize(g) {
 }
 
 function cleanTag(value) {
-  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 }
 
 const LOBBY_IDS = ['top', 'about', 'channels', 'live', 'giveaways', 'feed', 'faq', 'leaderboard', 'roles', 'rules', 'staff', 'links'];
@@ -5513,6 +5539,7 @@ app.post('/api/invites/:code/join', auth, (req, res) => {
     }
     if (found.kicked) delete found.kicked[req.user.id];
     found.members[req.user.id] = { roles: ['everyone'], joinedAt: new Date().toISOString(), onboarded: !found.onboarding.enabled };
+    if (found.id === OFFICIAL_ID && grantOfficialPerks(req.user, found.members[req.user.id])) save(USERS_FILE, users);
     const inviteKey = inviteRecordKey(found, code);
     if (inviteKey) found.invites[inviteKey].uses = (found.invites[inviteKey].uses || 0) + 1;
     audit(found, req.user, 'joined the server');
@@ -7282,7 +7309,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (b.tag != null || b.tagIcon != null || b.vanity != null || b.tagColor != null) {
       const nextTag = b.tag != null ? cleanTag(b.tag) : (g.tag || '');
       const nextIcon = b.tagIcon != null ? String(b.tagIcon || '') : (g.tagIcon || '');
-      if (b.tag != null && nextTag && nextTag.length < 2) return res.status(400).json({ error: 'A tag is 2 to 4 letters or numbers' });
+      if (b.tag != null && nextTag && (nextTag.length < 2 || nextTag.length > 6)) return res.status(400).json({ error: 'A tag is 2 to 6 letters or numbers' });
       if (nextIcon && !TAG_ICONS.includes(nextIcon)) return res.status(400).json({ error: 'Pick a tag icon from the list' });
       const wantsCustom = (b.tag != null && nextTag) || (b.vanity != null && g.id !== OFFICIAL_ID && cleanSlug(b.vanity));
       if (wantsCustom && !canCustomize(g)) {
@@ -7527,6 +7554,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     g.requests = g.requests.filter((r) => r.id !== reqItem.id);
     if (req.body.accept && !g.members[reqItem.userId] && !(g.bans && g.bans[reqItem.userId])) {
       g.members[reqItem.userId] = { roles: ['everyone'], joinedAt: new Date().toISOString(), onboarded: !(g.onboarding && g.onboarding.enabled) };
+      if (g.id === OFFICIAL_ID && grantOfficialPerks(users[reqItem.userId], g.members[reqItem.userId])) save(USERS_FILE, users);
       audit(g, req.user, 'accepted a join request');
       noteBotJoin(g, users[reqItem.userId]);
     } else audit(g, req.user, 'declined a join request');

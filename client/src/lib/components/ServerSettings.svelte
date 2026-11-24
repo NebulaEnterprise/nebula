@@ -569,10 +569,10 @@
 
           <section class="gset-card">
             <h3>Server tag</h3>
-            <p class="hint">2 to 4 letters or numbers. Members can wear it next to their name.</p>
+            <p class="hint">2 to 6 letters or numbers. Members can wear it next to their name.</p>
             {#if s.canCustomize}
               <div class="gset-inline">
-                <input bind:value={tag} maxlength="4" placeholder="TAG" />
+                <input bind:value={tag} maxlength="6" placeholder="TAG" />
                 <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, tagColor, vanity: s.official ? 'nebula' : vanity }))}>Save</button>
               </div>
               <div class="tag-icons">

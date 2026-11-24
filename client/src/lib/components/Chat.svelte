@@ -48,7 +48,7 @@
     while (i < list.length) {
       if (!authorBlocked(list[i])) {
         const msg = list[i];
-        if (msg && isSealedText(msg.content)) {
+        if (msg && (msg.locked || isSealedText(msg.content))) {
           i += 1;
           continue;
         }

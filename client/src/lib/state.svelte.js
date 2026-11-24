@@ -904,8 +904,7 @@ export async function loadDms() {
     adoptRemoteSeen(seen, data.seen);
     const next = applyDmSnippets(mergeOpened(data.dms || []));
     if (!sameDms(ui.dms, next)) ui.dms = next;
-    const warmIds = next.slice(0, 6).map((row) => row.other && row.other.id).filter(Boolean);
-    setTimeout(() => { for (const id of warmIds) warmDm(id); }, 1200);
+    for (const row of next) if (row.other && row.other.id) warmDm(row.other.id);
     const map = seenMap();
     const ready = localStorage.getItem(accountKey('nebula-dm-baseline')) === '1';
     if (!ready) {
@@ -1174,7 +1173,10 @@ export async function openDm(user) {
   if (!same) {
     if (prev.startsWith('ch:')) snapServer(ui.serverId);
     stashRoom(prev);
-    showCached(user && user.id ? 'dm:' + user.id : '');
+    const roomKey = user && user.id ? 'dm:' + user.id : '';
+    if (roomKey) warmDm(user.id);
+    showCached(roomKey);
+    await paintReady(roomKey);
   }
   dropLive();
   await loadMessages();
@@ -1344,10 +1346,8 @@ export async function openServer(id, opts = {}) {
   ui.seenMessageId = '';
   memberStamp = '';
   dropLive();
-  const warming = (ui.channels || []).slice();
-  const warmServer = ui.serverId;
+  warmServerChannels(ui.channels, ui.serverId);
   await Promise.all([loadMessages(), loadMembers()]);
-  setTimeout(() => warmServerChannels(warming, warmServer), 1200);
   import('./voice.js').then((mod) => mod.refreshVoiceRooms()).catch(() => {});
   if (!opts.keepDialog && ui.onboarding) ui.dialog = { kind: 'onboarding' };
 }
@@ -1424,7 +1424,7 @@ function restoreServer(id) {
 }
 
 function logReady(list) {
-  return !(list || []).some((msg) => msg && isSealedText(msg.content));
+  return !(list || []).some((msg) => msg && (msg.locked || isSealedText(msg.content)));
 }
 
 function showCached(id) {
@@ -1461,41 +1461,81 @@ function sameLog(a, b) {
   return true;
 }
 
-const warmSeen = new Set();
-let warmTail = Promise.resolve();
+const warmTasks = new Map();
+let warmSlots = 0;
+const warmQueue = [];
+
+function runWarm(job) {
+  return new Promise((resolve) => {
+    const start = () => {
+      warmSlots += 1;
+      Promise.resolve()
+        .then(job)
+        .then(resolve, () => resolve(null))
+        .finally(() => {
+          warmSlots -= 1;
+          const next = warmQueue.shift();
+          if (next) next();
+        });
+    };
+    if (warmSlots < 4) start();
+    else warmQueue.push(start);
+  });
+}
 
 export function warmDm(id) {
-  if (!id) return;
-  warmRoom('dm:' + id, '/api/dms/' + encodeURIComponent(id) + '/messages');
+  if (!id) return Promise.resolve(null);
+  return warmRoom('dm:' + id, '/api/dms/' + encodeURIComponent(id) + '/messages', { mode: 'dm', dmUserId: id });
 }
 
 export function warmChannel(id, serverId) {
-  if (!id) return;
+  if (!id) return Promise.resolve(null);
   const server = serverId || ui.serverId || '';
-  warmRoom('ch:' + id, '/api/channels/' + encodeURIComponent(id) + '/messages?serverId=' + encodeURIComponent(server));
+  return warmRoom('ch:' + id, '/api/channels/' + encodeURIComponent(id) + '/messages?serverId=' + encodeURIComponent(server), { mode: 'chat', serverId: server });
 }
 
 function warmServerChannels(channels, serverId) {
-  for (const ch of (channels || []).filter((row) => row && row.type === 'text' && row.id !== ui.channelId).slice(0, 4)) warmChannel(ch.id, serverId);
+  for (const ch of (channels || []).filter((row) => row && row.type === 'text' && !isVoiceRoom(row))) warmChannel(ch.id, serverId);
 }
 
-function warmRoom(key, path) {
-  if (!key || roomLogs.has(key) || warmSeen.has(key)) return;
-  warmSeen.add(key);
-  warmTail = warmTail.then(async () => {
-    if (roomLogs.has(key) && logReady(roomLogs.get(key))) return;
+function warmRoom(key, path, where) {
+  if (!key) return Promise.resolve(null);
+  if (roomLogs.has(key) && logReady(roomLogs.get(key))) return Promise.resolve(roomLogs.get(key));
+  if (warmTasks.has(key)) return warmTasks.get(key);
+  const task = runWarm(async () => {
+    if (roomLogs.has(key) && logReady(roomLogs.get(key))) return roomLogs.get(key);
     try {
       const data = await api(path);
-      const list = await revealList(data.messages || []);
-      if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) {
-        warmSeen.delete(key);
-        return;
-      }
+      let list = await revealList(data.messages || [], where);
+      if (list.some((msg) => msg && msg.locked)) list = await revealList(data.messages || [], where);
+      if (!list.length && (data.messages || []).length) return null;
+      if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) return null;
       if (!roomLogs.has(key) || !logReady(roomLogs.get(key))) roomLogs.set(key, list);
+      return roomLogs.get(key) || list;
     } catch (_) {
-      warmSeen.delete(key);
+      return null;
+    } finally {
+      warmTasks.delete(key);
     }
   });
+  warmTasks.set(key, task);
+  return task;
+}
+
+async function paintReady(key) {
+  if (!key || currentRoom() !== key) return;
+  const ready = roomLogs.get(key);
+  if (ready && logReady(ready)) {
+    ui.messages = ready.slice();
+    ui.chatLoading = false;
+    return;
+  }
+  const task = warmTasks.get(key);
+  if (!task) return;
+  const list = await task;
+  if (currentRoom() !== key || !list || !logReady(list)) return;
+  ui.messages = list.slice();
+  ui.chatLoading = false;
 }
 
 export function markAllRead() {
@@ -1607,10 +1647,11 @@ export function pickChannel(ch) {
   ui.picker = '';
   ui.reply = null;
   ui.editing = null;
+  warmChannel(ch.id, ui.serverId);
   showCached('ch:' + ch.id);
   snapServer(ui.serverId);
   dropLive();
-  loadMessages();
+  paintReady('ch:' + ch.id).then(() => loadMessages());
 }
 
 let messagesBusy = false;
@@ -2032,6 +2073,7 @@ export async function loadMessages(quiet, live) {
   if (quiet && messagesBusy) return 'skip';
   const serial = ++pulseSerial;
   messagesBusy = true;
+  let holdLoading = false;
   const mode = ui.mode;
   const channelId = ui.channelId;
   const dmId = ui.dmUser?.id || '';
@@ -2079,7 +2121,28 @@ export async function loadMessages(quiet, live) {
     }
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
-    const list = await revealList(data.messages);
+    const where = roomWhere();
+    let list = await revealList(data.messages, where);
+    if (list.some((msg) => msg && msg.locked)) list = await revealList(data.messages, where);
+    if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) {
+      const cached = roomLogs.get(currentRoom());
+      if (cached && logReady(cached) && cached.length) {
+        if (!sameLog(ui.messages, cached)) ui.messages = cached.slice();
+        ui.chatLoading = false;
+        return 'same';
+      }
+      if (ui.messages.some((msg) => msg && msg.content && !msg.locked && !isSealedText(msg.content))) {
+        ui.chatLoading = false;
+        return 'same';
+      }
+      ui.messages = [];
+      ui.chatLoading = true;
+      holdLoading = true;
+      const key = currentRoom();
+      const again = ui.mode === 'dm' && ui.dmUser ? warmDm(ui.dmUser.id) : ui.mode === 'chat' && ui.channelId ? warmChannel(ui.channelId, ui.serverId) : null;
+      if (again) again.then(() => paintReady(key));
+      return 'same';
+    }
     paintNames(list);
     const newest = list[list.length - 1];
     if (previousId && newest && newest.id !== previousId && newest.author && newest.author.id) {
@@ -2106,7 +2169,7 @@ export async function loadMessages(quiet, live) {
   } finally {
     if (serial === pulseSerial) {
       messagesBusy = false;
-      if (!live) ui.chatLoading = false;
+      if (!live && !holdLoading) ui.chatLoading = false;
     }
   }
 }
@@ -2587,7 +2650,13 @@ export async function sealCallStart(where) {
   };
 }
 
-async function revealMessage(message) {
+function roomWhere() {
+  if (ui.mode === 'dm' && ui.dmUser) return { mode: 'dm', dmUserId: ui.dmUser.id };
+  if (ui.mode === 'group' && ui.group) return { mode: 'group', groupId: ui.group.id };
+  return { mode: 'chat', serverId: ui.serverId };
+}
+
+async function revealMessage(message, whereHint) {
   if (!message) return message;
   if (message.seal && !String(message.content || '').trim()) return null;
   let content = message.content || '';
@@ -2597,10 +2666,12 @@ async function revealMessage(message) {
   }
   try {
     const channel = String(message.channelId || '');
-    let where = null;
-    if (channel.startsWith('dm:')) where = { mode: 'dm', dmUserId: channel.slice(3).split(':').find((id) => id !== ui.me?.id) || '' };
-    else if (channel.startsWith('group:')) where = { mode: 'group', groupId: channel.slice(6) };
-    else where = { mode: 'chat', serverId: ui.serverId };
+    let where = whereHint || null;
+    if (!where) {
+      if (channel.startsWith('dm:')) where = { mode: 'dm', dmUserId: channel.slice(3).split(':').find((id) => id && id !== ui.me?.id) || '' };
+      else if (channel.startsWith('group:')) where = { mode: 'group', groupId: channel.slice(6) };
+      else where = { mode: 'chat', serverId: ui.serverId };
+    }
     const key = masterOf(await roomMaster(where));
     content = await openText(key, content);
     if (isSealedText(content)) return { ...message, content: '', locked: true };
@@ -2636,10 +2707,10 @@ function repairReplies(list) {
   });
 }
 
-export async function revealList(list) {
+export async function revealList(list, whereHint) {
   const opened = [];
   for (const msg of list || []) {
-    const next = await revealMessage(msg);
+    const next = await revealMessage(msg, whereHint);
     if (next) opened.push(next);
   }
   return repairReplies(opened);
