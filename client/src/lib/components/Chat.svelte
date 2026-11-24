@@ -12,6 +12,7 @@
   import { startCall, joinOpenCall, joinVoice, leaveVoice, toggleMute, toggleDeafen, toggleShare, changeShare, setWatching, localScreen, remoteScreen, partnerInCall, callDevices, setCallMic, setCallSpeaker, setCallProcessing, takeClip } from '../voice.js';
   import Dock from './Dock.svelte';
   import { formatContent, emojiScale, inviteSlugs, PERM } from '../format.js';
+  import { t } from '../i18n.svelte.js';
   import { isSealedText } from '../vault.js';
   import InviteCard from './InviteCard.svelte';
   import { fileUrl, api } from '../api.js';
@@ -1452,14 +1453,14 @@
     {/if}
     <button type="button" class="bar-tool" class:on={muted} title="Notifications" onclick={() => (bell = !bell)}><Bell size={18} /></button>
     <button type="button" class="bar-tool" class:on={ui.dock === 'pins'} title="Pinned messages" onclick={() => toggleDock('pins')}><Pin size={18} /></button>
-    <button type="button" class="bar-tool" class:on={ui.dock === 'media'} title="Media" onclick={() => toggleDock('media')}><ImageIcon size={18} /></button>
+    <button type="button" class="bar-tool" class:on={ui.dock === 'media'} title={t('Media')} onclick={() => toggleDock('media')}><ImageIcon size={18} /></button>
     {#if ui.mode === 'chat' || ui.mode === 'thread'}
       <button type="button" class="bar-tool" class:on={ui.dock === 'threads'} title="Threads" onclick={() => toggleDock('threads')}><MessagesSquare size={18} /></button>
     {/if}
     <button type="button" class="bar-tool" class:on={(ui.mode === 'chat' || ui.mode === 'thread') ? ui.showMembers !== false : ui.dock === (ui.mode === 'group' ? 'group' : 'profile')} title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
     <label class="top-search">
       <Search size={15} />
-      <input placeholder={ui.mode === 'dm' ? 'Search' : 'Search ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />
+      <input placeholder={ui.mode === 'dm' ? t('Search') : t('Search') + ' ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />
     </label>
   </div>
 </div>
@@ -1614,7 +1615,7 @@
   {:else if !ui.messages.length}
     <div class="welcome">
       <h2>{ui.mode === 'dm' ? (ui.dmUser?.displayName || 'Direct message') : ui.mode === 'group' ? (ui.group?.name || 'Group') : ui.mode === 'thread' ? (ui.thread?.name || 'Thread') : voiceChat ? (voiceChat.name || 'Voice') : '#' + (channel?.name || 'channel')}</h2>
-      <p>{ui.mode === 'dm' ? 'This is the start of your conversation.' : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : voiceChat ? 'This is the start of the chat in ' + (voiceChat.name || 'this voice channel') + '.' : 'This is the start of the channel. Say hi.'}</p>
+      <p>{ui.mode === 'dm' ? t('This is the start of your conversation.') : ui.mode === 'group' ? 'Welcome to the beginning of the ' + (ui.group?.name || 'group') + ' group.' : ui.mode === 'thread' ? 'Welcome to #' + (ui.thread?.name || 'thread') + '. This is the start of the thread.' : voiceChat ? 'This is the start of the chat in ' + (voiceChat.name || 'this voice channel') + '.' : t('This is the start of the channel. Say hi.')}</p>
     </div>
   {/if}
   {#each chatRows as row (row.key)}
@@ -1763,8 +1764,8 @@
 </div>
 {#if behind}
   <button type="button" class="history-jump" onclick={pinBottom}>
-    <strong>You're viewing older messages</strong>
-    <span>Scroll down to see new messages</span>
+    <strong>{t("You're viewing older messages")}</strong>
+    <span>{t('Scroll down to see new messages')}</span>
   </button>
 {/if}
 {#if reactTip}
@@ -1998,7 +1999,7 @@
       onblur={noteTypingBlur}
       maxlength="2000"
       disabled={locked}
-      placeholder={locked ? 'Finish onboarding before you chat' : ui.editing ? 'Edit message' : ui.mode === 'dm' ? 'Message @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? 'Message ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? 'Message #' + (ui.thread?.name || 'thread') : 'Message ' + (voiceChat?.name || '#' + (channel?.name || 'channel'))}
+      placeholder={locked ? t('Finish onboarding before you chat') : ui.editing ? t('Edit message') : ui.mode === 'dm' ? t('Message') + ' @' + (ui.dmUser?.username || '') : ui.mode === 'group' ? t('Message') + ' ' + (ui.group?.name || 'group') : ui.mode === 'thread' ? t('Message') + ' #' + (ui.thread?.name || 'thread') : t('Message') + ' ' + (voiceChat?.name || '#' + (channel?.name || 'channel'))}
     ></textarea>
     <button type="button" class="btn icon picker-toggle" title="Emoji, stickers, and GIFs" disabled={locked} onclick={() => openPicker('emoji')}><Smile size={20} /></button>
     <button type="button" class="btn icon mic-btn" title="Voice message" disabled={locked} onclick={startVoice}><Mic size={18} /></button>

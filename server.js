@@ -6852,8 +6852,8 @@ function searchHit(msg, query) {
   if (mentions && !text.toLowerCase().includes('@' + mentions.toLowerCase())) return false;
   if (has === 'link' && !/https?:\/\//i.test(text)) return false;
   if (has === 'file' && !(msg.files || []).length) return false;
-  if (has === 'image' && !(msg.files || []).some((file) => /^image\//.test(file.type || '') || /\.(png|jpe?g|gif|webp)$/i.test(file.name || file.url || ''))) return false;
-  if (has === 'video' && !(msg.files || []).some((file) => /^video\//.test(file.type || '') || /\.(mp4|webm|mov)$/i.test(file.name || file.url || ''))) return false;
+  if (has === 'image' && !(msg.files || []).some((file) => file.kind === 'image' || /^image\//.test(file.type || '') || /\.(png|jpe?g|gif|webp)$/i.test(file.name || file.url || ''))) return false;
+  if (has === 'video' && !(msg.files || []).some((file) => file.kind === 'video' || /^video\//.test(file.type || '') || /\.(mp4|webm|mov)$/i.test(file.name || file.url || ''))) return false;
   if (before && Date.parse(msg.createdAt) >= Date.parse(before)) return false;
   if (after && Date.parse(msg.createdAt) <= Date.parse(after)) return false;
   if (during) {
@@ -6892,8 +6892,8 @@ app.get('/api/room/media', auth, (req, res) => {
     for (const file of msg.files || []) {
       const name = file.name || file.url || '';
       const type = file.type || '';
-      const image = /^image\//.test(type) || /\.(png|jpe?g|gif|webp)$/i.test(name);
-      const video = /^video\//.test(type) || /\.(mp4|webm|mov)$/i.test(name);
+      const image = file.kind === 'image' || /^image\//.test(type) || /\.(png|jpe?g|gif|webp)$/i.test(name);
+      const video = file.kind === 'video' || /^video\//.test(type) || /\.(mp4|webm|mov)$/i.test(name);
       if (kind === 'images' && !image) continue;
       if (kind === 'videos' && !video) continue;
       if (kind === 'files' && (image || video)) continue;
@@ -9593,6 +9593,32 @@ async function pullUpdates() {
   }
 }
 
+function openNeb2(key, buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 32 || buf.subarray(0, 4).toString() !== 'NEB2') return null;
+  try {
+    const iv = buf.subarray(4, 16);
+    const body = buf.subarray(16);
+    const tag = body.subarray(body.length - 16);
+    const data = body.subarray(0, body.length - 16);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(data), decipher.final()]);
+  } catch (_) {
+    return null;
+  }
+}
+
+function payloadKind(plain) {
+  if (!plain || plain.length < 8) return null;
+  const len = plain.readUInt32BE(0);
+  if (!len || len > 400 || 4 + len >= plain.length) return null;
+  const bytes = plain.subarray(4 + len);
+  const ext = sniffImage(bytes) || sniffVideo(bytes);
+  if (!ext) return null;
+  const kind = ext === '.mp4' || ext === '.webm' || ext === '.mov' ? 'video' : 'image';
+  return { kind, ext };
+}
+
 function neb2Pack(key, payload) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -9618,7 +9644,7 @@ function sealListedHistory() {
           changed = true;
         }
         for (const file of msg.files || []) {
-          if (!file || file.enc || file.lock) continue;
+          if (!file || file.lock) continue;
           const stored = uploadName(file.url);
           if (!stored) continue;
           const full = path.join(UPLOAD_DIR, stored);
@@ -9626,18 +9652,31 @@ function sealListedHistory() {
           try {
             let bytes = fs.readFileSync(full);
             if (isSealedFile(bytes)) bytes = openSealedBytes(bytes);
-            if (bytes.slice(0, 4).toString() !== 'NEB2') {
-              const header = Buffer.from(JSON.stringify({ name: file.name || 'file', type: '' }));
+            if (!file.enc && bytes.slice(0, 4).toString() !== 'NEB2') {
+              const sniffed = sniffImage(bytes) || sniffVideo(bytes);
+              const mime = sniffed ? mediaType('file' + sniffed) : '';
+              const header = Buffer.from(JSON.stringify({ name: file.name || 'file', type: mime }));
               const len = Buffer.alloc(4);
               len.writeUInt32BE(header.length, 0);
               const packed = neb2Pack(key, Buffer.concat([len, header, bytes]));
               fs.writeFileSync(full, Buffer.concat([Buffer.from('NEB2'), packed]));
+              file.enc = 1;
+              const visual = sniffed === '.mp4' || sniffed === '.webm' || sniffed === '.mov' ? 'video' : (sniffed ? 'image' : '');
+              if (visual) {
+                file.kind = visual;
+                if (!file.name || file.name === 'file') file.name = visual + sniffed;
+              }
+              delete file.alt;
+              changed = true;
+            } else if (file.enc && file.kind !== 'image' && file.kind !== 'video' && file.kind !== 'audio') {
+              const plain = openNeb2(key, bytes);
+              const info = plain ? payloadKind(plain) : null;
+              if (info && info.kind && info.kind !== file.kind) {
+                file.kind = info.kind;
+                if (!file.name || file.name === 'file') file.name = info.kind + (info.ext || '');
+                changed = true;
+              }
             }
-            file.enc = 1;
-            file.name = 'file';
-            file.kind = 'file';
-            delete file.alt;
-            changed = true;
           } catch (_) {}
         }
       }

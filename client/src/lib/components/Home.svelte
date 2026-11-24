@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ArrowRight, Code2, Lock, Moon, Palette, Sun, Zap } from '@lucide/svelte';
   import { ui } from '../state.svelte.js';
+  import { t, languages, locale, applyLanguage } from '../i18n.svelte.js';
   import { getApiBase } from '../api.js';
   import DeveloperDocs from './DeveloperDocs.svelte';
 
@@ -13,12 +14,12 @@
   const nav = ['Developers', 'Plus', 'About'];
   const desktop = typeof window !== 'undefined' && (!!window.nebulaDesktop || /Electron/i.test(navigator.userAgent));
   const downloadUrl = 'https://github.com/NebulaEnterprise/nebula/releases/latest/download/Nebula.exe';
-  const features = [
-    { icon: Zap, title: 'Blazing Fast', text: 'Messages show up as soon as they’re sent, wherever you are.' },
-    { icon: Lock, title: 'Private rooms', text: 'Servers and chats stay with the people you let in.' },
-    { icon: Palette, title: 'Fully Customizable', text: 'Names, colors, badges, and profiles can look like yours.' },
-    { icon: Code2, title: 'Built for communities', text: 'Roles, tags, and channels for the people you talk with.' },
-  ];
+  const features = $derived([
+    { icon: Zap, title: t('Blazing Fast'), text: t('Messages show up as soon as they are sent, wherever you are.') },
+    { icon: Lock, title: t('Private rooms'), text: t('Servers and chats stay with the people you let in.') },
+    { icon: Palette, title: t('Fully Customizable'), text: t('Names, colors, badges, and profiles can look like yours.') },
+    { icon: Code2, title: t('Built for communities'), text: t('Roles, tags, and channels for the people you talk with.') },
+  ]);
   const preview = [
     { name: 'princess', time: 'Today at 9:41 PM', text: 'Welcome to Nebula!', tone: '#c084fc' },
     { name: 'Nova', time: 'Today at 9:42 PM', text: 'this is amazing!', tone: '#f0abfc' },
@@ -87,13 +88,13 @@
       Nebula
     </button>
     <nav class="nav" aria-label="Site">
-      <button type="button" class:on={!docs} onclick={() => { docs = false; toTop(); }}>Home</button>
+      <button type="button" class:on={!docs} onclick={() => { docs = false; toTop(); }}>{t('Home')}</button>
       {#if !desktop}
-        <a href={downloadUrl} download="Nebula.exe">Download</a>
+        <a href={downloadUrl} download="Nebula.exe">{t('Download')}</a>
       {/if}
       {#each nav as label}
         {#if label === 'Developers'}
-          <button type="button" class:on={docs} onclick={openDocs}>Developers</button>
+          <button type="button" class:on={docs} onclick={openDocs}>{t('Developers')}</button>
         {:else}
           <span>{label}</span>
         {/if}
@@ -107,8 +108,16 @@
           <Moon size={16} />
         {/if}
       </button>
-      <button class="signup" type="button" onclick={() => openAuth('register')}>Sign up</button>
-      <button class="login" type="button" onclick={() => openAuth('login')}>Login <ArrowRight size={15} /></button>
+      <label class="home-lang">
+        <span class="sr">{t('Language')}</span>
+        <select value={locale.code} onchange={(event) => applyLanguage(event.currentTarget.value)}>
+          {#each languages as row (row.code)}
+            <option value={row.code}>{row.native}</option>
+          {/each}
+        </select>
+      </label>
+      <button class="signup" type="button" onclick={() => openAuth('register')}>{t('Sign up')}</button>
+      <button class="login" type="button" onclick={() => openAuth('login')}>{t('Login')} <ArrowRight size={15} /></button>
     </div>
   </header>
 
@@ -119,21 +128,21 @@
   {:else}
   <section class="hero">
     <div class="copy">
-      <p class="pill"><span class="dot"></span> The next generation chat platform</p>
-      <h1>Connect beyond<br /><em>the stars.</em></h1>
+      <p class="pill"><span class="dot"></span> {t('The next generation chat platform')}</p>
+      <h1>{t('Connect beyond')}<br /><em>{t('the stars.')}</em></h1>
       <p class="lead">Nebula is a fast, secure, and beautiful platform to chat, share, and build with your community.</p>
       <div class="actions">
         {#if !desktop}
-          <a class="cta" href={downloadUrl} download="Nebula.exe">Download</a>
+          <a class="cta" href={downloadUrl} download="Nebula.exe">{t('Download')}</a>
         {/if}
-        <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
-        <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
-        <button class="ghost" type="button" onclick={openDocs}>Developers</button>
+        <button class="cta" type="button" onclick={() => openAuth('register')}>{t('Sign up')}</button>
+        <button class="ghost" type="button" onclick={() => openAuth('login')}>{t('Login')}</button>
+        <button class="ghost" type="button" onclick={openDocs}>{t('Developers')}</button>
       </div>
       <p class="live">
         <span class="faces" aria-hidden="true"><i></i><i></i><i></i></span>
         {#if onlineState === 'ready'}
-          <strong>{online.toLocaleString()}</strong> online now
+          <strong>{online.toLocaleString()}</strong> {t('online now')}
           <span class="pulse" aria-hidden="true"></span>
         {:else if onlineState === 'error'}
           Online count unavailable
@@ -199,11 +208,11 @@
 
   <section class="join">
     <p class="eyebrow">Get Started Today</p>
-    <h2>Join Nebula</h2>
+    <h2>{t('Join Nebula')}</h2>
     <p>Create an account or log in and talk with the people who are online right now.</p>
     <div class="actions">
-      <button class="cta" type="button" onclick={() => openAuth('register')}>Sign up</button>
-      <button class="ghost" type="button" onclick={() => openAuth('login')}>Login</button>
+      <button class="cta" type="button" onclick={() => openAuth('register')}>{t('Sign up')}</button>
+      <button class="ghost" type="button" onclick={() => openAuth('login')}>{t('Login')}</button>
     </div>
   </section>
   {/if}
@@ -295,6 +304,11 @@
     color: #1a1028;
   }
   .tools { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+  .home-lang select {
+    height: 36px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.06); color: inherit; padding: 0 12px; max-width: 180px;
+  }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .theme {
     width: 36px;
     height: 36px;

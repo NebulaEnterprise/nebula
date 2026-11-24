@@ -2539,6 +2539,24 @@ export async function roomKey(where) {
   return masterOf(await roomMaster(where));
 }
 
+export async function fileRoomKeys(where) {
+  const keys = [];
+  const add = (value) => {
+    const key = masterOf(value);
+    if (key && !keys.includes(key)) keys.push(key);
+  };
+  try { add(await roomMaster(where)); } catch (_) {}
+  const mode = where?.mode || ui.mode;
+  if (mode !== 'dm' && mode !== 'group') {
+    const serverId = where?.serverId || ui.serverId;
+    const known = (ui.servers || []).find((server) => String(server.id) === String(serverId));
+    if (known?.roomKey) add(known.roomKey);
+    const vault = liveVault();
+    if (vault?.servers?.[serverId]) add(vault.servers[serverId]);
+  }
+  return keys;
+}
+
 export async function prepareRoom(where) {
   try { await roomMaster(where); } catch (_) {}
 }

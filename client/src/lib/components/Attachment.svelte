@@ -3,7 +3,7 @@
   import { api, fileUrl, getApiBase, pinnedSrc, resolveMedia } from '../api.js';
   import { formatSize, imageLayout } from '../image-view.js';
   import { openFile } from '../seal.js';
-  import { roomKey, ui } from '../state.svelte.js';
+  import { fileRoomKeys, ui } from '../state.svelte.js';
   import { openPackedFile } from '../vault.js';
   import VoiceNote from './VoiceNote.svelte';
 
@@ -38,6 +38,43 @@
     return pinnedSrc(url) || (navigator.serviceWorker?.controller ? fileUrl(url) : '');
   }
 
+  function sniffMime(bytes) {
+    const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return 'image/png';
+    if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return 'image/jpeg';
+    if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return 'image/gif';
+    if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+    if (b.length >= 12 && b[4] === 0x66 && b[5] === 0x74 && b[6] === 0x79 && b[7] === 0x70) {
+      const brand = String.fromCharCode(b[8], b[9], b[10], b[11]);
+      return brand.startsWith('qt') ? 'video/quicktime' : 'video/mp4';
+    }
+    if (b.length >= 4 && b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video/webm';
+    return '';
+  }
+
+  function extFor(mime) {
+    if (mime === 'image/png') return '.png';
+    if (mime === 'image/jpeg') return '.jpg';
+    if (mime === 'image/gif') return '.gif';
+    if (mime === 'image/webp') return '.webp';
+    if (mime === 'video/mp4') return '.mp4';
+    if (mime === 'video/webm') return '.webm';
+    if (mime === 'video/quicktime') return '.mov';
+    return '';
+  }
+
+  function showPacked(opened, type) {
+    const voice = !!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(opened.name || '');
+    let mime = type || opened.type || '';
+    if (voice && !/^audio\//i.test(mime)) mime = /mp4|m4a/i.test(mime + opened.name) ? 'audio/mp4' : 'audio/webm';
+    if (!voice && (!mime || mime === 'application/octet-stream')) mime = sniffMime(opened.bytes) || mime;
+    const blob = new Blob([opened.bytes], { type: mime || 'application/octet-stream' });
+    const named = opened.name && opened.name !== 'file' ? opened.name : '';
+    unlockedName = named || ((mime.startsWith('image/') || mime.startsWith('video/')) ? (mime.startsWith('video/') ? 'video' : 'image') + extFor(mime) : 'file');
+    unlockedMime = mime;
+    return URL.createObjectURL(blob);
+  }
+
   async function unlock(url, lock) {
     const full = /^https?:/i.test(url) ? url : getApiBase() + url;
     const headers = { 'ngrok-skip-browser-warning': 'true', 'bypass-tunnel-reminder': 'true' };
@@ -49,16 +86,18 @@
       const otherId = room?.dmUserId || ui.dmUser?.id || '';
       const groupId = room?.groupId || ui.group?.id || '';
       const serverId = room?.serverId || ui.serverId;
-      const key = await roomKey({ mode, dmUserId: otherId, groupId, serverId });
-      if (!key) throw new Error('locked');
-      const opened = await openPackedFile(key, bytes);
-      const voice = !!file?.voice || file?.kind === 'audio' || /voice[- ]message/i.test(opened.name || '');
-      let type = opened.type || '';
-      if (voice && !/^audio\//i.test(type)) type = /mp4|m4a/i.test(type + opened.name) ? 'audio/mp4' : 'audio/webm';
-      const blob = new Blob([opened.bytes], { type: type || 'application/octet-stream' });
-      unlockedName = opened.name || 'file';
-      unlockedMime = type || opened.type || '';
-      return URL.createObjectURL(blob);
+      const keys = await fileRoomKeys({ mode, dmUserId: otherId, groupId, serverId });
+      let opened = null;
+      for (const key of keys) {
+        try {
+          opened = await openPackedFile(key, bytes);
+          break;
+        } catch (_) {}
+      }
+      if (opened) return showPacked(opened, opened.type || '');
+      const plain = sniffMime(bytes);
+      if (!plain) throw new Error('locked');
+      return showPacked({ name: 'file', type: plain, bytes }, plain);
     }
     const opened = await openFile(lock, bytes, ui.me?.id);
     const mime = String(opened.meta?.mime || '');

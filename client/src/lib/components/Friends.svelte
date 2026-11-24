@@ -6,6 +6,7 @@
   import { seenPhrase, presenceDot } from '../seen.js';
   import { playingName } from '../format.js';
   import { api } from '../api.js';
+  import { t } from '../i18n.svelte.js';
   let q = $state('');
   let name = $state('');
   let people = $state([]);
@@ -72,21 +73,21 @@
   <header class="pal-top">
     <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
     <div>
-      <h1><Users size={22} /> Friends</h1>
+      <h1><Users size={22} /> {t('Friends')}</h1>
       <p>Manage your friends and see what they are up to.</p>
     </div>
-    <button type="button" class="hub-create" onclick={showAddFriend}><UserPlus size={16} /> Add friend</button>
+    <button type="button" class="hub-create" onclick={showAddFriend}><UserPlus size={16} /> {t('Add friend')}</button>
   </header>
   <div class="pal-pills">
-    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'all'} onclick={() => showFriends('all')}><Users size={14} /> All friends</button>
-    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'online'} onclick={() => showFriends('online')}>Online</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'all'} onclick={() => showFriends('all')}><Users size={14} /> {t('All friends')}</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'online'} onclick={() => showFriends('online')}>{t('Online')}</button>
     <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'pending'} onclick={() => showFriends('pending')}>
-      Pending
+      {t('Pending')}
       {#if ui.incoming.length}<em>{ui.incoming.length > 99 ? '99+' : ui.incoming.length}</em>{/if}
     </button>
-    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'blocked'} onclick={() => showFriends('blocked')}>Blocked</button>
-    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'suggested'} onclick={() => showFriends('suggested')}>Suggested</button>
-    <button type="button" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}>Find</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'blocked'} onclick={() => showFriends('blocked')}>{t('Blocked')}</button>
+    <button type="button" class:on={ui.mode === 'friends' && ui.friendsTab === 'suggested'} onclick={() => showFriends('suggested')}>{t('Suggested')}</button>
+    <button type="button" class:on={ui.friendsTab === 'find' && ui.mode === 'friends'} onclick={() => showFriends('find')}>{t('Find')}</button>
   </div>
   {#if ui.mode === 'friends' && ui.friendsTab !== 'pending'}
     <label class="hub-search">
@@ -97,7 +98,7 @@
 <div class="friends-body">
   {#if ui.mode === 'add'}
     <div class="add-box">
-      <h2>Add friend</h2>
+      <h2>{t('Add friend')}</h2>
       <p>Use their username, or a user id like #1.</p>
       <form class="add-row" onsubmit={(e) => { e.preventDefault(); add(); }}>
         <input bind:value={name} maxlength="32" placeholder="Username or #id" />

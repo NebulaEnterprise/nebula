@@ -6,6 +6,7 @@
   import { shortBio, playingName } from '../format.js';
   import { ui, nowClock, openPopout, peekProfile, openMemberMenu } from '../state.svelte.js';
   import { presenceDot } from '../seen.js';
+  import { t } from '../i18n.svelte.js';
   function shown(m) {
     if (m.id === ui.me?.id && ui.me) {
       return {
@@ -40,7 +41,7 @@
 
 <aside class="members">
   <button type="button" class="phone-people-back" onclick={() => (ui.phone = 'chat')}><ChevronLeft size={18} /> Back to chat</button>
-  <div class="cat">Online — {online.length}</div>
+  <div class="cat">{t('Online')} — {online.length}</div>
   {#each online as m}
     <button class="member" onpointerenter={() => peekProfile(m)} onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
       <Avatar user={m} size={34} />
@@ -55,7 +56,7 @@
     </button>
   {/each}
   {#if offline.length}
-    <div class="cat">Offline — {offline.length}</div>
+    <div class="cat">{t('Offline')} — {offline.length}</div>
     {#each offline as m}
       <button class="member" onpointerenter={() => peekProfile(m)} onclick={(e) => openPopout(m, e.clientX, e.clientY)} oncontextmenu={(e) => openMemberMenu(e, m)}>
         <Avatar user={m} size={34} />

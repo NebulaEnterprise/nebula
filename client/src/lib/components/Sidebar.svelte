@@ -11,6 +11,7 @@
   import { recentServerIds, serverFace } from '../serverface.js';
   import { look } from '../look.svelte.js';
   import { PERM } from '../format.js';
+  import { t } from '../i18n.svelte.js';
 
   const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
@@ -205,7 +206,7 @@
         {#each items as item, i}
           {#if item.danger && i}<hr />{/if}
           <button class:danger={item.danger} onclick={() => menu(item.act)}>
-            <item.icon size={16} /> {item.label}
+            <item.icon size={16} /> {t(item.label)}
           </button>
         {/each}
       </div>
@@ -213,7 +214,7 @@
     {#if hasPerm(PERM.INVITE)}
       <button type="button" class="invite-bar" style:background={!look.ignoreServerAccent && ui.serverMeta?.color ? ui.serverMeta.color : undefined} style:color={!look.ignoreServerAccent && ui.serverMeta?.color ? '#fff' : undefined} onclick={() => (ui.dialog = { kind: 'invite' })}>
         <Link size={16} />
-        Invite people
+        {t('Invite people')}
       </button>
     {/if}
     {#if (ui.links || []).length}
@@ -236,7 +237,7 @@
           {#if cat.name}<div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}><span>{cat.name}</span></div>{/if}
           {#if texts.length || !cat.id}
             <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
-              <span>{cat.name ? 'text' : 'text channels'}</span>
+              <span>{cat.name ? t('text') : t('text channels')}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
               {/if}
@@ -264,7 +265,7 @@
           {/if}
           {#if voices.length || (!cat.id && hasPerm(PERM.MANAGE_CHANNELS))}
             <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
-              <span>{cat.name ? 'voice' : 'voice channels'}</span>
+              <span>{cat.name ? t('voice') : t('voice channels')}</span>
               {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
                 <button class="cat-add" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
               {/if}
@@ -298,7 +299,7 @@
     </div>
   {:else}
     <div class="inbox-head">
-      <span>Messages</span>
+      <span>{t('Messages')}</span>
       <button type="button" title="New group" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /></button>
     </div>
     {#if recentServers.length}
@@ -325,7 +326,7 @@
     {/if}
     <label class="msg-search">
       <Search size={15} />
-      <input placeholder="Search DMs..." bind:value={dmQuery} />
+      <input placeholder={t('Search DMs...')} bind:value={dmQuery} />
     </label>
     <div class="scroll">
       {#each ui.groups || [] as group (group.id)}
@@ -334,7 +335,7 @@
             <span class="group-mark">{(group.name || 'G').slice(0, 1)}</span>
             <span class="dm-copy">
               <span class="msg-top"><span class="ch-name">{group.name}</span></span>
-              <span class="msg-preview">Group</span>
+              <span class="msg-preview">{t('Group')}</span>
             </span>
             <button class="dm-x" title="Close" onclick={(e) => { e.stopPropagation(); closeConversation('group:' + group.id, group.lastId); }}><X size={14} /></button>
           </div>

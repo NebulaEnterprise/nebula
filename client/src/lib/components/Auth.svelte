@@ -2,6 +2,7 @@
   import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey, unlockAccount, finishSetup, confirmSwitch, cancelSwitch } from '../state.svelte.js';
   import { recoveryCode } from '../vault.js';
   import Avatar from './Avatar.svelte';
+  import { t } from '../i18n.svelte.js';
   let email = $state('');
   let username = $state('');
   let password = $state('');
@@ -37,13 +38,13 @@
     <h1>Nebula</h1>
     <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
-      <p class="sub">Log in and pick up where you left off.</p>
-      <div class="field"><label>Email or username</label><input bind:value={email} autocomplete="username" /></div>
-      <div class="field"><label>Password</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
+      <p class="sub">{t('Log in and pick up where you left off.')}</p>
+      <div class="field"><label>{t('Email or username')}</label><input bind:value={email} autocomplete="username" /></div>
+      <div class="field"><label>{t('Password')}</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
       <p class="sub">A correct email and password still need your recovery code or passphrase.</p>
-      <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>Log in</button>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>{t('Log in')}</button>
       <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Sign in with a passkey</button>
-      <p class="auth-switch">New here? <button type="button" onclick={() => (ui.auth = 'register')}>Create an account</button></p>
+      <p class="auth-switch">{t('New here?')} <button type="button" onclick={() => (ui.auth = 'register')}>{t('Create an account')}</button></p>
       {#if ui.addingAccount}
         <p class="auth-switch"><button type="button" onclick={() => run(() => cancelAdd())}>Back</button></p>
       {:else}

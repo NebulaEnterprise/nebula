@@ -9,7 +9,8 @@
   import Attachment from './Attachment.svelte';
   import Inbox from './Inbox.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges, playingName } from '../format.js';
+  import { shortBio, visibleBadges, playingName, gifUrls } from '../format.js';
+  import { t } from '../i18n.svelte.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile, revealList } from '../state.svelte.js';
   import { isSealedText } from '../vault.js';
   import { profileSeen, localClock } from '../seen.js';
@@ -36,6 +37,27 @@
             : ui.dock === 'group' ? 'Group details'
               : 'Profile'
   );
+  const dockRoom = $derived({
+    mode: ui.mode,
+    dmUserId: ui.dmUser?.id || '',
+    groupId: ui.group?.id || '',
+    serverId: ui.serverId || '',
+  });
+
+  function spoken(msg) {
+    return plainLine(msg).replace(/\[\[(?:gif|sticker):[^\]]+\]\]/g, '').trim();
+  }
+
+  function keepShot(file) {
+    if (!file || file.kind === 'audio' || file.voice) return false;
+    const name = file.name || file.url || '';
+    const image = file.kind === 'image' || /\.(png|jpe?g|gif|webp)(\?|$)/i.test(name);
+    const video = file.kind === 'video' || /\.(mp4|webm|mov)(\?|$)/i.test(name);
+    if (mediaKind === 'images') return image;
+    if (mediaKind === 'videos') return video;
+    if (mediaKind === 'files') return !image && !video;
+    return true;
+  }
 
   function roomQuery() {
     if (ui.mode === 'dm' && ui.dmUser) return 'dmUserId=' + encodeURIComponent(ui.dmUser.id);
@@ -69,7 +91,21 @@
         pins = await revealList(data.messages || []);
       } else if (kind === 'media') {
         const data = await api('/api/room/media?' + roomQuery() + '&kind=' + mediaKind + '&user=' + encodeURIComponent(mediaWho));
-        files = data.files || [];
+        const shots = [];
+        const seen = new Set();
+        const add = (file) => {
+          if (!keepShot(file)) return;
+          const key = String(file.messageId || '') + '|' + String(file.url || '');
+          if (!file.url || seen.has(key)) return;
+          seen.add(key);
+          shots.push(file);
+        };
+        for (const msg of ui.messages || []) {
+          for (const url of gifUrls(msg.content)) add({ url, name: 'gif.gif', kind: 'image', messageId: msg.id });
+          for (const file of msg.files || []) add({ ...file, messageId: file.messageId || msg.id });
+        }
+        for (const file of data.files || []) add(file);
+        files = shots;
       } else if (kind === 'search') {
         const data = await api('/api/room/search?' + roomQuery() + '&q=' + encodeURIComponent(ui.dockQuery || ''));
         hits = await revealList(data.messages || []);
@@ -193,7 +229,7 @@
 <aside class="dock" class:profile-dock={ui.dock === 'profile' && !!ui.dmUser}>
   {#if ui.dock !== 'profile'}
   <div class="dock-h">
-    <strong>{title}</strong>
+    <strong>{t(title)}</strong>
     <button class="btn icon" title="Close" onclick={() => (ui.dock = '')}><X size={16} /></button>
   </div>
   {/if}
@@ -205,38 +241,45 @@
         {#each pins as msg (msg.id)}
           <article class="dock-card">
             <div class="dock-who"><Avatar user={msg.author} size={28} dot={false} /><Name user={msg.author} /><time>{when(msg.createdAt)}</time></div>
-            <p>{plainLine(msg) || (msg.files?.[0]?.name || 'Attachment')}</p>
+            {#if spoken(msg)}<p>{spoken(msg)}</p>{:else if !msg.files?.length}<p>{t('Attachment')}</p>{/if}
+            {#if msg.files?.length}
+              <div class="dock-shots">
+                {#each msg.files as file, index (`${msg.id}-pin-${index}`)}
+                  <Attachment {file} room={dockRoom} />
+                {/each}
+              </div>
+            {/if}
             <button class="btn sm" onclick={() => pinMessage(msg.id, false)}>Unpin</button>
           </article>
         {/each}
       {:else}
         <div class="dock-empty">
           <Pin size={28} />
-          <strong>Nothing pinned yet</strong>
+          <strong>{t('Nothing pinned yet')}</strong>
           <p>Open a message's menu and choose Pin to keep it here.</p>
         </div>
       {/if}
     {:else if ui.dock === 'media'}
       <div class="dock-tabs">
         {#each [['all', 'All media'], ['images', 'Images'], ['videos', 'Videos'], ['files', 'Files']] as [id, label]}
-          <button class:on={mediaKind === id} onclick={() => (mediaKind = id)}>{label}</button>
+          <button class:on={mediaKind === id} onclick={() => (mediaKind = id)}>{t(label)}</button>
         {/each}
       </div>
       <select class="dock-select" bind:value={mediaWho}>
-        <option value="anyone">From anyone</option>
+        <option value="anyone">{t('From anyone')}</option>
         {#if ui.dmUser}<option value={ui.dmUser.username}>{ui.dmUser.username}</option>{/if}
         {#if ui.me}<option value={ui.me.username}>{ui.me.username}</option>{/if}
       </select>
       {#if files.length}
         <div class="media-grid">
           {#each files as file, index (`${file.messageId}-${index}`)}
-            <Attachment {file} />
+            <Attachment {file} room={dockRoom} />
           {/each}
         </div>
       {:else}
         <div class="dock-empty">
           <ImageIcon size={28} />
-          <strong>No pictures or videos here yet.</strong>
+          <strong>{t('No pictures or videos here yet.')}</strong>
         </div>
       {/if}
     {:else if ui.dock === 'search'}
@@ -249,13 +292,25 @@
         {#each hits as msg (msg.id)}
           <article class="dock-card">
             <div class="dock-who"><Name user={msg.author} /><time>{when(msg.createdAt)}</time></div>
-            <p>{plainLine(msg) || 'Attachment'}</p>
+            {#if spoken(msg)}<p>{spoken(msg)}</p>{/if}
+            {#if gifUrls(msg.content).length || msg.files?.length}
+              <div class="dock-shots">
+                {#each gifUrls(msg.content) as url, index (`${msg.id}-gif-${index}`)}
+                  <img src={url} alt="" />
+                {/each}
+                {#each msg.files || [] as file, index (`${msg.id}-file-${index}`)}
+                  <Attachment {file} room={dockRoom} />
+                {/each}
+              </div>
+            {:else if !spoken(msg)}
+              <p>{t('Attachment')}</p>
+            {/if}
           </article>
         {/each}
       {:else}
         <div class="dock-empty">
           <Search size={28} />
-          <strong>{ui.dockQuery ? 'No messages found' : 'Search this chat'}</strong>
+          <strong>{ui.dockQuery ? t('No messages found') : t('Search this chat')}</strong>
           <p>Try mentions:name, from:name, or pinned:true.</p>
         </div>
       {/if}

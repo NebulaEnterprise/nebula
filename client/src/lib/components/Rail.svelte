@@ -2,6 +2,7 @@
   import { ChevronRight, Compass, MessageSquare, Server, Settings, Users } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { ui, showFriends, showMessages, showServers, showDiscover, openDm, phoneBrowse } from '../state.svelte.js';
+  import { t } from '../i18n.svelte.js';
   import { presenceDot } from '../seen.js';
 
   const onMessages = $derived(ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'messages');
@@ -69,34 +70,34 @@
   <button class="rail-logo" title="Nebula" onclick={messages}>
     <img src="./logo.webp?v=3" alt="" />
   </button>
-  <button class="rail-tab" class:on={onMessages} title="Messages" onclick={messages}>
+  <button class="rail-tab" class:on={onMessages} title={t('Messages')} onclick={messages}>
     <MessageSquare size={22} />
-    <span>Messages</span>
+    <span>{t('Messages')}</span>
     {#if chatUnread}<em class="rail-count">{count(chatUnread)}</em>{/if}
   </button>
-  <button class="rail-tab" class:on={onPeople} title="Friends" onclick={people}>
+  <button class="rail-tab" class:on={onPeople} title={t('Friends')} onclick={people}>
     <Users size={22} />
-    <span>Friends</span>
+    <span>{t('Friends')}</span>
     {#if peopleUnread}<em class="rail-count">{count(peopleUnread)}</em>{/if}
   </button>
-  <button class="rail-tab" class:on={onServers} title="Servers" onclick={servers}>
+  <button class="rail-tab" class:on={onServers} title={t('Servers')} onclick={servers}>
     <Server size={22} />
-    <span>Servers</span>
+    <span>{t('Servers')}</span>
   </button>
-  <button class="rail-tab" class:on={onDiscover} title="Discover" onclick={discover}>
+  <button class="rail-tab" class:on={onDiscover} title={t('Discover')} onclick={discover}>
     <Compass size={22} />
-    <span>Discover</span>
+    <span>{t('Discover')}</span>
   </button>
   <div class="rail-spacer"></div>
-  <button class="rail-tab" class:on={ui.userSettings} title="Settings" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
+  <button class="rail-tab" class:on={ui.userSettings} title={t('Settings')} onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
     <Settings size={22} />
-    <span>Settings</span>
+    <span>{t('Settings')}</span>
   </button>
   <button type="button" class="rail-user" title="Account" onclick={() => { ui.userPage = 'profile'; ui.userSettings = true; }}>
     <Avatar user={ui.me} size={32} />
     <span>
-      <strong>{ui.me?.displayName || ui.me?.username || 'You'}</strong>
-      <em>{status === 'dnd' ? 'Busy' : status === 'idle' ? 'Idle' : status === 'online' ? 'Online' : 'Offline'}</em>
+      <strong>{ui.me?.displayName || ui.me?.username || t('You')}</strong>
+      <em>{status === 'dnd' ? t('Busy') : status === 'idle' ? t('Idle') : status === 'online' ? t('Online') : t('Offline')}</em>
     </span>
     <ChevronRight size={14} />
   </button>

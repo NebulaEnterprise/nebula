@@ -36,6 +36,15 @@ export function emojiScale(text) {
   return 'jumbo-sm';
 }
 
+export function gifUrls(text) {
+  const out = [];
+  String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,1000})\]\]/g, (_, url) => {
+    out.push(url);
+    return '';
+  });
+  return out;
+}
+
 export function formatContent(text, emoji, stickers, namesList) {
   const gifs = [];
   let raw = String(text || '').replace(/\[\[gif:(https:\/\/[^\]\s]{8,1000})\]\]/g, (_, url) => {

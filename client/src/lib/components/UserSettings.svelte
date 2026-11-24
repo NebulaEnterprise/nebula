@@ -1,5 +1,7 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard, Languages } from '@lucide/svelte';
+  import Language from './Language.svelte';
+  import { t } from '../i18n.svelte.js';
   import { ui, nowClock, saveMe, logout, toast, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
@@ -71,7 +73,7 @@
     }
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds', desktop: 'Desktop app' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds', desktop: 'Desktop app', language: 'Language' };
   const desktopApp = typeof window !== 'undefined' && !!window.nebulaDesktop;
 
   async function useSaved(id) {
@@ -629,9 +631,9 @@
           <span>@{ui.me?.username}</span>
         </div>
       </div>
-      <div class="group">User settings</div>
-      <button class:on={page === 'account'} onclick={() => { ui.userPage = 'account'; recoverOpen = false; }}><Shield size={16} /> Account</button>
-      <button class:on={page === 'profile'} onclick={() => { ui.userPage = 'profile'; profilePart = 'identity'; lookOpen = ''; }}><User size={16} /> Profile</button>
+      <div class="group">{t('User settings')}</div>
+      <button class:on={page === 'account'} onclick={() => { ui.userPage = 'account'; recoverOpen = false; }}><Shield size={16} /> {t('Account')}</button>
+      <button class:on={page === 'profile'} onclick={() => { ui.userPage = 'profile'; profilePart = 'identity'; lookOpen = ''; }}><User size={16} /> {t('Profile')}</button>
       {#if page === 'profile'}
         <div class="profile-subs">
           {#each [['identity', 'Identity'], ['looks', 'Looks'], ['about', 'About'], ['privacy', 'Privacy']] as [id, label]}
@@ -639,11 +641,12 @@
           {/each}
         </div>
       {/if}
-      <button class:on={page === 'media'} onclick={() => (ui.userPage = 'media')}><Images size={16} /> Media</button>
-      <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
-      <button class:on={page === 'sounds'} onclick={() => (ui.userPage = 'sounds')}><Volume2 size={16} /> Sounds</button>
-      <button class:on={page === 'voice'} onclick={() => (ui.userPage = 'voice')}><Headphones size={16} /> Voice & Audio</button>
-      <button class:on={page === 'keybinds'} onclick={() => (ui.userPage = 'keybinds')}><Keyboard size={16} /> Keybinds</button>
+      <button class:on={page === 'media'} onclick={() => (ui.userPage = 'media')}><Images size={16} /> {t('Media')}</button>
+      <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> {t('Theme')}</button>
+      <button class:on={page === 'language'} onclick={() => (ui.userPage = 'language')}><Languages size={16} /> {t('Language')}</button>
+      <button class:on={page === 'sounds'} onclick={() => (ui.userPage = 'sounds')}><Volume2 size={16} /> {t('Sounds')}</button>
+      <button class:on={page === 'voice'} onclick={() => (ui.userPage = 'voice')}><Headphones size={16} /> {t('Voice & Audio')}</button>
+      <button class:on={page === 'keybinds'} onclick={() => (ui.userPage = 'keybinds')}><Keyboard size={16} /> {t('Keybinds')}</button>
       {#if desktopApp}
         <button class:on={page === 'desktop'} onclick={() => (ui.userPage = 'desktop')}><Monitor size={16} /> Desktop app</button>
       {/if}
@@ -654,7 +657,7 @@
       {/if}
       <div class="group">Account</div>
       <button class:on={page === 'accounts'} onclick={() => (ui.userPage = 'accounts')}><Users size={16} /> Switch accounts</button>
-      <button class="danger set-logout" onclick={logout}>Sign out</button>
+      <button class="danger set-logout" onclick={logout}>{t('Sign out')}</button>
     </aside>
     <div class="set-main" class:look-main={page === 'profile' || page === 'theme'} class:media-main={page === 'media'}>
       <div class="set-head">
@@ -688,12 +691,14 @@
           </div>
         {:else}
           <div>
-            <h2>{titles[page] || 'Settings'}</h2>
+            <h2>{t(titles[page] || 'Settings')}</h2>
           </div>
         {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
-      {#if page === 'account' && recoverOpen}
+      {#if page === 'language'}
+        <Language />
+      {:else if page === 'account' && recoverOpen}
         <section class="recover-page">
           <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
           {#if revealed}

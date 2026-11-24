@@ -20,7 +20,7 @@
   --fast: 140ms;
   --med: 200ms;
   color-scheme: dark;
-  font-family: Outfit, ui-sans-serif, system-ui, sans-serif;
+  font-family: Outfit, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans TC", "Hiragino Sans", "Noto Sans JP", "Malgun Gothic", "Noto Sans KR", "Noto Naskh Arabic", "Noto Sans Arabic", "Noto Nastaliq Urdu", "Noto Sans Devanagari", "Noto Sans Bengali", "Noto Sans Thai", "Nirmala UI", ui-sans-serif, system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -157,6 +157,46 @@ img { max-width: 100%; }
   letter-spacing: 0.4em; text-align: center; font-size: 22px; font-weight: 700;
 }
 
+html[dir="rtl"] .shell,
+html[dir="rtl"] .home,
+html[dir="rtl"] .settings,
+html[dir="rtl"] .auth,
+html[dir="rtl"] .dock {
+  direction: rtl;
+}
+html[dir="rtl"] .shell { text-align: start; }
+.lang-page { max-width: 560px; display: flex; flex-direction: column; gap: 10px; }
+.lang-page h2 { margin: 0; font-size: 22px; }
+.lang-page p { margin: 0; color: var(--muted); }
+.lang-search {
+  height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1);
+  background: #1a1b20; color: var(--text); padding: 0 12px;
+}
+.lang-list { display: flex; flex-direction: column; gap: 4px; }
+.lang-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 12px; border-radius: 12px; border: 1px solid transparent;
+  background: transparent; color: inherit; text-align: start;
+}
+.lang-row span { flex: 1; min-width: 0; }
+.lang-row strong, .lang-row em { display: block; }
+.lang-row em { color: var(--muted); font-style: normal; font-size: 12px; margin-top: 2px; }
+.lang-row.on { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 16%, transparent); }
+.lang-row:hover { background: rgba(255,255,255,0.04); }
+.dock-shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dock-shots .file-card,
+.dock-shots .file-open,
+.dock-shots .file-img,
+.dock-shots .file-video,
+.dock-shots img,
+.dock .media-grid .file-card,
+.dock .media-grid .file-open,
+.dock .media-grid .file-img,
+.dock .media-grid .file-video {
+  width: 100%; max-width: none; height: 110px; max-height: 110px;
+  object-fit: cover; border-radius: 8px;
+}
+.dock .media-grid .file-card { display: block; }
 .shell {
   height: 100%; min-height: 0; display: flex; min-width: 0; overflow: hidden;
   font-size: var(--ui-size, 14px);
