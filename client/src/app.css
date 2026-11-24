@@ -2597,7 +2597,9 @@ html.paint-mention .mention {
   z-index: 7;
   border: 0;
   border-radius: inherit;
-  background: transparent;
+  background: rgba(8, 4, 16, 0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .role-box {
   position: absolute;
