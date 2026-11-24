@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom, serverListHidden } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { look } from '../look.svelte.js';
   import { PERM } from '../format.js';
@@ -213,7 +213,6 @@
       <div class="side-links">
         {#each ui.links as link}
           <a href={link.url} target="_blank" rel="noreferrer">
-            <Link size={16} />
             <span>{link.label}</span>
             <em>{hostOf(link.url)}</em>
           </a>
@@ -295,7 +294,7 @@
       <span>{t('Messages')}</span>
       <button type="button" title="New group" onclick={() => (ui.dialog = { kind: 'group' })}><UserPlus size={16} /></button>
     </div>
-    {#if recentServers.length}
+    {#if recentServers.length && !serverListHidden()}
       <div class="recent-servers" aria-label="Recent servers">
         {#each [recentServers[0]] as server (server.id)}
           {@const face = serverFace(server)}

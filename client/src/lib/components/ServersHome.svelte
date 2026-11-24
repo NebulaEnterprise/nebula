@@ -1,10 +1,11 @@
 <script>
   import { ChevronLeft, Plus, Search, Users } from '@lucide/svelte';
-  import { ui, openServer, showDiscover } from '../state.svelte.js';
+  import { ui, openServer, showDiscover, serverListHidden, setHideServerList } from '../state.svelte.js';
   import { memberLine, recentServerIds, serverFace } from '../serverface.js';
 
   let q = $state('');
   const query = $derived(q.trim().toLowerCase());
+  const hidden = $derived(serverListHidden());
   const yours = $derived((ui.servers || []).filter((server) => !query || (server.name || '').toLowerCase().includes(query)));
   const recent = $derived.by(() => {
     const byId = new Map((ui.servers || []).map((server) => [String(server.id), server]));
@@ -17,6 +18,7 @@
 </script>
 
 <div class="hub">
+  {#if !hidden}
   <aside class="hub-strip">
     <button type="button" class="hub-plus" title="Add a server" onclick={add}><Plus size={18} /></button>
     {#each ui.servers as server (server.id)}
@@ -35,16 +37,28 @@
       </button>
     {/each}
   </aside>
+  {/if}
   <div class="hub-main">
     <header class="hub-top">
       <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
       <h1>Servers</h1>
       <button type="button" class="hub-create" onclick={add}><Plus size={16} /> Create a Server</button>
     </header>
+    {#if !hidden}
     <label class="hub-search">
       <Search size={16} />
       <input placeholder="Search servers..." bind:value={q} />
     </label>
+    {/if}
+    {#if hidden}
+      <section>
+        <div class="hub-empty">
+          <strong>Server list is hidden</strong>
+          <p>Only you have this on. Other people still see their own servers.</p>
+          <button type="button" class="hub-create" onclick={() => setHideServerList(false)}>Show server list</button>
+        </div>
+      </section>
+    {:else}
     <section>
       <div class="hub-label"><Users size={15} /> Your Servers <em>{yours.length}</em></div>
       {#if yours.length}
@@ -70,7 +84,8 @@
         </div>
       {/if}
     </section>
-    {#if recent.length}
+    {/if}
+    {#if !hidden && recent.length}
       <section>
         <div class="hub-label">Recently visited</div>
         <div class="hub-rows">

@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel, serverListHidden, setHideServerList } from '../state.svelte.js';
   import Events from './Events.svelte';
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
@@ -17,7 +17,7 @@
   const TAG_COLORS = ['#5865f2', '#57f287', '#fee75c', '#eb459e', '#ed4245', '#f47b67', '#9b59b6', '#3498db', '#e67e22', '#1abc9c'];
   const NAV = [
     { label: 'Overview', pages: [
-      { id: 'overview', label: 'Overview', icon: Image, keys: 'profile icon banner name tag discovery description invite vanity template links rules tickets clips transfer delete' },
+      { id: 'overview', label: 'Overview', icon: Image, keys: 'profile icon banner name tag discovery description invite vanity template links rules tickets clips transfer delete hide server list' },
       { id: 'theme', label: 'Theme', icon: Palette, keys: 'accent colour color tint background' },
       { id: 'channels', label: 'Channels', icon: Hash, keys: 'category reorder text voice' },
     ]},
@@ -108,6 +108,7 @@
   let rosterOk = $state(false);
 
   const s = $derived(ui.settings || {});
+  const hideServers = $derived(serverListHidden());
   const ownerHere = $derived(!!ui.serverMeta?.owner);
   const canKick = $derived(ownerHere || hasPerm(PERM.KICK));
   const canBan = $derived(ownerHere || hasPerm(PERM.BAN));
@@ -615,6 +616,16 @@
                 <p><i></i> {people.filter((member) => member.online || member.status === 'online').length} online · {s.memberCount || people.length} Members</p>
                 {#if established()}<p>Est. {established()}</p>{/if}
               </div>
+            </div>
+          </section>
+
+          <section class="gset-card">
+            <div class="gset-split">
+              <div>
+                <h3>Hide server list</h3>
+                <p class="hint">Hides your servers on this account. Only you are affected. Everyone else still sees their own list.</p>
+              </div>
+              <button type="button" class="switch" class:on={hideServers} role="switch" aria-checked={hideServers} aria-label="Hide server list" onclick={() => setHideServerList(!hideServers)}><i></i></button>
             </div>
           </section>
 

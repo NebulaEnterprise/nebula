@@ -43,6 +43,7 @@ export const ui = $state({
   showMembers: true,
   closedChats: {},
   muteTick: 0,
+  hideTick: 0,
   devTick: 0,
   idMenu: null,
   channelMenu: null,
@@ -3510,6 +3511,21 @@ export function mentionsMe(text) {
 function accountKey(name) {
   const id = ui.me && ui.me.id;
   return id ? name + ':' + id : name;
+}
+
+export function serverListHidden() {
+  ui.hideTick;
+  try { return localStorage.getItem(accountKey('nebula-hide-servers')) === '1'; }
+  catch { return false; }
+}
+
+export function setHideServerList(on) {
+  try {
+    const key = accountKey('nebula-hide-servers');
+    if (on) localStorage.setItem(key, '1');
+    else localStorage.removeItem(key);
+  } catch (_) {}
+  ui.hideTick += 1;
 }
 
 function seenMap() {
