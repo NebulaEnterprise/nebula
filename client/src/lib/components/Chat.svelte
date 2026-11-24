@@ -1512,6 +1512,16 @@
     </label>
   </div>
 </div>
+{#if ui.link}
+  <div class="link-pill" class:down={ui.link === 'reconnecting' || ui.link === 'catching'} role="status">
+    {#if ui.link === 'reconnecting' || ui.link === 'catching'}
+      <i class="link-spin"></i>
+    {:else}
+      <i class="link-dot"></i>
+    {/if}
+    {ui.link === 'reconnecting' ? 'Reconnecting...' : ui.link === 'catching' ? 'Catching up...' : ui.link === 'online' ? 'Back online' : 'Caught up'}
+  </div>
+{/if}
 {#if renaming && ui.mode === 'thread'}
   <form class="thread-rename" onsubmit={(e) => { e.preventDefault(); threadAct('rename', { name: threadName }); }}>
     <input bind:value={threadName} maxlength="100" />

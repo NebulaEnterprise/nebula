@@ -682,6 +682,21 @@ html:not(.app-blur) .thread-menu {
   border-bottom: 1px solid var(--line); flex-shrink: 0;
 }
 .top h2 { margin: 0; font-size: 16px; }
+.link-pill {
+  position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 8;
+  display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 10px;
+  border-radius: 999px; background: #1e1f22; color: #f2f3f5;
+  border: 1px solid #23a559; font-size: 13px; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); pointer-events: none;
+}
+.link-pill.down { border-color: #f0b429; }
+.link-dot { width: 8px; height: 8px; border-radius: 50%; background: #23a559; flex-shrink: 0; }
+.link-spin {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid rgba(240, 180, 41, 0.35); border-top-color: #f0b429;
+  animation: link-spin 0.7s linear infinite;
+}
+@keyframes link-spin { to { transform: rotate(360deg); } }
 .topic { color: var(--faint); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .badge {
   position: absolute; right: -6px; bottom: -4px; z-index: 2; pointer-events: none;

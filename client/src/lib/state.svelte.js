@@ -116,6 +116,7 @@ export const ui = $state({
   switchHold: null,
   quickOpen: false,
   quickUser: null,
+  link: '',
 });
 
 let pollTimer = null;
@@ -1869,6 +1870,43 @@ async function applySocketMessage(type, data) {
 
 let alertTask = null;
 let alertPending = false;
+let linkLive = false;
+let linkJob = 0;
+let linkTimer = 0;
+
+function clearLinkTimer() {
+  if (!linkTimer) return;
+  clearTimeout(linkTimer);
+  linkTimer = 0;
+}
+
+function finishLink() {
+  clearLinkTimer();
+  ui.link = 'online';
+  linkTimer = setTimeout(() => {
+    ui.link = 'caught';
+    linkTimer = setTimeout(() => {
+      if (ui.link === 'caught') ui.link = '';
+    }, 1800);
+  }, 1400);
+}
+
+async function catchUpLink() {
+  const job = ++linkJob;
+  clearLinkTimer();
+  ui.link = 'catching';
+  try {
+    const jobs = [pollActivity().catch(() => {})];
+    if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') jobs.push(loadMessages().catch(() => {}));
+    await Promise.all(jobs);
+  } catch (_) {}
+  if (job !== linkJob) return;
+  if (!gatewayReady()) {
+    ui.link = linkLive ? '' : 'reconnecting';
+    return;
+  }
+  finishLink();
+}
 function noteSocketAlert(data) {
   const next = String((data && data.cursor) || '');
   const changed = !!alertCursor && next !== alertCursor;
@@ -1897,16 +1935,24 @@ function applySocket(packet) {
   if (type === 'READY' || type === 'RESUMED') {
     if (data.cursor) alertCursor = String(data.cursor);
     if (data.voice) import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data.voice)).catch(() => {});
+    const dropped = ui.link === 'reconnecting' || ui.link === 'catching';
+    linkLive = true;
+    if (dropped) catchUpLink();
     return;
   }
   if (type === 'DISCONNECT') {
     import('./voice.js').then((mod) => mod.resetVoiceClock()).catch(() => {});
+    if (linkLive) {
+      linkJob += 1;
+      clearLinkTimer();
+      ui.link = 'reconnecting';
+    }
+    linkLive = false;
     return;
   }
   if (type === 'RESYNC') {
-    const looking = ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread';
-    if (looking) loadMessages();
-    pollActivity();
+    linkLive = true;
+    catchUpLink();
     import('./voice.js').then((mod) => {
       mod.resetVoiceClock();
       return mod.pokeVoice();
