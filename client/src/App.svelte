@@ -532,14 +532,14 @@
       <button type="button" onclick={() => { ui.dialog = { kind: 'channel-notify', channel: menu.channel }; ui.channelMenu = null; }}><Bell size={16} /> Notifications</button>
       {#if menu.canChannels}
         <button type="button" onclick={() => { ui.dialog = { kind: 'edit-channel', channel: menu.channel }; ui.channelMenu = null; }}><Pencil size={16} /> Edit channel</button>
-        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel).catch((err) => { ui.toast = err.message; })}><Trash2 size={16} /> Delete channel</button>
+        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel)}><Trash2 size={16} /> Delete channel</button>
       {/if}
     {:else}
       <button type="button" onclick={() => markChannelRead(menu.channel.id)}>Mark as read</button>
       <button type="button" onclick={() => { ui.dialog = { kind: 'channel-notify', channel: menu.channel }; ui.channelMenu = null; }}><Bell size={16} /> Notifications</button>
       {#if menu.canChannels}
         <button type="button" onclick={() => { ui.dialog = { kind: 'edit-channel', channel: menu.channel }; ui.channelMenu = null; }}><Pencil size={16} /> Edit channel</button>
-        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel).catch((err) => { ui.toast = err.message; })}><Trash2 size={16} /> Delete channel</button>
+        <button type="button" class="danger" onclick={() => deleteChannel(menu.channel)}><Trash2 size={16} /> Delete channel</button>
       {/if}
     {/if}
     {#if developerMode() && menu.channel}

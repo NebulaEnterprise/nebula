@@ -5,7 +5,6 @@
     MicOff, PhoneOff,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
-  import { api } from '../api.js';
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
   import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
@@ -181,16 +180,9 @@
     dropId = '';
   }
 
-  async function removeChannel(ch) {
-    const label = ch.type === 'voice' ? ch.name : '#' + ch.name;
-    if (!confirm('Delete ' + label + '?')) return;
-    try {
-      await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
-      if (ui.channelId === ch.id) ui.channelId = '';
-      await openServer(ui.serverId);
-    } catch (err) {
-      toast(err.message);
-    }
+  function removeChannel(ch) {
+    if (!ch) return;
+    ui.dialog = { kind: 'delete-channel', channel: ch };
   }
 </script>
 

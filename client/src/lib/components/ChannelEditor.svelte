@@ -171,20 +171,10 @@
     }
   }
 
-  async function removeChannel() {
+  function removeChannel() {
     const ch = channel;
-    if (!ch || !confirm('Delete this channel?')) return;
-    busy = true;
-    try {
-      await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
-      if (ui.channelId === ch.id) ui.channelId = '';
-      ui.dialog = null;
-      await openServer(ui.serverId, { keepDialog: true });
-    } catch (err) {
-      toast(err.message);
-    } finally {
-      busy = false;
-    }
+    if (!ch) return;
+    ui.dialog = { kind: 'delete-channel', channel: ch };
   }
 
   async function loadHooks() {

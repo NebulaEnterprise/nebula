@@ -196,7 +196,7 @@
   </div>
 {:else}
 <div class="overlay" role="presentation" onclick={close}>
-  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="sheet" class:wide-sheet={kind === 'group'} class:channel-sheet={kind === 'edit-channel'} class:create-channel={kind === 'channel' || kind === 'discussion'} class:report-sheet={kind === 'user-report'} class:confirm-sheet={kind === 'delete-channel'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <div class="sheet-h">
       <h3>
         {#if kind === 'add-server'}Add a server
@@ -218,6 +218,7 @@
         {:else if kind === 'user-report'}Report {ui.dialog.user?.displayName || ui.dialog.user?.username || 'user'}
         {:else if kind === 'leave'}Leave Nebula
         {:else if kind === 'leave-server'}Leave server
+        {:else if kind === 'delete-channel'}Delete channel
         {:else}Server{/if}
       </h3>
       {#if kind !== 'user-report'}<button class="btn icon" onclick={close}><X size={16} /></button>{/if}
@@ -555,6 +556,22 @@
           close();
           await openServer('nebula-official');
         })}>Delete server</button>
+
+      {:else if kind === 'delete-channel'}
+        {@const ch = ui.dialog.channel}
+        {@const label = ch?.type === 'voice' ? (ch?.name || 'this channel') : '#' + (ch?.name || 'channel')}
+        <p class="hint">Delete <strong>{label}</strong>? Messages in it are removed too.</p>
+        <div class="leave-actions">
+          <button class="btn" type="button" onclick={close}>Cancel</button>
+          <button class="btn danger-fill" type="button" disabled={busy} onclick={() => go(async () => {
+            if (!ch?.id) return;
+            await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
+            if (ui.channelId === ch.id) ui.channelId = '';
+            ui.channelMenu = null;
+            close();
+            await openServer(ui.serverId, { keepDialog: true });
+          })}>Delete</button>
+        </div>
       {/if}
     </div>
   </div>

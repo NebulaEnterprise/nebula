@@ -1962,6 +1962,11 @@ html.paint-mention .mention {
   width: min(480px, 100%); background: #16171e; border: 1px solid var(--line);
   border-radius: 18px; box-shadow: var(--shadow); max-height: min(86vh, 760px); display: flex; flex-direction: column;
 }
+.confirm-sheet { width: min(420px, 100%); }
+.confirm-sheet .body { display: grid; gap: 16px; }
+.confirm-sheet .hint { margin: 0; font-size: 15px; line-height: 1.45; color: #ddd4ea; }
+.confirm-sheet .hint strong { color: #fff; font-weight: 750; }
+.confirm-sheet .btn.danger-fill { min-width: 96px; }
 .sheet.heady, .sheet-h {
   display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 0;
 }

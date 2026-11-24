@@ -3735,14 +3735,10 @@ function noteRemoteRead(data) {
   loadDms();
 }
 
-export async function deleteChannel(ch) {
+export function deleteChannel(ch) {
   if (!ch) return;
-  const label = ch.type === 'voice' ? ch.name : '#' + ch.name;
-  if (!confirm('Delete ' + label + '?')) return;
-  await api('/api/servers/' + ui.serverId + '/channels/' + ch.id, { method: 'DELETE' });
-  if (ui.channelId === ch.id) ui.channelId = '';
   ui.channelMenu = null;
-  await openServer(ui.serverId);
+  ui.dialog = { kind: 'delete-channel', channel: ch };
 }
 
 export function markChannelRead(id) {
