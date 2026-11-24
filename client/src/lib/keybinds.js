@@ -92,8 +92,29 @@ export function setChord(id, chord) {
 export function prettyKey(key) {
   const map = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Escape: 'Esc', ' ': 'Space', Space: 'Space' };
   if (map[key]) return map[key];
+  const mouse = /^mouse(\d+)$/i.exec(String(key || ''));
+  if (mouse) return 'Mouse ' + mouse[1];
   if (!key) return '';
   return key.length === 1 ? key.toUpperCase() : key;
+}
+
+export function mouseName(button) {
+  const map = { 0: 'Mouse1', 2: 'Mouse2', 1: 'Mouse3', 3: 'Mouse4', 4: 'Mouse5' };
+  if (map[button]) return map[button];
+  const n = Number(button);
+  return Number.isFinite(n) && n >= 0 ? 'Mouse' + (n + 1) : '';
+}
+
+function pointerType(event) {
+  const type = String(event && event.type || '');
+  return type === 'mousedown' || type === 'mouseup' || type === 'pointerdown' || type === 'pointerup' || type === 'auxclick' || type === 'contextmenu';
+}
+
+export function chordFromPointer(event) {
+  if (!pointerType(event)) return null;
+  const key = mouseName(event.button);
+  if (!key) return null;
+  return { ctrl: !!(event.ctrlKey || event.metaKey), alt: !!event.altKey, shift: !!event.shiftKey, key };
 }
 
 export function chordLabel(chord) {
@@ -112,14 +133,30 @@ export function chordFromEvent(event) {
   return { ctrl: !!(event.ctrlKey || event.metaKey), alt: !!event.altKey, shift: !!event.shiftKey, key };
 }
 
+function eventKeyName(event) {
+  if (pointerType(event)) return mouseName(event.button);
+  if (event.key == null) return '';
+  return event.key === ' ' ? 'Space' : event.key;
+}
+
 export function sameChord(chord, event) {
   if (!chord || !chord.key) return false;
   const ctrl = !!(event.ctrlKey || event.metaKey);
   if (!!chord.ctrl !== ctrl) return false;
   if (!!chord.alt !== !!event.altKey) return false;
   if (!!chord.shift !== !!event.shiftKey) return false;
-  const key = event.key === ' ' ? 'Space' : event.key;
-  return key.toLowerCase() === String(chord.key).toLowerCase();
+  return eventKeyName(event).toLowerCase() === String(chord.key).toLowerCase();
+}
+
+export function chordUsesMouse(name) {
+  const want = String(name || '').toLowerCase();
+  if (!want) return false;
+  for (const id of Object.keys(DEFAULT_CHORDS)) {
+    const chord = chordOf(id);
+    if (chord && bindOn(id) && String(chord.key).toLowerCase() === want) return true;
+  }
+  const held = pttChord();
+  return !!(held && String(held.key).toLowerCase() === want);
 }
 
 export function matchBind(id, event) {

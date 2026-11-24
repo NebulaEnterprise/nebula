@@ -665,7 +665,15 @@ html:not(.app-blur) .thread-menu {
   display: inline-grid; place-items: center; flex-shrink: 0;
 }
 .pill-dot { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: #fff; flex-shrink: 0; }
-.messages { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overflow-anchor: auto; padding: 18px 8px 8px; }
+.messages { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; overflow-anchor: none; padding: 18px 8px 8px; }
+.history-jump {
+  position: absolute; left: 50%; bottom: 86px; z-index: 6; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  max-width: calc(100% - 32px); padding: 8px 16px; border: 0; border-radius: 999px;
+  background: var(--bg-elev); color: var(--text); box-shadow: var(--shadow); cursor: pointer;
+}
+.history-jump strong { font-size: 13px; }
+.history-jump span { color: var(--brand); font-size: 12px; font-weight: 650; }
 .welcome { padding: 28px 18px; }
 .welcome h2 { margin: 0 0 6px; font-size: 30px; letter-spacing: -0.03em; }
 .welcome p { margin: 0; color: var(--muted); }

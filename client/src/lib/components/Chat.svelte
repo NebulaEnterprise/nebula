@@ -540,6 +540,7 @@
 
   let box = $state(null);
   let follow = true;
+  let stream = $state(null);
   let composerEl = $state(null);
   let mentionAt = $state(-1);
   let mentionQ = $state('');
@@ -956,8 +957,8 @@
     pollOpen = false;
   }
 
-  const roomScroll = new Map();
   let pinning = false;
+  let behind = $state(false);
 
   function chatOnScreen() {
     if (typeof window === 'undefined') return true;
@@ -967,18 +968,36 @@
 
   let pinGen = 0;
 
+  function atBottom(node = box) {
+    if (!node) return true;
+    return node.scrollHeight - node.scrollTop - node.clientHeight < 80;
+  }
+
   function pinBottom() {
     if (!box) return;
     const gen = ++pinGen;
     pinning = true;
     follow = true;
+    behind = false;
     const node = box;
-    node.scrollTop = node.scrollHeight;
+    const go = () => { if (node) node.scrollTop = node.scrollHeight; };
+    go();
     requestAnimationFrame(() => {
       if (gen !== pinGen || !node) return;
-      node.scrollTop = node.scrollHeight;
-      pinning = false;
+      go();
+      requestAnimationFrame(() => {
+        if (gen !== pinGen || !node) return;
+        go();
+        pinning = false;
+      });
     });
+  }
+
+  function releaseFollow() {
+    if (!box || atBottom()) return;
+    follow = false;
+    pinning = false;
+    pinGen += 1;
   }
 
   $effect(() => {
@@ -1002,9 +1021,30 @@
 
   function trackScroll() {
     if (!box || pinning || !chatOnScreen()) return;
-    if (box.scrollHeight <= box.clientHeight + 8) return;
-    follow = box.scrollHeight - box.scrollTop - box.clientHeight < 140;
-    if (roomKey) roomScroll.set(roomKey, { top: box.scrollTop, follow });
+    if (box.scrollHeight <= box.clientHeight + 8) {
+      follow = true;
+      behind = false;
+      return;
+    }
+    if (atBottom()) {
+      follow = true;
+      behind = false;
+    } else {
+      follow = false;
+    }
+  }
+
+  function onWheel(event) {
+    if (event.deltaY < -4) releaseFollow();
+  }
+
+  let touchY = 0;
+  function onTouchStart(event) {
+    touchY = event.touches && event.touches[0] ? event.touches[0].clientY : 0;
+  }
+  function onTouchMove(event) {
+    const y = event.touches && event.touches[0] ? event.touches[0].clientY : 0;
+    if (y - touchY > 10) releaseFollow();
   }
 
   function roomToken() {
@@ -1025,31 +1065,54 @@
     shownKey = token;
     roomKey = next;
     if (!visible) return;
-    const saved = roomScroll.get(next);
-    follow = saved ? saved.follow : true;
-    const top = saved && !saved.follow ? saved.top : null;
-    queueMicrotask(() => {
-      if (!box) return;
-      if (top == null) pinBottom();
-      else box.scrollTop = top;
-    });
+    follow = true;
+    behind = false;
+    queueMicrotask(() => pinBottom());
   });
 
   let stickKey = '';
   let stickCount = -1;
+  let stickRoom = '';
   $effect(() => {
     const last = ui.messages[ui.messages.length - 1];
     const key = (last && (last.clientKey || last.id)) || '';
     const count = ui.messages.length;
+    const room = roomToken();
+    ui.chatLoading;
     ui.reply;
     ui.editing;
-    ui.composer;
     if (composerEl) fitComposer();
-    if (!box || !follow) return;
+    if (room !== stickRoom) {
+      stickRoom = room;
+      stickKey = '';
+      stickCount = -1;
+      follow = true;
+      behind = false;
+    }
+    if (!box) return;
     if (key === stickKey && count === stickCount) return;
+    const first = stickCount < 0;
+    const added = stickCount >= 0 && count > stickCount;
     stickKey = key;
     stickCount = count;
-    pinBottom();
+    if (follow || first) pinBottom();
+    else if (added) behind = true;
+  });
+
+  $effect(() => {
+    const node = stream;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const watcher = new ResizeObserver(() => {
+      if (!follow || !box) return;
+      const gen = pinGen;
+      pinning = true;
+      box.scrollTop = box.scrollHeight;
+      requestAnimationFrame(() => {
+        if (gen === pinGen) pinning = false;
+      });
+    });
+    watcher.observe(node);
+    return () => watcher.disconnect();
   });
 
   function dayStart(date) {
@@ -1536,7 +1599,8 @@
     </div>
   </div>
 {/if}
-<div class="messages" bind:this={box} onscroll={trackScroll}>
+<div class="messages" bind:this={box} onscroll={trackScroll} onwheel={onWheel} ontouchstart={onTouchStart} ontouchmove={onTouchMove}>
+  <div class="msg-stream" bind:this={stream}>
   {#if ui.chatLoading && !ui.messages.length}
     <div class="skel-list" aria-hidden="true">
       {#each [78, 64, 86, 58, 72, 48] as width}
@@ -1694,7 +1758,14 @@
     {/if}
     {/if}
   {/each}
+  </div>
 </div>
+{#if behind}
+  <button type="button" class="history-jump" onclick={pinBottom}>
+    <strong>You're viewing older messages</strong>
+    <span>Scroll down to see new messages</span>
+  </button>
+{/if}
 {#if reactTip}
   <div class="react-tip" style="left:{reactTip.x}px;top:{reactTip.y}px">{reactTip.text}</div>
 {/if}

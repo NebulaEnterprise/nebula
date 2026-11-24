@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { callDevices, setCallMic, setCallSpeaker, setCallProcessing } from '../voice.js';
   import { toast } from '../state.svelte.js';
-  import { pttChord, setPttChord, chordFromEvent, chordLabel, setRecordingBind } from '../keybinds.js';
+  import { pttChord, setPttChord, chordFromEvent, chordFromPointer, chordLabel, setRecordingBind } from '../keybinds.js';
 
   let mics = $state([]);
   let speakers = $state([]);
@@ -22,6 +22,13 @@
   let tester = null;
 
   onMount(() => {
+    const finish = (chord) => {
+      if (!arming || !chord) return;
+      setPttChord(chord);
+      ptt = chordLabel(chord).join(' + ');
+      arming = false;
+      setRecordingBind(false);
+    };
     const onKey = (event) => {
       if (!arming) return;
       event.preventDefault();
@@ -31,14 +38,22 @@
         setRecordingBind(false);
         return;
       }
-      const chord = chordFromEvent(event);
-      if (!chord) return;
-      setPttChord(chord);
-      ptt = chordLabel(chord).join(' + ');
-      arming = false;
-      setRecordingBind(false);
+      finish(chordFromEvent(event));
+    };
+    const onPointer = (event) => {
+      if (!arming) return;
+      if (event.button === 0 && event.target instanceof Element && event.target.closest('.bind-edit')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      finish(chordFromPointer(event));
+    };
+    const onMenu = (event) => {
+      if (!arming) return;
+      event.preventDefault();
     };
     window.addEventListener('keydown', onKey, true);
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('contextmenu', onMenu, true);
     callDevices().then((data) => {
       mics = data.mics || [];
       speakers = data.speakers || [];
@@ -50,6 +65,8 @@
     return () => {
       setRecordingBind(false);
       window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('pointerdown', onPointer, true);
+      window.removeEventListener('contextmenu', onMenu, true);
       stopTest();
     };
   });
@@ -196,7 +213,7 @@
       <em>Click the key, then press the key or shortcut you want to hold.</em>
     </div>
     <button type="button" class="bind-keys bind-edit" class:on={arming} onclick={armPtt}>
-      <kbd>{arming ? 'Press a key' : ptt}</kbd>
+      <kbd>{arming ? 'Press a key or mouse button' : ptt}</kbd>
     </button>
   </div>
 

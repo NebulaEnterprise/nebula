@@ -4,7 +4,7 @@
   import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast, stepTextChannel, markServerRead } from './lib/state.svelte.js';
   import { pullSharedTheme } from './lib/look.svelte.js';
   import { answerCall, declineCall, joinVoice, toggleMute, toggleDeafen } from './lib/voice.js';
-  import { matchBind, isRecordingBind, pttKeyDown, pttChord } from './lib/keybinds.js';
+  import { matchBind, isRecordingBind, pttKeyDown, pttChord, chordUsesMouse, mouseName } from './lib/keybinds.js';
   import { playEvent } from './lib/sounds.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
@@ -200,71 +200,75 @@
       if (!node || !node.tagName) return false;
       return node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.isContentEditable;
     };
-    const onKey = (e) => {
-      if (isRecordingBind()) return;
+    const onShortcut = (e) => {
+      if (isRecordingBind()) return false;
       const typingPlain = typing(e) && !e.ctrlKey && !e.metaKey && !e.altKey;
       if (matchBind('mute', e) && ui.voice) {
         e.preventDefault();
         toggleMute();
-        return;
+        return true;
       }
       if (matchBind('deafen', e) && ui.voice) {
         e.preventDefault();
         toggleDeafen();
-        return;
+        return true;
       }
       if (matchBind('switcher', e)) {
         e.preventDefault();
         ui.switcher = !ui.switcher;
-        return;
+        return true;
       }
       if (matchBind('help', e)) {
         e.preventDefault();
         ui.userPage = 'keybinds';
         ui.userSettings = true;
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('prev', e)) {
         e.preventDefault();
         stepTextChannel(-1, false);
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('next', e)) {
         e.preventDefault();
         stepTextChannel(1, false);
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('prev-unread', e)) {
         e.preventDefault();
         stepTextChannel(-1, true);
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('next-unread', e)) {
         e.preventDefault();
         stepTextChannel(1, true);
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('mark-read', e)) {
         e.preventDefault();
         markServerRead();
-        return;
+        return true;
       }
       if (matchBind('edit-last', e) && !String(ui.composer || '').trim()) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('nebula-edit-last'));
-        return;
+        return true;
       }
       if (!typingPlain && matchBind('clip', e)) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('nebula-clip'));
-        return;
+        return true;
       }
       if (!e.repeat && !typing(e) && ui.voice && localStorage.getItem('nebula-input') === 'ptt' && pttKeyDown(e)) {
         e.preventDefault();
         if (ui.voice.muted) toggleMute();
         playEvent('ptt-down');
-        return;
+        return true;
       }
+      return false;
+    };
+    const onKey = (e) => {
+      if (onShortcut(e)) return;
       if (e.key !== 'Escape') return;
       if (ui.dialog?.kind === 'leave') { ui.dialog = null; return; }
       ui.switcher = false;
@@ -275,6 +279,19 @@
       ui.dmMenu = null;
       ui.memberMenu = null;
       ui.channelMenu = null;
+    };
+    const stopMouseHistory = (e) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    const onPointerDown = (e) => {
+      stopMouseHistory(e);
+      if (e.button < 0) return;
+      if (isRecordingBind()) return;
+      if (onShortcut(e)) return;
+      if (e.button === 3 && !chordUsesMouse('Mouse4')) stepTextChannel(-1, false);
+      if (e.button === 4 && !chordUsesMouse('Mouse5')) stepTextChannel(1, false);
     };
     const onClick = (e) => {
       const node = e.target instanceof Element ? e.target : null;
@@ -308,8 +325,21 @@
       if (!ui.voice.muted) toggleMute();
       playEvent('ptt-up');
     };
+    const onPointerUp = (e) => {
+      stopMouseHistory(e);
+      if (isRecordingBind() || localStorage.getItem('nebula-input') !== 'ptt' || !ui.voice) return;
+      const key = mouseName(e.button);
+      if (!key || key.toLowerCase() !== String(pttChord().key || '').toLowerCase()) return;
+      if (!ui.voice.muted) toggleMute();
+      playEvent('ptt-up');
+    };
     window.addEventListener('keydown', onKey);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('pointerdown', onPointerDown, true);
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('mousedown', stopMouseHistory, true);
+    window.addEventListener('mouseup', stopMouseHistory, true);
+    window.addEventListener('auxclick', stopMouseHistory, true);
     window.addEventListener('click', onClick);
     window.addEventListener('click', onLink, true);
     window.addEventListener('auxclick', onLink, true);
@@ -317,6 +347,11 @@
     return () => {
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('pointerdown', onPointerDown, true);
+      window.removeEventListener('pointerup', onPointerUp, true);
+      window.removeEventListener('mousedown', stopMouseHistory, true);
+      window.removeEventListener('mouseup', stopMouseHistory, true);
+      window.removeEventListener('auxclick', stopMouseHistory, true);
       window.removeEventListener('click', onClick);
       window.removeEventListener('click', onLink, true);
       window.removeEventListener('auxclick', onLink, true);

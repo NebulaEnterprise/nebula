@@ -221,8 +221,16 @@ function createWindow() {
     }
     return { action: 'allow' };
   });
+  const stopHistory = (event, cmd) => {
+    if (cmd === 'browser-backward' || cmd === 'browser-forward') event.preventDefault();
+  };
+  contents.on('app-command', stopHistory);
+  mainWindow.on('app-command', stopHistory);
   contents.on('will-navigate', (event, url) => {
-    if (url.startsWith('file:')) return;
+    if (url.startsWith('file:')) {
+      event.preventDefault();
+      return;
+    }
     if (isPictureLink(url) || !isSiteUrl(url)) {
       event.preventDefault();
       shell.openExternal(url);
