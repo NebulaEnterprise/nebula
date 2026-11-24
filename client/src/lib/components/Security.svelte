@@ -65,7 +65,7 @@
   }
 
   $effect(() => {
-    if (ui.userSettings && (ui.userPage === 'profile' || ui.userPage === 'account' || !ui.userPage)) load();
+    if (ui.userSettings && ui.userPage === 'account') load();
   });
 </script>
 

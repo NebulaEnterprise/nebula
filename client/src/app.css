@@ -1967,11 +1967,7 @@ html.paint-mention .mention {
 .set-main { flex: 1; overflow: auto; padding: 28px 36px 48px; }
 .set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .set-main h2 { margin: 0; font-size: 20px; font-weight: 700; }
-.acct-board { margin-top: 28px; max-width: 760px; }
-.acct-board > h3 {
-  margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
-  text-transform: uppercase; color: var(--faint);
-}
+.acct-board { margin-top: 8px; max-width: 760px; }
 .acct-line {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   min-height: 72px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.06);

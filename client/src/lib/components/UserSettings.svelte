@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
@@ -221,9 +221,9 @@
       toast(err.message);
     }
   }
-  const page = $derived(ui.userPage === 'account' || !ui.userPage ? 'profile' : ui.userPage);
+  const page = $derived(ui.userPage || 'profile');
   $effect(() => {
-    if (page !== 'profile') securityOpen = false;
+    if (page !== 'account') securityOpen = false;
     if (page !== 'look') lookOpen = '';
     if (page === 'admin' && ui.me?.canAdmin) {
       api('/api/staff/reports').then((data) => { ui.staffReports = data.reports || []; }).catch(() => {});
@@ -618,6 +618,7 @@
         </div>
       </div>
       <div class="group">User settings</div>
+      <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
       <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
@@ -667,7 +668,76 @@
         {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
-      {#if page === 'accounts'}
+      {#if page === 'account'}
+        <div class="acct-board">
+          <div class="acct-line">
+            <div>
+              <span>Username</span>
+              <p>@{ui.me?.username}</p>
+            </div>
+            <button type="button" class="acct-edit" onclick={() => openAccount('username')}>Edit</button>
+          </div>
+          <div class="acct-line">
+            <div>
+              <span>Email</span>
+              <p>
+                {emailShown ? (ui.me?.email || 'No email yet') : maskEmail(ui.me?.email)}
+                {#if ui.me?.email}
+                  <button type="button" class="acct-reveal" onclick={() => (emailShown = !emailShown)}>{emailShown ? 'Hide' : 'Reveal'}</button>
+                {/if}
+              </p>
+            </div>
+            <button type="button" class="acct-edit" onclick={() => openAccount('email')}>Edit</button>
+          </div>
+          <div class="acct-line">
+            <div>
+              <span>Password</span>
+              <p>••••••••</p>
+            </div>
+            <button type="button" class="acct-edit" onclick={() => openAccount('password')}>Edit</button>
+          </div>
+          <div class="acct-line">
+            <div>
+              <span>Recovery</span>
+              <p>{ui.me?.recovery === 'code' ? 'Recovery code set' : ui.me?.recovery === 'pass' ? 'Passphrase set' : 'Not set up'}</p>
+            </div>
+            <button type="button" class="acct-edit" onclick={() => (recoverOpen = !recoverOpen)}>{recoverOpen ? 'Close' : 'Edit'}</button>
+          </div>
+          {#if recoverOpen}
+            <div class="recover-card">
+              <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
+              {#if revealed}
+                <div class="recover-secret">{revealed}</div>
+                <button type="button" class="btn sm" onclick={() => (revealed = '')}>Hide</button>
+              {/if}
+              <div class="field"><label>Password</label><input type="password" bind:value={recoverPassword} autocomplete="current-password" /></div>
+              <button type="button" class="btn" disabled={recoverBusy} onclick={() => showRecovery().catch((err) => toast(err.message))}>Show secret</button>
+              <p class="label">Replace it</p>
+              <div class="recover-choice">
+                <button type="button" class="btn" class:brand={recoverMethod === 'pass'} onclick={() => pickRecover('pass')}>Passphrase</button>
+                <button type="button" class="btn" class:brand={recoverMethod === 'code'} onclick={() => pickRecover('code')}>Recovery code</button>
+              </div>
+              {#if recoverMethod === 'pass'}
+                <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" autocomplete="new-password" /></div>
+              {:else}
+                <div class="recover-secret">{recoverCode || 'Make a code'}</div>
+                <button type="button" class="btn sm" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
+              {/if}
+              <div class="recover-actions">
+                <button type="button" class="btn brand" disabled={recoverBusy} onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
+              </div>
+            </div>
+          {/if}
+          <Security bind:open={securityOpen} />
+          <div class="acct-line acct-danger">
+            <div>
+              <span>Delete account</span>
+              <p>Erases this profile, messages, and servers you alone own. This cannot be undone.</p>
+            </div>
+            <button type="button" class="acct-edit danger" onclick={() => { deletePassword = ''; accountDialog = 'delete'; }}>Delete</button>
+          </div>
+        </div>
+      {:else if page === 'accounts'}
         <section class="acct-section">
           <h3>Saved on this device</h3>
           <div class="acct-list">
@@ -1270,77 +1340,6 @@
           </div>
         </div>
       </div>
-      {#if page === 'profile'}
-        <div class="acct-board">
-          <h3>Account</h3>
-          <div class="acct-line">
-            <div>
-              <span>Username</span>
-              <p>@{ui.me?.username}</p>
-            </div>
-            <button type="button" class="acct-edit" onclick={() => openAccount('username')}>Edit</button>
-          </div>
-          <div class="acct-line">
-            <div>
-              <span>Email</span>
-              <p>
-                {emailShown ? (ui.me?.email || 'No email yet') : maskEmail(ui.me?.email)}
-                {#if ui.me?.email}
-                  <button type="button" class="acct-reveal" onclick={() => (emailShown = !emailShown)}>{emailShown ? 'Hide' : 'Reveal'}</button>
-                {/if}
-              </p>
-            </div>
-            <button type="button" class="acct-edit" onclick={() => openAccount('email')}>Edit</button>
-          </div>
-          <div class="acct-line">
-            <div>
-              <span>Password</span>
-              <p>••••••••</p>
-            </div>
-            <button type="button" class="acct-edit" onclick={() => openAccount('password')}>Edit</button>
-          </div>
-          <div class="acct-line">
-            <div>
-              <span>Recovery</span>
-              <p>{ui.me?.recovery === 'code' ? 'Recovery code set' : ui.me?.recovery === 'pass' ? 'Passphrase set' : 'Not set up'}</p>
-            </div>
-            <button type="button" class="acct-edit" onclick={() => (recoverOpen = !recoverOpen)}>{recoverOpen ? 'Close' : 'Edit'}</button>
-          </div>
-          {#if recoverOpen}
-            <div class="recover-card">
-              <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
-              {#if revealed}
-                <div class="recover-secret">{revealed}</div>
-                <button type="button" class="btn sm" onclick={() => (revealed = '')}>Hide</button>
-              {/if}
-              <div class="field"><label>Password</label><input type="password" bind:value={recoverPassword} autocomplete="current-password" /></div>
-              <button type="button" class="btn" disabled={recoverBusy} onclick={() => showRecovery().catch((err) => toast(err.message))}>Show secret</button>
-              <p class="label">Replace it</p>
-              <div class="recover-choice">
-                <button type="button" class="btn" class:brand={recoverMethod === 'pass'} onclick={() => pickRecover('pass')}>Passphrase</button>
-                <button type="button" class="btn" class:brand={recoverMethod === 'code'} onclick={() => pickRecover('code')}>Recovery code</button>
-              </div>
-              {#if recoverMethod === 'pass'}
-                <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" autocomplete="new-password" /></div>
-              {:else}
-                <div class="recover-secret">{recoverCode || 'Make a code'}</div>
-                <button type="button" class="btn sm" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
-              {/if}
-              <div class="recover-actions">
-                <button type="button" class="btn brand" disabled={recoverBusy} onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
-              </div>
-            </div>
-          {/if}
-          <Security bind:open={securityOpen} />
-          <div class="acct-line acct-danger">
-            <div>
-              <span>Delete account</span>
-              <p>Erases this profile, messages, and servers you alone own. This cannot be undone.</p>
-            </div>
-            <button type="button" class="acct-edit danger" onclick={() => { deletePassword = ''; accountDialog = 'delete'; }}>Delete</button>
-          </div>
-        </div>
-      {/if}
       {/if}
     </div>
   </div>
