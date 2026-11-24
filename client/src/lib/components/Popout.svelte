@@ -1,5 +1,5 @@
 <script>
-  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X, Gamepad2 } from '@lucide/svelte';
+  import { User, AtSign, Tags, Smile, Clock, Circle, MessageSquare, MoreHorizontal, Plus, X, Gamepad2, Crown } from '@lucide/svelte';
   import Name from './Name.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -213,7 +213,7 @@
             <div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>
           {/if}
         </div>
-        <h3><Name user={u} />{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
+        <h3><Name user={u} />{#if u.serverOwner && !u.bot}<Crown size={15} class="owner-crown" />{/if}{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
         <div class="profile-idline">
           <p class="handle"><span>@{u.username}</span></p>
           <span class="profile-badges">

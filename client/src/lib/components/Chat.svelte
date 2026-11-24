@@ -147,6 +147,7 @@
       showcaseBadge: mine?.showcaseBadge || member?.showcaseBadge || dm?.showcaseBadge || author.showcaseBadge || '',
       badges: mine?.badges || author.badges || member?.badges,
       roleIcon: member?.roleIcon || '',
+      serverOwner: !!(member?.serverOwner || author.serverOwner),
     };
   }
 

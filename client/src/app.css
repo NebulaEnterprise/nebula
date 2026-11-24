@@ -1707,6 +1707,8 @@ html[data-theme="amoled"] #app { background-color: #000; }
 .name-row { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: nowrap; }
 .name-row strong { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .name-extras { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; height: 18px; }
+.owner-crown { color: #e3b34c; flex-shrink: 0; }
+.pop h3 .owner-crown { margin-left: 6px; vertical-align: -2px; }
 .role-ico { font-style: normal; font-size: 14px; line-height: 1; }
 .tag-pill {
   display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;

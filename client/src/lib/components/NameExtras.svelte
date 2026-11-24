@@ -1,4 +1,5 @@
 <script>
+  import { Crown } from '@lucide/svelte';
   import MoonBadge from './MoonBadge.svelte';
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
@@ -10,6 +11,7 @@
 </script>
 
 <span class="name-extras">
+  {#if user?.serverOwner && !user?.bot}<Crown size={13} class="owner-crown" />{/if}
   {#if user?.roleIcon}<i class="role-ico">{user.roleIcon}</i>{/if}
   {#if !user?.bot && badge === 'early'}<MoonBadge />{/if}
   {#if !user?.bot && badge === 'staff'}<StaffBadge rank={user?.staff || 'staff'} />{/if}
