@@ -450,21 +450,6 @@
     await loadMembers();
   }
 
-  async function moveRole(role, dir) {
-    const list = customRoles.slice();
-    const index = list.findIndex((row) => row.id === role.id);
-    const next = dir === 'up' ? index - 1 : index + 1;
-    if (index < 0 || next < 0 || next >= list.length) return;
-    const swapped = list.slice();
-    const [item] = swapped.splice(index, 1);
-    swapped.splice(next, 0, item);
-    try {
-      await saveRoleOrder(swapped.map((row) => row.id));
-    } catch (err) {
-      toast(err.message);
-    }
-  }
-
   async function dropRole(target) {
     const from = dragRole;
     dragRole = '';
@@ -596,10 +581,6 @@
       <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
       <span class="gset-role-name">{role.icon ? role.icon + ' ' : ''}{role.name}</span>
     </button>
-    <span class="gset-role-moves">
-      <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
-      <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
-    </span>
   </div>
 {/snippet}
 
@@ -1131,7 +1112,7 @@
                 <span class="gset-dot"></span>
                 <span class="grow"><strong>Default permissions</strong><em>@everyone · applies to all server members</em></span>
               </button>
-              <p class="hint">Drag a role, or use the arrows, to change its place. Roles at the top show first in the member list. {customRoles.length} custom {customRoles.length === 1 ? 'role' : 'roles'}.</p>
+              <p class="hint">Drag a role to change its place. Roles at the top show first in the member list. {customRoles.length} custom {customRoles.length === 1 ? 'role' : 'roles'}.</p>
               {#each customRoles as role}
                 <div class="gset-role-row" ondragover={(e) => e.preventDefault()} ondrop={() => dropRole(role)}>
                   <span class="gset-grip" draggable="true" title="Drag to reorder" ondragstart={() => (dragRole = role.id)}><GripVertical size={14} /></span>
@@ -1140,8 +1121,6 @@
                     <strong class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</strong>
                   </button>
                   <span class="hint">{people.filter((member) => memberRoleIds(member).includes(role.id)).length}</span>
-                  <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
-                  <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
                 </div>
               {/each}
             </section>

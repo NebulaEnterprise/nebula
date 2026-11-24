@@ -3575,8 +3575,6 @@ html.paint-mention .mention {
 .gset-grip { display: grid; place-items: center; color: var(--faint); cursor: grab; flex-shrink: 0; }
 .gset-role-hit { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; background: none; color: inherit; text-align: left; font-weight: 650; padding: 0; }
 .gset-role-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gset-role-moves { display: flex; flex-shrink: 0; gap: 2px; }
-.gset-role-moves .btn.icon { width: 26px; height: 26px; padding: 0; }
 .gset-dot { width: 12px; height: 12px; border-radius: 50%; background: #99aab5; flex-shrink: 0; }
 .gset-tabs { display: flex; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); margin: 8px 0 14px; }
 .gset-tabs button { padding: 8px 0; color: var(--muted); font-weight: 700; background: transparent; }
