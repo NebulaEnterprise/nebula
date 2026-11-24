@@ -1,10 +1,10 @@
 <script>
   import { onMount } from 'svelte';
   import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast } from './lib/state.svelte.js';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast, stepTextChannel, markServerRead } from './lib/state.svelte.js';
   import { pullSharedTheme } from './lib/look.svelte.js';
   import { answerCall, declineCall, joinVoice, toggleMute, toggleDeafen } from './lib/voice.js';
-  import { bindOn } from './lib/keybinds.js';
+  import { matchBind, isRecordingBind, pttKeyDown, pttChord } from './lib/keybinds.js';
   import { playEvent } from './lib/sounds.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
@@ -201,28 +201,65 @@
       return node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.isContentEditable;
     };
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm' && bindOn('mute') && ui.voice) {
+      if (isRecordingBind()) return;
+      const typingPlain = typing(e) && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (matchBind('mute', e) && ui.voice) {
         e.preventDefault();
         toggleMute();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd' && bindOn('deafen') && ui.voice) {
+      if (matchBind('deafen', e) && ui.voice) {
         e.preventDefault();
         toggleDeafen();
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && bindOn('switcher')) {
+      if (matchBind('switcher', e)) {
         e.preventDefault();
         ui.switcher = !ui.switcher;
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === '/' && bindOn('help')) {
+      if (matchBind('help', e)) {
         e.preventDefault();
         ui.userPage = 'keybinds';
         ui.userSettings = true;
         return;
       }
-      if (!e.repeat && e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e) && ui.voice && localStorage.getItem('nebula-input') === 'ptt') {
+      if (!typingPlain && matchBind('prev', e)) {
+        e.preventDefault();
+        stepTextChannel(-1, false);
+        return;
+      }
+      if (!typingPlain && matchBind('next', e)) {
+        e.preventDefault();
+        stepTextChannel(1, false);
+        return;
+      }
+      if (!typingPlain && matchBind('prev-unread', e)) {
+        e.preventDefault();
+        stepTextChannel(-1, true);
+        return;
+      }
+      if (!typingPlain && matchBind('next-unread', e)) {
+        e.preventDefault();
+        stepTextChannel(1, true);
+        return;
+      }
+      if (!typingPlain && matchBind('mark-read', e)) {
+        e.preventDefault();
+        markServerRead();
+        return;
+      }
+      if (matchBind('edit-last', e) && !String(ui.composer || '').trim()) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('nebula-edit-last'));
+        return;
+      }
+      if (!typingPlain && matchBind('clip', e)) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('nebula-clip'));
+        return;
+      }
+      if (!e.repeat && !typing(e) && ui.voice && localStorage.getItem('nebula-input') === 'ptt' && pttKeyDown(e)) {
         e.preventDefault();
         if (ui.voice.muted) toggleMute();
         playEvent('ptt-down');
@@ -265,7 +302,9 @@
       ui.dialog = { kind: 'leave', url };
     };
     const onKeyUp = (e) => {
-      if (e.key.toLowerCase() !== 'v' || localStorage.getItem('nebula-input') !== 'ptt' || !ui.voice || typing(e)) return;
+      if (isRecordingBind() || localStorage.getItem('nebula-input') !== 'ptt' || !ui.voice || typing(e)) return;
+      const key = e.key === ' ' ? 'Space' : e.key;
+      if (key.toLowerCase() !== String(pttChord().key || '').toLowerCase()) return;
       if (!ui.voice.muted) toggleMute();
       playEvent('ptt-up');
     };

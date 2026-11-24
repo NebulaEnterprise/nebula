@@ -18,36 +18,36 @@ export const PING_CHOICES = [
 ];
 
 const EVENT_TONE = {
-  message: 'pulse',
-  dm: 'pulse-bright',
-  mention: 'double',
-  group: 'pulse',
-  sent: 'click',
-  friend: 'glass',
-  'call-in': 'ring',
-  'call-out': 'ring-out',
-  'call-end': 'end',
-  'voice-join': 'join',
-  'voice-leave': 'leave',
-  'voice-other-join': 'join',
-  'voice-other-leave': 'leave',
-  'voice-move': 'click',
-  'voice-lost': 'error',
-  'voice-back': 'click',
-  mute: 'click',
-  unmute: 'click',
-  deafen: 'click',
-  undeafen: 'click',
-  'ptt-down': 'click',
-  'ptt-up': 'click',
-  stage: 'glass',
-  'share-start': 'click',
-  'share-stop': 'click',
-  'stream-start': 'click',
-  'stream-stop': 'click',
-  'watch-start': 'click',
-  'watch-stop': 'click',
-  clip: 'glass',
+  message: 'message',
+  dm: 'dm',
+  mention: 'mention',
+  group: 'group',
+  sent: 'sent',
+  friend: 'friend',
+  'call-in': 'call-in',
+  'call-out': 'call-out',
+  'call-end': 'call-end',
+  'voice-join': 'voice-join',
+  'voice-leave': 'voice-leave',
+  'voice-other-join': 'voice-other-join',
+  'voice-other-leave': 'voice-other-leave',
+  'voice-move': 'voice-move',
+  'voice-lost': 'voice-lost',
+  'voice-back': 'voice-back',
+  mute: 'mute',
+  unmute: 'unmute',
+  deafen: 'deafen',
+  undeafen: 'undeafen',
+  'ptt-down': 'ptt-down',
+  'ptt-up': 'ptt-up',
+  stage: 'stage',
+  'share-start': 'share-start',
+  'share-stop': 'share-stop',
+  'stream-start': 'stream-start',
+  'stream-stop': 'stream-stop',
+  'watch-start': 'watch-start',
+  'watch-stop': 'watch-stop',
+  clip: 'clip',
   error: 'error',
 };
 
@@ -57,13 +57,18 @@ function readJson(key) {
 }
 
 export function soundVolume() {
-  const n = Number(localStorage.getItem(VOLUME));
-  if (!Number.isFinite(n)) return 0.8;
+  const raw = localStorage.getItem(VOLUME);
+  const chosen = localStorage.getItem(VOLUME + '-set') === '1';
+  if (!chosen || raw == null || raw === '') return 0.75;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0.75;
   return Math.min(1, Math.max(0, n));
 }
 
 export function setSoundVolume(value) {
-  localStorage.setItem(VOLUME, String(Math.min(1, Math.max(0, Number(value) || 0))));
+  const n = Number(value);
+  localStorage.setItem(VOLUME + '-set', '1');
+  localStorage.setItem(VOLUME, String(Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0.75))));
 }
 
 export function notifySounds() {
@@ -109,14 +114,14 @@ export function unlockAudio() {
   } catch (_) {}
 }
 
-function blip(context, { freq, at, dur, gain, slide }) {
+function blip(context, { freq, at, dur, gain, slide, type = 'sine' }) {
   const osc = context.createOscillator();
   const amp = context.createGain();
-  osc.type = 'sine';
+  osc.type = type;
   osc.frequency.setValueAtTime(freq, at);
   if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, slide), at + dur);
   amp.gain.setValueAtTime(0.0001, at);
-  amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + 0.012);
+  amp.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), at + 0.01);
   amp.gain.exponentialRampToValueAtTime(0.0001, at + dur);
   osc.connect(amp);
   amp.connect(context.destination);
@@ -125,23 +130,77 @@ function blip(context, { freq, at, dur, gain, slide }) {
 }
 
 function recipe(name, context, at, gain) {
-  if (name === 'pulse-bright') blip(context, { freq: 587, at, dur: 0.14, gain: gain * 0.1, slide: 466 });
-  else if (name === 'double') {
-    blip(context, { freq: 659, at, dur: 0.08, gain: gain * 0.09 });
-    blip(context, { freq: 784, at: at + 0.1, dur: 0.11, gain: gain * 0.07 });
-  } else if (name === 'glass') blip(context, { freq: 1318, at, dur: 0.06, gain: gain * 0.05, slide: 988 });
-  else if (name === 'ring') {
-    blip(context, { freq: 440, at, dur: 0.26, gain: gain * 0.09 });
-    blip(context, { freq: 554, at: at + 0.3, dur: 0.26, gain: gain * 0.08 });
-  } else if (name === 'ring-out') blip(context, { freq: 392, at, dur: 0.2, gain: gain * 0.07, slide: 330 });
-  else if (name === 'end') blip(context, { freq: 349, at, dur: 0.16, gain: gain * 0.07, slide: 262 });
-  else if (name === 'join') blip(context, { freq: 392, at, dur: 0.12, gain: gain * 0.08, slide: 494 });
-  else if (name === 'leave') blip(context, { freq: 440, at, dur: 0.1, gain: gain * 0.06, slide: 330 });
-  else if (name === 'error') {
-    blip(context, { freq: 311, at, dur: 0.07, gain: gain * 0.06 });
-    blip(context, { freq: 247, at: at + 0.09, dur: 0.1, gain: gain * 0.05 });
-  } else if (name === 'click') blip(context, { freq: 988, at, dur: 0.03, gain: gain * 0.045 });
-  else blip(context, { freq: 494, at, dur: 0.15, gain: gain * 0.09, slide: 392 });
+  const g = gain;
+  const tone = {
+    pulse: () => blip(context, { freq: 523, at, dur: 0.22, gain: g * 0.46, slide: 392, type: 'sine' }),
+    'pulse-bright': () => blip(context, { freq: 698, at, dur: 0.18, gain: g * 0.44, slide: 554, type: 'sine' }),
+    double: () => {
+      blip(context, { freq: 784, at, dur: 0.1, gain: g * 0.4, type: 'sine' });
+      blip(context, { freq: 988, at: at + 0.12, dur: 0.14, gain: g * 0.36, type: 'sine' });
+    },
+    glass: () => blip(context, { freq: 1568, at, dur: 0.09, gain: g * 0.28, slide: 1174 }),
+    click: () => blip(context, { freq: 880, at, dur: 0.05, gain: g * 0.32, type: 'sine' }),
+    message: () => blip(context, { freq: 494, at, dur: 0.24, gain: g * 0.5, slide: 370, type: 'sine' }),
+    dm: () => {
+      blip(context, { freq: 659, at, dur: 0.1, gain: g * 0.42, type: 'sine' });
+      blip(context, { freq: 880, at: at + 0.11, dur: 0.16, gain: g * 0.38, slide: 740, type: 'sine' });
+    },
+    mention: () => {
+      blip(context, { freq: 880, at, dur: 0.09, gain: g * 0.4 });
+      blip(context, { freq: 1174, at: at + 0.13, dur: 0.16, gain: g * 0.36 });
+    },
+    group: () => blip(context, { freq: 392, at, dur: 0.26, gain: g * 0.48, slide: 294, type: 'sine' }),
+    sent: () => blip(context, { freq: 740, at, dur: 0.06, gain: g * 0.3, slide: 988 }),
+    friend: () => blip(context, { freq: 1318, at, dur: 0.12, gain: g * 0.34, slide: 1760 }),
+    'call-in': () => {
+      blip(context, { freq: 440, at, dur: 0.28, gain: g * 0.42, type: 'sine' });
+      blip(context, { freq: 554, at: at + 0.32, dur: 0.32, gain: g * 0.4, type: 'sine' });
+    },
+    'call-out': () => {
+      blip(context, { freq: 349, at, dur: 0.18, gain: g * 0.36, type: 'sine' });
+      blip(context, { freq: 349, at: at + 0.28, dur: 0.18, gain: g * 0.32, type: 'sine' });
+    },
+    'call-end': () => blip(context, { freq: 523, at, dur: 0.28, gain: g * 0.4, slide: 196, type: 'sine' }),
+    'voice-join': () => blip(context, { freq: 330, at, dur: 0.2, gain: g * 0.42, slide: 523, type: 'sine' }),
+    'voice-leave': () => blip(context, { freq: 494, at, dur: 0.2, gain: g * 0.38, slide: 247, type: 'sine' }),
+    'voice-other-join': () => blip(context, { freq: 587, at, dur: 0.12, gain: g * 0.3, slide: 784 }),
+    'voice-other-leave': () => blip(context, { freq: 698, at, dur: 0.12, gain: g * 0.28, slide: 392 }),
+    'voice-move': () => {
+      blip(context, { freq: 440, at, dur: 0.06, gain: g * 0.3 });
+      blip(context, { freq: 554, at: at + 0.08, dur: 0.06, gain: g * 0.3 });
+      blip(context, { freq: 659, at: at + 0.16, dur: 0.1, gain: g * 0.32 });
+    },
+    'voice-lost': () => {
+      blip(context, { freq: 311, at, dur: 0.1, gain: g * 0.4, type: 'sine' });
+      blip(context, { freq: 196, at: at + 0.12, dur: 0.16, gain: g * 0.36, type: 'sine' });
+    },
+    'voice-back': () => {
+      blip(context, { freq: 392, at, dur: 0.08, gain: g * 0.34 });
+      blip(context, { freq: 587, at: at + 0.1, dur: 0.12, gain: g * 0.34 });
+    },
+    mute: () => blip(context, { freq: 220, at, dur: 0.1, gain: g * 0.4, slide: 140, type: 'sine' }),
+    unmute: () => blip(context, { freq: 280, at, dur: 0.1, gain: g * 0.38, slide: 440, type: 'sine' }),
+    deafen: () => blip(context, { freq: 160, at, dur: 0.14, gain: g * 0.42, slide: 90, type: 'sine' }),
+    undeafen: () => blip(context, { freq: 247, at, dur: 0.12, gain: g * 0.38, slide: 494, type: 'sine' }),
+    'ptt-down': () => blip(context, { freq: 660, at, dur: 0.04, gain: g * 0.28, type: 'sine' }),
+    'ptt-up': () => blip(context, { freq: 440, at, dur: 0.05, gain: g * 0.24, type: 'sine' }),
+    stage: () => blip(context, { freq: 1046, at, dur: 0.16, gain: g * 0.36, slide: 1318 }),
+    'share-start': () => blip(context, { freq: 523, at, dur: 0.1, gain: g * 0.34, slide: 784 }),
+    'share-stop': () => blip(context, { freq: 784, at, dur: 0.1, gain: g * 0.3, slide: 392 }),
+    'stream-start': () => blip(context, { freq: 466, at, dur: 0.08, gain: g * 0.32, slide: 622, type: 'sine' }),
+    'stream-stop': () => blip(context, { freq: 622, at, dur: 0.1, gain: g * 0.28, slide: 311, type: 'sine' }),
+    'watch-start': () => blip(context, { freq: 880, at, dur: 0.08, gain: g * 0.26, slide: 1174 }),
+    'watch-stop': () => blip(context, { freq: 988, at, dur: 0.08, gain: g * 0.24, slide: 659 }),
+    clip: () => {
+      blip(context, { freq: 988, at, dur: 0.06, gain: g * 0.3 });
+      blip(context, { freq: 1318, at: at + 0.08, dur: 0.1, gain: g * 0.28 });
+    },
+    error: () => {
+      blip(context, { freq: 349, at, dur: 0.1, gain: g * 0.4, type: 'sine' });
+      blip(context, { freq: 233, at: at + 0.12, dur: 0.16, gain: g * 0.38, type: 'sine' });
+    },
+  };
+  (tone[name] || tone.pulse)();
 }
 
 export function playEvent(id, opts = {}) {

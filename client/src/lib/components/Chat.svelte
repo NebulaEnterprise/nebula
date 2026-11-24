@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { AtSign, Hash, Plus, Smile, Sticker, FileUp, BarChart3, Trash2, MoreHorizontal, Reply, Pencil, Forward, SmilePlus, Eye, EyeOff, Search, Phone, PhoneOff, Bell, Pin, Image as ImageIcon, MessagesSquare, UserRound, ChevronLeft, Mic, MicOff, Headphones, HeadphoneOff, Monitor, Link, Flag, Mail, X, Maximize2, PictureInPicture2, Settings, Video, AudioLines, Scissors, Volume2, Square } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
@@ -462,6 +463,22 @@
     menu = null;
     queueMicrotask(() => composerEl && composerEl.focus());
   }
+
+  onMount(() => {
+    const onEdit = () => {
+      if (String(ui.composer || '').trim()) return;
+      const me = String(ui.me?.id || '');
+      const mine = [...(ui.messages || [])].reverse().find((msg) => msg && String(msg.authorId || msg.author?.id || '') === me && msg.content);
+      if (mine) beginEdit(mine);
+    };
+    const onClip = () => saveClip();
+    window.addEventListener('nebula-edit-last', onEdit);
+    window.addEventListener('nebula-clip', onClip);
+    return () => {
+      window.removeEventListener('nebula-edit-last', onEdit);
+      window.removeEventListener('nebula-clip', onClip);
+    };
+  });
 
   async function beginForward(msg) {
     menu = null;

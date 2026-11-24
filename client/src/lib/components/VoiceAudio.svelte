@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { callDevices, setCallMic, setCallSpeaker, setCallProcessing } from '../voice.js';
   import { toast } from '../state.svelte.js';
+  import { pttChord, setPttChord, chordFromEvent, chordLabel, setRecordingBind } from '../keybinds.js';
 
   let mics = $state([]);
   let speakers = $state([]);
@@ -13,12 +14,31 @@
   let echo = $state(localStorage.getItem('nebula-echo') !== 'off');
   let gain = $state(localStorage.getItem('nebula-gain') !== 'off');
   let mode = $state(localStorage.getItem('nebula-input') === 'ptt' ? 'ptt' : 'voice');
+  let ptt = $state(chordLabel(pttChord()).join(' + ') || 'V');
+  let arming = $state(false);
   let joinMuted = $state(localStorage.getItem('nebula-join-muted') === '1');
   let level = $state(0);
   let testing = $state(false);
   let tester = null;
 
   onMount(() => {
+    const onKey = (event) => {
+      if (!arming) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey) {
+        arming = false;
+        setRecordingBind(false);
+        return;
+      }
+      const chord = chordFromEvent(event);
+      if (!chord) return;
+      setPttChord(chord);
+      ptt = chordLabel(chord).join(' + ');
+      arming = false;
+      setRecordingBind(false);
+    };
+    window.addEventListener('keydown', onKey, true);
     callDevices().then((data) => {
       mics = data.mics || [];
       speakers = data.speakers || [];
@@ -27,8 +47,17 @@
       noise = data.noise !== false;
       echo = data.echo !== false;
     }).catch(() => {});
-    return () => stopTest();
+    return () => {
+      setRecordingBind(false);
+      window.removeEventListener('keydown', onKey, true);
+      stopTest();
+    };
   });
+
+  function armPtt() {
+    arming = true;
+    setRecordingBind(true);
+  }
 
   function deviceLabel(row, fallback) {
     return row.label || fallback;
@@ -158,7 +187,16 @@
     </button>
     <button type="button" class:on={mode === 'ptt'} onclick={() => setMode('ptt')}>
       <strong>Push to talk</strong>
-      <span>Hold V to talk while you are in a call and not typing.</span>
+      <span>Hold {ptt} to talk while you are in a call and not typing.</span>
+    </button>
+  </div>
+  <div class="sound-row">
+    <div class="copy">
+      <strong>Push to talk key</strong>
+      <em>Click the key, then press the key or shortcut you want to hold.</em>
+    </div>
+    <button type="button" class="bind-keys bind-edit" class:on={arming} onclick={armPtt}>
+      <kbd>{arming ? 'Press a key' : ptt}</kbd>
     </button>
   </div>
 

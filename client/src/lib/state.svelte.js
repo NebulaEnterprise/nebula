@@ -3604,6 +3604,30 @@ export function markChannelRead(id) {
   ui.channelMenu = null;
 }
 
+function textChannels() {
+  return (ui.channels || []).filter((ch) => ch && ch.type === 'text' && !isVoiceRoom(ch));
+}
+
+export function stepTextChannel(dir, unreadOnly) {
+  if (ui.mode !== 'chat') return;
+  const list = textChannels();
+  const unread = list.filter((ch) => {
+    const note = ui.activity?.channels?.[ch.id];
+    return note && (note.unread || note.mentions) && ch.id !== ui.channelId;
+  });
+  const pool = unreadOnly ? unread : list;
+  if (!pool.length) return;
+  const idx = pool.findIndex((ch) => ch.id === ui.channelId);
+  const at = idx < 0 ? (dir > 0 ? 0 : pool.length - 1) : (idx + dir + pool.length) % pool.length;
+  const next = pool[at];
+  if (next && next.id !== ui.channelId) pickChannel(next);
+}
+
+export function markServerRead() {
+  if (ui.mode !== 'chat') return;
+  for (const ch of textChannels()) markChannelRead(ch.id);
+}
+
 function chatInFront() {
   if (typeof document === 'undefined') return false;
   if (document.visibilityState !== 'visible') return false;
