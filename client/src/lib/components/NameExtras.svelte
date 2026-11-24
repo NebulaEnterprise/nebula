@@ -5,10 +5,12 @@
   import DevBadge from './DevBadge.svelte';
   import TagPill from './TagPill.svelte';
   import { ownedBadges } from '../format.js';
+  import { ui } from '../state.svelte.js';
 
   let { user = null } = $props();
   const badge = $derived(ownedBadges(user).includes(user?.showcaseBadge) ? user.showcaseBadge : '');
-  const crown = $derived(!!user?.serverOwner && !user?.bot && Number(user?.uid) !== 2);
+  const inServer = $derived(ui.mode === 'chat' || ui.mode === 'thread');
+  const crown = $derived(inServer && !!user?.serverOwner && !user?.bot && Number(user?.uid) !== 2);
 </script>
 
 <span class="name-extras">

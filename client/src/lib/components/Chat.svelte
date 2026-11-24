@@ -153,7 +153,7 @@
       showcaseBadge: mine ? (mine.showcaseBadge || '') : (member?.showcaseBadge || dm?.showcaseBadge || author.showcaseBadge || ''),
       badges: mine?.badges || author.badges || member?.badges,
       roleIcon: member?.roleIcon || '',
-      serverOwner: Number(uid) === 2 ? false : !!(member?.serverOwner || author.serverOwner),
+      serverOwner: (ui.mode === 'chat' || ui.mode === 'thread') && Number(uid) !== 2 && !!member?.serverOwner,
     };
   }
 
