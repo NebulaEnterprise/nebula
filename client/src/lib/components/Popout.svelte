@@ -9,7 +9,7 @@
   import { shortBio, visibleBadges } from '../format.js';
   import { api, fileUrl, uploadFile } from '../api.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia } from '../state.svelte.js';
-  import { profileSeen } from '../seen.js';
+  import { profileSeen, localClock } from '../seen.js';
   import { hasSong, playSongAfterPaint, releaseSong } from '../song.svelte.js';
 
   const u = $derived.by(() => {
@@ -185,12 +185,14 @@
           {#if shortBio(u.bio)}<div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>{/if}
         </div>
         <h3><Name user={u} />{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
-        <p class="handle">
-          <span>@{u.username}</span>
-          {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
-          {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
-          {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
-        </p>
+        <div class="profile-idline">
+          <p class="handle"><span>@{u.username}</span></p>
+          <span class="profile-badges">
+            {#if visibleBadges(u).includes('early')}<MoonBadge />{/if}
+            {#if visibleBadges(u).includes('staff')}<StaffBadge rank={u.staff} />{/if}
+            {#if visibleBadges(u).includes('developer')}<DevBadge on={true} />{/if}
+          </span>
+        </div>
         {#if u.aboutMe}<p class="profile-status">{u.aboutMe}</p>{/if}
       </div>
       {#if roles.length}
@@ -215,6 +217,9 @@
       </section>
       <section class="profile-panel">
         <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(u, nowClock.t)}</strong></div>
+        {#if localClock(u, nowClock.t)}
+          <div class="profile-row"><span><Clock size={14} /> Local time</span><strong>{localClock(u, nowClock.t)}</strong></div>
+        {/if}
         <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[u.status] || statusColor.offline}"></i>{statusName[u.status] || 'Offline'}</strong></div>
       </section>
       {#if rel === 'outgoing'}

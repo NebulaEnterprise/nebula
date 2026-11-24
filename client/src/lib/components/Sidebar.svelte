@@ -240,11 +240,7 @@
               {@const note = ui.activity.channels[ch.id]}
               <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
                 <button class="channel-hit" onpointerenter={() => warmChannel(ch.id)} onclick={() => pickChannel(ch)}>
-                  {#if String(ch.name || '').toLowerCase() === 'general'}
-                    <MessageSquare size={16} />
-                  {:else}
-                    <Hash size={16} />
-                  {/if}
+                  <Hash size={16} />
                   <span class="ch-name">{ch.name}</span>
                   {#if note?.mentions}
                     <em class="pill-count">{note.mentions > 99 ? '99+' : note.mentions}</em>

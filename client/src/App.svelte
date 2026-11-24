@@ -3,7 +3,9 @@
   import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen } from '@lucide/svelte';
   import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast } from './lib/state.svelte.js';
   import { pullSharedTheme } from './lib/look.svelte.js';
-  import { answerCall, declineCall, joinVoice } from './lib/voice.js';
+  import { answerCall, declineCall, joinVoice, toggleMute, toggleDeafen } from './lib/voice.js';
+  import { bindOn } from './lib/keybinds.js';
+  import { playEvent } from './lib/sounds.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
   import Home from './lib/components/Home.svelte';
@@ -193,10 +195,37 @@
     window.addEventListener('resize', fitKeyboard);
     const onVisible = () => { if (!document.hidden && ui.me) pollActivity(); };
     document.addEventListener('visibilitychange', onVisible);
+    const typing = (event) => {
+      const node = event.target;
+      if (!node || !node.tagName) return false;
+      return node.tagName === 'INPUT' || node.tagName === 'TEXTAREA' || node.isContentEditable;
+    };
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm' && bindOn('mute') && ui.voice) {
+        e.preventDefault();
+        toggleMute();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd' && bindOn('deafen') && ui.voice) {
+        e.preventDefault();
+        toggleDeafen();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && bindOn('switcher')) {
         e.preventDefault();
         ui.switcher = !ui.switcher;
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '/' && bindOn('help')) {
+        e.preventDefault();
+        ui.userPage = 'keybinds';
+        ui.userSettings = true;
+        return;
+      }
+      if (!e.repeat && e.key.toLowerCase() === 'v' && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e) && ui.voice && localStorage.getItem('nebula-input') === 'ptt') {
+        e.preventDefault();
+        if (ui.voice.muted) toggleMute();
+        playEvent('ptt-down');
         return;
       }
       if (e.key !== 'Escape') return;
@@ -235,13 +264,20 @@
       e.stopPropagation();
       ui.dialog = { kind: 'leave', url };
     };
+    const onKeyUp = (e) => {
+      if (e.key.toLowerCase() !== 'v' || localStorage.getItem('nebula-input') !== 'ptt' || !ui.voice || typing(e)) return;
+      if (!ui.voice.muted) toggleMute();
+      playEvent('ptt-up');
+    };
     window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
     window.addEventListener('click', onClick);
     window.addEventListener('click', onLink, true);
     window.addEventListener('auxclick', onLink, true);
     window.addEventListener('pointerdown', onGesture);
     return () => {
       window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('click', onClick);
       window.removeEventListener('click', onLink, true);
       window.removeEventListener('auxclick', onLink, true);

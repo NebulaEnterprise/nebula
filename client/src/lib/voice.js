@@ -2,6 +2,7 @@ import { api, getApiBase } from './api.js';
 import { PERM } from './format.js';
 import { openCall, sealCall } from './seal.js';
 import { ui, toast, hasPerm, callTone, gateCall, postCallNote, sealCallStart, writeCallNote } from './state.svelte.js';
+import { playEvent } from './sounds.js';
 
 const ICE = [
   { urls: 'stun:stun.l.google.com:19302' },
@@ -191,6 +192,7 @@ let micDeviceId = '';
 let speakerDeviceId = '';
 let noiseOn = true;
 let echoOn = true;
+let gainOn = true;
 let clipRecorder = null;
 let clipChunks = [];
 try {
@@ -198,10 +200,11 @@ try {
   speakerDeviceId = localStorage.getItem('nebula-speaker') || '';
   noiseOn = localStorage.getItem('nebula-noise') !== 'off';
   echoOn = localStorage.getItem('nebula-echo') !== 'off';
+  gainOn = localStorage.getItem('nebula-gain') !== 'off';
 } catch (_) {}
 
 function audioConstraints() {
-  const audio = { echoCancellation: echoOn, noiseSuppression: noiseOn };
+  const audio = { echoCancellation: echoOn, noiseSuppression: noiseOn, autoGainControl: gainOn };
   if (micDeviceId) audio.deviceId = { exact: micDeviceId };
   return audio;
 }
@@ -281,6 +284,10 @@ export function setCallProcessing(next) {
   if (typeof next.echo === 'boolean') {
     echoOn = next.echo;
     try { localStorage.setItem('nebula-echo', echoOn ? 'on' : 'off'); } catch (_) {}
+  }
+  if (typeof next.gain === 'boolean') {
+    gainOn = next.gain;
+    try { localStorage.setItem('nebula-gain', gainOn ? 'on' : 'off'); } catch (_) {}
   }
 }
 
@@ -746,6 +753,7 @@ export async function joinVoice(channel, opts = {}) {
   if (!channel || channel.type !== 'voice') return;
   const stage = !!channel.stage;
   if (stage && !opts.deafened && !canSpeakOnStage()) opts = { ...opts, muted: true };
+  if (!opts.muted && (localStorage.getItem('nebula-join-muted') === '1' || localStorage.getItem('nebula-input') === 'ptt')) opts = { ...opts, muted: true };
   const same = ui.voice && ui.voice.channelId === channel.id && ui.voice.serverId === ui.serverId;
   if (same && stream) {
     ui.streamUi = { view: 'wide', watching: !!ui.streamUi?.watching, hideChat: ui.streamUi?.hideChat !== false };
@@ -757,7 +765,7 @@ export async function joinVoice(channel, opts = {}) {
     }
     return;
   }
-  await leaveVoice();
+  await leaveVoice(true);
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints(), video: false });
   } catch (_) {
@@ -800,10 +808,12 @@ export async function joinVoice(channel, opts = {}) {
   }
   try { await sync(); } catch (_) {}
   poll = setInterval(() => { sync().catch(() => {}); }, 500);
+  playEvent('voice-join');
 }
 
-export async function leaveVoice() {
+export async function leaveVoice(silent = false) {
   if (leaving) return;
+  if (!silent && ui.voice) playEvent('voice-leave');
   leaving = true;
   roomTicket += 1;
   syncTicket += 1;
@@ -958,6 +968,7 @@ export async function toggleMute() {
     return;
   }
   ui.voice.muted = !ui.voice.muted;
+  playEvent(ui.voice.muted ? 'mute' : 'unmute');
   stream.getAudioTracks().forEach((track) => { track.enabled = !ui.voice.muted && !ui.voice.deafened; });
   if (ui.voice.muted) speaking = false;
   try {
@@ -971,6 +982,7 @@ export async function toggleMute() {
 export async function toggleDeafen() {
   if (!ui.voice || !stream) return;
   ui.voice.deafened = !ui.voice.deafened;
+  playEvent(ui.voice.deafened ? 'deafen' : 'undeafen');
   ui.voice.muted = ui.voice.deafened || (ui.voice.stage && !canSpeakOnStage());
   stream.getAudioTracks().forEach((track) => { track.enabled = !ui.voice.muted; });
   applyDeaf();

@@ -15,20 +15,42 @@ function seenAt(user) {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function zoneOf(user) {
+  const zone = user && String(user.timezone || '');
+  if (!zone) return undefined;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return undefined;
+  }
+}
+
+export function localClock(user, now = Date.now()) {
+  const timeZone = zoneOf(user);
+  if (!timeZone) return '';
+  try {
+    return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone, timeZoneName: 'short' }).format(now);
+  } catch {
+    return '';
+  }
+}
+
 export function profileSeen(user, now = Date.now()) {
   if (!user) return '—';
   const hidden = user.seen === 'recent' || user.seen === 'week' || user.seen === 'month' || user.seen === 'long';
   const at = seenAt(user);
+  const timeZone = zoneOf(user);
   if (!hidden && at) {
     const d = new Date(at);
     if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+      return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone });
     }
   }
-  return seenPhrase(user, now);
+  return seenPhrase(user, now, timeZone);
 }
 
-export function seenPhrase(user, now = Date.now()) {
+export function seenPhrase(user, now = Date.now(), timeZone) {
   if (!user) return '';
   const dot = presenceDot(user, now);
   if (dot === 'online') return 'online';
@@ -42,7 +64,7 @@ export function seenPhrase(user, now = Date.now()) {
   if (!at) return user.seen === 'exact' ? 'offline' : 'last seen a long time ago';
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return 'offline';
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone });
   const today = new Date(now);
   if (d.toDateString() === today.toDateString()) return 'last seen today at ' + time;
   const yesterday = new Date(now);

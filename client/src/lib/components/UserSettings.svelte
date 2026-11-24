@@ -1,6 +1,6 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound } from '@lucide/svelte';
-  import { ui, nowClock, saveMe, logout, toast, playPing, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard } from '@lucide/svelte';
+  import { ui, nowClock, saveMe, logout, toast, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -19,11 +19,14 @@
   import Security from './Security.svelte';
   import Developer from './Developer.svelte';
   import Media from './Media.svelte';
+  import Sounds from './Sounds.svelte';
+  import Keybinds from './Keybinds.svelte';
+  import VoiceAudio from './VoiceAudio.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook, savedThemes, createTheme, deleteTheme, useTheme, themeShareLink } from '../look.svelte.js';
 
-  let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
+  const timeZones = typeof Intl !== 'undefined' && Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : ['UTC', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'Europe/London', 'Europe/Paris', 'Asia/Tokyo', 'Australia/Sydney'];
   let emailShown = $state(false);
   let recoverOpen = $state(false);
   let recoverMethod = $state('pass');
@@ -67,13 +70,7 @@
     }
   }
 
-  function toggleSound() {
-    sound = !sound;
-    localStorage.setItem('nebula-sound', sound ? 'on' : 'off');
-    if (sound) playPing();
-  }
-
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media', sounds: 'Sounds', voice: 'Voice & Audio', keybinds: 'Keybinds' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -288,6 +285,7 @@
     songUrl: ui.me?.songUrl || '',
     songStart: ui.me?.songStart ? formatStamp(ui.me.songStart) : '',
     songAutoplay: !!ui.me?.songAutoplay,
+    timezone: ui.me?.timezone || '',
   });
 
   const fonts = [
@@ -636,6 +634,9 @@
       <button class:on={page === 'media'} onclick={() => (ui.userPage = 'media')}><Images size={16} /> Media</button>
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
+      <button class:on={page === 'sounds'} onclick={() => (ui.userPage = 'sounds')}><Volume2 size={16} /> Sounds</button>
+      <button class:on={page === 'voice'} onclick={() => (ui.userPage = 'voice')}><Headphones size={16} /> Voice & Audio</button>
+      <button class:on={page === 'keybinds'} onclick={() => (ui.userPage = 'keybinds')}><Keyboard size={16} /> Keybinds</button>
       <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => { portalOpen = false; ui.userPage = 'developer'; }}><Code size={16} /> Developer</button>
       {#if ui.me?.canAdmin}
         <div class="group">Nebula staff</div>
@@ -774,6 +775,12 @@
         <Developer docs={page === 'devdocs'} portal={portalOpen || page === 'devdocs'} onopen={() => (portalOpen = true)} />
       {:else if page === 'media'}
         <Media />
+      {:else if page === 'sounds'}
+        <Sounds />
+      {:else if page === 'voice'}
+        <VoiceAudio />
+      {:else if page === 'keybinds'}
+        <Keybinds />
       {:else if page === 'theme'}
         <section class="look-sec app-card">
           <h3><Sparkles size={16} class="sec-ico" /> App theme</h3>
@@ -934,9 +941,9 @@
         <div>
           {#if page === 'notify'}
             <div class="field">
-              <label>Notification sound</label>
-              <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
-              <p class="hint">Plays a sound for every new message and every mention, including while this tab is in the background.</p>
+              <label>Sounds</label>
+              <p class="hint">Message, call, and voice sounds each have their own switch.</p>
+              <button type="button" class="btn brand" onclick={() => (ui.userPage = 'sounds')}>Open Sounds</button>
             </div>
           {:else if page === 'admin'}
             <div class="report-list">
@@ -1162,6 +1169,19 @@
                 </div>
               {/if}
             </section>
+            <section class="look-sec">
+              <h3><Clock size={16} class="sec-ico" /> Local time</h3>
+              <p class="look-note">Shown on your profile. Last seen uses this timezone, so it matches where you live.</p>
+              <div class="field">
+                <label>Timezone</label>
+                <select bind:value={form.timezone}>
+                  <option value="">Use this device</option>
+                  {#each timeZones as zone}
+                    <option value={zone}>{zone.replaceAll('_', ' ')}</option>
+                  {/each}
+                </select>
+              </div>
+            </section>
             {:else if profilePart === 'about'}
             <section class="look-sec">
               <h3><User size={16} class="sec-ico" /> About</h3>
@@ -1314,12 +1334,14 @@
                   {#if shortBio(form.bio)}<div class="bio-bubble"><span>{shortBio(form.bio)}</span></div>{/if}
                 </div>
                 <h3><Name user={{ displayName: form.displayName || form.username, username: form.username, nameEffect: form.nameEffect, nameFont: form.nameFont, nameColors: form.nameColors }} /></h3>
-                <p class="handle">
-                  <span>@{form.username}</span>
-                  {#if badgeOn('early')}<MoonBadge />{/if}
-                  {#if badgeOn('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
-                  {#if badgeOn('developer')}<DevBadge on={true} />{/if}
-                </p>
+                <div class="profile-idline">
+                  <p class="handle"><span>@{form.username}</span></p>
+                  <span class="profile-badges">
+                    {#if badgeOn('early')}<MoonBadge />{/if}
+                    {#if badgeOn('staff')}<StaffBadge rank={ui.me?.staff || ''} />{/if}
+                    {#if badgeOn('developer')}<DevBadge on={true} />{/if}
+                  </span>
+                </div>
                 {#if aboutDraft}<p class="profile-status">{aboutDraft}</p>{/if}
               </div>
               <section class="profile-panel">

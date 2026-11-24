@@ -1416,6 +1416,7 @@ function ensureGuilds() {
   g.ownerIds = Array.isArray(g.ownerIds) ? g.ownerIds : [];
   g.roles = Array.isArray(g.roles) ? g.roles : [];
   g.channels = Array.isArray(g.channels) && g.channels.length ? g.channels : officialChannels();
+  if (!g.iconUrl) g.iconUrl = './logo.webp';
   g.members = g.members || {};
   g.invites = g.invites || {};
   if (!g.roles.some((r) => r.id === 'everyone')) g.roles.unshift(everyoneRole());
@@ -2902,6 +2903,7 @@ function publicUser(u, viewer) {
     status: seen.status,
     statusChoice: self ? (u.status || 'online') : undefined,
     lastSeen: seen.lastSeen,
+    timezone: cleanZone(u.timezone),
     seen: seen.seen,
     onlineUntil: seen.onlineUntil,
     hideLastSeen: self ? privacyMode(u) === 'nobody' : false,
@@ -3038,6 +3040,17 @@ function youtubeVideoId(value) {
   }
   id = String(id).replace(/[^A-Za-z0-9_-]/g, '');
   return /^[A-Za-z0-9_-]{6,}$/.test(id) ? id : '';
+}
+
+function cleanZone(value) {
+  const zone = String(value || '').trim().slice(0, 80);
+  if (!zone) return '';
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return zone;
+  } catch {
+    return '';
+  }
 }
 
 function cleanSongUrl(value) {
@@ -4439,7 +4452,7 @@ app.get('/api/username-available', auth, (req, res) => {
 app.patch('/api/me', auth, (req, res) => {
   const {
     username, displayName, aliases, bio, aboutMe, pronouns, customStatus, status, hideLastSeen,
-    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart, songAutoplay, boxKey,
+    accentColor, avatarColor, bannerColor, avatarUrl, bannerUrl, serverTag, nameEffect, nameFont, nameColors, profileStyle, profileColors, songUrl, songStart, songAutoplay, boxKey, timezone,
     shownBadges, showcaseServerId, showcaseBadge,
   } = req.body || {};
   if (showcaseServerId) {
@@ -4467,6 +4480,7 @@ app.patch('/api/me', auth, (req, res) => {
   if (bio !== undefined) req.user.bio = String(bio).replace(/\s+/g, ' ').trim().slice(0, 29);
   if (aboutMe !== undefined) req.user.aboutMe = String(aboutMe).slice(0, 190);
   if (pronouns !== undefined) req.user.pronouns = String(pronouns).slice(0, 40);
+  if (timezone !== undefined) req.user.timezone = cleanZone(timezone);
   if (customStatus !== undefined) req.user.customStatus = String(customStatus).slice(0, 128);
   let presenceChanged = false;
   if (status && ['online', 'idle', 'dnd', 'offline'].includes(status)) {
@@ -4762,10 +4776,13 @@ app.post('/api/servers', auth, (req, res) => {
     id,
     name,
     icon: name.charAt(0).toUpperCase(),
-    color: '#7c5cff',
+    color: '#c026d3',
     ownerIds: [req.user.id],
     roles: [everyoneRole(), ownerRole()],
-    channels: [{ id: uuidv4(), name: 'general', type: 'text', topic: 'Welcome to ' + name, overwrites: [] }],
+    channels: [
+      { id: uuidv4(), name: 'general', type: 'text', topic: 'Welcome to ' + name, overwrites: [] },
+      { id: uuidv4(), name: 'General', type: 'voice', topic: '', overwrites: [] },
+    ],
     members: { [req.user.id]: { roles: ['everyone', 'owner'], joinedAt: new Date().toISOString() } },
     invites: {},
     discover: req.body?.discover === false ? false : true,

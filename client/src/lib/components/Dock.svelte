@@ -11,7 +11,7 @@
   import SongButton from './SongButton.svelte';
   import { shortBio, visibleBadges } from '../format.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile } from '../state.svelte.js';
-  import { profileSeen } from '../seen.js';
+  import { profileSeen, localClock } from '../seen.js';
   import { api, uploadFile, fileUrl } from '../api.js';
 
   let pins = $state([]);
@@ -321,12 +321,14 @@
               {#if shortBio(person.bio)}<div class="bio-bubble"><span>{shortBio(person.bio)}</span></div>{/if}
             </div>
             <h3><Name user={person} />{#if person.bot}<span class="bot-tag">BOT</span>{/if}</h3>
-            <p class="handle">
-              <span>@{person.username}</span>
-              {#if visibleBadges(person).includes('early')}<MoonBadge />{/if}
-              {#if visibleBadges(person).includes('staff')}<StaffBadge rank={person.staff} />{/if}
-              {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
-            </p>
+            <div class="profile-idline">
+              <p class="handle"><span>@{person.username}</span></p>
+              <span class="profile-badges">
+                {#if visibleBadges(person).includes('early')}<MoonBadge />{/if}
+                {#if visibleBadges(person).includes('staff')}<StaffBadge rank={person.staff} />{/if}
+                {#if visibleBadges(person).includes('developer')}<DevBadge on={true} />{/if}
+              </span>
+            </div>
             {#if person.aboutMe}<p class="profile-status">{person.aboutMe}</p>{/if}
           </div>
           <section class="profile-panel">
@@ -341,6 +343,9 @@
           </section>
           <section class="profile-panel">
             <div class="profile-row"><span><Clock size={14} /> Last seen</span><strong>{profileSeen(person, nowClock.t)}</strong></div>
+            {#if localClock(person, nowClock.t)}
+              <div class="profile-row"><span><Clock size={14} /> Local time</span><strong>{localClock(person, nowClock.t)}</strong></div>
+            {/if}
             <div class="profile-row"><span><Circle size={14} /> Online status</span><strong><i style="background:{statusColor[person.status] || statusColor.offline}"></i>{statusName[person.status] || 'Offline'}</strong></div>
           </section>
           <div class="pop-meta">

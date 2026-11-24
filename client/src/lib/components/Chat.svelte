@@ -1359,7 +1359,7 @@
       <AtSign size={18} />
       {#if inboxBadge}<em class="inbox-badge">{inboxBadge > 99 ? '99+' : inboxBadge}</em>{/if}
     </button>
-    <button type="button" class="bar-tool switcher-btn" title="Quick switcher" onclick={() => (ui.switcher = true)}><Search size={18} /><kbd>Ctrl K</kbd></button>
+    <button type="button" class="bar-tool switcher-btn" title="Search" onclick={() => (ui.switcher = true)}><Search size={18} /></button>
     {#if ui.mode === 'dm' || ui.mode === 'group'}
       <button type="button" class="bar-tool" title="Start a call" onclick={startCall}><Phone size={18} /></button>
     {/if}

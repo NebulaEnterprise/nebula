@@ -4,6 +4,7 @@ import { getPasskey } from './webauthn.js';
 import { fileKind } from './media.js';
 import { PERM, hasBit, inviteCodeFromUrl, inviteLink, stripInviteText } from './format.js';
 import { rememberServer } from './serverface.js';
+import { playEvent, unlockAudio, notifySounds } from './sounds.js';
 import { applyLook } from './look.svelte.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
 import {
@@ -698,8 +699,11 @@ export async function consumeInvite() {
 export async function loadFriends() {
   try {
     const data = await api('/api/friends');
+    const nextIncoming = data.incoming || [];
+    if (friendsReady && nextIncoming.length > (ui.incoming || []).length) playEvent('friend');
+    friendsReady = true;
     ui.friends = data.friends || [];
-    ui.incoming = data.incoming || [];
+    ui.incoming = nextIncoming;
     ui.outgoing = data.outgoing || [];
     ui.blocked = data.blocked || [];
     ui.suggested = data.suggested || [];
@@ -710,6 +714,7 @@ const heardDm = {};
 const ackedDm = {};
 const pendingDm = new Map();
 let inboxReady = false;
+let friendsReady = false;
 let lastSentId = '';
 let dmSerial = 0;
 
@@ -955,7 +960,7 @@ export async function loadDms() {
         unread[id] = { unread: count };
         if (inboxReady && stamp && heardDm[id] !== stamp) {
           const who = (row.other && (row.other.displayName || row.other.username)) || 'Someone';
-          if (!roomMuted('dm:' + id)) noteArrival(stamp || key, who, 'New direct message');
+          if (!roomMuted('dm:' + id)) noteArrival(stamp || key, who, 'New direct message', 'dm');
         }
       }
       if (stamp) heardDm[id] = stamp;
@@ -1709,7 +1714,7 @@ function pingDm(roomId, author, messageId) {
   ui.activity = { ...ui.activity, dms: { ...ui.activity.dms, [otherId]: { unread } } };
   if (stamp && heardDm[otherId] !== stamp && !roomMuted(channel)) {
     const who = (author && (author.displayName || author.username)) || 'Someone';
-    noteArrival(stamp, who, 'New direct message');
+    noteArrival(stamp, who, 'New direct message', 'dm');
     heardDm[otherId] = stamp;
   }
   warmDm(otherId);
@@ -3085,7 +3090,7 @@ const heardHeads = {};
 const heardIds = new Set();
 
 export function soundEnabled() {
-  return localStorage.getItem('nebula-sound') !== 'off';
+  return notifySounds();
 }
 
 function audioCtx() {
@@ -3217,6 +3222,7 @@ export async function askSiteAccess() {
 }
 
 export function unlockSound() {
+  unlockAudio();
   try {
     const ctx = audioCtx();
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
@@ -3244,38 +3250,14 @@ function tryWebChime() {
 }
 
 export function playPing(force) {
-  if (!soundEnabled()) return;
-  const now = Date.now();
-  if (!force && now - lastSound < 350) return;
-  lastSound = now;
-  if (pingAudio) {
-    try {
-      pingAudio.volume = 0.7;
-      pingAudio.currentTime = 0;
-      const attempt = pingAudio.play();
-      if (attempt && attempt.catch) {
-        attempt.catch(() => tryWebChime());
-        return;
-      }
-    } catch (_) {}
-  }
-  tryWebChime();
+  playEvent('message', { preview: !!force });
 }
 
 let lastSpam = 0;
 const burstTimes = [];
 
 function playSpam() {
-  if (!soundEnabled()) return;
-  const now = Date.now();
-  if (now - lastSpam < 1800) return;
-  lastSpam = now;
-  lastSound = now;
-  try {
-    const ctx = audioCtx();
-    if (ctx.state === 'running') spamChime();
-    else ctx.resume().then(() => { if (ctx.state === 'running') spamChime(); }).catch(() => {});
-  } catch (_) {}
+  playEvent('message');
 }
 
 function flashTitle() {
@@ -3301,7 +3283,7 @@ function deskNotice(title, body) {
   } catch (_) {}
 }
 
-function noteArrival(id, title, body) {
+function noteArrival(id, title, body, kind) {
   const key = String(id || '');
   if (!key || heardIds.has(key)) return;
   heardIds.add(key);
@@ -3309,8 +3291,9 @@ function noteArrival(id, title, body) {
   const now = Date.now();
   burstTimes.push(now);
   while (burstTimes.length && now - burstTimes[0] > 2500) burstTimes.shift();
-  if (burstTimes.length >= 4) playSpam();
-  else playPing();
+  const event = kind || 'message';
+  if (burstTimes.length >= 4) playEvent('message');
+  else playEvent(event);
   deskNotice(title, body);
 }
 
@@ -3346,7 +3329,8 @@ function announceFresh(list, roomKey) {
       .replace(/\[\[gif:[^\]]+\]\]/g, 'GIF')
       .replace(/\[\[sticker:[^\]]+\]\]/g, 'Sticker')
       .trim() || ((msg.files && msg.files.length) ? 'Sent a file' : 'New message');
-    noteArrival(msg.id, mentioned ? who + ' mentioned you' : who, text);
+    const kind = mentioned ? 'mention' : (ui.mode === 'dm' ? 'dm' : ui.mode === 'group' ? 'group' : 'message');
+    noteArrival(msg.id, mentioned ? who + ' mentioned you' : who, text, kind);
   }
   roomHeard[roomKey] = newest.id;
 }
@@ -3701,7 +3685,10 @@ export async function pollActivity() {
     if (body.seen) seenUploaded = stamp;
     const calls = data.calls || {};
     const ringing = (calls.incoming || []).filter((call) => !call.at || Date.now() - Number(call.at) < 22000);
-    ui.incomingCall = ringing[0] || null;
+    const nextRing = ringing[0] || null;
+    if (nextRing && nextRing.id !== ui.incomingCall?.id) playEvent('call-in');
+    else if (!nextRing && ui.incomingCall) playEvent('call-end');
+    ui.incomingCall = nextRing;
     refreshMissed();
     for (const row of calls.outgoing || []) {
       if (row.status !== 'declined' || !row.messageId) continue;
@@ -3761,7 +3748,7 @@ export async function pollActivity() {
         dms[userId] = { ...(note || {}), unread: count };
         if (activityReady && heardDm[userId] !== head) {
           const who = (row && row.other && (row.other.displayName || row.other.username)) || 'Someone';
-          if (!roomMuted('dm:' + userId)) noteArrival(head, who, 'New direct message');
+          if (!roomMuted('dm:' + userId)) noteArrival(head, who, 'New direct message', 'dm');
         }
         heardDm[userId] = head;
       }
@@ -3798,7 +3785,7 @@ export async function pollActivity() {
         const speaker = (data.speakers || {})[id];
         if (speaker && ui.me && String(speaker) === String(ui.me.id)) continue;
         const note = (data.channels || {})[id];
-        noteArrival(messageId, 'Nebula', note && note.mentions ? 'You were mentioned' : 'New message');
+        noteArrival(messageId, 'Nebula', note && note.mentions ? 'You were mentioned' : 'New message', note && note.mentions ? 'mention' : 'message');
       }
     }
     activityReady = true;
@@ -3928,7 +3915,7 @@ async function watchAlerts() {
 export async function saveMe(body) {
   const previous = ui.me;
   const pending = { ...ui.me };
-  for (const key of ['displayName', 'username', 'aliases', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'nameFont', 'profileStyle', 'avatarColor', 'accentColor', 'showcaseServerId', 'showcaseBadge', 'songUrl', 'songStart', 'songAutoplay']) {
+  for (const key of ['displayName', 'username', 'aliases', 'pronouns', 'bio', 'aboutMe', 'customStatus', 'status', 'nameEffect', 'nameFont', 'profileStyle', 'avatarColor', 'accentColor', 'showcaseServerId', 'showcaseBadge', 'songUrl', 'songStart', 'songAutoplay', 'timezone']) {
     if (body[key] !== undefined) pending[key] = body[key];
   }
   if (Array.isArray(body.shownBadges)) pending.shownBadges = body.shownBadges;
