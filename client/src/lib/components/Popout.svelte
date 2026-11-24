@@ -76,6 +76,25 @@
     }
   }
 
+  async function removeRole(role) {
+    if (!role || !u || !ui.serverId || busy || !canManageRoles) return;
+    busy = role.id;
+    try {
+      await api('/api/servers/' + encodeURIComponent(ui.serverId) + '/members/' + encodeURIComponent(u.id) + '/roles', {
+        method: 'POST',
+        body: { roleId: role.id, action: 'remove' },
+      });
+      const have = (u.roles || []).filter((row) => row && row.id !== role.id);
+      if (ui.popout && ui.popout.user && ui.popout.user.id === u.id) ui.popout = { ...ui.popout, user: { ...ui.popout.user, roles: have } };
+      ui.members = (ui.members || []).map((member) => member && member.id === u.id ? { ...member, roles: have } : member);
+      toast('Removed ' + role.name);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      busy = '';
+    }
+  }
+
   function flipCard(event) {
     if (event.target.closest('button, a, input, label, video, .ig-view')) return;
     turned = !turned;
@@ -230,8 +249,18 @@
       </div>
       {#if roles.length || canManageRoles}
         <div class="pop-role-list profile-roles">
-          {#each roles as r}
-            <em class="pop-role"><i style="background:{r.color || '#99aab5'}"></i>{r.name}</em>
+          {#each roles as r (r.id)}
+            <em class="pop-role" class:can-drop={canManageRoles}>
+              {#if canManageRoles}
+                <button type="button" class="role-x" title={'Remove ' + r.name} aria-label={'Remove ' + r.name} disabled={busy === r.id} onclick={(event) => { event.stopPropagation(); removeRole(r); }}>
+                  <i style="background:{r.color || '#99aab5'}"></i>
+                  <X size={9} />
+                </button>
+              {:else}
+                <i style="background:{r.color || '#99aab5'}"></i>
+              {/if}
+              {r.name}
+            </em>
           {/each}
           {#if canManageRoles}
             <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={(event) => { event.stopPropagation(); roleOpen = !roleOpen; }}><Plus size={14} /></button>

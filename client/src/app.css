@@ -2574,6 +2574,40 @@ html.paint-mention .mention {
   font-size: 12px; font-weight: 650; font-style: normal; color: var(--text);
 }
 .pop-role i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.profile-roles.pop-role-list {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: center;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 6px;
+}
+.pop-role .role-x {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.pop-role.can-drop .role-x { cursor: pointer; }
+.pop-role .role-x i { width: 12px; height: 12px; }
+.pop-role .role-x svg {
+  position: absolute;
+  opacity: 0;
+  color: #fff;
+  filter: drop-shadow(0 0 1px #000);
+  pointer-events: none;
+}
+.pop-role.can-drop:hover .role-x svg,
+.pop-role.can-drop:focus-within .role-x svg { opacity: 1; }
+@media (hover: none) {
+  .pop-role.can-drop .role-x svg { opacity: 1; }
+}
 .role-add {
   width: 28px; height: 28px; padding: 0; border-radius: 999px; cursor: pointer;
   display: inline-grid; place-items: center; color: rgba(255, 255, 255, 0.82);
