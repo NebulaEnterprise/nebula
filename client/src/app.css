@@ -3465,11 +3465,11 @@ html.paint-mention .mention {
 .gset-nav button.on, .gset-nav button.on:hover { background: rgba(255,255,255,0.08); color: #fff; }
 .gset-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 18px 28px 10px; background: #120816;
+  padding: 18px 28px 10px;
 }
 .gset-bar h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; }
 .gset-tools { display: flex; align-items: center; gap: 8px; }
-.gset-body { flex: 1; overflow: auto; padding: 6px 28px 48px; background: #120816; }
+.gset-body { flex: 1; overflow: auto; padding: 6px 28px 48px; }
 .gset-count {
   min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
   display: inline-grid; place-items: center; background: rgba(255,255,255,0.08);
