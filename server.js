@@ -3710,6 +3710,7 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !checkPassword(password || '', user.passwordHash)) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
+  if (user.disabled) return res.status(403).json({ error: 'This account is disabled' });
   if (raw.includes('@') && emailMatches(raw, user.emailSalt, user.emailHash) && user.email !== raw) {
     user.email = raw;
     save(USERS_FILE, users);
@@ -4264,6 +4265,7 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const found = security.findSession(users, token);
   if (!found) return res.status(401).json({ error: 'Invalid session' });
+  if (found.user.disabled) return res.status(401).json({ error: 'This account is disabled' });
   req.user = found.user;
   req.session = found.session;
   if (!req.user.vault || !req.user.vault.check) {
@@ -7694,6 +7696,213 @@ app.post('/api/reports', auth, (req, res) => {
   res.json({ ok: true });
 });
 
+function accountServers(user) {
+  const out = [];
+  for (const g of Object.values((guilds && guilds.servers) || {})) {
+    if (g && g.members && g.members[user.id]) out.push({ id: g.id, name: g.name || 'Server' });
+  }
+  return out;
+}
+
+function ownedBotCount(user) {
+  if (!user || typeof bots !== 'object' || !bots) return 0;
+  let count = 0;
+  for (const bot of Object.values(bots)) {
+    if (bot && String(bot.ownerId) === String(user.id)) count += 1;
+  }
+  return count;
+}
+
+function canEditAccount(actor, target) {
+  if (!actor || !target || String(actor.id) === String(target.id)) return false;
+  if (isOfficialOwner(target)) return false;
+  if (isOfficialOwner(actor)) return true;
+  const home = guilds.servers && guilds.servers[OFFICIAL_ID];
+  return canStaffTouch(home, actor, target.id);
+}
+
+function staffAccount(user, viewer) {
+  return {
+    id: user.id,
+    uid: user.uid || null,
+    username: user.username,
+    displayName: user.displayName || user.username,
+    email: isOfficialOwner(viewer) && !user.bot ? String(user.email || '') : '',
+    bot: !!user.bot,
+    createdAt: user.createdAt || '',
+    status: effectiveStatus(user),
+    lastSeen: Number(user.lastSeen) || 0,
+    disabled: !!user.disabled,
+    early: Array.isArray(user.badges) && user.badges.includes('early'),
+    mfa: !!(user.totp && user.totp.enabled),
+    sessions: security.sessionCount(user),
+    servers: accountServers(user),
+    bots: ownedBotCount(user),
+    protected: isOfficialOwner(user),
+    canEdit: canEditAccount(viewer, user),
+    canModerate: isOfficialOwner(viewer) && !isOfficialOwner(user) && String(viewer.id) !== String(user.id),
+  };
+}
+
+function staffDirectory(viewer) {
+  const list = Object.values(users).filter(Boolean).map((user) => staffAccount(user, viewer));
+  list.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  const counts = {
+    accounts: list.length,
+    people: list.filter((user) => !user.bot).length,
+    bots: list.filter((user) => user.bot).length,
+    online: list.filter((user) => user.status === 'online').length,
+    disabled: list.filter((user) => user.disabled).length,
+  };
+  return { users: list, counts, owner: isOfficialOwner(viewer) };
+}
+
+function dropSessions(user) {
+  user.sessions = [];
+  user.token = '';
+  if (user.status === 'online') user.status = 'offline';
+}
+
+function usernameTaken(name, exceptId) {
+  return Object.values(users).some((user) => user && user.id !== exceptId && user.username === name);
+}
+
+function spareUsername(user) {
+  const tail = user.bot ? '_bot' : '';
+  const stem = (user.bot ? 'bot' : 'user') + (user.uid || '');
+  let name = normalizeUsername(stem + tail);
+  let n = 2;
+  while (!name || reservedUsername(name) || usernameTaken(name, user.id) || (user.bot ? !name.endsWith('_bot') : name.endsWith('_bot'))) {
+    name = normalizeUsername(stem + n + tail);
+    n += 1;
+    if (n > 40) return '';
+  }
+  return name;
+}
+
+function applyStaffUsername(user, raw) {
+  const clean = normalizeUsername(raw);
+  if (!clean) return 'Username required';
+  if (reservedUsername(clean)) return 'That username is reserved';
+  if (user.bot && !clean.endsWith('_bot')) return 'Bot usernames have to end with _bot';
+  if (!user.bot && clean.endsWith('_bot')) return 'Usernames cannot end with _bot';
+  if (usernameTaken(clean, user.id)) return 'Username taken';
+  const old = user.username;
+  user.username = clean;
+  if (!user.displayName || user.displayName === old) user.displayName = clean;
+  return '';
+}
+
+function purgeAccount(user) {
+  const id = String(user.id);
+  dropSessions(user);
+  delete users[id];
+  for (const g of Object.values((guilds && guilds.servers) || {})) {
+    if (!g) continue;
+    if (g.members) delete g.members[id];
+    if (g.bans) delete g.bans[id];
+    if (g.kicked) delete g.kicked[id];
+    if (g.voiceBans) delete g.voiceBans[id];
+    if (Array.isArray(g.ownerIds)) g.ownerIds = g.ownerIds.filter((row) => String(row) !== id);
+  }
+  if (friendGraph) {
+    delete friendGraph[id];
+    for (const node of Object.values(friendGraph)) {
+      if (!node) continue;
+      for (const key of ['friends', 'incoming', 'outgoing', 'blocked']) {
+        if (Array.isArray(node[key])) node[key] = node[key].filter((row) => String(row) !== id);
+      }
+    }
+    save(FRIENDS_FILE, friendGraph);
+  }
+  if (typeof reads === 'object' && reads) {
+    delete reads[id];
+    save(READS_FILE, reads);
+  }
+  if (typeof dmThreads === 'object' && dmThreads) {
+    for (const key of Object.keys(dmThreads)) {
+      if (String(key).split(':').includes(id)) delete dmThreads[key];
+    }
+    save(DMS_FILE, dmThreads);
+  }
+  if (messages && typeof messages === 'object') {
+    for (const key of Object.keys(messages)) {
+      if (key.startsWith('dm:') && key.slice(3).split(':').includes(id)) {
+        delete messages[key];
+        continue;
+      }
+      if (Array.isArray(messages[key])) messages[key] = messages[key].filter((msg) => !msg || String(msg.authorId) !== id);
+    }
+    save(MESSAGES_FILE, messages);
+  }
+  if (typeof threads === 'object' && threads) {
+    for (const [tid, thread] of Object.entries(threads)) {
+      if (!thread) continue;
+      if (String(thread.ownerId) === id) delete threads[tid];
+      else if (Array.isArray(thread.followers)) thread.followers = thread.followers.filter((row) => String(row) !== id);
+    }
+    save(THREADS_FILE, threads);
+  }
+  save(USERS_FILE, users);
+  saveGuilds();
+}
+
+app.get('/api/staff/directory', auth, (req, res) => {
+  if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can open admin' });
+  const directory = staffDirectory(req.user);
+  res.json({ ok: true, ...directory });
+});
+
+app.post('/api/staff/users/:id', auth, (req, res) => {
+  if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can open admin' });
+  const target = users[String(req.params.id || '')];
+  if (!target) return res.status(404).json({ error: 'Account not found' });
+  const action = String(req.body?.action || '');
+  const moderate = ['disable', 'enable', 'logout', 'delete', 'badge'];
+  if (moderate.includes(action)) {
+    if (!isOfficialOwner(req.user)) return res.status(403).json({ error: 'Only the server owners can do that' });
+    if (isOfficialOwner(target) || String(target.id) === String(req.user.id)) {
+      return res.status(400).json({ error: 'That account stays as it is' });
+    }
+  } else if (!canEditAccount(req.user, target)) {
+    return res.status(403).json({ error: 'You cannot change that account' });
+  }
+  if (action === 'reset-username') {
+    const next = spareUsername(target);
+    const error = next ? applyStaffUsername(target, next) : 'Could not pick a username';
+    if (error) return res.status(400).json({ error });
+  } else if (action === 'username') {
+    const error = applyStaffUsername(target, req.body?.username);
+    if (error) return res.status(400).json({ error });
+  } else if (action === 'display-name') {
+    target.displayName = String(req.body?.displayName || target.username).slice(0, 32);
+  } else if (action === 'reset-display') {
+    target.displayName = target.username;
+  } else if (action === 'disable') {
+    target.disabled = true;
+    dropSessions(target);
+  } else if (action === 'enable') {
+    target.disabled = false;
+  } else if (action === 'logout') {
+    dropSessions(target);
+  } else if (action === 'badge') {
+    const badges = new Set(Array.isArray(target.badges) ? target.badges : []);
+    if (badges.has('early')) badges.delete('early');
+    else badges.add('early');
+    target.badges = [...badges];
+  } else if (action === 'delete') {
+    if (ownedBotCount(target) > 0) return res.status(400).json({ error: 'Delete their bots in Developer first' });
+    purgeAccount(target);
+    touchAlerts();
+    return res.json({ ok: true, ...staffDirectory(req.user) });
+  } else {
+    return res.status(400).json({ error: 'Unknown action' });
+  }
+  save(USERS_FILE, users);
+  touchAlerts();
+  res.json({ ok: true, user: staffAccount(target, req.user), ...staffDirectory(req.user) });
+});
+
 app.get('/api/staff/reports', auth, (req, res) => {
   if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can see reports' });
   ensureGuilds();
@@ -8473,6 +8682,7 @@ function botAuth(req, res, next) {
   const bot = Object.values(bots).find((row) => row && row.tokenHash === hash);
   const user = bot && users[bot.id];
   if (!bot || !user) return res.status(401).json({ error: 'Wrong token', code: 'unauthorized' });
+  if (user.disabled) return res.status(403).json({ error: 'This bot is disabled', code: 'disabled' });
   req.bot = bot;
   req.botUser = user;
   if (req.method === 'POST' && (req.path === '/offline' || req.path === '/api/bot/v1/offline')) return next();

@@ -2,7 +2,7 @@
   import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound, Volume2, Headphones, Keyboard, Languages } from '@lucide/svelte';
   import Language from './Language.svelte';
   import { t } from '../i18n.svelte.js';
-  import { ui, nowClock, saveMe, logout, toast, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
+  import { ui, nowClock, saveMe, logout, toast, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
@@ -25,6 +25,7 @@
   import Keybinds from './Keybinds.svelte';
   import VoiceAudio from './VoiceAudio.svelte';
   import DesktopApp from './DesktopApp.svelte';
+  import AdminPanel from './AdminPanel.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook, savedThemes, createTheme, deleteTheme, useTheme, themeShareLink } from '../look.svelte.js';
@@ -85,8 +86,6 @@
       toast(err.message);
     }
   }
-  const reasonLabel = { harassment: 'Harassment or bullying', hate: 'Hate speech or slurs', sexual: 'Sexual content', child: 'Child safety', threats: 'Threats or violence', 'self-harm': 'Self-harm or suicide', spam: 'Spam or scams', illegal: 'Something illegal', other: 'Something else' };
-  let viewing = $state(null);
   let accountDialog = $state('');
   let accountBusy = $state(false);
   let deletePassword = $state('');
@@ -953,45 +952,12 @@
             </label>
           {/if}
         </section>
+      {:else if page === 'admin'}
+        <AdminPanel />
       {:else}
       <div class="grid-2" class:look-layout={page === 'profile'}>
         <div>
-          {#if page === 'admin'}
-            <div class="report-list">
-              {#each ui.staffReports.filter((report) => report.status !== 'closed') as report (report.id)}
-                <article class="report-row">
-                  <div>
-                    <strong>@{report.target?.username || 'unknown'}</strong>
-                    <span>{reasonLabel[report.reason] || report.reason || 'Report'} · {report.status}</span>
-                    {#if report.excerpt}<p>Message: {report.excerpt}</p>{/if}
-                    {#if report.text}<p>{report.text}</p>{/if}
-                  </div>
-                  <div class="report-acts">
-                    <button class="btn sm" onclick={() => viewing = report}>View</button>
-                    {#if report.status !== 'handled'}<button class="btn sm" onclick={() => staffReport(report.id, 'handle')}>Handle</button>{/if}
-                    {#if report.status !== 'closed'}<button class="btn sm" onclick={() => { staffReport(report.id, 'close'); if (viewing?.id === report.id) viewing = null; }}>Close</button>{/if}
-                  </div>
-                </article>
-              {:else}
-                <p class="hint">No reports yet.</p>
-              {/each}
-            </div>
-            {#if viewing}
-              <div class="report-view">
-                <strong>Report on @{viewing.target?.username}</strong>
-                <p>{reasonLabel[viewing.reason] || 'Report'}</p>
-                {#if viewing.excerpt}<p>Message: {viewing.excerpt}</p>{/if}
-                <p>{viewing.text || 'No extra details.'}</p>
-                <p class="hint">From @{viewing.reporter?.username || 'someone'} · {viewing.status}</p>
-                <div class="report-acts">
-                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'view')}>Mark viewed</button>
-                  <button class="btn sm" onclick={() => staffReport(viewing.id, 'handle')}>Handle</button>
-                  <button class="btn sm" onclick={() => { const id = viewing.id; viewing = null; staffReport(id, 'close'); }}>Close</button>
-                  <button class="btn sm" onclick={() => (viewing = null)}>Back</button>
-                </div>
-              </div>
-            {/if}
-          {:else if page === 'profile' && lookOpen === 'badges'}
+          {#if page === 'profile' && lookOpen === 'badges'}
             <section class="look-sec">
               <div class="look-line">
                 <div class="copy">
