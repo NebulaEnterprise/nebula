@@ -1470,10 +1470,8 @@
               <div class="profile-hero">
                 <div class="profile-face">
                   <div class="song-av">
-                    <div class="pfp-hold">
-                      <div class="pop-av profile-av" style="background:{form.avatarColor}">
-                        {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
-                      </div>
+                    <div class="pop-av profile-av" style="background:{form.avatarColor}">
+                      {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                     </div>
                     <SongButton file={ui.me?.songFile || ''} start={parseStamp(form.songStart)} />
                   </div>

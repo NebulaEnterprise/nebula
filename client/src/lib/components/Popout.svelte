@@ -253,11 +253,9 @@
       <div class="profile-hero">
         <div class="profile-face">
           <div class="song-av">
-            <div class="pfp-hold">
-              <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
-                {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
-                {#if u.avatarUrl}<button type="button" class="banner-hit" aria-label="View profile picture" onclick={(event) => openFull('avatar', event)}></button>{/if}
-              </div>
+            <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
+              {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+              {#if u.avatarUrl}<button type="button" class="banner-hit" aria-label="View profile picture" onclick={(event) => openFull('avatar', event)}></button>{/if}
             </div>
             <SongButton file={u.songFile} start={u.songStart} />
           </div>
