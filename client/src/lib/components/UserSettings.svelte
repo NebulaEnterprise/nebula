@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Images, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users, KeyRound } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, playPing, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
@@ -18,6 +18,7 @@
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
   import Developer from './Developer.svelte';
+  import Media from './Media.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
   import { look, saveWallpaper, setLook, savedThemes, createTheme, deleteTheme, useTheme, themeShareLink } from '../look.svelte.js';
@@ -72,7 +73,7 @@
     if (sound) playPing();
   }
 
-  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers' };
+  const titles = { profile: 'Profile', look: 'Appearance', theme: 'Theme', notify: 'Notifications', privacy: 'Privacy', account: 'Account', admin: 'Admin', accounts: 'Switch accounts', developer: 'Developer', devdocs: 'Developers', media: 'Media' };
 
   async function useSaved(id) {
     if (id === ui.me?.id) return;
@@ -224,7 +225,10 @@
   let profilePart = $state('identity');
   const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage === 'advanced' ? 'developer' : ui.userPage);
   $effect(() => {
-    if (page !== 'account') securityOpen = false;
+    if (page !== 'account') {
+      securityOpen = false;
+      recoverOpen = false;
+    }
     if (page !== 'profile') lookOpen = '';
     if (page !== 'developer' && page !== 'devdocs') portalOpen = false;
     if (page === 'admin' && ui.me?.canAdmin) {
@@ -620,7 +624,7 @@
         </div>
       </div>
       <div class="group">User settings</div>
-      <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
+      <button class:on={page === 'account'} onclick={() => { ui.userPage = 'account'; recoverOpen = false; }}><Shield size={16} /> Account</button>
       <button class:on={page === 'profile'} onclick={() => { ui.userPage = 'profile'; profilePart = 'identity'; lookOpen = ''; }}><User size={16} /> Profile</button>
       {#if page === 'profile'}
         <div class="profile-subs">
@@ -629,6 +633,7 @@
           {/each}
         </div>
       {/if}
+      <button class:on={page === 'media'} onclick={() => (ui.userPage = 'media')}><Images size={16} /> Media</button>
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => { portalOpen = false; ui.userPage = 'developer'; }}><Code size={16} /> Developer</button>
@@ -651,6 +656,23 @@
               <p>Choose what shows on your profile and next to your name.</p>
             </div>
           </div>
+        {:else if page === 'account' && recoverOpen}
+          <div class="look-intro">
+            <button type="button" class="look-back" onclick={() => (recoverOpen = false)} aria-label="Back to Account"><ChevronLeft size={18} /></button>
+            <i class="look-mark"><KeyRound size={18} /></i>
+            <div>
+              <h2>Recovery</h2>
+              <p>The code or passphrase you enter with your email and password.</p>
+            </div>
+          </div>
+        {:else if page === 'media'}
+          <div class="look-intro">
+            <i class="look-mark"><Images size={18} /></i>
+            <div>
+              <h2>Media</h2>
+              <p>Stories and posts on your profile.</p>
+            </div>
+          </div>
         {:else if page === 'theme'}
           <div class="look-intro">
             <i class="look-mark"><Sparkles size={18} /></i>
@@ -666,7 +688,31 @@
         {/if}
         <button class="btn icon" onclick={() => (ui.userSettings = false)}><X size={18} /></button>
       </div>
-      {#if page === 'account'}
+      {#if page === 'account' && recoverOpen}
+        <section class="recover-page">
+          <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
+          {#if revealed}
+            <div class="recover-secret">{revealed}</div>
+            <button type="button" class="btn sm" onclick={() => (revealed = '')}>Hide</button>
+          {/if}
+          <div class="field"><label>Password</label><input type="password" bind:value={recoverPassword} autocomplete="current-password" /></div>
+          <button type="button" class="btn" disabled={recoverBusy} onclick={() => showRecovery().catch((err) => toast(err.message))}>Show secret</button>
+          <p class="label">Replace it</p>
+          <div class="recover-choice">
+            <button type="button" class="btn" class:brand={recoverMethod === 'pass'} onclick={() => pickRecover('pass')}>Passphrase</button>
+            <button type="button" class="btn" class:brand={recoverMethod === 'code'} onclick={() => pickRecover('code')}>Recovery code</button>
+          </div>
+          {#if recoverMethod === 'pass'}
+            <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" autocomplete="new-password" /></div>
+          {:else}
+            <div class="recover-secret">{recoverCode || 'Make a code'}</div>
+            <button type="button" class="btn sm" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
+          {/if}
+          <div class="recover-actions">
+            <button type="button" class="btn brand" disabled={recoverBusy} onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
+          </div>
+        </section>
+      {:else if page === 'account'}
         <div class="acct-board">
           <div class="acct-line">
             <div>
@@ -699,33 +745,8 @@
               <span>Recovery</span>
               <p>{ui.me?.recovery === 'code' ? 'Recovery code set' : ui.me?.recovery === 'pass' ? 'Passphrase set' : 'Not set up'}</p>
             </div>
-            <button type="button" class="acct-edit" onclick={() => (recoverOpen = !recoverOpen)}>{recoverOpen ? 'Close' : 'Edit'}</button>
+            <button type="button" class="acct-edit" onclick={() => (recoverOpen = true)}>Edit</button>
           </div>
-          {#if recoverOpen}
-            <div class="recover-card">
-              <p class="hint">You enter this with your email and password. It stays hidden until you type the account password.</p>
-              {#if revealed}
-                <div class="recover-secret">{revealed}</div>
-                <button type="button" class="btn sm" onclick={() => (revealed = '')}>Hide</button>
-              {/if}
-              <div class="field"><label>Password</label><input type="password" bind:value={recoverPassword} autocomplete="current-password" /></div>
-              <button type="button" class="btn" disabled={recoverBusy} onclick={() => showRecovery().catch((err) => toast(err.message))}>Show secret</button>
-              <p class="label">Replace it</p>
-              <div class="recover-choice">
-                <button type="button" class="btn" class:brand={recoverMethod === 'pass'} onclick={() => pickRecover('pass')}>Passphrase</button>
-                <button type="button" class="btn" class:brand={recoverMethod === 'code'} onclick={() => pickRecover('code')}>Recovery code</button>
-              </div>
-              {#if recoverMethod === 'pass'}
-                <div class="field"><label>New passphrase</label><input bind:value={recoverSecret} type="password" autocomplete="new-password" /></div>
-              {:else}
-                <div class="recover-secret">{recoverCode || 'Make a code'}</div>
-                <button type="button" class="btn sm" onclick={() => (recoverCode = recoveryCode())}>Make another code</button>
-              {/if}
-              <div class="recover-actions">
-                <button type="button" class="btn brand" disabled={recoverBusy} onclick={() => saveUnlock().catch((err) => toast(err.message))}>Save recovery</button>
-              </div>
-            </div>
-          {/if}
           <Security bind:open={securityOpen} />
           <div class="acct-line acct-danger">
             <div>
@@ -757,6 +778,8 @@
         </section>
       {:else if page === 'developer' || page === 'devdocs'}
         <Developer docs={page === 'devdocs'} portal={portalOpen || page === 'devdocs'} onopen={() => (portalOpen = true)} />
+      {:else if page === 'media'}
+        <Media />
       {:else if page === 'theme'}
         <section class="look-sec app-card">
           <h3><Sparkles size={16} class="sec-ico" /> App theme</h3>
@@ -1009,27 +1032,6 @@
               <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
               <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
               <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
-              <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="Add your pronouns" /></div>
-              <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
-                <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
-                <ChevronRight size={16} class="row-chev" />
-              </button>
-              {#if lookOpen === 'aliases'}
-                <div class="look-panel">
-                  <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
-                  <div class="alias-edit">
-                    {#each form.aliases as alias, i}
-                      <div class="alias-line">
-                        <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
-                        <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
-                      </div>
-                    {/each}
-                  </div>
-                  {#if form.aliases.length < 10}
-                    <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
-                  {/if}
-                </div>
-              {/if}
             </section>
             {:else if profilePart === 'looks'}
             <section class="look-sec">
@@ -1169,6 +1171,27 @@
             {:else if profilePart === 'about'}
             <section class="look-sec">
               <h3><User size={16} class="sec-ico" /> About</h3>
+              <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="Add your pronouns" /></div>
+              <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
+                <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'aliases'}
+                <div class="look-panel">
+                  <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
+                  <div class="alias-edit">
+                    {#each form.aliases as alias, i}
+                      <div class="alias-line">
+                        <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
+                        <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
+                      </div>
+                    {/each}
+                  </div>
+                  {#if form.aliases.length < 10}
+                    <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
+                  {/if}
+                </div>
+              {/if}
               <button type="button" class="bg-row" onclick={() => togglePanel('bio')}>
                 <span class="copy"><strong>Bio</strong><em>{bioLabel}</em></span>
                 <ChevronRight size={16} class="row-chev" />
