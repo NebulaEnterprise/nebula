@@ -1967,6 +1967,34 @@ html.paint-mention .mention {
 .set-main { flex: 1; overflow: auto; padding: 28px 36px 48px; }
 .set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
 .set-main h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.acct-board { margin-top: 28px; max-width: 760px; }
+.acct-board > h3 {
+  margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.acct-line {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 72px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.acct-line > div { min-width: 0; }
+.acct-line span {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.acct-line p { margin: 4px 0 0; font-size: 15px; font-weight: 600; color: var(--text); }
+.acct-line.acct-danger p { color: var(--muted); font-size: 13px; font-weight: 500; line-height: 1.4; }
+.acct-reveal {
+  margin-left: 10px; padding: 0; border: 0; background: none; color: #ff6a3d;
+  font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.acct-reveal:hover { text-decoration: underline; }
+.acct-edit {
+  flex-shrink: 0; height: 36px; padding: 0 16px; border: 0; border-radius: 10px;
+  background: #2a2d35; color: #fff; font-weight: 650;
+}
+.acct-edit:hover { background: #3a3d48; }
+.acct-edit.danger { background: rgba(218, 55, 60, 0.16); color: #ffb4b4; }
+.acct-edit.danger:hover { background: rgba(218, 55, 60, 0.28); }
 .acct-section h3 { margin: 18px 0 6px; font-size: 16px; font-weight: 700; }
 .acct-row { display: flex; align-items: center; gap: 12px; min-height: 48px; }
 .acct-row span { width: 120px; color: var(--muted); font-weight: 600; flex-shrink: 0; }
