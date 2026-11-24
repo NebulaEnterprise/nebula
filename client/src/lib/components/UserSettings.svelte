@@ -222,6 +222,7 @@
     }
   }
   let portalOpen = $state(false);
+  let profilePart = $state('identity');
   const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage);
   $effect(() => {
     if (page !== 'account') securityOpen = false;
@@ -621,7 +622,14 @@
       </div>
       <div class="group">User settings</div>
       <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
-      <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
+      <button class:on={page === 'profile'} onclick={() => { ui.userPage = 'profile'; profilePart = 'identity'; lookOpen = ''; }}><User size={16} /> Profile</button>
+      {#if page === 'profile'}
+        <div class="profile-subs">
+          {#each [['identity', 'Identity'], ['looks', 'Looks'], ['about', 'About'], ['privacy', 'Privacy']] as [id, label]}
+            <button type="button" class:on={profilePart === id} onclick={() => { profilePart = id; lookOpen = ''; }}>{label}</button>
+          {/each}
+        </div>
+      {/if}
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
       <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
@@ -1007,13 +1015,35 @@
             </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {:else if page === 'profile'}
+            {#if profilePart === 'identity'}
             <section class="look-sec">
               <h3><User size={16} class="sec-ico" /> Identity</h3>
               <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
               <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
               <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
               <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="Add your pronouns" /></div>
+              <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
+                <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
+                <ChevronRight size={16} class="row-chev" />
+              </button>
+              {#if lookOpen === 'aliases'}
+                <div class="look-panel">
+                  <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
+                  <div class="alias-edit">
+                    {#each form.aliases as alias, i}
+                      <div class="alias-line">
+                        <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
+                        <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
+                      </div>
+                    {/each}
+                  </div>
+                  {#if form.aliases.length < 10}
+                    <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
+                  {/if}
+                </div>
+              {/if}
             </section>
+            {:else if profilePart === 'looks'}
             <section class="look-sec">
               <h3><Palette size={16} class="sec-ico" /> Profile theme</h3>
               <p class="look-note">How your profile card is colored. App colors stay in Theme.</p>
@@ -1127,7 +1157,7 @@
               {/if}
             </section>
             <section class="look-sec">
-              <h3><User size={16} class="sec-ico" /> Profile</h3>
+              <h3><User size={16} class="sec-ico" /> Picture</h3>
               <button type="button" class="bg-row" onclick={() => togglePanel('avatar')}>
                 <span class="bg-thumb avatar-thumb" style="background:{form.avatarColor}">
                   {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
@@ -1147,26 +1177,10 @@
                   {/if}
                 </div>
               {/if}
-              <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
-                <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
-                <ChevronRight size={16} class="row-chev" />
-              </button>
-              {#if lookOpen === 'aliases'}
-                <div class="look-panel">
-                  <p class="hint">Shown on your profile. You can add 10. These are not usernames.</p>
-                  <div class="alias-edit">
-                    {#each form.aliases as alias, i}
-                      <div class="alias-line">
-                        <input value={alias} maxlength="32" placeholder="apple" oninput={(e) => setAlias(i, e.target.value)} />
-                        <button type="button" class="btn sm" onclick={() => removeAlias(i)}>Remove</button>
-                      </div>
-                    {/each}
-                  </div>
-                  {#if form.aliases.length < 10}
-                    <button type="button" class="btn sm" onclick={addAlias}>Add alias</button>
-                  {/if}
-                </div>
-              {/if}
+            </section>
+            {:else if profilePart === 'about'}
+            <section class="look-sec">
+              <h3><User size={16} class="sec-ico" /> About</h3>
               <button type="button" class="bg-row" onclick={() => togglePanel('bio')}>
                 <span class="copy"><strong>Bio</strong><em>{bioLabel}</em></span>
                 <ChevronRight size={16} class="row-chev" />
@@ -1214,6 +1228,7 @@
                 </div>
               {/if}
             </section>
+            {:else}
             <section class="look-sec">
               <h3><Shield size={16} class="sec-ico" /> Privacy</h3>
               <div class="field">
@@ -1267,6 +1282,7 @@
                 <p class="hint">Stories stay on your profile for 24 hours. Friends can always see them, unless you pick Nobody. Blocked people never can.</p>
               </div>
             </section>
+            {/if}
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {/if}
         </div>

@@ -1943,6 +1943,12 @@ html.paint-mention .mention {
 }
 .set-nav button:hover { background: #35373e; color: var(--text); }
 .set-nav button.on, .set-nav button.on:hover { background: var(--brand); color: #fff; }
+.profile-subs { display: flex; flex-direction: column; margin: 2px 0 8px 22px; padding-left: 8px; border-left: 2px solid rgba(255,255,255,0.08); }
+.profile-subs button { padding: 7px 10px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+.set-nav .profile-subs button.on,
+.set-nav .profile-subs button.on:hover {
+  background: rgba(255,255,255,0.08); color: #fff; box-shadow: inset 3px 0 0 var(--brand);
+}
 .set-logout { margin-top: auto; }
 .set-badge {
   margin-left: auto; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
