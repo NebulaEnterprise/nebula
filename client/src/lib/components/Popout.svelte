@@ -258,7 +258,9 @@
           {#each stories as story, index (story.id)}
             <div class="ig-story-wrap">
               <button type="button" class="ig-story" onclick={() => (storyAt = index)}>
-                {#if isVideo(story)}<video src={fileUrl(story.url)} muted playsinline autoplay loop></video>{:else}<Photo url={story.url} />{/if}
+                <span class="ig-story-pic">
+                  {#if isVideo(story)}<video src={fileUrl(story.url)} muted playsinline></video>{:else}<Photo url={story.url} fill />{/if}
+                </span>
               </button>
               <button type="button" class="ig-x" title="Remove story" onclick={() => removeMedia('stories', story.id)}><X size={12} /></button>
             </div>

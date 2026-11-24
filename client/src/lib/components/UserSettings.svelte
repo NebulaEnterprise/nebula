@@ -645,7 +645,7 @@
       <button class:on={page === 'accounts'} onclick={() => (ui.userPage = 'accounts')}><Users size={16} /> Switch accounts</button>
       <button class="danger set-logout" onclick={logout}>Sign out</button>
     </aside>
-    <div class="set-main" class:look-main={page === 'profile' || page === 'theme'}>
+    <div class="set-main" class:look-main={page === 'profile' || page === 'theme'} class:media-main={page === 'media'}>
       <div class="set-head">
         {#if page === 'profile' && lookOpen === 'badges'}
           <div class="look-intro">
@@ -666,13 +666,7 @@
             </div>
           </div>
         {:else if page === 'media'}
-          <div class="look-intro">
-            <i class="look-mark"><Images size={18} /></i>
-            <div>
-              <h2>Media</h2>
-              <p>Stories and posts on your profile.</p>
-            </div>
-          </div>
+          <div></div>
         {:else if page === 'theme'}
           <div class="look-intro">
             <i class="look-mark"><Sparkles size={18} /></i>
