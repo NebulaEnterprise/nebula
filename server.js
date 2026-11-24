@@ -1736,6 +1736,15 @@ function isRootAccount(user) {
   return !!user && Number(user.uid) === 1;
 }
 
+function accountHold(user) {
+  if (!user || isRootAccount(user)) return '';
+  if (user.deleted) return 'This account is deleted';
+  if (user.disabled) return 'This account is disabled';
+  if (user.globalBan) return 'This account is banned from Nebula';
+  if (Number(user.suspendedUntil) > Date.now()) return 'This account is suspended';
+  return '';
+}
+
 function isOwner(g, user) {
   if (!g || !user) return false;
   if (g.id === OFFICIAL_ID) return isOfficialOwner(user);
@@ -3718,7 +3727,8 @@ app.post('/api/auth/login', (req, res) => {
   if (!user || !checkPassword(password || '', user.passwordHash)) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
-  if (user.disabled) return res.status(403).json({ error: 'This account is disabled' });
+  const held = accountHold(user);
+  if (held) return res.status(403).json({ error: held });
   if (raw.includes('@') && emailMatches(raw, user.emailSalt, user.emailHash) && user.email !== raw) {
     user.email = raw;
     save(USERS_FILE, users);
@@ -4273,7 +4283,8 @@ function auth(req, res, next) {
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   const found = security.findSession(users, token);
   if (!found) return res.status(401).json({ error: 'Invalid session' });
-  if (found.user.disabled) return res.status(401).json({ error: 'This account is disabled' });
+  const held = accountHold(found.user);
+  if (held) return res.status(401).json({ error: held });
   req.user = found.user;
   req.session = found.session;
   if (!req.user.vault || !req.user.vault.check) {
@@ -5655,6 +5666,12 @@ app.post('/api/channels/:id/messages', auth, (req, res) => {
   if (sender.timeoutUntil && Date.now() < sender.timeoutUntil) {
     return res.status(403).json({ error: 'You are timed out' });
   }
+  if (!isRootAccount(req.user) && (req.user.locked || req.user.muted || req.user.restrictMessages)) {
+    return res.status(403).json({ error: 'Messaging is restricted on this account' });
+  }
+  if (!isRootAccount(req.user) && (req.user.restrictImages || req.user.restrictFiles) && Array.isArray(req.body?.files) && req.body.files.length) {
+    return res.status(403).json({ error: 'Uploads are restricted on this account' });
+  }
   if (found.guild.lockedUntil && Date.now() < found.guild.lockedUntil && !can(found.guild, req.user, PERM.MANAGE_CHANNELS)) {
     return res.status(403).json({ error: 'This server is locked' });
   }
@@ -6493,6 +6510,12 @@ app.post('/api/dms/:userId/messages', auth, (req, res) => {
   if (!users[otherId]) return res.status(404).json({ error: 'User not found' });
   if (otherId === req.user.id) return res.status(400).json({ error: 'Cannot DM yourself' });
   if (!canMessage(req.user, users[otherId])) return res.status(403).json({ error: messageBlockReason(users[otherId]) });
+  if (!isRootAccount(req.user) && (req.user.locked || req.user.muted || req.user.restrictMessages)) {
+    return res.status(403).json({ error: 'Messaging is restricted on this account' });
+  }
+  if (!isRootAccount(req.user) && (req.user.restrictImages || req.user.restrictFiles) && Array.isArray(req.body?.files) && req.body.files.length) {
+    return res.status(403).json({ error: 'Uploads are restricted on this account' });
+  }
 
   const extra = messageExtras(req.body);
   if (extra.error) return res.status(400).json({ error: extra.error });
@@ -7724,46 +7747,146 @@ function ownedBotCount(user) {
 
 function canEditAccount(actor, target) {
   if (!actor || !target || String(actor.id) === String(target.id)) return false;
-  if (isOfficialOwner(target)) return false;
+  if (isRootAccount(target)) return false;
+  if (isOfficialOwner(target) && !isOfficialOwner(actor)) return false;
   if (isOfficialOwner(actor)) return true;
   const home = guilds.servers && guilds.servers[OFFICIAL_ID];
   return canStaffTouch(home, actor, target.id);
 }
 
+function accountRoles(user) {
+  const out = [];
+  for (const g of Object.values((guilds && guilds.servers) || {})) {
+    if (!g) continue;
+    const mem = g.members && g.members[user.id];
+    const banned = !!(g.bans && g.bans[user.id]);
+    if (!mem && !banned) continue;
+    const roles = ((mem && mem.roles) || []).map((id) => {
+      const role = (g.roles || []).find((row) => row.id === id);
+      return { id, name: role ? role.name : id };
+    });
+    out.push({
+      id: g.id,
+      name: g.name || 'Server',
+      roles,
+      banned,
+      timeoutUntil: mem ? Number(mem.timeoutUntil) || 0 : 0,
+    });
+  }
+  return out;
+}
+
+function reportsAgainst(user) {
+  const home = guilds.servers && guilds.servers[OFFICIAL_ID];
+  return ((home && home.reports) || []).filter((row) => String(row.targetId) === String(user.id)).slice(0, 20).map((row) => ({
+    id: row.id,
+    status: row.status || 'open',
+    reason: row.reason || '',
+    text: String(row.text || '').slice(0, 240),
+    at: row.at || '',
+  }));
+}
+
+function pushStaffLog(actor, target, action, detail) {
+  if (!guilds.staffAudit) guilds.staffAudit = [];
+  guilds.staffAudit.unshift({
+    id: uuidv4(),
+    at: new Date().toISOString(),
+    actorName: actor.username,
+    targetName: target ? target.username : '',
+    action: String(action || '').slice(0, 40),
+    detail: String(detail || '').slice(0, 240),
+  });
+  guilds.staffAudit = guilds.staffAudit.slice(0, 200);
+}
+
+function setStaffDisplayName(user, value) {
+  const next = String(value || user.username || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+  const old = user.displayName || '';
+  if (!Array.isArray(user.displayHistory)) user.displayHistory = [];
+  if (old && old !== next) user.displayHistory.unshift({ name: old, at: new Date().toISOString() });
+  user.displayHistory = user.displayHistory.slice(0, 12);
+  user.displayName = next || user.username;
+}
+
 function staffAccount(user, viewer) {
+  const ownerView = isOfficialOwner(viewer);
   return {
     id: user.id,
     uid: user.uid || null,
     username: user.username,
     displayName: user.displayName || user.username,
-    email: isOfficialOwner(viewer) && !user.bot && !isRootAccount(user) ? String(user.email || '') : '',
+    email: ownerView && !user.bot && !isRootAccount(user) ? String(user.email || '') : '',
     bot: !!user.bot,
     createdAt: user.createdAt || '',
-    status: effectiveStatus(user),
+    status: user.deleted ? 'deleted' : (user.disabled || user.globalBan ? 'offline' : effectiveStatus(user)),
     lastSeen: Number(user.lastSeen) || 0,
     disabled: !!user.disabled,
+    deleted: !!user.deleted,
+    locked: !!user.locked,
+    muted: !!user.muted,
+    globalBan: !!user.globalBan,
+    suspendedUntil: Number(user.suspendedUntil) || 0,
     early: Array.isArray(user.badges) && user.badges.includes('early'),
+    premium: !!user.premium,
+    emailVerified: !!user.emailVerified,
     mfa: !!(user.totp && user.totp.enabled),
+    restrictMessages: !!user.restrictMessages,
+    restrictImages: !!user.restrictImages,
+    restrictFiles: !!user.restrictFiles,
+    restrictVoice: !!user.restrictVoice,
     sessions: security.sessionCount(user),
+    sessionList: ownerView ? (Array.isArray(user.sessions) ? user.sessions : []).slice(-8).map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt || '',
+      lastSeen: Number(row.lastSeen) || 0,
+    })) : [],
     servers: accountServers(user),
+    roles: accountRoles(user),
     bots: ownedBotCount(user),
-    protected: isOfficialOwner(user),
+    warnings: Array.isArray(user.warnings) ? user.warnings.slice(0, 20) : [],
+    cases: Array.isArray(user.cases) ? user.cases.slice(0, 20) : [],
+    notes: Array.isArray(user.staffNotes) ? user.staffNotes.slice(0, 30) : [],
+    nameHistory: Array.isArray(user.nameHistory) ? user.nameHistory.slice(0, 12) : [],
+    displayHistory: Array.isArray(user.displayHistory) ? user.displayHistory.slice(0, 12) : [],
+    reports: reportsAgainst(user),
+    protected: isRootAccount(user),
     canEdit: canEditAccount(viewer, user),
-    canModerate: isOfficialOwner(viewer) && !isOfficialOwner(user) && String(viewer.id) !== String(user.id),
+    canModerate: ownerView && !isRootAccount(user) && String(viewer.id) !== String(user.id),
+    avatarUrl: user.avatarUrl || '',
+    avatarColor: user.avatarColor || '#7c5cff',
   };
 }
 
 function staffDirectory(viewer) {
   const list = Object.values(users).filter(Boolean).map((user) => staffAccount(user, viewer));
   list.sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0));
+  const home = guilds.servers && guilds.servers[OFFICIAL_ID];
+  const openReports = ((home && home.reports) || []).filter((row) => row.status !== 'closed').length;
   const counts = {
-    accounts: list.length,
-    people: list.filter((user) => !user.bot).length,
+    accounts: list.filter((user) => !user.deleted).length,
+    people: list.filter((user) => !user.bot && !user.deleted).length,
     bots: list.filter((user) => user.bot).length,
     online: list.filter((user) => user.status === 'online').length,
-    disabled: list.filter((user) => user.disabled).length,
+    disabled: list.filter((user) => user.disabled || user.globalBan || user.deleted).length,
+    servers: Object.keys((guilds && guilds.servers) || {}).length,
+    reports: openReports,
   };
-  return { users: list, counts, owner: isOfficialOwner(viewer) };
+  const servers = Object.values((guilds && guilds.servers) || {}).slice(0, 8).map((g) => ({
+    id: g.id,
+    name: g.name || 'Server',
+    members: Object.keys(g.members || {}).length,
+    roles: (g.roles || []).filter((row) => row && row.id !== 'everyone' && row.id !== 'owner').map((row) => ({ id: row.id, name: row.name })),
+  }));
+  const audit = (guilds.staffAudit || []).slice(0, 12).map((row) => ({
+    id: row.id,
+    at: row.at,
+    actorName: row.actorName,
+    targetName: row.targetName,
+    action: row.action,
+    detail: row.detail,
+  }));
+  return { users: list, counts, owner: isOfficialOwner(viewer), servers, audit };
 }
 
 function dropSessions(user) {
@@ -7797,6 +7920,9 @@ function applyStaffUsername(user, raw) {
   if (!user.bot && clean.endsWith('_bot')) return 'Usernames cannot end with _bot';
   if (usernameTaken(clean, user.id)) return 'Username taken';
   const old = user.username;
+  if (!Array.isArray(user.nameHistory)) user.nameHistory = [];
+  if (old && old !== clean) user.nameHistory.unshift({ name: old, at: new Date().toISOString() });
+  user.nameHistory = user.nameHistory.slice(0, 12);
   user.username = clean;
   if (!user.displayName || user.displayName === old) user.displayName = clean;
   return '';
@@ -7858,58 +7984,216 @@ function purgeAccount(user) {
 
 app.get('/api/staff/directory', auth, (req, res) => {
   if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can open admin' });
-  const directory = staffDirectory(req.user);
-  res.json({ ok: true, ...directory });
+  res.json({ ok: true, ...staffDirectory(req.user) });
 });
 
 app.post('/api/staff/users/:id', auth, (req, res) => {
   if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can open admin' });
   const target = users[String(req.params.id || '')];
   if (!target) return res.status(404).json({ error: 'Account not found' });
+  if (isRootAccount(target)) return res.status(400).json({ error: 'That account is not affected by permissions' });
   const action = String(req.body?.action || '');
-  const moderate = ['disable', 'enable', 'logout', 'delete', 'badge'];
-  if (moderate.includes(action)) {
+  const reason = String(req.body?.reason || req.body?.text || '').trim().slice(0, 240);
+  const ownerOnly = new Set(['disable', 'enable', 'delete', 'restore', 'purge', 'global-ban', 'global-unban', 'password', 'email', 'premium', 'badge']);
+  const needsReason = new Set(['global-ban', 'suspend', 'disable', 'delete', 'purge', 'kick', 'server-ban', 'delete-messages', 'lock', 'warn', 'case', 'timeout']);
+  if (ownerOnly.has(action)) {
     if (!isOfficialOwner(req.user)) return res.status(403).json({ error: 'Only the server owners can do that' });
-    if (isOfficialOwner(target) || String(target.id) === String(req.user.id)) {
-      return res.status(400).json({ error: 'That account stays as it is' });
-    }
+    if (String(target.id) === String(req.user.id)) return res.status(400).json({ error: 'That account stays as it is' });
   } else if (!canEditAccount(req.user, target)) {
     return res.status(403).json({ error: 'You cannot change that account' });
   }
+  if (needsReason.has(action) && reason.length < 3) return res.status(400).json({ error: 'Add a reason' });
+  const home = guilds.servers && guilds.servers[OFFICIAL_ID];
+  const serverId = String(req.body?.serverId || (home && home.id) || '');
+  const guild = (guilds.servers && guilds.servers[serverId]) || home;
+  let temporaryPassword = '';
+  let detail = reason;
+
   if (action === 'reset-username') {
     const next = spareUsername(target);
     const error = next ? applyStaffUsername(target, next) : 'Could not pick a username';
     if (error) return res.status(400).json({ error });
+    detail = '@' + target.username;
   } else if (action === 'username') {
     const error = applyStaffUsername(target, req.body?.username);
     if (error) return res.status(400).json({ error });
+    detail = '@' + target.username;
   } else if (action === 'display-name') {
-    target.displayName = String(req.body?.displayName || target.username).slice(0, 32);
+    setStaffDisplayName(target, req.body?.displayName);
+    detail = target.displayName;
   } else if (action === 'reset-display') {
-    target.displayName = target.username;
+    setStaffDisplayName(target, target.username);
+    detail = target.displayName;
   } else if (action === 'disable') {
     target.disabled = true;
     dropSessions(target);
-  } else if (action === 'enable') {
+  } else if (action === 'enable' || action === 'unlock') {
     target.disabled = false;
+    target.locked = false;
+    target.suspendedUntil = 0;
+  } else if (action === 'lock') {
+    target.locked = true;
   } else if (action === 'logout') {
     dropSessions(target);
+    detail = 'Signed out';
   } else if (action === 'badge') {
     const badges = new Set(Array.isArray(target.badges) ? target.badges : []);
     if (badges.has('early')) badges.delete('early');
     else badges.add('early');
     target.badges = [...badges];
+    detail = badges.has('early') ? 'Granted early badge' : 'Removed early badge';
+  } else if (action === 'premium') {
+    target.premium = !target.premium;
+    detail = target.premium ? 'Granted premium' : 'Removed premium';
+  } else if (action === 'verify-email') {
+    target.emailVerified = !target.emailVerified;
+    detail = target.emailVerified ? 'Email marked verified' : 'Email marked unverified';
+  } else if (action === 'email') {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email.includes('@') || email.length > 120) return res.status(400).json({ error: 'Invalid email' });
+    if (Object.values(users).some((user) => user && user.id !== target.id && emailMatches(email, user.emailSalt, user.emailHash))) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+    const sealed = emailRecord(email);
+    target.email = email;
+    target.emailSalt = sealed.emailSalt;
+    target.emailHash = sealed.emailHash;
+    target.emailVerified = false;
+    detail = 'Email changed';
+  } else if (action === 'password') {
+    temporaryPassword = crypto.randomBytes(9).toString('base64url');
+    target.passwordHash = hashPassword(temporaryPassword);
+    dropSessions(target);
+    detail = 'Password reset';
+  } else if (action === 'global-ban') {
+    target.globalBan = { reason, at: new Date().toISOString(), by: req.user.id };
+    dropSessions(target);
+  } else if (action === 'global-unban') {
+    target.globalBan = null;
+    detail = 'Platform ban removed';
+  } else if (action === 'suspend') {
+    const hours = Math.min(24 * 30, Math.max(1, Number(req.body?.hours) || 24));
+    target.suspendedUntil = Date.now() + hours * 3600000;
+    dropSessions(target);
+    detail = reason + ' · ' + hours + 'h';
+  } else if (action === 'unsuspend') {
+    target.suspendedUntil = 0;
+    detail = 'Suspension cleared';
+  } else if (action === 'mute') {
+    target.muted = true;
+    target.restrictMessages = true;
+  } else if (action === 'unmute') {
+    target.muted = false;
+    target.restrictMessages = false;
+    detail = 'Unmuted';
+  } else if (action === 'restrict') {
+    const flag = String(req.body?.flag || '');
+    const map = { messages: 'restrictMessages', images: 'restrictImages', files: 'restrictFiles', voice: 'restrictVoice' };
+    if (!map[flag]) return res.status(400).json({ error: 'Unknown restriction' });
+    target[map[flag]] = !target[map[flag]];
+    detail = flag + (target[map[flag]] ? ' restricted' : ' allowed');
+  } else if (action === 'warn') {
+    if (!Array.isArray(target.warnings)) target.warnings = [];
+    target.warnings.unshift({ id: uuidv4(), text: reason, at: new Date().toISOString(), by: req.user.username });
+    target.warnings = target.warnings.slice(0, 30);
+  } else if (action === 'case') {
+    if (!Array.isArray(target.cases)) target.cases = [];
+    target.cases.unshift({ id: uuidv4(), text: reason, at: new Date().toISOString(), by: req.user.username, status: 'open' });
+    target.cases = target.cases.slice(0, 30);
+  } else if (action === 'note') {
+    const text = String(req.body?.text || '').trim().slice(0, 500);
+    if (text.length < 2) return res.status(400).json({ error: 'Write a note' });
+    if (!Array.isArray(target.staffNotes)) target.staffNotes = [];
+    target.staffNotes.unshift({ id: uuidv4(), text, at: new Date().toISOString(), by: req.user.username });
+    target.staffNotes = target.staffNotes.slice(0, 40);
+    detail = 'Note added';
+  } else if (action === 'kick' || action === 'server-ban') {
+    if (!guild || !guild.members || !guild.members[target.id]) return res.status(400).json({ error: 'That account is not in that server' });
+    if (action === 'server-ban') {
+      if (!guild.bans) guild.bans = {};
+      guild.bans[target.id] = { reason, at: new Date().toISOString() };
+    } else {
+      guild.kicked = guild.kicked || {};
+      guild.kicked[target.id] = Date.now();
+    }
+    delete guild.members[target.id];
+    detail = (guild.name || 'Server') + ' · ' + reason;
+  } else if (action === 'unban') {
+    if (guild && guild.bans) delete guild.bans[target.id];
+    detail = 'Server ban removed';
+  } else if (action === 'timeout') {
+    if (!guild || !guild.members || !guild.members[target.id]) return res.status(400).json({ error: 'That account is not in that server' });
+    const minutes = Math.min(10080, Math.max(1, Number(req.body?.minutes) || 60));
+    guild.members[target.id].timeoutUntil = Date.now() + minutes * 60000;
+    detail = (guild.name || 'Server') + ' · ' + minutes + 'm';
+  } else if (action === 'role') {
+    if (!guild || !guild.members || !guild.members[target.id]) return res.status(400).json({ error: 'That account is not in that server' });
+    const roleId = String(req.body?.roleId || '');
+    const role = (guild.roles || []).find((row) => row.id === roleId);
+    if (!role || role.id === 'everyone' || role.id === 'owner') return res.status(400).json({ error: 'Pick a role' });
+    if ((role.id === 'admin' || role.id === 'developer' || role.id === 'owner') && !isOfficialOwner(req.user)) {
+      return res.status(403).json({ error: 'Only the server owners can assign that role' });
+    }
+    const mem = guild.members[target.id];
+    mem.roles = mem.roles || ['everyone'];
+    if (req.body?.remove) mem.roles = mem.roles.filter((id) => id !== role.id);
+    else if (!mem.roles.includes(role.id)) mem.roles.push(role.id);
+    detail = (req.body?.remove ? 'Removed ' : 'Added ') + role.name;
+  } else if (action === 'reset-avatar') {
+    target.avatarUrl = '';
+    target.avatarPath = '';
+    detail = 'Avatar reset';
+  } else if (action === 'reset-banner') {
+    target.bannerUrl = '';
+    target.bannerPath = '';
+    detail = 'Banner reset';
+  } else if (action === 'clear-status') {
+    target.customStatus = '';
+    detail = 'Status cleared';
+  } else if (action === 'clear-effects') {
+    target.nameEffect = '';
+    detail = 'Effects removed';
+  } else if (action === 'delete-messages') {
+    const since = Date.parse(req.body?.since || '') || 0;
+    let removed = 0;
+    if (messages && typeof messages === 'object') {
+      for (const key of Object.keys(messages)) {
+        if (!Array.isArray(messages[key])) continue;
+        messages[key] = messages[key].filter((msg) => {
+          if (!msg || String(msg.authorId) !== String(target.id)) return true;
+          if (since && Date.parse(msg.createdAt || 0) < since) return true;
+          removed += 1;
+          return false;
+        });
+      }
+      save(MESSAGES_FILE, messages);
+    }
+    detail = removed + ' messages · ' + reason;
   } else if (action === 'delete') {
+    target.deleted = true;
+    target.deletedAt = new Date().toISOString();
+    dropSessions(target);
+  } else if (action === 'restore') {
+    target.deleted = false;
+    target.disabled = false;
+    target.globalBan = null;
+    detail = 'Account restored';
+  } else if (action === 'purge') {
     if (ownedBotCount(target) > 0) return res.status(400).json({ error: 'Delete their bots in Developer first' });
+    pushStaffLog(req.user, target, action, reason);
     purgeAccount(target);
     touchAlerts();
     return res.json({ ok: true, ...staffDirectory(req.user) });
   } else {
     return res.status(400).json({ error: 'Unknown action' });
   }
+  pushStaffLog(req.user, target, action, detail);
   save(USERS_FILE, users);
+  saveGuilds();
   touchAlerts();
-  res.json({ ok: true, user: staffAccount(target, req.user), ...staffDirectory(req.user) });
+  const body = { ok: true, user: staffAccount(target, req.user), ...staffDirectory(req.user) };
+  if (temporaryPassword) body.temporaryPassword = temporaryPassword;
+  res.json(body);
 });
 
 app.get('/api/staff/reports', auth, (req, res) => {
@@ -8178,6 +8462,7 @@ app.get('/api/health', (req, res) => {
   });
 
   app.post('/api/voice/:channelId/join', auth, (req, res) => {
+    if (req.user.restrictVoice && !isRootAccount(req.user)) return res.status(403).json({ error: 'Voice is restricted on this account' });
     const found = locate(req, res);
     if (!found) return;
     const id = key(found.guild.id, found.channel.id);
@@ -8691,7 +8976,8 @@ function botAuth(req, res, next) {
   const bot = Object.values(bots).find((row) => row && row.tokenHash === hash);
   const user = bot && users[bot.id];
   if (!bot || !user) return res.status(401).json({ error: 'Wrong token', code: 'unauthorized' });
-  if (user.disabled) return res.status(403).json({ error: 'This bot is disabled', code: 'disabled' });
+  const held = accountHold(user);
+  if (held) return res.status(403).json({ error: held, code: 'disabled' });
   req.bot = bot;
   req.botUser = user;
   if (req.method === 'POST' && (req.path === '/offline' || req.path === '/api/bot/v1/offline')) return next();
