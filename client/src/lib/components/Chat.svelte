@@ -147,6 +147,7 @@
       accentColor: mine?.accentColor || member?.accentColor || author.accentColor || '',
       bannerUrl: mine ? (mine.bannerUrl || '') : (member ? (member.bannerUrl || '') : (author.bannerUrl || '')),
       bannerColor: mine?.bannerColor || member?.bannerColor || author.bannerColor || '',
+      profileColors: member?.profileColors || mine?.profileColors || author.profileColors,
       staff: member?.staff || mine?.staff || author.staff || '',
       developer: !!(member?.developer || mine?.developer || author.developer),
       showcase: mine ? (mine.showcase || null) : (member?.showcase || dm?.showcase || author.showcase || null),

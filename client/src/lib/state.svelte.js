@@ -1159,7 +1159,7 @@ export async function openDm(user) {
   ui.dock = 'profile';
   if (user && user.id) {
     loadProfile(user.id).then((fresh) => {
-      if (fresh && ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
+      if (fresh && ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = withBotLook({ ...ui.dmUser, ...fresh });
     }).catch(() => {});
   }
   ui.group = null;
@@ -1988,7 +1988,7 @@ function paintNames(list) {
       avatarColor: author.avatarColor || member.avatarColor,
     };
   });
-  if (changed) ui.members = next;
+  if (changed) ui.members = next.map(withBotLook);
 }
 
 function adoptMe(members) {
@@ -2204,7 +2204,7 @@ export async function loadMembers(quiet) {
         ui.seeMembers = false;
         ui.showMembers = false;
       } else {
-        ui.members = data.members || [];
+        ui.members = (data.members || []).map(withBotLook);
       }
       ui.badgeDefs = data.badges || {};
       adoptMe(ui.members);
@@ -4025,23 +4025,44 @@ export async function pollActivity() {
 
 let presenceStarted = false;
 
+const botLooks = new Map();
+
+function withBotLook(person) {
+  if (!person || person.id == null) return person;
+  const look = botLooks.get(String(person.id));
+  if (!look) return person;
+  return {
+    ...person,
+    displayName: look.displayName || person.displayName,
+    username: look.username || person.username,
+    bio: look.bio ?? person.bio,
+    avatarUrl: look.avatarUrl,
+    bannerUrl: look.bannerUrl,
+    avatarColor: look.avatarColor || person.avatarColor,
+    accentColor: look.accentColor || person.accentColor,
+    bannerColor: look.bannerColor || person.bannerColor,
+    profileColors: look.profileColors || person.profileColors,
+  };
+}
+
 export function paintBotLook(bot) {
   if (!bot || !bot.id) return;
-  const color = bot.accentColor || bot.avatarColor || bot.bannerColor || '';
-  const touch = (person) => {
-    if (!person || String(person.id) !== String(bot.id)) return person;
-    return {
-      ...person,
-      displayName: bot.displayName || bot.name || person.displayName,
-      username: bot.username || person.username,
-      bio: bot.bio ?? person.bio,
-      avatarUrl: bot.avatarUrl || '',
-      bannerUrl: bot.bannerUrl || '',
-      avatarColor: color || person.avatarColor,
-      accentColor: color || person.accentColor,
-      bannerColor: color || person.bannerColor,
-    };
-  };
+  const color = bot.accentColor || bot.avatarColor || bot.bannerColor || (Array.isArray(bot.profileColors) ? bot.profileColors[0] : '') || '';
+  const shades = Array.isArray(bot.profileColors) && bot.profileColors.length >= 2
+    ? bot.profileColors.slice(0, 2)
+    : (color ? [color, color] : null);
+  botLooks.set(String(bot.id), {
+    displayName: bot.displayName || bot.name || '',
+    username: bot.username || '',
+    bio: bot.bio,
+    avatarUrl: bot.avatarUrl || '',
+    bannerUrl: bot.bannerUrl || '',
+    avatarColor: color,
+    accentColor: color,
+    bannerColor: color,
+    profileColors: shades,
+  });
+  const touch = (person) => withBotLook(person);
   const patchMsg = (msg) => {
     if (!msg?.author || String(msg.author.id) !== String(bot.id)) return msg;
     return { ...msg, author: touch(msg.author) };
@@ -4329,9 +4350,9 @@ export function peekProfile(user) {
 export async function openPopout(user, x, y) {
   const inServer = ui.mode === 'chat' && !!ui.serverId;
   const known = inServer ? ui.members.find((m) => m.id === user.id) : null;
-  const seed = known
+  const seed = withBotLook(known
     ? { ...user, ...known, roles: known.roles || [] }
-    : { ...user, roles: inServer ? (user.roles || []) : [] };
+    : { ...user, roles: inServer ? (user.roles || []) : [] });
   if (ui.me && String(ui.me.id) === String(user.id)) {
     seed.gallery = mediaList(ui.me.gallery, seed.gallery);
     seed.stories = mediaList(ui.me.stories, seed.stories);
@@ -4346,7 +4367,7 @@ export async function openPopout(user, x, y) {
     if (!fresh || !ui.popout || ui.popout.user?.id !== user.id) return;
     const gallery = mediaList(fresh.gallery, ui.popout.user.gallery);
     const stories = mediaList(fresh.stories, ui.popout.user.stories);
-    ui.popout = { user: { ...ui.popout.user, ...fresh, gallery, stories, roles: ui.popout.user.roles || [] }, x, y };
+    ui.popout = { user: withBotLook({ ...ui.popout.user, ...fresh, gallery, stories, roles: ui.popout.user.roles || [] }), x, y };
     if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
     if (ui.dmUser && String(ui.dmUser.id) === String(fresh.id)) ui.dmUser = { ...ui.dmUser, ...fresh };
@@ -4361,7 +4382,7 @@ export async function openPopout(user, x, y) {
     if (opened !== profileRevision) return;
     const gallery = mediaList(fresh.gallery, ui.popout?.user?.gallery);
     const stories = mediaList(fresh.stories, ui.popout?.user?.stories);
-    ui.popout = { user: { ...seed, ...fresh, gallery, stories, roles: fresh.roles || [] }, x, y };
+    ui.popout = { user: withBotLook({ ...seed, ...fresh, gallery, stories, roles: fresh.roles || [] }), x, y };
     if (ui.me && String(ui.me.id) === String(fresh.id)) ui.me = { ...ui.me, gallery, stories };
     warmMedia([fresh.bannerUrl, fresh.avatarUrl]);
     primeMedia([fresh.bannerUrl, fresh.avatarUrl]);

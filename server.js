@@ -8677,6 +8677,7 @@ app.patch('/api/me/bots/:id', auth, (req, res) => {
   }
   save(USERS_FILE, users);
   saveBots();
+  touchProfiles();
   res.json({ ok: true, bot: publicBot(bot) });
 });
 
