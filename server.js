@@ -1411,6 +1411,7 @@ function powerRank(g, user) {
 function canStaffTouch(g, actor, targetId) {
   const target = users[targetId];
   if (!actor || !target) return false;
+  if (isRootAccount(target) && actor.id !== target.id) return false;
   if (isOwner(g, target) && actor.id !== target.id) return false;
   if (isOwner(g, actor)) return true;
   return powerRank(g, actor) > powerRank(g, target);
@@ -1731,6 +1732,10 @@ function isOfficialOwner(user) {
   return !!user && (Number(user.uid) === 1 || Number(user.uid) === 2);
 }
 
+function isRootAccount(user) {
+  return !!user && Number(user.uid) === 1;
+}
+
 function isOwner(g, user) {
   if (!g || !user) return false;
   if (g.id === OFFICIAL_ID) return isOfficialOwner(user);
@@ -1757,7 +1762,7 @@ function memberRoles(g, user) {
 }
 
 function basePerms(g, user) {
-  if (isOwner(g, user)) return ALL_PERMS;
+  if (isRootAccount(user) || isOwner(g, user)) return ALL_PERMS;
   let bits = 0;
   for (const role of memberRoles(g, user)) bits |= Number(role.permissions) || 0;
   if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || powerRank(g, user) >= 3)) return ALL_PERMS;
@@ -1765,6 +1770,7 @@ function basePerms(g, user) {
 }
 
 function effectivePerms(g, user, channel) {
+  if (isRootAccount(user)) return ALL_PERMS;
   let bits = basePerms(g, user);
   if (!channel || !(channel.overwrites || []).length) return stripOfficialManage(g, user, bits);
   if ((bits & PERM.ADMIN) && (!g || g.id !== OFFICIAL_ID || powerRank(g, user) >= 3 || isOwner(g, user))) return bits;
@@ -1789,6 +1795,7 @@ function permHas(bits, flag) {
 
 function canSeeMemberList(g, user) {
   if (!g || !g.hideMembers) return true;
+  if (isRootAccount(user)) return true;
   if (!user || !g.members || !g.members[user.id]) return false;
   if (isOwner(g, user)) return true;
   for (const role of memberRoles(g, user)) {
@@ -1800,6 +1807,7 @@ function canSeeMemberList(g, user) {
 
 function can(g, user, perm, channel) {
   if (!g || !user || !g.members || !g.members[user.id]) return false;
+  if (isRootAccount(user)) return true;
   if ((effectivePerms(g, user, channel) & perm) === perm) return true;
   if (!channel) return false;
   const manage = (basePerms(g, user) & PERM.MANAGE_CHANNELS) === PERM.MANAGE_CHANNELS;
@@ -5511,6 +5519,7 @@ app.post('/api/servers/:id/members/:userId/roles', auth, (req, res) => {
   if (!g) return;
   const mem = g.members[req.params.userId];
   if (!mem) return res.status(404).json({ error: 'Member not found' });
+  if (isRootAccount(users[req.params.userId])) return res.status(403).json({ error: 'That account is not affected by permissions' });
   const roleId = String(req.body?.roleId || '');
   const role = (g.roles || []).find((r) => r.id === roleId);
   if (!role || role.id === 'everyone') return res.status(400).json({ error: 'Pick a role' });
@@ -7727,7 +7736,7 @@ function staffAccount(user, viewer) {
     uid: user.uid || null,
     username: user.username,
     displayName: user.displayName || user.username,
-    email: isOfficialOwner(viewer) && !user.bot ? String(user.email || '') : '',
+    email: isOfficialOwner(viewer) && !user.bot && !isRootAccount(user) ? String(user.email || '') : '',
     bot: !!user.bot,
     createdAt: user.createdAt || '',
     status: effectiveStatus(user),
@@ -9451,6 +9460,7 @@ botApi.put('/servers/:id/members/:uid/roles/:rid', (req, res) => {
   const mem = g.members[req.params.uid];
   const role = (g.roles || []).find((row) => row.id === req.params.rid);
   if (!mem || !role || role.id === 'everyone' || role.id === 'owner') return botFail(res, 404, 'Member or role not found', 'not_found');
+  if (isRootAccount(users[req.params.uid])) return botFail(res, 403, 'That account is not affected by permissions', 'missing_permission');
   mem.roles = mem.roles || ['everyone'];
   if (!mem.roles.includes(role.id)) mem.roles.push(role.id);
   audit(g, req.botUser, 'gave a role');
@@ -9464,6 +9474,7 @@ botApi.delete('/servers/:id/members/:uid/roles/:rid', (req, res) => {
   if (!botManage(g, req.botUser, PERM.MANAGE_ROLES)) return botFail(res, 403, 'The bot cannot manage roles', 'missing_permission');
   const mem = g.members[req.params.uid];
   if (!mem) return botFail(res, 404, 'Member not found', 'not_found');
+  if (isRootAccount(users[req.params.uid])) return botFail(res, 403, 'That account is not affected by permissions', 'missing_permission');
   mem.roles = (mem.roles || []).filter((id) => id !== req.params.rid);
   saveGuilds();
   res.json(botMemberView(g, req.params.uid));

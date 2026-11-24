@@ -239,7 +239,7 @@
             <div><dt>Created</dt><dd>{opened(selected.createdAt)}</dd></div>
             <div><dt>Last seen</dt><dd>{seen(selected.lastSeen)}</dd></div>
             <div><dt>Status</dt><dd>{selected.disabled ? 'Disabled' : selected.status}</dd></div>
-            {#if selected.email}<div><dt>Email</dt><dd>{selected.email}</dd></div>{/if}
+            {#if selected.email && Number(selected.uid) !== 1}<div><dt>Email</dt><dd>{selected.email}</dd></div>{/if}
             <div><dt>Sessions</dt><dd>{selected.sessions}{selected.mfa ? ' · authenticator on' : ''}</dd></div>
             <div><dt>Servers</dt><dd>{selected.servers.length ? selected.servers.map((server) => server.name).join(', ') : 'None'}</dd></div>
             {#if selected.bots}<div><dt>Bots</dt><dd>{selected.bots}</dd></div>{/if}
