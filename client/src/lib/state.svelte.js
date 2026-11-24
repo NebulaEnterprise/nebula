@@ -4025,6 +4025,42 @@ export async function pollActivity() {
 
 let presenceStarted = false;
 
+export function paintBotLook(bot) {
+  if (!bot || !bot.id) return;
+  const color = bot.accentColor || bot.avatarColor || bot.bannerColor || '';
+  const touch = (person) => {
+    if (!person || String(person.id) !== String(bot.id)) return person;
+    return {
+      ...person,
+      displayName: bot.displayName || bot.name || person.displayName,
+      username: bot.username || person.username,
+      bio: bot.bio ?? person.bio,
+      avatarUrl: bot.avatarUrl || '',
+      bannerUrl: bot.bannerUrl || '',
+      avatarColor: color || person.avatarColor,
+      accentColor: color || person.accentColor,
+      bannerColor: color || person.bannerColor,
+    };
+  };
+  const patchMsg = (msg) => {
+    if (!msg?.author || String(msg.author.id) !== String(bot.id)) return msg;
+    return { ...msg, author: touch(msg.author) };
+  };
+  ui.members = (ui.members || []).map(touch);
+  ui.messages = (ui.messages || []).map(patchMsg);
+  for (const [key, list] of roomLogs) {
+    if (Array.isArray(list)) roomLogs.set(key, list.map(patchMsg));
+  }
+  if (ui.popout?.user) ui.popout = { ...ui.popout, user: touch(ui.popout.user) };
+  if (ui.quickUser) ui.quickUser = touch(ui.quickUser);
+  if (ui.dmUser) ui.dmUser = touch(ui.dmUser);
+  if (ui.group && Array.isArray(ui.group.members)) {
+    ui.group = { ...ui.group, members: ui.group.members.map(touch) };
+  }
+  ui.friends = (ui.friends || []).map(touch);
+  ui.dms = (ui.dms || []).map((dm) => dm && dm.other ? { ...dm, other: touch(dm.other) } : dm);
+}
+
 function patchPerson(person, row) {
   if (!person || String(person.id) !== String(row.id)) return person;
   return { ...person, status: row.status, lastSeen: row.lastSeen, seen: row.seen, onlineUntil: row.onlineUntil };

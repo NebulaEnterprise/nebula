@@ -87,7 +87,7 @@
     <div class="cat">{t('Online')} — 0</div>
   {/if}
   {#each grouped.roles as group (group.role.id)}
-    <div class="cat role-cat" style:color={group.role.color || ''}>{group.role.name} — {group.members.length}</div>
+    <div class="cat role-cat">{group.role.name} — {group.members.length}</div>
     {#each group.members as m (m.id)}
       {@render person(m)}
     {/each}

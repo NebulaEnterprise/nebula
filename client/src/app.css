@@ -450,7 +450,7 @@ html:not(.app-blur) .thread-menu {
   padding: 14px 8px 4px; color: var(--faint); font-size: 11px; font-weight: 700;
   letter-spacing: 0.08em; text-transform: uppercase;
 }
-.members .cat.role-cat { letter-spacing: 0.04em; }
+.members .cat.role-cat { color: #fff; letter-spacing: 0.04em; }
 .side .cat {
   padding: 16px 12px 4px; color: #8e8798; font-size: 13px; font-weight: 500;
   letter-spacing: 0; text-transform: none;
@@ -3781,11 +3781,19 @@ button.portal-card:hover, a.portal-card:hover { background: #35373c; }
 .portal-row.name-row { margin: 18px 0; }
 .portal-row input, .portal-row select, .portal-card label input, .portal-card label select { background: #1e1f22; color: #f2f3f5; border: 1px solid #3f4147; border-radius: 8px; padding: 8px 10px; }
 .portal-card label { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; color: #b5bac1; font-size: 13px; font-weight: 650; }
-.bot-color { width: 72px; height: 36px; padding: 4px; }
-.bot-look { display: grid; grid-template-columns: 72px 1fr; gap: 12px; align-items: center; margin-top: 12px; }
-.bot-face, .bot-banner { border-radius: 16px; overflow: hidden; background: #5865f2; }
-.bot-face { width: 72px; height: 72px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 24px; }
-.bot-banner { height: 72px; display: grid; place-items: center; color: rgba(255,255,255,0.8); font-weight: 700; }
+.val-tabs { display: flex; gap: 28px; margin: 18px 0 0; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.val-tabs button { background: none; border: 0; padding: 10px 0 12px; margin-bottom: -1px; color: rgba(236, 232, 225, 0.55); font-size: 13px; font-weight: 750; letter-spacing: 0.14em; text-transform: uppercase; border-bottom: 2px solid transparent; }
+.val-tabs button.on { color: #f4efe6; border-bottom-color: #f4efe6; }
+.val-tabs button:hover { color: #fff; }
+.bot-title { margin: 8px 0 0; font-size: 22px; }
+.bot-color-row { flex-direction: row; align-items: center; justify-content: space-between; }
+.bot-color { width: 44px; height: 28px; padding: 0; border: 0; background: transparent; }
+.bot-preview { position: relative; margin-top: 14px; border-radius: 12px; overflow: hidden; background: #1e1f22; min-height: 148px; }
+.bot-preview .bot-banner { height: 92px; border-radius: 0; }
+.bot-preview .bot-face { position: absolute; left: 16px; top: 52px; width: 72px; height: 72px; border: 4px solid #2b2d31; border-radius: 50%; }
+.bot-preview strong { display: block; margin: 40px 16px 14px; font-size: 18px; }
+.bot-face, .bot-banner { overflow: hidden; background: #5865f2; }
+.bot-face { display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 24px; }
 .bot-face img, .bot-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .portal-back { color: #b5bac1; font-weight: 650; margin-bottom: 8px; }
 .portal-bots { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

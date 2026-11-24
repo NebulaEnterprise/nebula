@@ -1,6 +1,6 @@
 <script>
   import { Plus, X, LayoutGrid, KeyRound, BookOpen, Braces, CircleHelp, Code } from '@lucide/svelte';
-  import { ui, toast, developerMode, setDeveloperMode } from '../state.svelte.js';
+  import { ui, toast, developerMode, setDeveloperMode, paintBotLook } from '../state.svelte.js';
   import { api } from '../api.js';
   import { PERM, hasBit } from '../format.js';
   import DeveloperDocs from './DeveloperDocs.svelte';
@@ -25,6 +25,8 @@
   let profileAvatar = $state('');
   let profileBanner = $state('');
   let devOn = $state(developerMode());
+  let ready = $state(false);
+  let botTab = $state('general');
 
   const openBot = $derived(bots.find((bot) => bot.id === openId) || null);
   const manageable = $derived(servers.filter((server) => server.owner || hasBit(server.permissions || 0, PERM.MANAGE_SERVER)));
@@ -39,7 +41,14 @@
       servers = mine.servers || [];
     } catch (err) {
       note = err.status === 404 ? 'Bots need the updated server. Replace server.js and start it again.' : err.message;
+    } finally {
+      ready = true;
     }
+  }
+
+  function showBot(bot) {
+    if (!bot) return;
+    paintBotLook(bot);
   }
 
   $effect(() => {
@@ -63,8 +72,10 @@
       const data = await api('/api/me/bots', { method: 'POST', body: { name: next } });
       freshToken = data.bot?.token || '';
       openId = data.bot?.id || '';
+      botTab = 'general';
       name = '';
       await load();
+      showBot(bots.find((bot) => bot.id === openId) || data.bot);
     } catch (err) {
       toast(err.message);
     } finally {
@@ -94,7 +105,7 @@
   async function saveProfile() {
     if (!openBot) return;
     try {
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: {
+      const data = await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: {
         displayName: profileName,
         bio: profileBio,
         accentColor: profileColor,
@@ -102,7 +113,9 @@
         bannerColor: profileColor,
         profileColors: [profileColor, profileColor],
       } });
+      showBot(data.bot);
       await load();
+      showBot(bots.find((bot) => bot.id === openBot.id) || data.bot);
       toast('Profile saved');
     } catch (err) {
       toast(err.message);
@@ -125,8 +138,10 @@
     if (!file || !openBot) return;
     try {
       const url = await uploadBotImage(file);
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { avatarUrl: url } });
+      const data = await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { avatarUrl: url } });
+      showBot(data.bot);
       await load();
+      showBot(bots.find((bot) => bot.id === openBot.id) || data.bot);
       toast('Picture saved');
     } catch (err) {
       toast(err.message);
@@ -139,8 +154,10 @@
     if (!file || !openBot) return;
     try {
       const url = await uploadBotImage(file);
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { bannerUrl: url } });
+      const data = await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { bannerUrl: url } });
+      showBot(data.bot);
       await load();
+      showBot(bots.find((bot) => bot.id === openBot.id) || data.bot);
       toast('Banner saved');
     } catch (err) {
       toast(err.message);
@@ -150,8 +167,10 @@
   async function clearBotImage(field) {
     if (!openBot) return;
     try {
-      await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { [field]: '' } });
+      const data = await api('/api/me/bots/' + openBot.id, { method: 'PATCH', body: { [field]: '' } });
+      showBot(data.bot);
       await load();
+      showBot(bots.find((bot) => bot.id === openBot.id) || data.bot);
     } catch (err) {
       toast(err.message);
     }
@@ -223,21 +242,21 @@
       <div>
         <h2>Developer</h2>
         <p>Bots that chat in servers. Run them on your own computer. <button type="button" class="dev-docs-link" onclick={() => { tab = 'api'; onopen(); }}>Docs</button></p>
-        <p class="dev-count">{bots.length} of {limit} bots.</p>
+        <p class="dev-count">{ready ? `${bots.length} of ${limit} bots.` : 'Loading bots…'}</p>
       </div>
       <button type="button" class="dev-open" disabled={busy || bots.length >= limit} onclick={() => { naming = true; openId = ''; onopen(); }}>New bot</button>
     </header>
     {#if note}<p class="portal-note">{note}</p>{/if}
-    {#if bots.length}
+    {#if ready && bots.length}
       <div class="dev-bot-list">
         {#each bots as bot (bot.id)}
-          <button type="button" class="dev-bot" onclick={() => { openId = bot.id; freshToken = ''; onopen(); }}>
+          <button type="button" class="dev-bot" onclick={() => { openId = bot.id; botTab = 'general'; freshToken = ''; onopen(); }}>
             <Code size={18} />
             <span><strong>{bot.displayName || bot.name}</strong><em>@{bot.username}</em></span>
           </button>
         {/each}
       </div>
-    {:else if !note}
+    {:else if ready && !note}
       <div class="dev-empty">
         <img src="./logo.webp?v=3" alt="" />
         <strong>No bots yet</strong>
@@ -268,93 +287,109 @@
         <div>
           <h2>Developer</h2>
           <p>Bots that chat in servers. Run them on your own computer. They talk to Nebula over HTTPS.</p>
-          <p class="portal-count">{bots.length} of {limit} bots.</p>
+          <p class="portal-count">{ready ? `${bots.length} of ${limit} bots.` : 'Loading bots…'}</p>
         </div>
         <button type="button" class="portal-go" disabled={busy || bots.length >= limit} onclick={() => { naming = true; openId = ''; }}><Plus size={16} /> New bot</button>
       </header>
       {#if note}<p class="portal-note">{note}</p>{/if}
       {#if openBot}
         <button type="button" class="portal-back" onclick={() => { openId = ''; freshToken = ''; ask = ''; }}>All bots</button>
-        <section class="portal-card wide">
-          <h3>{openBot.displayName || openBot.name}</h3>
-          <p>@{openBot.username} · id {openBot.id}</p>
-          <p>The username ends with _bot.</p>
-          {#if freshToken}
-            <p>Copy this token now. Nebula will not show it again.</p>
-            <code class="dev-token">{freshToken}</code>
-            <div class="portal-row">
-              <button type="button" class="portal-go" onclick={copyToken}>Copy token</button>
-              <button type="button" class="portal-quiet" onclick={() => (freshToken = '')}>I saved it</button>
-            </div>
-          {:else}
-            <p>Token ending in {openBot.tokenTail || '····'}. The full token is only shown when you create it.</p>
-            {#if ask === 'rotate'}
-              <p>Make a new token? The current one will stop working.</p>
+        <h2 class="bot-title">{openBot.displayName || openBot.name}</h2>
+        <p class="portal-count">@{openBot.username}</p>
+        <nav class="val-tabs">
+          <button type="button" class:on={botTab === 'general'} onclick={() => (botTab = 'general')}>General</button>
+          <button type="button" class:on={botTab === 'profile'} onclick={() => (botTab = 'profile')}>Profile</button>
+          <button type="button" class:on={botTab === 'appearance'} onclick={() => (botTab = 'appearance')}>Appearance</button>
+          <button type="button" class:on={botTab === 'servers'} onclick={() => (botTab = 'servers')}>Servers</button>
+        </nav>
+        {#if botTab === 'general'}
+          <section class="portal-card wide">
+            <h3>Bot</h3>
+            <p>id {openBot.id}</p>
+            <p>The username ends with _bot.</p>
+            {#if freshToken}
+              <p>Copy this token now. Nebula will not show it again.</p>
+              <code class="dev-token">{freshToken}</code>
               <div class="portal-row">
-                <button type="button" class="portal-go" onclick={rotate}>New token</button>
-                <button type="button" class="portal-quiet" onclick={() => (ask = '')}>Cancel</button>
+                <button type="button" class="portal-go" onclick={copyToken}>Copy token</button>
+                <button type="button" class="portal-quiet" onclick={() => (freshToken = '')}>I saved it</button>
               </div>
             {:else}
-              <button type="button" class="portal-quiet" onclick={() => (ask = 'rotate')}>New token</button>
+              <p>Token ending in {openBot.tokenTail || '····'}. The full token is only shown when you create it.</p>
+              {#if ask === 'rotate'}
+                <p>Make a new token? The current one will stop working.</p>
+                <div class="portal-row">
+                  <button type="button" class="portal-go" onclick={rotate}>New token</button>
+                  <button type="button" class="portal-quiet" onclick={() => (ask = '')}>Cancel</button>
+                </div>
+              {:else}
+                <button type="button" class="portal-quiet" onclick={() => (ask = 'rotate')}>New token</button>
+              {/if}
             {/if}
-          {/if}
-        </section>
-        <section class="portal-card wide">
-          <h3>Profile</h3>
-          <label>Display name<input bind:value={profileName} maxlength="32" /></label>
-          <label>Bio<input bind:value={profileBio} maxlength="300" /></label>
-          <label>Profile color<input class="bot-color" type="color" bind:value={profileColor} /></label>
-          <div class="bot-look">
-            <div class="bot-face" style="background:{profileColor}">
-              {#if profileAvatar}<img src={profileAvatar} alt="" />{:else}{(profileName || 'B').charAt(0).toUpperCase()}{/if}
+            <div class="portal-row">
+              <button type="button" class="portal-go" onclick={sendTest}>Send test event</button>
+              {#if ask === 'delete'}
+                <span>Delete {openBot.name}? It leaves every server and the token dies.</span>
+                <button type="button" class="portal-go danger" onclick={removeBot}>Delete</button>
+                <button type="button" class="portal-quiet" onclick={() => (ask = '')}>Cancel</button>
+              {:else}
+                <button type="button" class="portal-quiet danger" onclick={() => (ask = 'delete')}>Delete bot</button>
+              {/if}
             </div>
-            <div class="bot-banner" style="background:{profileColor}">
-              {#if profileBanner}<img src={profileBanner} alt="" />{:else}<span>Banner</span>{/if}
+          </section>
+        {:else if botTab === 'profile'}
+          <section class="portal-card wide">
+            <h3>Profile</h3>
+            <label>Display name<input bind:value={profileName} maxlength="32" /></label>
+            <label>Bio<input bind:value={profileBio} maxlength="300" /></label>
+            <div class="portal-row">
+              <button type="button" class="portal-go" onclick={saveProfile}>Save</button>
             </div>
-          </div>
-          <div class="portal-row">
-            <button type="button" class="portal-go" onclick={saveProfile}>Save</button>
-            <label class="portal-quiet">Picture<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickAvatar} /></label>
-            <label class="portal-quiet">Banner<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickBanner} /></label>
-            {#if profileAvatar}<button type="button" class="portal-quiet" onclick={() => clearBotImage('avatarUrl')}>Remove picture</button>{/if}
-            {#if profileBanner}<button type="button" class="portal-quiet" onclick={() => clearBotImage('bannerUrl')}>Remove banner</button>{/if}
-          </div>
-        </section>
-        <section class="portal-card wide">
-          <h3>Servers</h3>
-          <p>Your own bots can join servers you manage right away.</p>
-          <div class="portal-row">
-            <select bind:value={serverPick}>
-              <option value="">Pick a server</option>
-              {#each manageable.filter((server) => !(openBot.servers || []).some((row) => row.id === server.id)) as server}
-                <option value={server.id}>{server.name}</option>
-              {/each}
-            </select>
-            <button type="button" class="portal-go" disabled={!serverPick} onclick={addServer}>Add</button>
-          </div>
-          {#each openBot.servers || [] as server (server.id)}
-            <div class="portal-row between">
-              <strong>{server.name}</strong>
-              <button type="button" class="portal-quiet" onclick={() => removeServer(server.id)}>Remove</button>
+          </section>
+        {:else if botTab === 'appearance'}
+          <section class="portal-card wide">
+            <h3>Appearance</h3>
+            <div class="bot-preview">
+              <div class="bot-banner" style="background:{profileColor}">
+                {#if profileBanner}<img src={profileBanner} alt="" />{/if}
+              </div>
+              <div class="bot-face" style="background:{profileColor}">
+                {#if profileAvatar}<img src={profileAvatar} alt="" />{:else}{(profileName || 'B').charAt(0).toUpperCase()}{/if}
+              </div>
+              <strong>{profileName || 'Bot'}</strong>
             </div>
-          {:else}
-            <p>Not in a server yet.</p>
-          {/each}
-        </section>
-        <section class="portal-card wide">
-          <h3>Try it</h3>
-          <p>Send a test event. If your bot is running, its terminal prints it.</p>
-          <div class="portal-row">
-            <button type="button" class="portal-go" onclick={sendTest}>Send test event</button>
-            {#if ask === 'delete'}
-              <span>Delete {openBot.name}? It leaves every server and the token dies.</span>
-              <button type="button" class="portal-go danger" onclick={removeBot}>Delete</button>
-              <button type="button" class="portal-quiet" onclick={() => (ask = '')}>Cancel</button>
+            <label class="bot-color-row">Profile color<input class="bot-color" type="color" bind:value={profileColor} /></label>
+            <div class="portal-row">
+              <button type="button" class="portal-go" onclick={saveProfile}>Save</button>
+              <label class="portal-quiet">Picture<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickAvatar} /></label>
+              <label class="portal-quiet">Banner<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" onchange={pickBanner} /></label>
+              {#if profileAvatar}<button type="button" class="portal-quiet" onclick={() => clearBotImage('avatarUrl')}>Remove picture</button>{/if}
+              {#if profileBanner}<button type="button" class="portal-quiet" onclick={() => clearBotImage('bannerUrl')}>Remove banner</button>{/if}
+            </div>
+          </section>
+        {:else}
+          <section class="portal-card wide">
+            <h3>Servers</h3>
+            <p>Your own bots can join servers you manage right away.</p>
+            <div class="portal-row">
+              <select bind:value={serverPick}>
+                <option value="">Pick a server</option>
+                {#each manageable.filter((server) => !(openBot.servers || []).some((row) => row.id === server.id)) as server}
+                  <option value={server.id}>{server.name}</option>
+                {/each}
+              </select>
+              <button type="button" class="portal-go" disabled={!serverPick} onclick={addServer}>Add</button>
+            </div>
+            {#each openBot.servers || [] as server (server.id)}
+              <div class="portal-row between">
+                <strong>{server.name}</strong>
+                <button type="button" class="portal-quiet" onclick={() => removeServer(server.id)}>Remove</button>
+              </div>
             {:else}
-              <button type="button" class="portal-quiet danger" onclick={() => (ask = 'delete')}>Delete bot</button>
-            {/if}
-          </div>
-        </section>
+              <p>Not in a server yet.</p>
+            {/each}
+          </section>
+        {/if}
       {:else if naming || bots.length}
         {#if naming}
           <div class="portal-row name-row">
@@ -365,20 +400,20 @@
         {#if bots.length}
           <div class="portal-bots">
             {#each bots as bot (bot.id)}
-              <button type="button" class="portal-bot" onclick={() => { openId = bot.id; freshToken = ''; naming = false; }}>
+              <button type="button" class="portal-bot" onclick={() => { openId = bot.id; botTab = 'general'; freshToken = ''; naming = false; }}>
                 <Code size={18} />
                 <span><strong>{bot.displayName || bot.name}</strong><em>@{bot.username}</em></span>
               </button>
             {/each}
           </div>
-        {:else if !note}
+        {:else if ready && !note}
           <div class="portal-empty">
             <img src="./logo.webp?v=3" alt="" />
             <strong>No bots yet</strong>
             <p>Make one, add it to a server and it can answer /commands in a few minutes.</p>
           </div>
         {/if}
-      {:else if !note}
+      {:else if ready && !note}
         <div class="portal-empty">
           <img src="./logo.webp?v=3" alt="" />
           <strong>No bots yet</strong>
