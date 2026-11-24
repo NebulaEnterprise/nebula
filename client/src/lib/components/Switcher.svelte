@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { ui, openDm, openGroup, openServer, pickChannel, showFriends, logout, loadGroups, serverListHidden } from '../state.svelte.js';
+  import { ui, openDm, openGroup, openServer, pickChannel, showFriends, logout, loadGroups } from '../state.svelte.js';
 
   onMount(() => { loadGroups(); });
 
@@ -19,10 +19,8 @@
     for (const group of ui.groups || []) {
       if (keep(group.name || 'Group')) list.push({ kind: 'Group chat', label: group.name || 'Group', run: () => openGroup(group) });
     }
-    if (!serverListHidden()) {
-      for (const server of ui.servers || []) {
-        if (keep(server.name || 'Server')) list.push({ kind: 'Server', label: server.name || 'Server', run: () => openServer(server.id) });
-      }
+    for (const server of ui.servers || []) {
+      if (keep(server.name || 'Server')) list.push({ kind: 'Server', label: server.name || 'Server', run: () => openServer(server.id) });
     }
     if (ui.mode === 'chat' || ui.serverId) {
       for (const channel of ui.channels || []) {

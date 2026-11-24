@@ -1498,6 +1498,7 @@ function hydrateGuild(g) {
   if (!g.stickers) g.stickers = [];
   if (!g.events) g.events = [];
   if (!Array.isArray(g.links)) g.links = [];
+  if (g.hideMembers == null) g.hideMembers = false;
   if (!g.tagColor) g.tagColor = '';
   if (!g.rulesChannelId) g.rulesChannelId = '';
   if (!g.lobby || typeof g.lobby !== 'object') g.lobby = defaultLobby();
@@ -1774,6 +1775,27 @@ function effectivePerms(g, user, channel) {
   }
   if (isOwner(g, user)) return ALL_PERMS;
   return stripOfficialManage(g, user, bits);
+}
+
+const SEE_MEMBERS = 2 ** 33;
+
+function permHas(bits, flag) {
+  let n = Number(bits) || 0;
+  const b = Number(flag) || 0;
+  if (!(b > 0) || !Number.isFinite(n)) return false;
+  if (n < 0) n = n >>> 0;
+  return Math.floor(n / b) % 2 === 1;
+}
+
+function canSeeMemberList(g, user) {
+  if (!g || !g.hideMembers) return true;
+  if (!user || !g.members || !g.members[user.id]) return false;
+  if (isOwner(g, user)) return true;
+  for (const role of memberRoles(g, user)) {
+    const bits = Number(role.permissions) || 0;
+    if (permHas(bits, PERM.ADMIN) || permHas(bits, SEE_MEMBERS)) return true;
+  }
+  return false;
 }
 
 function can(g, user, perm, channel) {
@@ -4813,6 +4835,9 @@ app.get('/api/members', auth, (req, res) => {
   const g = guilds.servers[serverId];
   if (!g) return res.status(404).json({ error: 'Server not found' });
   if (!g.members[req.user.id]) return res.status(403).json({ error: 'You are not in this server' });
+  if (!canSeeMemberList(g, req.user)) {
+    return res.json({ ok: true, members: [], hidden: true, badges: BADGE_DEFS, server: g.name, roles: g.roles });
+  }
   const list = Object.keys(g.members)
     .map((id) => users[id])
     .filter(Boolean)
@@ -4910,6 +4935,8 @@ app.get('/api/channels', auth, (req, res) => {
     showLobby: !!g.showLobby,
     about: g.about || '',
     links: Array.isArray(g.links) ? g.links : [],
+    hideMembers: !!g.hideMembers,
+    seeMembers: canSeeMemberList(g, req.user),
     rulesChannelId: g.rulesChannelId || '',
     lobby: publicLobby(g),
     events: (g.events || []).filter((ev) => ev.status !== 'cancelled').slice(0, 12),
@@ -7100,6 +7127,7 @@ function settingsView(g, user) {
     tagIcon: g.tagIcon || '',
     tagColor: g.tagColor || '',
     links: Array.isArray(g.links) ? g.links : [],
+    hideMembers: !!g.hideMembers,
     rulesChannelId: g.rulesChannelId || '',
     lobby: publicLobby(g),
     vanity: g.id === OFFICIAL_ID ? 'nebula' : (g.vanity || ''),
@@ -7137,7 +7165,7 @@ function settingsView(g, user) {
     audit: g.audit,
     bans: Object.keys(g.bans).map((id) => ({ userId: id, reason: g.bans[id].reason, at: g.bans[id].at, user: users[id] ? publicUser(users[id]) : null })),
     voiceBans: Object.keys(g.voiceBans || {}).map((id) => ({ userId: id, reason: (g.voiceBans[id] && g.voiceBans[id].reason) || '', at: g.voiceBans[id] && g.voiceBans[id].at, user: users[id] ? publicUser(users[id]) : null })),
-    members: Object.keys(g.members).map((id) => users[id] ? memberView(g, users[id], user) : null).filter(Boolean),
+    members: canSeeMemberList(g, user) ? Object.keys(g.members).map((id) => users[id] ? memberView(g, users[id], user) : null).filter(Boolean) : [],
   });
 }
 
@@ -7340,6 +7368,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
         url: clip(item && item.url, 200).trim(),
       })).filter((item) => item.label && /^https?:\/\//i.test(item.url));
     }
+    if (b.hideMembers != null) g.hideMembers = !!b.hideMembers;
     if (b.rulesChannelId != null) {
       const id = String(b.rulesChannelId || '');
       g.rulesChannelId = id && (g.channels || []).some((ch) => ch.id === id) ? id : '';

@@ -43,7 +43,8 @@ export const ui = $state({
   showMembers: true,
   closedChats: {},
   muteTick: 0,
-  hideTick: 0,
+  hideMembers: false,
+  seeMembers: true,
   devTick: 0,
   idMenu: null,
   channelMenu: null,
@@ -1329,6 +1330,9 @@ export async function openServer(id, opts = {}) {
   ui.bannerUrl = data.bannerUrl || '';
   ui.about = data.about || '';
   ui.showLobby = !!data.showLobby;
+  ui.hideMembers = !!data.hideMembers;
+  ui.seeMembers = data.seeMembers !== false;
+  if (!ui.seeMembers) ui.showMembers = false;
   if (Array.isArray(data.links)) ui.links = data.links;
   else if (target !== fromServer) ui.links = [];
   ui.events = data.events || [];
@@ -2194,7 +2198,14 @@ export async function loadMembers(quiet) {
     do {
       membersAgain = false;
       const data = await api('/api/members?serverId=' + encodeURIComponent(ui.serverId));
-      ui.members = data.members || [];
+      if (data.hidden) {
+        ui.members = [];
+        ui.hideMembers = true;
+        ui.seeMembers = false;
+        ui.showMembers = false;
+      } else {
+        ui.members = data.members || [];
+      }
       ui.badgeDefs = data.badges || {};
       adoptMe(ui.members);
       applyMemberNames(ui.members);
@@ -3511,21 +3522,6 @@ export function mentionsMe(text) {
 function accountKey(name) {
   const id = ui.me && ui.me.id;
   return id ? name + ':' + id : name;
-}
-
-export function serverListHidden() {
-  ui.hideTick;
-  try { return localStorage.getItem(accountKey('nebula-hide-servers')) === '1'; }
-  catch { return false; }
-}
-
-export function setHideServerList(on) {
-  try {
-    const key = accountKey('nebula-hide-servers');
-    if (on) localStorage.setItem(key, '1');
-    else localStorage.removeItem(key);
-  } catch (_) {}
-  ui.hideTick += 1;
 }
 
 function seenMap() {

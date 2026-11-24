@@ -1459,7 +1459,9 @@
     {#if ui.mode === 'chat' || ui.mode === 'thread'}
       <button type="button" class="bar-tool" class:on={ui.dock === 'threads'} title="Threads" onclick={() => toggleDock('threads')}><MessagesSquare size={18} /></button>
     {/if}
-    <button type="button" class="bar-tool" class:on={(ui.mode === 'chat' || ui.mode === 'thread') ? ui.showMembers !== false : ui.dock === (ui.mode === 'group' ? 'group' : 'profile')} title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
+    {#if (ui.mode !== 'chat' && ui.mode !== 'thread') || ui.seeMembers !== false}
+      <button type="button" class="bar-tool" class:on={(ui.mode === 'chat' || ui.mode === 'thread') ? ui.showMembers !== false : ui.dock === (ui.mode === 'group' ? 'group' : 'profile')} title={ui.mode === 'chat' || ui.mode === 'thread' ? 'Members' : 'Profile'} onclick={togglePeople}><UserRound size={18} /></button>
+    {/if}
     <label class="top-search">
       <Search size={15} />
       <input placeholder={ui.mode === 'dm' ? t('Search') : t('Search') + ' ' + (ui.mode === 'group' ? (ui.group?.name || 'group') : titleName)} bind:value={ui.dockQuery} onfocus={() => (ui.dock = 'search')} />

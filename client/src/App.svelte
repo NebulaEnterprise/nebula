@@ -393,7 +393,7 @@
         <Chat />
       {/if}
     </main>
-    {#if (ui.mode === 'chat' || ui.mode === 'thread') && ui.showMembers !== false}
+    {#if (ui.mode === 'chat' || ui.mode === 'thread') && ui.showMembers !== false && ui.seeMembers !== false}
       <Members />
     {/if}
   </div>

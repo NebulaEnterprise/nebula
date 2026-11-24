@@ -265,6 +265,7 @@ export const PERM = {
   SPEAK: bit(30),
   MUTE_MEMBERS: bit(31),
   MOVE_MEMBERS: bit(32),
+  SEE_MEMBERS: bit(33),
 };
 
 export function hasBit(perms, flag) {
@@ -305,6 +306,7 @@ export const PERM_GROUPS = [
   {
     title: 'Membership Permissions',
     items: [
+      ['See Server List', PERM.SEE_MEMBERS, 'See the member list when the server hides it.'],
       ['Kick Members', PERM.KICK, 'Remove people; they can rejoin with an invite.'],
       ['Ban Members', PERM.BAN, 'Remove people for good (until unbanned).'],
       ['Timeout Members', PERM.TIMEOUT, 'Stop someone from talking for a while.'],

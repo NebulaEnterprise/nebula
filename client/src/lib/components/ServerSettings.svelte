@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel, serverListHidden, setHideServerList } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel } from '../state.svelte.js';
   import Events from './Events.svelte';
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
@@ -108,7 +108,6 @@
   let rosterOk = $state(false);
 
   const s = $derived(ui.settings || {});
-  const hideServers = $derived(serverListHidden());
   const ownerHere = $derived(!!ui.serverMeta?.owner);
   const canKick = $derived(ownerHere || hasPerm(PERM.KICK));
   const canBan = $derived(ownerHere || hasPerm(PERM.BAN));
@@ -623,9 +622,9 @@
             <div class="gset-split">
               <div>
                 <h3>Hide server list</h3>
-                <p class="hint">Hides your servers on this account. Only you are affected. Everyone else still sees their own list.</p>
+                <p class="hint">Hides every member in the list for this server. The list disappears for everyone except roles with See Server List. Owners and administrators still see it.</p>
               </div>
-              <button type="button" class="switch" class:on={hideServers} role="switch" aria-checked={hideServers} aria-label="Hide server list" onclick={() => setHideServerList(!hideServers)}><i></i></button>
+              <button type="button" class="switch" class:on={!!s.hideMembers} role="switch" aria-checked={!!s.hideMembers} aria-label="Hide server list" onclick={() => run(() => guildAction({ type: 'settings', hideMembers: !s.hideMembers }))}><i></i></button>
             </div>
           </section>
 
@@ -983,6 +982,12 @@
           <p class="hint">Deleted channels, categories, threads and roles stay here for 7 days, messages and permissions included. Bring them back any time before that.</p>
           <section class="gset-card">
             {@render bear('The trash is empty', 'Deleted channels, categories and roles wait here for 7 days.')}
+          </section>
+
+        {:else if ui.settingsPage === 'members' && ui.hideMembers && ui.seeMembers === false}
+          <section class="gset-card">
+            <h3>Members</h3>
+            <p class="hint">The member list is hidden. Roles with See Server List can still open it.</p>
           </section>
 
         {:else if ui.settingsPage === 'members'}
