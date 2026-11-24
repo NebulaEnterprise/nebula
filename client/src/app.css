@@ -2530,16 +2530,9 @@ html.paint-mention .mention {
   max-height: min(88vh, 760px); overflow: auto; border-radius: inherit;
 }
 .pop-banner { height: 128px; min-height: 128px; max-height: 128px; }
-.pop-banner.zoomable, .pop-av.zoomable, .banner-hit { cursor: zoom-in; }
-button.pop-banner, button.pop-av {
-  border: 0; padding: 0; margin: 0; font: inherit; color: inherit;
-  text-align: inherit; appearance: none; background: transparent;
-}
-button.pop-banner { display: block; width: 100%; }
-button.pop-av { display: grid; }
 .banner-hit {
-  position: absolute; inset: 0; z-index: 1; border: 0; padding: 0;
-  background: transparent; cursor: zoom-in;
+  position: absolute; inset: 0; z-index: 2; border: 0; padding: 0; margin: 0;
+  background: transparent; cursor: zoom-in; border-radius: inherit;
 }
 .dock-profile .pop-banner .dock-close { z-index: 3; }
 .preview-card .pop-banner.can-move { cursor: grab; touch-action: none; }

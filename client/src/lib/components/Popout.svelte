@@ -237,13 +237,12 @@
     <div class="pop-spin" class:show-back={turned} style="transform: rotateY({turned ? 180 : 0}deg)" onclick={flipCard}>
     <div class="pop-face">
     <div class="pop-frame">
-    {#if u.bannerUrl}
-      <button type="button" class="pop-banner zoomable" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}" aria-label="View banner" onclick={(event) => openFull('banner', event)}>
+    <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
+      {#if u.bannerUrl}
         <Photo url={u.bannerUrl} fill focus={bannerFocus(u)} />
-      </button>
-    {:else}
-      <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}"></div>
-    {/if}
+        <button type="button" class="banner-hit" aria-label="View banner" onclick={(event) => openFull('banner', event)}></button>
+      {/if}
+    </div>
     {#if rel !== 'self'}
       <div class="pop-actions">
         <button class="pop-msg" title="Message" onclick={() => { const person = u; ui.popout = null; openDm(person); }}><MessageSquare size={16} /></button>
@@ -254,13 +253,10 @@
       <div class="profile-hero">
         <div class="profile-face">
           <div class="song-av">
-            {#if u.avatarUrl}
-              <button type="button" class="pop-av profile-av zoomable" style="background:{u.avatarColor || 'var(--brand)'}" aria-label="View profile picture" onclick={(event) => openFull('avatar', event)}>
-                <Photo url={u.avatarUrl} />
-              </button>
-            {:else}
-              <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">{(u.displayName || u.username || '?').charAt(0).toUpperCase()}</div>
-            {/if}
+            <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
+              {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
+              {#if u.avatarUrl}<button type="button" class="banner-hit" aria-label="View profile picture" onclick={(event) => openFull('avatar', event)}></button>{/if}
+            </div>
             <SongButton file={u.songFile} start={u.songStart} />
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>

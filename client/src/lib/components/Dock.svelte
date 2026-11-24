@@ -379,13 +379,10 @@
           <div class="profile-hero">
             <div class="profile-face">
               <div class="song-av">
-                {#if person.avatarUrl}
-                  <button type="button" class="pop-av profile-av zoomable" style="background:{person.avatarColor || shades[0]}" aria-label="View profile picture" onclick={(event) => { event.stopPropagation(); full = 'avatar'; }}>
-                    <Photo url={person.avatarUrl} />
-                  </button>
-                {:else}
-                  <div class="pop-av profile-av" style="background:{person.avatarColor || shades[0]}">{(person.displayName || person.username || '?').charAt(0).toUpperCase()}</div>
-                {/if}
+                <div class="pop-av profile-av" style="background:{person.avatarColor || shades[0]}">
+                  {#if person.avatarUrl}<Photo url={person.avatarUrl} />{:else}{(person.displayName || person.username || '?').charAt(0).toUpperCase()}{/if}
+                  {#if person.avatarUrl}<button type="button" class="banner-hit" aria-label="View profile picture" onclick={(event) => { event.stopPropagation(); full = 'avatar'; }}></button>{/if}
+                </div>
                 <SongButton file={person.songFile} start={person.songStart} />
               </div>
               <i class="profile-dot" style="background:{statusColor[person.status] || statusColor.offline}"></i>
