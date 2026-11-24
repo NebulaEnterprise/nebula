@@ -15,7 +15,7 @@
   import TagPill from './TagPill.svelte';
   import SongButton from './SongButton.svelte';
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
-  import { ownedBadges, shortBio } from '../format.js';
+  import { ownedBadges, shortBio, bannerFocus } from '../format.js';
   import { EMOJI } from '../emoji.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
@@ -286,6 +286,10 @@
     accentColor: ui.me?.accentColor || '#7c6af7',
     avatarUrl: ui.me?.avatarUrl || '',
     bannerUrl: ui.me?.bannerUrl || '',
+    bannerPos: {
+      x: Number.isFinite(Number(ui.me?.bannerPos?.x)) ? Math.max(0, Math.min(100, Number(ui.me.bannerPos.x))) : 50,
+      y: Number.isFinite(Number(ui.me?.bannerPos?.y)) ? Math.max(0, Math.min(100, Number(ui.me.bannerPos.y))) : 50,
+    },
     nameEffect: ui.me?.nameEffect || '',
     nameFont: ['serif', 'mono', 'round', 'script', 'display'].includes(ui.me?.nameFont) ? ui.me.nameFont : '',
     profileStyle: ['solid', 'glow', 'rainbow'].includes(ui.me?.profileStyle) ? ui.me.profileStyle : 'gradient',
@@ -359,6 +363,77 @@
     }
   }
 
+  function paintBannerPos(pos) {
+    form.bannerPos = pos;
+    if (ui.me) ui.me = { ...ui.me, bannerPos: pos };
+    ui.members = ui.members.map((m) => (m.id === ui.me?.id ? { ...m, bannerPos: pos } : m));
+    if (ui.popout?.user?.id === ui.me?.id) {
+      ui.popout = { ...ui.popout, user: { ...ui.popout.user, bannerPos: pos } };
+    }
+    if (ui.dmUser?.id === ui.me?.id) ui.dmUser = { ...ui.dmUser, bannerPos: pos };
+  }
+
+  function clampAxis(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 50;
+    return Math.max(0, Math.min(100, Math.round(num)));
+  }
+
+  function startBannerDrag(event) {
+    if (!form.bannerUrl || event.button > 0) return;
+    const frame = event.currentTarget;
+    const img = frame.querySelector('img');
+    if (!img || !img.naturalWidth || !img.naturalHeight) return;
+    const box = frame.getBoundingClientRect();
+    const scale = Math.max(box.width / img.naturalWidth, box.height / img.naturalHeight);
+    const extraX = Math.max(0, img.naturalWidth * scale - box.width);
+    const extraY = Math.max(0, img.naturalHeight * scale - box.height);
+    if (extraX < 8 && extraY < 8) return;
+    event.preventDefault();
+    const origin = { x: clampAxis(form.bannerPos?.x), y: clampAxis(form.bannerPos?.y) };
+    const startX = event.clientX;
+    const startY = event.clientY;
+    frame.setPointerCapture?.(event.pointerId);
+    const move = (e) => {
+      paintBannerPos({
+        x: extraX > 8 ? clampAxis(origin.x - ((e.clientX - startX) / extraX) * 100) : origin.x,
+        y: extraY > 8 ? clampAxis(origin.y - ((e.clientY - startY) / extraY) * 100) : origin.y,
+      });
+    };
+    const up = () => {
+      frame.removeEventListener('pointermove', move);
+      frame.removeEventListener('pointerup', up);
+      frame.removeEventListener('pointercancel', up);
+      queueBannerSave();
+    };
+    frame.addEventListener('pointermove', move);
+    frame.addEventListener('pointerup', up);
+    frame.addEventListener('pointercancel', up);
+  }
+
+  let bannerSave = 0;
+  function queueBannerSave() {
+    clearTimeout(bannerSave);
+    bannerSave = setTimeout(() => {
+      const pos = { x: clampAxis(form.bannerPos?.x), y: clampAxis(form.bannerPos?.y) };
+      api('/api/me', { method: 'PATCH', body: { bannerPos: pos } }).catch((err) => toast(err.message || 'Could not save the banner position'));
+    }, 250);
+  }
+
+  function nudgeBanner(event) {
+    if (!form.bannerUrl) return;
+    const step = event.shiftKey ? 12 : 4;
+    const pos = { x: clampAxis(form.bannerPos?.x), y: clampAxis(form.bannerPos?.y) };
+    if (event.key === 'ArrowLeft') pos.x = clampAxis(pos.x - step);
+    else if (event.key === 'ArrowRight') pos.x = clampAxis(pos.x + step);
+    else if (event.key === 'ArrowUp') pos.y = clampAxis(pos.y - step);
+    else if (event.key === 'ArrowDown') pos.y = clampAxis(pos.y + step);
+    else return;
+    event.preventDefault();
+    paintBannerPos(pos);
+    queueBannerSave();
+  }
+
   function openPicture(kind) {
     const input = document.createElement('input');
     input.type = 'file';
@@ -408,8 +483,10 @@
       });
       if (!data.url) throw new Error('The picture did not save');
       pinMedia(data.url, body);
-      if (!data.user || data.user[field] !== data.url) {
-        await api('/api/me', { method: 'PATCH', body: { [field]: data.url } });
+      const placed = kind === 'banner' ? { x: 50, y: 50 } : null;
+      if (placed) paintBannerPos(placed);
+      if (!data.user || data.user[field] !== data.url || placed) {
+        await api('/api/me', { method: 'PATCH', body: placed ? { [field]: data.url, bannerPos: placed } : { [field]: data.url } });
       }
       savedUrl[field] = data.url;
       form[field] = data.url;
@@ -436,8 +513,13 @@
     form[field] = '';
     savedUrl[field] = '';
     paintPicture(field, '');
+    const body = { [field]: '' };
+    if (kind === 'banner') {
+      paintBannerPos({ x: 50, y: 50 });
+      body.bannerPos = { x: 50, y: 50 };
+    }
     try {
-      await api('/api/me', { method: 'PATCH', body: { [field]: '' } });
+      await api('/api/me', { method: 'PATCH', body });
     } catch (err) { toast(err.message); }
   }
 
@@ -1127,11 +1209,11 @@
               <h3><Image size={16} class="sec-ico" /> Background</h3>
               <button type="button" class="bg-row" onclick={() => openPicture('banner')}>
                 <span class="bg-thumb" style="background:{form.accentColor || 'var(--brand)'}">
-                  {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
+                  {#if form.bannerUrl}<Photo url={form.bannerUrl} fill focus={bannerFocus(form)} />{/if}
                 </span>
                 <span class="copy">
                   <strong>{form.bannerUrl ? 'Profile banner' : 'Default background'}</strong>
-                  <em>{form.bannerUrl ? 'Your picture across the top of the profile.' : 'Choose a picture.'}</em>
+                  <em>{form.bannerUrl ? 'Drag the preview to reposition it.' : 'Choose a picture.'}</em>
                 </span>
               </button>
               {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove banner</button>{/if}
@@ -1316,9 +1398,14 @@
             <p class="label">Preview</p>
           {/if}
           <div class="preview-card profile-card skin-{form.profileStyle || 'gradient'}" style="--shade-a:{form.profileColors[0]};--shade-b:{form.profileColors[1]}">
-            <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}">
-              {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
-            </div>
+            {#if form.bannerUrl}
+              <div class="pop-banner can-move" style="background:{form.accentColor || 'var(--brand)'}" role="button" tabindex="0" aria-label="Drag to reposition banner" onpointerdown={startBannerDrag} onkeydown={nudgeBanner}>
+                <Photo url={form.bannerUrl} fill focus={bannerFocus(form)} />
+                <span class="banner-move">Drag to reposition</span>
+              </div>
+            {:else}
+              <div class="pop-banner" style="background:{form.accentColor || 'var(--brand)'}"></div>
+            {/if}
             <div class="pop-body">
               <div class="profile-hero">
                 <div class="profile-face">

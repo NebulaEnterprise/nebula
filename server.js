@@ -2975,6 +2975,16 @@ function clearBotMarks(row, u) {
   return row;
 }
 
+function cleanBannerPos(value) {
+  const src = value && typeof value === 'object' ? value : {};
+  const axis = (n) => {
+    const num = Number(n);
+    if (!Number.isFinite(num)) return 50;
+    return Math.max(0, Math.min(100, Math.round(num)));
+  };
+  return { x: axis(src.x), y: axis(src.y) };
+}
+
 function publicUser(u, viewer) {
   if (!u) return null;
   const seen = seenFor(u, viewer || u);
@@ -3016,6 +3026,7 @@ function publicUser(u, viewer) {
     avatarUrl: publishedMedia(u, 'avatar'),
     bannerPath: u.bannerPath || '',
     bannerUrl: publishedMedia(u, 'banner'),
+    bannerPos: cleanBannerPos(u.bannerPos),
     gallery: liveGallery(u.gallery),
     stories: self || !viewer || allowsShare(viewer, u, storyPrivacyOf(u)) ? liveStories(u.stories) : [],
     serverTag: u.serverTag || '',
@@ -4663,6 +4674,8 @@ app.patch('/api/me', auth, (req, res) => {
     req.user.bannerUrl = storeImage(bannerUrl);
     if (!req.user.bannerUrl) req.user.bannerPath = '';
   }
+  if (req.body && req.body.bannerPos !== undefined) req.user.bannerPos = cleanBannerPos(req.body.bannerPos);
+  if (bannerUrl !== undefined && !req.user.bannerUrl) req.user.bannerPos = { x: 50, y: 50 };
   if (serverTag !== undefined) req.user.serverTag = String(serverTag).slice(0, 16);
   if (Array.isArray(shownBadges)) {
     req.user.shownBadges = [...new Set(shownBadges.filter((id) => id === 'early' || id === 'staff' || id === 'developer'))];

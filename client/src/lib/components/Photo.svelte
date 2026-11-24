@@ -1,7 +1,7 @@
 <script>
   import { bannerGif, fileUrl, pinnedSrc, resolveMedia, primeMedia, mediaReady } from '../api.js';
 
-  let { url = '', fill = false } = $props();
+  let { url = '', fill = false, focus = '' } = $props();
   let src = $state('');
   let ready = $state(false);
 
@@ -61,7 +61,7 @@
   }
 </script>
 
-{#if src}<img class:fill class:ready src={src} alt="" decoding={ready ? 'sync' : 'async'} onload={() => (ready = true)} onerror={failed} />{/if}
+{#if src}<img class:fill class:ready src={src} alt="" style:object-position={focus || 'center'} decoding={ready ? 'sync' : 'async'} onload={() => (ready = true)} onerror={failed} />{/if}
 
 <style>
   img.fill {

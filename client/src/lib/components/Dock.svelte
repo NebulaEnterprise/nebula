@@ -9,7 +9,8 @@
   import Attachment from './Attachment.svelte';
   import Inbox from './Inbox.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges, playingName, gifUrls } from '../format.js';
+  import FullPhoto from './FullPhoto.svelte';
+  import { shortBio, visibleBadges, playingName, bannerFocus, gifUrls } from '../format.js';
   import { t } from '../i18n.svelte.js';
   import { ui, nowClock, openThread, pinMessage, friendAct, toast, showFriends, loadProfile, revealList } from '../state.svelte.js';
   import { isSealedText } from '../vault.js';
@@ -27,6 +28,7 @@
   let busy = $state(false);
   let addId = $state('');
   let profileLoaded = '';
+  let full = $state('');
 
   const title = $derived(
     ui.dock === 'pins' ? 'Pinned messages'
@@ -367,16 +369,23 @@
       {@const skin = ['solid', 'glow', 'rainbow'].includes(person.profileStyle) ? person.profileStyle : 'gradient'}
       <div class="dock-profile profile-card skin-{skin}" style="--shade-a:{shades[0]};--shade-b:{shades[1]}">
         <div class="pop-banner" style="background:{person.bannerColor || person.accentColor || shades[0]}">
-          {#if person.bannerUrl}<Photo url={person.bannerUrl} fill />{/if}
+          {#if person.bannerUrl}
+            <Photo url={person.bannerUrl} fill focus={bannerFocus(person)} />
+            <button type="button" class="banner-hit" aria-label="View banner" onclick={() => (full = 'banner')}></button>
+          {/if}
           <button class="dock-close" title="Close" onclick={() => (ui.dock = '')}><X size={16} /></button>
         </div>
         <div class="pop-body">
           <div class="profile-hero">
             <div class="profile-face">
               <div class="song-av">
-                <div class="pop-av profile-av" style="background:{person.avatarColor || shades[0]}">
-                  {#if person.avatarUrl}<Photo url={person.avatarUrl} />{:else}{(person.displayName || person.username || '?').charAt(0).toUpperCase()}{/if}
-                </div>
+                {#if person.avatarUrl}
+                  <button type="button" class="pop-av profile-av zoomable" style="background:{person.avatarColor || shades[0]}" aria-label="View profile picture" onclick={(event) => { event.stopPropagation(); full = 'avatar'; }}>
+                    <Photo url={person.avatarUrl} />
+                  </button>
+                {:else}
+                  <div class="pop-av profile-av" style="background:{person.avatarColor || shades[0]}">{(person.displayName || person.username || '?').charAt(0).toUpperCase()}</div>
+                {/if}
                 <SongButton file={person.songFile} start={person.songStart} />
               </div>
               <i class="profile-dot" style="background:{statusColor[person.status] || statusColor.offline}"></i>
@@ -427,3 +436,8 @@
     {/if}
   </div>
 </aside>
+{#if full === 'banner' && ui.dmUser?.bannerUrl}
+  <FullPhoto url={ui.dmUser.bannerUrl} label="Banner" onclose={() => (full = '')} />
+{:else if full === 'avatar' && ui.dmUser?.avatarUrl}
+  <FullPhoto url={ui.dmUser.avatarUrl} label="Profile picture" onclose={() => (full = '')} />
+{/if}

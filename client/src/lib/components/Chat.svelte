@@ -146,6 +146,7 @@
       avatarColor: mine?.avatarColor || member?.avatarColor || author.avatarColor,
       accentColor: mine?.accentColor || member?.accentColor || author.accentColor || '',
       bannerUrl: mine ? (mine.bannerUrl || '') : (member ? (member.bannerUrl || '') : (author.bannerUrl || '')),
+      bannerPos: mine?.bannerPos || member?.bannerPos || dm?.bannerPos || author.bannerPos,
       bannerColor: mine?.bannerColor || member?.bannerColor || author.bannerColor || '',
       profileColors: member?.profileColors || mine?.profileColors || author.profileColors,
       staff: member?.staff || mine?.staff || author.staff || '',
@@ -699,6 +700,8 @@
   let editAlt = $state('');
   let editSpoiler = $state(false);
   let draftRoom = '';
+  let fileDrop = $state(false);
+  let dropDepth = 0;
 
   $effect(() => {
     const key = ui.mode === 'dm' ? 'dm:' + (ui.dmUser?.id || '') : 'ch:' + (ui.channelId || '');
@@ -710,6 +713,8 @@
       drafts = [];
       editAt = -1;
       cancelVoice();
+      dropDepth = 0;
+      fileDrop = false;
     }
     draftRoom = key;
   });
@@ -849,6 +854,38 @@
   function onFiles(event) {
     const list = [...(event.target.files || [])];
     event.target.value = '';
+    if (list.length) stageFiles(list);
+  }
+
+  function dragFiles(event) {
+    const types = event.dataTransfer?.types;
+    return !!types && [...types].includes('Files');
+  }
+
+  function onDragEnter(event) {
+    if (!dragFiles(event) || locked || dmBlocked) return;
+    event.preventDefault();
+    dropDepth += 1;
+    fileDrop = true;
+  }
+
+  function onDragOver(event) {
+    if (!dragFiles(event) || locked || dmBlocked) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onDragLeave() {
+    dropDepth = Math.max(0, dropDepth - 1);
+    if (!dropDepth) fileDrop = false;
+  }
+
+  function onDropFiles(event) {
+    dropDepth = 0;
+    fileDrop = false;
+    if (!dragFiles(event) || locked || dmBlocked) return;
+    event.preventDefault();
+    const list = [...(event.dataTransfer?.files || [])];
     if (list.length) stageFiles(list);
   }
 
@@ -1412,7 +1449,10 @@
 </script>
 
 <div class="chat-frame">
-<div class="chat-col" class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard}>
+<div class="chat-col" role="region" aria-label="Conversation" class:voice-full={wideOpen} class:chat-hidden={ui.streamUi?.hideChat && showBoard} ondragenter={onDragEnter} ondragover={onDragOver} ondragleave={onDragLeave} ondrop={onDropFiles}>
+{#if fileDrop}
+  <div class="file-drop"><strong>Drop files to attach</strong></div>
+{/if}
 <div class="top" class:dm-bar={ui.mode === 'dm'}>
   <button type="button" class="phone-back" title="Back" onclick={() => (ui.phone = 'browse')}><ChevronLeft size={22} /></button>
   {#if ui.mode === 'thread'}

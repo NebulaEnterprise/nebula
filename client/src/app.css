@@ -1601,6 +1601,21 @@ html:not(.app-blur) .thread-menu {
 .file-progress i { display: block; height: 100%; background: #fff; }
 .msg-fail { margin-top: 6px; color: #ed6b6b; font-size: 13px; font-weight: 650; }
 .lightbox { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, 0.84); display: grid; place-items: center; padding: 24px; }
+.profile-full { z-index: 120; cursor: zoom-out; }
+.profile-full-frame { display: grid; place-items: center; }
+.profile-full-frame img {
+  position: static !important; inset: auto !important;
+  width: auto !important; height: auto !important;
+  max-width: min(1100px, 94vw) !important; max-height: 88vh !important;
+  object-fit: contain !important; border-radius: 12px; display: block;
+}
+.file-drop {
+  position: absolute; inset: 12px; z-index: 30;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px dashed #ff4f9a; border-radius: 18px;
+  background: rgba(12, 6, 20, 0.78); color: #fff; pointer-events: none;
+}
+.file-drop strong { font-size: 18px; font-weight: 750; }
 .lightbox img, .lightbox video { max-width: min(1100px, 94vw); max-height: 88vh; border-radius: 12px; }
 .image-view { position: fixed; inset: 0; z-index: 120; background: rgba(0, 0, 0, 0.9); }
 .image-stage { position: absolute; inset: 0; overflow: hidden; }
@@ -2509,6 +2524,26 @@ html.paint-mention .mention {
   max-height: min(88vh, 760px); overflow: auto; border-radius: inherit;
 }
 .pop-banner { height: 128px; min-height: 128px; max-height: 128px; }
+.pop-banner.zoomable, .pop-av.zoomable, .banner-hit { cursor: zoom-in; }
+button.pop-banner, button.pop-av {
+  border: 0; padding: 0; margin: 0; font: inherit; color: inherit;
+  text-align: inherit; appearance: none; background: transparent;
+}
+button.pop-banner { display: block; width: 100%; }
+button.pop-av { display: grid; }
+.banner-hit {
+  position: absolute; inset: 0; z-index: 1; border: 0; padding: 0;
+  background: transparent; cursor: zoom-in;
+}
+.dock-profile .pop-banner .dock-close { z-index: 3; }
+.preview-card .pop-banner.can-move { cursor: grab; touch-action: none; }
+.preview-card .pop-banner.can-move:active { cursor: grabbing; }
+.banner-move {
+  position: absolute; top: 12px; right: 12px; z-index: 2;
+  padding: 6px 10px; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.62); color: #fff;
+  font-size: 12px; font-weight: 700; pointer-events: none;
+}
 .pop-add {
   position: absolute; top: 10px; right: 10px; z-index: 2;
   width: 36px; height: 36px; display: grid; place-items: center;

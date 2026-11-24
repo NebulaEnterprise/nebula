@@ -6,7 +6,8 @@
   import StaffBadge from './StaffBadge.svelte';
   import DevBadge from './DevBadge.svelte';
   import SongButton from './SongButton.svelte';
-  import { shortBio, visibleBadges, playingName, PERM } from '../format.js';
+  import FullPhoto from './FullPhoto.svelte';
+  import { shortBio, visibleBadges, playingName, bannerFocus, PERM } from '../format.js';
   import { api, fileUrl, uploadFile } from '../api.js';
   import { ui, nowClock, relation, friendAct, openDm, toast, copyText, touchProfileMedia, hasPerm } from '../state.svelte.js';
   import { profileSeen, localClock } from '../seen.js';
@@ -32,6 +33,7 @@
   let busy = $state('');
   let storyAt = $state(-1);
   let photoAt = $state(-1);
+  let full = $state('');
   let photoInput = $state(null);
   let storyInput = $state(null);
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
@@ -55,6 +57,7 @@
     rolesOpen = false;
     storyAt = -1;
     photoAt = -1;
+    full = '';
   });
 
   async function grantRole(role) {
@@ -99,8 +102,17 @@
   }
 
   function flipCard(event) {
-    if (event.target.closest('button, a, input, label, video, .ig-view')) return;
+    if (event.target.closest('button, a, input, label, video, .ig-view, .zoomable')) return;
     turned = !turned;
+  }
+
+  function openFull(kind, event) {
+    event.stopPropagation();
+    if (event.type === 'keydown') event.preventDefault();
+    const nested = event.target.closest('button, a, input, video');
+    if (nested && nested !== event.currentTarget) return;
+    if (kind === 'banner' && u?.bannerUrl) full = 'banner';
+    if (kind === 'avatar' && u?.avatarUrl) full = 'avatar';
   }
 
   function stepStory(event) {
@@ -225,9 +237,13 @@
     <div class="pop-spin" class:show-back={turned} style="transform: rotateY({turned ? 180 : 0}deg)" onclick={flipCard}>
     <div class="pop-face">
     <div class="pop-frame">
-    <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}">
-      {#if u.bannerUrl}<Photo url={u.bannerUrl} fill />{/if}
-    </div>
+    {#if u.bannerUrl}
+      <button type="button" class="pop-banner zoomable" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}" aria-label="View banner" onclick={(event) => openFull('banner', event)}>
+        <Photo url={u.bannerUrl} fill focus={bannerFocus(u)} />
+      </button>
+    {:else}
+      <div class="pop-banner" style="background:{u.bannerColor || u.accentColor || 'var(--brand)'}"></div>
+    {/if}
     {#if rel !== 'self'}
       <div class="pop-actions">
         <button class="pop-msg" title="Message" onclick={() => { const person = u; ui.popout = null; openDm(person); }}><MessageSquare size={16} /></button>
@@ -238,9 +254,13 @@
       <div class="profile-hero">
         <div class="profile-face">
           <div class="song-av">
-            <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">
-              {#if u.avatarUrl}<Photo url={u.avatarUrl} />{:else}{(u.displayName || u.username || '?').charAt(0).toUpperCase()}{/if}
-            </div>
+            {#if u.avatarUrl}
+              <button type="button" class="pop-av profile-av zoomable" style="background:{u.avatarColor || 'var(--brand)'}" aria-label="View profile picture" onclick={(event) => openFull('avatar', event)}>
+                <Photo url={u.avatarUrl} />
+              </button>
+            {:else}
+              <div class="pop-av profile-av" style="background:{u.avatarColor || 'var(--brand)'}">{(u.displayName || u.username || '?').charAt(0).toUpperCase()}</div>
+            {/if}
             <SongButton file={u.songFile} start={u.songStart} />
           </div>
           <i class="profile-dot" style="background:{statusColor[u.status] || statusColor.offline}"></i>
@@ -429,4 +449,9 @@
       </div>
     {/if}
   </div>
+  {#if full === 'banner' && u.bannerUrl}
+    <FullPhoto url={u.bannerUrl} label="Banner" onclose={() => (full = '')} />
+  {:else if full === 'avatar' && u.avatarUrl}
+    <FullPhoto url={u.avatarUrl} label="Profile picture" onclose={() => (full = '')} />
+  {/if}
 {/if}

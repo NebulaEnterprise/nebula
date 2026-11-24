@@ -2,6 +2,16 @@ export function shortBio(text) {
   return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 29);
 }
 
+export function bannerFocus(user) {
+  const pos = user && user.bannerPos;
+  const axis = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return 50;
+    return Math.max(0, Math.min(100, num));
+  };
+  return axis(pos && pos.x) + '% ' + axis(pos && pos.y) + '%';
+}
+
 export function playingName(user) {
   const value = user && user.activity;
   if (!value) return '';
