@@ -3452,12 +3452,23 @@ function profileShades(input) {
   return ['#7c3aed', '#c084fc'];
 }
 
+function colorToHex(value) {
+  const raw = String(value || '').trim();
+  const hex = raw.slice(0, 9);
+  if (/^#[0-9a-fA-F]{3,8}$/.test(hex)) return hex;
+  const rgb = raw.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i);
+  if (!rgb) return '';
+  const nums = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+  if (nums.some((n) => n > 255)) return '';
+  return '#' + nums.map((n) => n.toString(16).padStart(2, '0')).join('');
+}
+
 function cleanNameColors(input) {
   const list = Array.isArray(input) ? input : [];
   const out = [];
   for (const c of list) {
-    const hex = String(c || '').trim().slice(0, 9);
-    if (/^#[0-9a-fA-F]{3,8}$/.test(hex)) out.push(hex);
+    const hex = colorToHex(c);
+    if (hex) out.push(hex);
     if (out.length === 2) break;
   }
   return out;

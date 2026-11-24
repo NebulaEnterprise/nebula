@@ -686,6 +686,52 @@
     if (index === 0) form.accentColor = value;
   }
 
+  let rgbText = $state('rgb(124, 58, 237)');
+  let rgbFocus = $state(false);
+
+  function hexToRgbCode(value) {
+    let raw = String(value || '').trim().replace('#', '');
+    if (raw.length === 3) raw = raw.split('').map((part) => part + part).join('');
+    if (!/^[0-9a-fA-F]{6}$/.test(raw)) return '';
+    const r = parseInt(raw.slice(0, 2), 16);
+    const g = parseInt(raw.slice(2, 4), 16);
+    const b = parseInt(raw.slice(4, 6), 16);
+    return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+  }
+
+  function parseColorCode(text) {
+    const raw = String(text || '').trim();
+    const rgb = raw.match(/^rgba?\(\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})/i)
+      || raw.match(/^(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})$/);
+    if (rgb) {
+      const nums = [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+      if (nums.some((n) => n > 255)) return '';
+      return '#' + nums.map((n) => n.toString(16).padStart(2, '0')).join('');
+    }
+    let hex = raw.replace(/^#/, '');
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) hex = hex.split('').map((part) => part + part).join('');
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) return '#' + hex.toLowerCase();
+    return '';
+  }
+
+  function commitRgb() {
+    const next = parseColorCode(rgbText);
+    const slot = form.profileStyle === 'solid' ? 0 : accentSlot;
+    if (!next) {
+      rgbText = hexToRgbCode(form.profileColors[slot] || '#7c3aed');
+      toast('Use an RGB code like rgb(192, 38, 211)');
+      return;
+    }
+    setProfileColor(slot, next);
+    rgbText = hexToRgbCode(next);
+  }
+
+  $effect(() => {
+    const slot = form.profileStyle === 'solid' ? 0 : accentSlot;
+    const current = form.profileColors[slot] || '#7c3aed';
+    if (!rgbFocus) rgbText = hexToRgbCode(current) || rgbText;
+  });
+
   function setAllBadges(on) {
     form.shownBadges = on ? [...ownedBadges(ui.me)] : [];
   }
@@ -1155,6 +1201,20 @@
                   {/if}
                 </div>
               </div>
+              <div class="rgb-code">
+                <label for="profile-rgb">RGB code</label>
+                <input
+                  id="profile-rgb"
+                  bind:value={rgbText}
+                  spellcheck="false"
+                  maxlength="32"
+                  placeholder="rgb(192, 38, 211)"
+                  onfocus={() => (rgbFocus = true)}
+                  onblur={() => { rgbFocus = false; commitRgb(); }}
+                  onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitRgb(); } }}
+                />
+              </div>
+              <p class="hint">Paste rgb(192, 38, 211) or 192, 38, 211. It colors the selected shade.</p>
             </section>
             <section class="look-sec">
               <h3><Monitor size={16} class="sec-ico" /> Profile Customization</h3>
