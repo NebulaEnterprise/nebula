@@ -12,6 +12,7 @@
   import Rail from './lib/components/Rail.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import Chat from './lib/components/Chat.svelte';
+  import LinkPill from './lib/components/LinkPill.svelte';
   import Members from './lib/components/Members.svelte';
   import Friends from './lib/components/Friends.svelte';
   import ServersHome from './lib/components/ServersHome.svelte';
@@ -365,6 +366,9 @@
 </script>
 
 <DesktopChrome />
+{#if ui.link && (ui.booting || !ui.me || ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'servers' || ui.mode === 'discover' || ui.mode === 'messages')}
+  <LinkPill floating />
+{/if}
 {#if ui.booting}
   <div class="boot">Opening Nebula…</div>
 {:else if !ui.me}

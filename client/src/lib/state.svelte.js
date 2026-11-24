@@ -1881,6 +1881,7 @@ function clearLinkTimer() {
 }
 
 function finishLink() {
+  if (ui.link === 'updating') return;
   clearLinkTimer();
   ui.link = 'online';
   linkTimer = setTimeout(() => {
@@ -1900,7 +1901,7 @@ async function catchUpLink() {
     if (ui.mode === 'chat' || ui.mode === 'dm' || ui.mode === 'group' || ui.mode === 'thread') jobs.push(loadMessages().catch(() => {}));
     await Promise.all(jobs);
   } catch (_) {}
-  if (job !== linkJob) return;
+  if (job !== linkJob || ui.link === 'updating') return;
   if (!gatewayReady()) {
     ui.link = linkLive ? '' : 'reconnecting';
     return;
@@ -1937,12 +1938,13 @@ function applySocket(packet) {
     if (data.voice) import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data.voice)).catch(() => {});
     const dropped = ui.link === 'reconnecting' || ui.link === 'catching';
     linkLive = true;
+    if (ui.link === 'updating') return;
     if (dropped) catchUpLink();
     return;
   }
   if (type === 'DISCONNECT') {
     import('./voice.js').then((mod) => mod.resetVoiceClock()).catch(() => {});
-    if (linkLive) {
+    if (linkLive && ui.link !== 'updating') {
       linkJob += 1;
       clearLinkTimer();
       ui.link = 'reconnecting';
@@ -1952,6 +1954,7 @@ function applySocket(packet) {
   }
   if (type === 'RESYNC') {
     linkLive = true;
+    if (ui.link === 'updating') return;
     catchUpLink();
     import('./voice.js').then((mod) => {
       mod.resetVoiceClock();

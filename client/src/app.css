@@ -689,6 +689,7 @@ html:not(.app-blur) .thread-menu {
   border: 1px solid #23a559; font-size: 13px; font-weight: 700;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); pointer-events: none;
 }
+.link-pill.float { position: fixed; top: 16px; z-index: 90; }
 .link-pill.down { border-color: #f0b429; }
 .link-dot { width: 8px; height: 8px; border-radius: 50%; background: #23a559; flex-shrink: 0; }
 .link-spin {

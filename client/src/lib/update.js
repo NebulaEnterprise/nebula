@@ -1,28 +1,62 @@
+import { ui } from './state.svelte.js';
+import { onGateway } from './gateway.js';
+
+const TUNNEL = {
+  'ngrok-skip-browser-warning': 'true',
+  'bypass-tunnel-reminder': 'true',
+};
+
+let reloading = false;
+
+function stampFrom(value) {
+  return [...String(value || '').matchAll(/assets\/index-[A-Za-z0-9_-]+\.(?:js|css)\?v=\d+/g)].map((match) => match[0]).sort().join('|');
+}
+
 function runningBuild() {
   const files = [];
   for (const node of document.querySelectorAll('script[src],link[rel="stylesheet"]')) {
-    const url = node.getAttribute('src') || node.getAttribute('href') || '';
-    const match = url.match(/assets\/(index-[A-Za-z0-9_-]+\.(?:js|css))/);
-    if (match) files.push(match[1]);
+    files.push(node.getAttribute('src') || node.getAttribute('href') || '');
   }
-  return files.sort().join('|');
-}
-
-function publishedBuild(html) {
-  return [...html.matchAll(/assets\/(index-[A-Za-z0-9_-]+\.(?:js|css))/g)].map((match) => match[1]).sort().join('|');
+  return stampFrom(files.join('\n'));
 }
 
 function reloadFresh() {
-  const note = document.createElement('div');
-  note.textContent = 'Updating Nebula…';
-  note.setAttribute('role', 'status');
-  note.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:80;padding:10px 14px;border-radius:10px;background:#111214;color:#fff;border:1px solid #2b2d31;font:600 14px Outfit,sans-serif';
-  document.body.appendChild(note);
+  if (reloading) return;
+  reloading = true;
+  ui.link = 'updating';
   const next = new URL('index.html', document.baseURI);
   next.searchParams.set('_nebula', String(Date.now()));
-  setTimeout(() => location.replace(next.href), 200);
+  setTimeout(() => location.replace(next.href), 600);
+}
+
+async function check() {
+  if (reloading) return;
+  const mine = runningBuild();
+  if (!mine) return;
+  const page = new URL('index.html', document.baseURI);
+  page.searchParams.set('_nebula', String(Date.now()));
+  let html = '';
+  try {
+    const res = await fetch(page.href, { cache: 'no-store', headers: TUNNEL });
+    if (!res.ok) return;
+    html = await res.text();
+  } catch (_) {
+    return;
+  }
+  const published = stampFrom(html);
+  if (!published || published === mine) return;
+  reloadFresh();
 }
 
 export function watchForUpdates() {
-  /* Leave the open page alone. A new version loads the next time Nebula is opened. */
+  const tick = () => { check(); };
+  setTimeout(tick, 3000);
+  setInterval(tick, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tick();
+  });
+  onGateway((packet) => {
+    const type = packet && packet.t;
+    if (type === 'READY' || type === 'RESUMED' || type === 'RESYNC') tick();
+  });
 }
