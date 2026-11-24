@@ -3813,13 +3813,17 @@ button.portal-card:hover, a.portal-card:hover { background: #35373c; }
   .gset-profile, .gset-role { grid-template-columns: 1fr; }
   .gset-split, .gset-line { flex-direction: column; }
 }
-.side-links { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px 0; }
+.side-links { display: flex; flex-direction: column; gap: 4px; margin: 6px 10px 0; flex-shrink: 0; }
 .side-links a {
   display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; border-radius: 8px;
   background: rgba(255, 255, 255, 0.06); color: #fff; font-size: 13px; font-weight: 650; text-decoration: none;
 }
+.side-links a svg { flex-shrink: 0; color: #cbb6e4; }
 .side-links span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-links em { margin-left: auto; max-width: 48%; color: #b9a8c9; font-style: normal; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gset-member strong { display: flex; align-items: center; gap: 6px; }
+.gset-roles { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.gset-roles i { font-style: normal; font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); }
 .tag-colors { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
 .tag-colors button {
   min-width: 54px; height: 28px; border-radius: 8px; border: 2px solid transparent; color: #fff; font-size: 12px; font-weight: 800;

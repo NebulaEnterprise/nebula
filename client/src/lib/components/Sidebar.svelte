@@ -221,6 +221,7 @@
       <div class="side-links">
         {#each ui.links as link}
           <a href={link.url} target="_blank" rel="noreferrer">
+            <Link size={16} />
             <span>{link.label}</span>
             <em>{hostOf(link.url)}</em>
           </a>

@@ -1328,7 +1328,8 @@ export async function openServer(id, opts = {}) {
   ui.bannerUrl = data.bannerUrl || '';
   ui.about = data.about || '';
   ui.showLobby = !!data.showLobby;
-  ui.links = data.links || [];
+  if (Array.isArray(data.links)) ui.links = data.links;
+  else if (target !== fromServer) ui.links = [];
   ui.events = data.events || [];
   ui.rulesChannelId = data.rulesChannelId || '';
   ui.emoji = data.emoji || [];
@@ -3117,6 +3118,7 @@ export async function reloadSettings() {
   ui.settings = data.settings;
   await openServer(ui.serverId, { keepDialog: true });
   paintServerTag(data.settings);
+  if (Array.isArray(data.settings?.links)) ui.links = data.settings.links;
 }
 
 let lastTypingPing = 0;

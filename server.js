@@ -1840,6 +1840,7 @@ function memberView(g, u, viewer) {
   pub.staff = staffKey(g, u);
   pub.roleColor = top && top.color ? top.color : '';
   pub.nick = mem.nick || '';
+  pub.joinedAt = mem.joinedAt || '';
   pub.serverOwner = isOwner(g, u);
   return clearBotMarks(pub, u);
 }

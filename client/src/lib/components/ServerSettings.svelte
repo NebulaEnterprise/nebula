@@ -103,6 +103,9 @@
   let addQ = $state('');
   let banUid = $state('');
   let banReason = $state('');
+  let roster = $state([]);
+  let rosterFor = $state('');
+  let rosterOk = $state(false);
 
   const s = $derived(ui.settings || {});
   const ownerHere = $derived(!!ui.serverMeta?.owner);
@@ -111,8 +114,13 @@
   const canTimeout = $derived(ownerHere || hasPerm(PERM.TIMEOUT));
   const canNick = $derived(ownerHere || hasPerm(PERM.MANAGE_NICKS));
   const people = $derived.by(() => {
+    const serverId = s.id || ui.serverId;
+    const saved = (s.members || []).filter((member) => member?.id);
+    const sidebar = ui.serverId === serverId ? (ui.members || []) : [];
+    const live = rosterOk && rosterFor === serverId ? roster : null;
+    const source = live || [...saved, ...sidebar];
     const map = new Map();
-    for (const member of [...(s.members || []), ...(ui.members || [])]) {
+    for (const member of source) {
       if (!member?.id) continue;
       const prev = map.get(member.id) || {};
       map.set(member.id, { ...prev, ...member, roles: member.roles || prev.roles, roleIds: member.roleIds || prev.roleIds });
@@ -177,6 +185,49 @@
 
   function memberRoleIds(member) {
     return (member?.roles || member?.roleIds || []).map((role) => (typeof role === 'string' ? role : role?.id)).filter(Boolean);
+  }
+
+  function roleNames(member) {
+    return (member?.roles || []).filter((role) => role && typeof role === 'object' && role.id && role.name && role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner');
+  }
+
+  function joinedLabel(member) {
+    const iso = member?.joinedAt || member?.joined || '';
+    if (iso) return 'Joined ' + ago(iso);
+    return ago(member?.createdAt);
+  }
+
+  async function loadRoster() {
+    const serverId = ui.settings?.id || ui.serverId;
+    if (!serverId) return;
+    try {
+      const data = await api('/api/members?serverId=' + encodeURIComponent(serverId));
+      if ((ui.settings?.id || ui.serverId) !== serverId) return;
+      roster = data.members || [];
+      rosterFor = serverId;
+      rosterOk = true;
+    } catch (_) {
+      if ((ui.settings?.id || ui.serverId) !== serverId) return;
+      rosterOk = false;
+    }
+  }
+
+  $effect(() => {
+    const serverId = ui.settings?.id || ui.serverId;
+    if (!ui.serverSettings || !serverId) return;
+    loadRoster();
+  });
+
+  async function saveLinks() {
+    const next = links
+      .map((link) => ({ label: String(link.label || '').trim(), url: String(link.url || '').trim() }))
+      .filter((link) => link.label && /^https?:\/\//i.test(link.url))
+      .slice(0, 8);
+    const ok = await run(() => guildAction({ type: 'settings', links: next }));
+    if (!ok) return;
+    const saved = Array.isArray(ui.settings?.links) ? ui.settings.links : next;
+    links = saved.map((item) => ({ label: item.label || '', url: item.url || '' }));
+    ui.links = saved;
   }
 
   function ago(iso) {
@@ -660,7 +711,7 @@
             {/each}
             <div class="gset-inline">
               <button type="button" class="btn" onclick={() => (links = [...links, { label: '', url: '' }])}>+ Add link</button>
-              {#if links.length}<button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', links: links.filter((link) => link.label.trim() && link.url.trim()) }))}>Save links</button>{/if}
+              {#if links.length}<button type="button" class="btn brand" onclick={saveLinks}>Save links</button>{/if}
             </div>
           </section>
 
@@ -938,10 +989,17 @@
               <div class="gset-member">
                 <Avatar user={member} size={36} />
                 <div class="grow">
-                  <strong>{displayName(member)} {#if member.id === ui.me?.id}<em class="gset-you">YOU</em>{/if}</strong>
+                  <strong>{displayName(member)} {#if member.bot}<em class="bot-tag">BOT</em>{/if}{#if member.id === ui.me?.id}<em class="gset-you">YOU</em>{/if}</strong>
                   <span>@{member.username}{#if member.uid} · {member.uid}{/if}</span>
+                  {#if roleNames(member).length}
+                    <span class="gset-roles">
+                      {#each roleNames(member) as role (role.id)}
+                        <i style:color={role.color || '#d7c4ea'}>{role.name}</i>
+                      {/each}
+                    </span>
+                  {/if}
                 </div>
-                <span class="hint">{ago(member.joinedAt || member.joined || member.createdAt)}</span>
+                <span class="hint">{joinedLabel(member)}</span>
                 <button type="button" class="btn icon" aria-label="Member actions" onclick={(e) => { e.stopPropagation(); menuFor = menuFor === member.id ? '' : member.id; }}><MoreHorizontal size={16} /></button>
                 {#if menuFor === member.id}
                   <div class="gset-menu" role="menu" onclick={(e) => e.stopPropagation()}>
