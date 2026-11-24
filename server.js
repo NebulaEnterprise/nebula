@@ -7904,7 +7904,7 @@ function staffDirectory(viewer) {
     members: Object.keys(g.members || {}).length,
     roles: (g.roles || []).filter((row) => row && row.id && row.id !== 'everyone' && row.id !== 'owner' && row.id !== 'here' && row.type !== 'text' && row.type !== 'voice').map((row) => ({ id: row.id, name: row.name, color: row.color || '#99aab5' })),
   }));
-  const audit = (guilds.staffAudit || []).slice(0, 12).map((row) => ({
+  const audit = (guilds.staffAudit || []).slice(0, 80).map((row) => ({
     id: row.id,
     at: row.at,
     actorName: row.actorName,

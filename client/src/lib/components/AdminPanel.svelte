@@ -306,6 +306,7 @@
   <div class="adm-filters">
     <button type="button" class:on={view === 'users'} onclick={() => (view = 'users')}>Users</button>
     <button type="button" class:on={view === 'appeals'} onclick={() => (view = 'appeals')}>Appeals{openAppeals ? ' ' + openAppeals : ''}</button>
+    <button type="button" class:on={view === 'audit'} onclick={() => (view = 'audit')}>Audit</button>
   </div>
 
   {#if loadError}
@@ -372,6 +373,27 @@
         {/each}
       {/if}
     </section>
+  {:else if view === 'audit'}
+    <section class="adm-card">
+      <div class="adm-card-top">
+        <span class="stat-ico"><FileText size={15} /></span>
+        <div>
+          <h3>Audit log</h3>
+          <small>What staff changed, and who it was for.</small>
+        </div>
+      </div>
+      {#if !audit.length}
+        <p class="adm-empty">Staff actions will show up here.</p>
+      {:else}
+        {#each audit as row (row.id)}
+          <div class="adm-audit">
+            <span class="stat-ico"><Shield size={13} /></span>
+            <span>{auditLine(row)}</span>
+            <small>{when(row.at)}</small>
+          </div>
+        {/each}
+      {/if}
+    </section>
   {:else}
   <div class="adm-grid">
     <section class="adm-card">
@@ -427,27 +449,6 @@
           <button type="button" onclick={() => arm('warn')}><AlertTriangle size={16} /><span>Warn</span></button>
           <button type="button" onclick={() => arm('mute')}><VolumeX size={16} /><span>Mute</span></button>
         </div>
-      </section>
-
-      <section class="adm-card">
-        <div class="adm-card-top">
-          <span class="stat-ico"><FileText size={15} /></span>
-          <div>
-            <h3>Audit log</h3>
-            <small>Recent staff actions.</small>
-          </div>
-        </div>
-        {#if !audit.length}
-          <p class="adm-empty">Staff actions will show up here.</p>
-        {:else}
-          {#each audit as row (row.id)}
-            <div class="adm-audit">
-              <span class="stat-ico"><Shield size={13} /></span>
-              <span>{auditLine(row)}</span>
-              <small>{when(row.at)}</small>
-            </div>
-          {/each}
-        {/if}
       </section>
 
       <section class="adm-card adm-bot">

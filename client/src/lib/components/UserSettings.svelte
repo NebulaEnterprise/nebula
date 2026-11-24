@@ -7,7 +7,6 @@
   import { profileSeen } from '../seen.js';
   import Avatar from './Avatar.svelte';
   import Name from './Name.svelte';
-  import ColorBox from './ColorBox.svelte';
   import ColorWheel from './ColorWheel.svelte';
   import Photo from './Photo.svelte';
   import MoonBadge from './MoonBadge.svelte';
@@ -17,6 +16,7 @@
   import SongButton from './SongButton.svelte';
   import { parseSong, parseStamp, formatStamp } from '../song.svelte.js';
   import { ownedBadges, shortBio } from '../format.js';
+  import { EMOJI } from '../emoji.js';
   import { api, pinMedia } from '../api.js';
   import Security from './Security.svelte';
   import Developer from './Developer.svelte';
@@ -318,6 +318,29 @@
   let aboutDraft = $state(ui.me?.aboutMe || '');
   const statusName = { online: 'Online', idle: 'Idle', dnd: 'Do not disturb', offline: 'Invisible' };
   const statusColor = { online: '#3ecf8e', idle: '#f0b429', dnd: '#f06a6a', offline: '#8b8e98' };
+  let bioEmojiOpen = $state(false);
+
+  function splitBio(text) {
+    const raw = String(text || '');
+    try {
+      const match = raw.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u);
+      if (!match) return { emoji: '', text: raw };
+      return { emoji: match[1], text: raw.slice(match[0].length) };
+    } catch (_) {
+      return { emoji: '', text: raw };
+    }
+  }
+
+  function setBioEmoji(glyph) {
+    const parts = splitBio(form.bio);
+    form.bio = shortBio(glyph ? glyph + (parts.text ? ' ' + parts.text : '') : parts.text);
+    bioEmojiOpen = false;
+  }
+
+  function setBioText(value) {
+    const emoji = splitBio(form.bio).emoji;
+    form.bio = shortBio((emoji ? emoji + ' ' : '') + value);
+  }
 
   function joinedLabel(value) {
     if (!value) return '—';
@@ -1102,49 +1125,26 @@
             </section>
             <section class="look-sec">
               <h3><Image size={16} class="sec-ico" /> Background</h3>
-              <button type="button" class="bg-row" onclick={() => togglePanel('banner')}>
+              <button type="button" class="bg-row" onclick={() => openPicture('banner')}>
                 <span class="bg-thumb" style="background:{form.accentColor || 'var(--brand)'}">
                   {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{/if}
                 </span>
                 <span class="copy">
                   <strong>{form.bannerUrl ? 'Profile banner' : 'Default background'}</strong>
-                  <em>{form.bannerUrl ? 'Your picture across the top of the profile.' : 'Uses your accent color until you set a banner.'}</em>
+                  <em>{form.bannerUrl ? 'Your picture across the top of the profile.' : 'Choose a picture.'}</em>
                 </span>
-                <ChevronRight size={16} class="row-chev" />
               </button>
-              {#if lookOpen === 'banner'}
-                <div class="look-panel">
-                  <div class="look-banner">
-                    {#if form.bannerUrl}<Photo url={form.bannerUrl} fill />{:else}<span class="banner-empty">No banner yet</span>{/if}
-                  </div>
-                  <div class="look-actions">
-                    <button type="button" class="btn brand sm look-btn" onclick={() => openPicture('banner')}>Change banner</button>
-                    {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove</button>{/if}
-                  </div>
-                </div>
-              {/if}
+              {#if form.bannerUrl}<button type="button" class="btn sm" onclick={() => clearPicture('banner')}>Remove banner</button>{/if}
             </section>
             <section class="look-sec">
               <h3><User size={16} class="sec-ico" /> Picture</h3>
-              <button type="button" class="bg-row" onclick={() => togglePanel('avatar')}>
+              <button type="button" class="bg-row" onclick={() => openPicture('avatar')}>
                 <span class="bg-thumb avatar-thumb" style="background:{form.avatarColor}">
                   {#if form.avatarUrl}<Photo url={form.avatarUrl} />{:else}{(form.displayName || form.username || '?').charAt(0).toUpperCase()}{/if}
                 </span>
-                <span class="copy"><strong>Avatar</strong><em>{form.avatarUrl ? 'Photo' : 'Color'}</em></span>
-                <ChevronRight size={16} class="row-chev" />
+                <span class="copy"><strong>Avatar</strong><em>{form.avatarUrl ? 'Photo' : 'Choose a picture'}</em></span>
               </button>
-              {#if lookOpen === 'avatar'}
-                <div class="look-panel">
-                  <div class="look-actions">
-                    <button type="button" class="btn brand sm look-btn" onclick={() => openPicture('avatar')}>Change avatar</button>
-                    {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove</button>{/if}
-                  </div>
-                  {#if !form.avatarUrl}
-                    <p class="look-kicker">Fallback color</p>
-                    <ColorBox colors={[form.avatarColor]} slots={1} onpick={(_, c) => (form.avatarColor = c)} />
-                  {/if}
-                </div>
-              {/if}
+              {#if form.avatarUrl}<button type="button" class="btn sm" onclick={() => clearPicture('avatar')}>Remove picture</button>{/if}
             </section>
             <section class="look-sec">
               <h3><Clock size={16} class="sec-ico" /> Local time</h3>
@@ -1162,6 +1162,16 @@
             {:else if profilePart === 'about'}
             <section class="look-sec">
               <h3><User size={16} class="sec-ico" /> About</h3>
+              <div class="field">
+                <label>Online status</label>
+                <div class="status-picks">
+                  {#each Object.entries(statusName) as [id, label]}
+                    <button type="button" class:on={form.status === id} onclick={() => (form.status = id)}>
+                      <i style="background:{statusColor[id]}"></i>{label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
               <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="Add your pronouns" /></div>
               <button type="button" class="bg-row" onclick={() => togglePanel('aliases')}>
                 <span class="copy"><strong>Aliases</strong><em>{aliasLabel}</em></span>
@@ -1189,7 +1199,18 @@
               </button>
               {#if lookOpen === 'bio'}
                 <div class="look-panel">
-                  <textarea bind:value={form.bio} maxlength="29" rows="2" placeholder="A short line"></textarea>
+                  <div class="bio-compose">
+                    <button type="button" class="bio-emoji" title="Emoji" onclick={() => (bioEmojiOpen = !bioEmojiOpen)}>{splitBio(form.bio).emoji || '😀'}</button>
+                    <input value={splitBio(form.bio).text} maxlength="29" placeholder="A short line" oninput={(event) => setBioText(event.currentTarget.value)} />
+                  </div>
+                  {#if bioEmojiOpen}
+                    <div class="bio-emoji-grid">
+                      <button type="button" onclick={() => setBioEmoji('')}>None</button>
+                      {#each EMOJI[0][1].slice(0, 48) as glyph}
+                        <button type="button" onclick={() => setBioEmoji(glyph)}>{glyph}</button>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/if}
               <button type="button" class="bg-row" onclick={() => togglePanel('about')}>

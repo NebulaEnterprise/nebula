@@ -2307,6 +2307,27 @@ html.paint-mention .mention {
 }
 .bg-thumb.avatar-thumb { width: 48px; display: grid; place-items: center; color: #fff; font-weight: 750; }
 .look-panel { margin-top: 8px; padding: 12px; border-radius: 14px; background: #171821; border: 1px solid rgba(255,255,255,0.06); }
+.status-picks { display: flex; flex-wrap: wrap; gap: 8px; }
+.status-picks button {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 0; border-radius: 999px; padding: 8px 12px; cursor: pointer;
+  background: #22232e; color: inherit; font: inherit;
+}
+.status-picks button.on { background: #7c3aed; }
+.status-picks i { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+.bio-compose { display: flex; align-items: center; gap: 8px; }
+.bio-emoji {
+  width: 42px; height: 42px; flex: none; border-radius: 12px; border: 0; cursor: pointer;
+  background: #22232e; color: inherit; font-size: 22px;
+}
+.bio-compose input { flex: 1; }
+.bio-emoji-grid {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 10px; max-height: 180px; overflow: auto;
+}
+.bio-emoji-grid button {
+  border: 0; background: transparent; border-radius: 8px; cursor: pointer; font-size: 20px; padding: 4px;
+}
+.bio-emoji-grid button:hover { background: rgba(255,255,255,0.08); }
 .look-sec .field input,
 .look-sec .field textarea,
 .look-panel input,
