@@ -133,8 +133,10 @@
     const mine = author.id === ui.me?.id ? ui.me : null;
     const dm = ui.dmUser && ui.dmUser.id === author.id ? ui.dmUser : null;
     const chain = [mine, member, dm, author];
+    const uid = mine?.uid ?? member?.uid ?? dm?.uid ?? author.uid ?? null;
     return {
       ...author,
+      uid,
       username: mine?.username || author.username || member?.username,
       displayName: member?.nick || mine?.displayName || author.displayName || member?.displayName,
       nameEffect: firstStyle(chain, 'nameEffect'),
@@ -144,11 +146,11 @@
       avatarColor: mine?.avatarColor || author.avatarColor || member?.avatarColor,
       staff: member?.staff || mine?.staff || author.staff || '',
       developer: !!(member?.developer || mine?.developer || author.developer),
-      showcase: mine?.showcase || member?.showcase || dm?.showcase || author.showcase || null,
-      showcaseBadge: mine?.showcaseBadge || member?.showcaseBadge || dm?.showcaseBadge || author.showcaseBadge || '',
+      showcase: mine ? (mine.showcase || null) : (member?.showcase || dm?.showcase || author.showcase || null),
+      showcaseBadge: mine ? (mine.showcaseBadge || '') : (member?.showcaseBadge || dm?.showcaseBadge || author.showcaseBadge || ''),
       badges: mine?.badges || author.badges || member?.badges,
       roleIcon: member?.roleIcon || '',
-      serverOwner: !!(member?.serverOwner || author.serverOwner),
+      serverOwner: Number(uid) === 2 ? false : !!(member?.serverOwner || author.serverOwner),
     };
   }
 

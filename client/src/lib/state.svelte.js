@@ -2006,7 +2006,10 @@ function adoptMe(members) {
     && (mine.songUrl || '') === (ui.me.songUrl || '')
     && (mine.songError || '') === (ui.me.songError || '')
     && Number(mine.songStart || 0) === Number(ui.me.songStart || 0)
-    && !!mine.songAutoplay === !!ui.me.songAutoplay;
+    && !!mine.songAutoplay === !!ui.me.songAutoplay
+    && JSON.stringify(mine.showcase ?? null) === JSON.stringify(ui.me.showcase ?? null)
+    && (mine.showcaseBadge || '') === (ui.me.showcaseBadge || '')
+    && JSON.stringify(mine.tagChoices || []) === JSON.stringify(ui.me.tagChoices || []);
   if (same) return;
   ui.me = {
     ...ui.me,
@@ -2022,7 +2025,9 @@ function adoptMe(members) {
     bio: mine.bio ?? ui.me.bio,
     aboutMe: mine.aboutMe ?? ui.me.aboutMe,
     shownBadges: Array.isArray(mine.shownBadges) ? mine.shownBadges : ui.me.shownBadges,
-    showcase: mine.showcase || ui.me.showcase || null,
+    showcase: mine.showcase ?? null,
+    tagChoices: Array.isArray(mine.tagChoices) ? mine.tagChoices : (ui.me.tagChoices || []),
+    showcaseBadge: mine.showcaseBadge || '',
     showcaseServerId: mine.showcaseServerId ?? ui.me.showcaseServerId,
     status: mine.status || ui.me.status,
     avatarColor: mine.avatarColor || ui.me.avatarColor,
@@ -3072,10 +3077,46 @@ export async function openServerSettings(page) {
   ui.serverSettings = true;
 }
 
+function paintServerTag(settings) {
+  if (!settings) return;
+  const serverId = String(settings.id || ui.serverId || '');
+  if (!serverId) return;
+  const tag = String(settings.tag || '');
+  const icon = String(settings.tagIcon || '');
+  const color = String(settings.tagColor || '');
+  const name = String(settings.name || '');
+  const touch = (showcase) => {
+    if (!showcase || String(showcase.serverId) !== serverId) return showcase || null;
+    if (!tag) return null;
+    return { ...showcase, tag, icon, color, name: name || showcase.name || '' };
+  };
+  const choices = (list) => {
+    const rest = (list || []).filter((choice) => choice && String(choice.serverId) !== serverId);
+    if (!tag) return rest;
+    const prev = (list || []).find((choice) => choice && String(choice.serverId) === serverId);
+    return [...rest, { serverId, name: name || prev?.name || '', tag, icon, color }];
+  };
+  if (ui.me) ui.me = { ...ui.me, showcase: touch(ui.me.showcase), tagChoices: choices(ui.me.tagChoices) };
+  ui.members = (ui.members || []).map((member) => (member?.showcase ? { ...member, showcase: touch(member.showcase) } : member));
+  const patchMsg = (msg) => {
+    if (!msg?.author?.showcase) return msg;
+    const next = touch(msg.author.showcase);
+    if (next === msg.author.showcase) return msg;
+    return { ...msg, author: { ...msg.author, showcase: next } };
+  };
+  ui.messages = (ui.messages || []).map(patchMsg);
+  for (const [key, list] of roomLogs) {
+    if (Array.isArray(list)) roomLogs.set(key, list.map(patchMsg));
+  }
+  if (ui.popout?.user) ui.popout = { ...ui.popout, user: { ...ui.popout.user, showcase: touch(ui.popout.user.showcase) } };
+  if (ui.dmUser) ui.dmUser = { ...ui.dmUser, showcase: touch(ui.dmUser.showcase) };
+}
+
 export async function reloadSettings() {
   const data = await api('/api/servers/' + ui.serverId + '/settings');
   ui.settings = data.settings;
   await openServer(ui.serverId, { keepDialog: true });
+  paintServerTag(data.settings);
 }
 
 let lastTypingPing = 0;

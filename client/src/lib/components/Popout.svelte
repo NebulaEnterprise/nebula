@@ -213,7 +213,7 @@
             <div class="bio-bubble"><span>{shortBio(u.bio)}</span></div>
           {/if}
         </div>
-        <h3><Name user={u} />{#if u.serverOwner && !u.bot}<Crown size={15} class="owner-crown" />{/if}{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
+        <h3><Name user={u} />{#if u.serverOwner && !u.bot && Number(u.uid) !== 2}<Crown size={15} class="owner-crown" />{/if}{#if u.bot}<span class="bot-tag">BOT</span>{/if}</h3>
         <div class="profile-idline">
           <p class="handle"><span>@{u.username}</span></p>
           <span class="profile-badges">

@@ -573,7 +573,13 @@
             {#if s.canCustomize}
               <div class="gset-inline">
                 <input bind:value={tag} maxlength="6" placeholder="TAG" />
-                <button type="button" class="btn brand" onclick={() => run(() => guildAction({ type: 'settings', tag, tagIcon, tagColor, vanity: s.official ? 'nebula' : vanity }))}>Save</button>
+                <button type="button" class="btn brand" onclick={async () => {
+                  const ok = await run(() => guildAction({ type: 'settings', tag, tagIcon, tagColor, vanity: s.official ? 'nebula' : vanity }));
+                  if (!ok || !ui.settings) return;
+                  tag = ui.settings.tag || '';
+                  tagIcon = ui.settings.tagIcon || '';
+                  tagColor = ui.settings.tagColor || '';
+                }}>Save</button>
               </div>
               <div class="tag-icons">
                 <button type="button" class:on={!tagIcon} onclick={() => (tagIcon = '')}>None</button>
