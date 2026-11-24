@@ -1,5 +1,7 @@
 const KEY = 'nebula-look';
+const THEMES_KEY = 'nebula-themes';
 const DB = 'nebula-look';
+const SHARE_ORIGIN = 'https://nebulaapp.space';
 let objectUrl = '';
 
 function openDb() {
@@ -144,6 +146,165 @@ export async function saveWallpaper(file) {
   setLook({ background: 'idb' });
 }
 
+function readThemes() {
+  try {
+    const list = JSON.parse(localStorage.getItem(THEMES_KEY) || '[]');
+    if (!Array.isArray(list)) return [];
+    return list.map((row) => {
+      const pack = normalizePack(row && row.pack);
+      if (!pack || !row.id) return null;
+      const name = String((row && row.name) || pack.name || 'Theme').replace(/\s+/g, ' ').trim().slice(0, 32) || 'Theme';
+      return { id: String(row.id), name, pack: { ...pack, name }, at: Number(row.at) || 0 };
+    }).filter(Boolean).slice(0, 24);
+  } catch {
+    return [];
+  }
+}
+
+export const savedThemes = $state(readThemes());
+let sharedNote = '';
+
+function writeThemes() {
+  try { localStorage.setItem(THEMES_KEY, JSON.stringify(savedThemes)); } catch { /* the look itself still saves */ }
+}
+
+export function currentPack(name) {
+  return normalizePack({
+    name,
+    theme: look.theme,
+    accent: look.accent,
+    blur: look.blur,
+    motion: look.motion,
+    paint: look.paint,
+    one: look.one,
+    textSize: look.textSize,
+    ignoreServerAccent: look.ignoreServerAccent,
+    colors: look.colors,
+  });
+}
+
+function packBody(pack) {
+  const { name, ...rest } = pack;
+  return JSON.stringify(rest);
+}
+
+export function createTheme(name) {
+  const pack = currentPack(name);
+  if (!pack.name || pack.name.length < 2) throw new Error('Name the theme with at least 2 characters');
+  const row = { id: crypto.randomUUID(), name: pack.name, pack, at: Date.now() };
+  savedThemes.unshift(row);
+  if (savedThemes.length > 24) savedThemes.splice(24);
+  writeThemes();
+  return row;
+}
+
+export function deleteTheme(id) {
+  const index = savedThemes.findIndex((row) => row.id === id);
+  if (index >= 0) savedThemes.splice(index, 1);
+  writeThemes();
+}
+
+export function useTheme(source) {
+  const pack = normalizePack(source && source.pack ? source.pack : source);
+  if (!pack) throw new Error('That theme is missing');
+  setLook({
+    theme: pack.theme,
+    accent: pack.accent,
+    blur: pack.blur,
+    motion: pack.motion,
+    paint: pack.paint,
+    one: pack.one,
+    textSize: pack.textSize,
+    ignoreServerAccent: pack.ignoreServerAccent,
+    colors: { ...pack.colors },
+  });
+}
+
+function encodeTheme(pack) {
+  const bytes = new TextEncoder().encode(JSON.stringify(pack));
+  let bin = '';
+  for (const byte of bytes) bin += String.fromCharCode(byte);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeTheme(token) {
+  const text = String(token || '');
+  if (!text || text.length > 4000) return null;
+  try {
+    const pad = text.length % 4 ? '='.repeat(4 - (text.length % 4)) : '';
+    const bin = atob(text.replace(/-/g, '+').replace(/_/g, '/') + pad);
+    const bytes = Uint8Array.from(bin, (char) => char.charCodeAt(0));
+    return normalizePack(JSON.parse(new TextDecoder().decode(bytes)));
+  } catch {
+    return null;
+  }
+}
+
+export function themeShareLink(source) {
+  const pack = source && source.pack
+    ? normalizePack({ ...source.pack, name: source.name || source.pack.name })
+    : currentPack(typeof source === 'string' ? source : '');
+  if (!pack) return '';
+  return SHARE_ORIGIN + '/?theme=' + encodeTheme(pack);
+}
+
+function rememberShared(pack) {
+  const named = normalizePack({ ...pack, name: pack.name || 'Shared theme' });
+  if (savedThemes.some((row) => row.name === named.name && packBody(row.pack) === packBody(named))) return named.name;
+  let name = named.name;
+  const taken = new Set(savedThemes.map((row) => row.name));
+  if (taken.has(name)) {
+    let n = 2;
+    while (taken.has(name + ' ' + n)) n += 1;
+    name = name + ' ' + n;
+  }
+  const row = { id: crypto.randomUUID(), name, pack: { ...named, name }, at: Date.now() };
+  savedThemes.unshift(row);
+  if (savedThemes.length > 24) savedThemes.splice(24);
+  writeThemes();
+  return name;
+}
+
+function consumeSharedTheme() {
+  let params;
+  try { params = new URLSearchParams(location.search); } catch { return; }
+  if (!params.has('theme')) return;
+  const pack = decodeTheme(params.get('theme'));
+  params.delete('theme');
+  const next = location.pathname + (params.toString() ? '?' + params.toString() : '') + location.hash;
+  try { history.replaceState(null, '', next); } catch { /* keep the address */ }
+  if (!pack) {
+    sharedNote = 'That theme link did not open.';
+    return;
+  }
+  useTheme(pack);
+  const name = rememberShared(pack);
+  sharedNote = name + ' is on.';
+}
+
+export function pullSharedTheme() {
+  const note = sharedNote;
+  sharedNote = '';
+  return note;
+}
+
+export function normalizePack(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = String(raw.name || '').replace(/\s+/g, ' ').trim().slice(0, 32);
+  return {
+    name,
+    theme: ['dark', 'light', 'amoled'].includes(raw.theme) ? raw.theme : 'dark',
+    accent: hexOk(raw.accent) ? raw.accent : '#ff4f9a',
+    blur: raw.blur !== false,
+    motion: raw.motion !== false,
+    paint: ['theme', 'one', 'custom'].includes(raw.paint) ? raw.paint : 'theme',
+    one: hexOk(raw.one) ? raw.one : '#a855f7',
+    textSize: SIZES[raw.textSize] ? raw.textSize : 'normal',
+    ignoreServerAccent: !!raw.ignoreServerAccent,
+    colors: colorsFrom(raw.colors),
+  };
+}
+
 export function setLook(patch) {
   if (patch && Object.prototype.hasOwnProperty.call(patch, 'background') && !patch.background) {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -176,6 +337,7 @@ export function setLook(patch) {
 }
 
 applyLook();
+consumeSharedTheme();
 
 if (look.background === 'idb') {
   idb('readonly', (store) => store.get('background')).then((blob) => {

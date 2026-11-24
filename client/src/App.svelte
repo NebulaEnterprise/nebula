@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen } from '@lucide/svelte';
   import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast } from './lib/state.svelte.js';
+  import { pullSharedTheme } from './lib/look.svelte.js';
   import { answerCall, declineCall, joinVoice } from './lib/voice.js';
   import Avatar from './lib/components/Avatar.svelte';
   import Auth from './lib/components/Auth.svelte';
@@ -156,6 +157,8 @@
   });
 
   onMount(() => {
+    const shared = pullSharedTheme();
+    if (shared) toast(shared);
     boot();
     const vv = window.visualViewport;
     const fitKeyboard = () => {

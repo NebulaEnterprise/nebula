@@ -20,7 +20,7 @@
   import Developer from './Developer.svelte';
   import Select from './Select.svelte';
   import { fileToDataUrl, shrinkGif } from '../image.js';
-  import { look, saveWallpaper, setLook } from '../look.svelte.js';
+  import { look, saveWallpaper, setLook, savedThemes, createTheme, deleteTheme, useTheme, themeShareLink } from '../look.svelte.js';
 
   let sound = $state(localStorage.getItem('nebula-sound') !== 'off');
   let emailShown = $state(false);
@@ -469,6 +469,54 @@
     setLook({ paint: 'custom', colors: { ...look.colors, [key]: next } });
   }
 
+  let themeName = $state('');
+  let shareUrl = $state('');
+
+  function themeChips(pack) {
+    const colors = [];
+    if (pack?.accent) colors.push(pack.accent);
+    if (pack?.paint === 'one' && pack.one) colors.push(pack.one);
+    for (const hex of Object.values(pack?.colors || {})) {
+      if (hex && !colors.includes(hex)) colors.push(hex);
+      if (colors.length >= 5) break;
+    }
+    return colors;
+  }
+
+  function makeTheme() {
+    try {
+      const row = createTheme(themeName);
+      themeName = '';
+      toast('Saved ' + row.name);
+    } catch (err) {
+      toast(err.message || 'Could not save that theme');
+    }
+  }
+
+  async function shareTheme(source) {
+    const url = themeShareLink(source || themeName);
+    if (!url) {
+      toast('Could not make a link for that theme');
+      return;
+    }
+    shareUrl = url;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Theme link copied');
+    } catch {
+      toast('Copy the link below');
+    }
+  }
+
+  function applySaved(row) {
+    try {
+      useTheme(row);
+      toast(row.name + ' is on');
+    } catch (err) {
+      toast(err.message || 'Could not use that theme');
+    }
+  }
+
   function resetThemeColors() {
     setLook({
       paint: 'theme',
@@ -832,6 +880,38 @@
             </div>
           </div>
           <button type="button" class="btn" onclick={resetThemeColors}>Reset colors</button>
+        </section>
+        <section class="look-sec app-card">
+          <h3><Sparkles size={16} class="sec-ico" /> Saved themes</h3>
+          <p class="look-note">Save this look under a name, then copy a link. Opening the link turns those colors on. Wallpapers stay on this device.</p>
+          <div class="theme-save">
+            <input bind:value={themeName} maxlength="32" placeholder="Theme name" aria-label="Theme name" onkeydown={(e) => { if (e.key === 'Enter') makeTheme(); }} />
+            <button type="button" class="btn brand" onclick={makeTheme}>Create theme</button>
+            <button type="button" class="btn" onclick={() => shareTheme(themeName)}>Share link</button>
+          </div>
+          {#if savedThemes.length}
+            <div class="theme-lib">
+              {#each savedThemes as row (row.id)}
+                <div class="theme-lib-row">
+                  <span class="theme-dots" aria-hidden="true">
+                    {#each themeChips(row.pack) as hex}<i style:background={hex}></i>{/each}
+                  </span>
+                  <strong>{row.name}</strong>
+                  <button type="button" class="btn sm" onclick={() => applySaved(row)}>Use</button>
+                  <button type="button" class="btn sm" onclick={() => shareTheme(row)}>Share link</button>
+                  <button type="button" class="btn sm" onclick={() => deleteTheme(row.id)}>Remove</button>
+                </div>
+              {/each}
+            </div>
+          {:else}
+            <p class="hint">No saved themes yet. Name the look above and create one.</p>
+          {/if}
+          {#if shareUrl}
+            <label class="theme-link">
+              <span>Share link</span>
+              <input readonly value={shareUrl} onclick={(e) => e.currentTarget.select()} />
+            </label>
+          {/if}
         </section>
       {:else}
       <div class="grid-2" class:look-layout={page === 'look'}>

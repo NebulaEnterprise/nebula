@@ -1804,6 +1804,26 @@ html.paint-mention .mention {
 .theme-row input[type="color"] {
   width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; overflow: hidden;
 }
+.theme-save { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.theme-save input {
+  flex: 1 1 180px; min-width: 0;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid color-mix(in srgb, var(--brand) 45%, transparent);
+  border-radius: 10px; color: #fff; padding: 10px 12px; outline: none;
+}
+.theme-lib-row {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  min-height: 48px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.06);
+}
+.theme-lib-row strong { flex: 1; min-width: 88px; font-size: 14px; }
+.theme-dots { display: flex; flex-shrink: 0; }
+.theme-dots i { width: 14px; height: 14px; border-radius: 50%; margin-right: -4px; box-shadow: 0 0 0 2px #14081f; }
+.theme-link { display: block; margin-top: 12px; }
+.theme-link span { display: block; margin-bottom: 6px; color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.theme-link input {
+  width: 100%; background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: #fff; padding: 10px 12px;
+}
 .size-picks { display: flex; flex-wrap: wrap; gap: 8px; }
 .size-picks button { padding: 8px 12px; border-radius: 10px; background: rgba(255,255,255,0.05); color: inherit; font-weight: 700; }
 .size-picks button.on { background: var(--brand); color: #fff; }
