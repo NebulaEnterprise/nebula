@@ -39,8 +39,9 @@
   function hoistOf(member) {
     const saved = new Map((ui.roles || []).map((role) => [role.id, role]));
     const roles = (member?.roles || []).map((role) => {
-      const full = saved.get(role?.id) || role;
-      return full;
+      const full = saved.get(role?.id);
+      if (!full) return role;
+      return { ...full, ...role, hoist: role?.hoist != null ? role.hoist : full.hoist, position: role?.position != null ? role.position : full.position };
     }).filter((role) => role && role.hoist && role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner');
     roles.sort((a, b) => (b.position || 0) - (a.position || 0));
     return roles[0] || null;

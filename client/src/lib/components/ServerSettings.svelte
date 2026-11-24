@@ -128,7 +128,13 @@
     }
     return [...map.values()];
   });
-  const customRoles = $derived((s.roles || []).filter((role) => role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner'));
+  const customRoles = $derived.by(() => {
+    const list = (s.roles || []).filter((role) => role.id !== 'everyone' && role.id !== 'here' && role.id !== 'owner');
+    return list
+      .map((role, index) => ({ role, index }))
+      .sort((a, b) => (b.role.position || 0) - (a.role.position || 0) || a.index - b.index)
+      .map((row) => row.role);
+  });
   const textChannels = $derived((s.channels || []).filter((ch) => ch.type !== 'voice'));
   const voiceChannels = $derived((s.channels || []).filter((ch) => ch.type === 'voice'));
   const openReports = $derived((s.reports || []).filter((item) => item.status === 'open'));
@@ -436,6 +442,45 @@
 
   let dragCh = $state('');
   let dragCat = $state('');
+  let dragRole = $state('');
+
+  async function saveRoleOrder(ids) {
+    await api('/api/servers/' + ui.serverId + '/roles/order', { method: 'POST', body: { ids } });
+    await reloadSettings();
+    await loadMembers();
+  }
+
+  async function moveRole(role, dir) {
+    const list = customRoles.slice();
+    const index = list.findIndex((row) => row.id === role.id);
+    const next = dir === 'up' ? index - 1 : index + 1;
+    if (index < 0 || next < 0 || next >= list.length) return;
+    const swapped = list.slice();
+    const [item] = swapped.splice(index, 1);
+    swapped.splice(next, 0, item);
+    try {
+      await saveRoleOrder(swapped.map((row) => row.id));
+    } catch (err) {
+      toast(err.message);
+    }
+  }
+
+  async function dropRole(target) {
+    const from = dragRole;
+    dragRole = '';
+    if (!from || !target || from === target.id) return;
+    const list = customRoles.slice();
+    const start = list.findIndex((row) => row.id === from);
+    const dest = list.findIndex((row) => row.id === target.id);
+    if (start < 0 || dest < 0) return;
+    const [item] = list.splice(start, 1);
+    list.splice(dest, 0, item);
+    try {
+      await saveRoleOrder(list.map((row) => row.id));
+    } catch (err) {
+      toast(err.message);
+    }
+  }
 
   async function dropChannel(target) {
     const from = (s.channels || []).find((ch) => ch.id === dragCh) || (ui.channels || []).find((ch) => ch.id === dragCh);
@@ -541,6 +586,18 @@
     <img src="./logo.webp?v=3" alt="" />
     <strong>{title}</strong>
     <p>{text}</p>
+  </div>
+{/snippet}
+
+{#snippet roleRank(role)}
+  <div class="gset-role-row" class:on={editing && editing.id === role.id} ondragover={(e) => e.preventDefault()} ondrop={() => dropRole(role)}>
+    <span class="gset-grip" draggable="true" title="Drag to reorder" ondragstart={() => (dragRole = role.id)}><GripVertical size={14} /></span>
+    <button type="button" class="gset-role-hit" onclick={() => openRole(role)}>
+      <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
+      <span class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</span>
+    </button>
+    <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
+    <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
   </div>
 {/snippet}
 
@@ -1072,14 +1129,18 @@
                 <span class="gset-dot"></span>
                 <span class="grow"><strong>Default permissions</strong><em>@everyone · applies to all server members</em></span>
               </button>
-              <p class="hint">Click a role to edit it. {customRoles.length} custom {customRoles.length === 1 ? 'role' : 'roles'}.</p>
+              <p class="hint">Drag a role, or use the arrows, to change its place. Roles at the top show first in the member list. {customRoles.length} custom {customRoles.length === 1 ? 'role' : 'roles'}.</p>
               {#each customRoles as role}
-                <button type="button" class="gset-role-row" onclick={() => openRole(role)}>
-                  <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
-                  <strong class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</strong>
+                <div class="gset-role-row" ondragover={(e) => e.preventDefault()} ondrop={() => dropRole(role)}>
+                  <span class="gset-grip" draggable="true" title="Drag to reorder" ondragstart={() => (dragRole = role.id)}><GripVertical size={14} /></span>
+                  <button type="button" class="gset-role-hit" onclick={() => openRole(role)}>
+                    <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
+                    <strong class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</strong>
+                  </button>
                   <span class="hint">{people.filter((member) => memberRoleIds(member).includes(role.id)).length}</span>
-                  <Pencil size={14} />
-                </button>
+                  <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
+                  <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
+                </div>
               {/each}
             </section>
           {:else}
@@ -1089,11 +1150,9 @@
                   <button type="button" class="btn" onclick={() => (roleEdit = '')}><ChevronLeft size={16} /> Back</button>
                   <button type="button" class="btn icon" title="Create role" onclick={createRole}><Plus size={16} /></button>
                 </div>
+                <p class="hint">Top of this list shows first in the member list.</p>
                 {#each customRoles as role}
-                  <button type="button" class="gset-role-row" class:on={role.id === editing.id} onclick={() => openRole(role)}>
-                    <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
-                    <span>{role.name}</span>
-                  </button>
+                  {@render roleRank(role)}
                 {/each}
                 {#if (s.roles || []).some((role) => role.id === 'everyone')}
                   <button type="button" class="gset-role-row" class:on={editing.id === 'everyone'} onclick={() => openRole((s.roles || []).find((role) => role.id === 'everyone'))}>

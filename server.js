@@ -1453,7 +1453,7 @@ function ensureGuilds() {
     }
     role.name = fresh.name;
     role.permissions = fresh.permissions;
-    role.position = fresh.position;
+    if (role.position == null) role.position = fresh.position;
     if (!role.color) role.color = fresh.color;
   }
   let perksChanged = false;
@@ -5402,6 +5402,38 @@ app.delete('/api/servers/:id/channels/:channelId', auth, (req, res) => {
   g.webhooks = (g.webhooks || []).filter((hook) => hook.channelId !== channel.id);
   saveGuilds();
   res.json({ ok: true });
+});
+
+function placeRoles(g, ids) {
+  const locked = new Set(['everyone', 'here', 'owner']);
+  const movable = (g.roles || []).filter((role) => role && !locked.has(role.id));
+  const wanted = [];
+  const seen = new Set();
+  for (const id of ids || []) {
+    const key = String(id || '');
+    if (!key || seen.has(key) || locked.has(key)) continue;
+    if (!movable.some((role) => role.id === key)) continue;
+    seen.add(key);
+    wanted.push(key);
+  }
+  for (const role of movable) {
+    if (!seen.has(role.id)) wanted.push(role.id);
+  }
+  const rank = new Map(wanted.map((id, index) => [id, wanted.length - index]));
+  for (const role of g.roles || []) {
+    if (role.id === 'everyone' || role.id === 'here') role.position = 0;
+    else if (rank.has(role.id)) role.position = rank.get(role.id);
+  }
+}
+
+app.post('/api/servers/:id/roles/order', auth, (req, res) => {
+  const g = requireGuild(req, res, PERM.MANAGE_ROLES);
+  if (!g) return;
+  if (!Array.isArray(req.body?.ids)) return res.status(400).json({ error: 'Send the roles in order' });
+  placeRoles(g, req.body.ids);
+  saveGuilds();
+  touchProfiles();
+  res.json({ ok: true, settings: settingsView(g, req.user) });
 });
 
 app.post('/api/servers/:id/roles', auth, (req, res) => {

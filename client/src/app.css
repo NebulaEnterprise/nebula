@@ -3572,6 +3572,9 @@ html.paint-mention .mention {
 }
 .gset-role-row:hover, .gset-role-row.on { background: rgba(255,255,255,0.06); }
 .gset-role-row em { display: block; }
+.gset-grip { display: grid; place-items: center; color: var(--faint); cursor: grab; flex-shrink: 0; }
+.gset-role-hit { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; background: none; color: inherit; text-align: left; font-weight: 650; padding: 0; }
+.gset-role-side .gset-role-row .btn.icon { padding: 4px; }
 .gset-dot { width: 12px; height: 12px; border-radius: 50%; background: #99aab5; flex-shrink: 0; }
 .gset-tabs { display: flex; gap: 16px; border-bottom: 1px solid rgba(255,255,255,0.08); margin: 8px 0 14px; }
 .gset-tabs button { padding: 8px 0; color: var(--muted); font-weight: 700; background: transparent; }
