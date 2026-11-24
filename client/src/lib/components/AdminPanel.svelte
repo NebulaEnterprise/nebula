@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Search, Shield, Users, Server, Activity, AlertTriangle, Bot, Ban, Clock, VolumeX, UserX, X, Copy, Download, Zap, Lock, Trash2, RefreshCw, BadgeCheck, Crown, Mail, Calendar, StickyNote, Settings, Gavel, FileText } from '@lucide/svelte';
+  import { Search, Shield, Users, Server, Activity, AlertTriangle, Bot, Ban, Clock, VolumeX, UserX, X, Copy, Download, Zap, Lock, Trash2, RefreshCw, BadgeCheck, Crown, Mail, Calendar, StickyNote, Settings, Gavel, FileText, Plus } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { api } from '../api.js';
   import { toast, staffReport } from '../state.svelte.js';
@@ -9,6 +9,9 @@
   let counts = $state({ accounts: 0, people: 0, bots: 0, online: 0, disabled: 0, servers: 0, reports: 0 });
   let servers = $state([]);
   let audit = $state([]);
+  let appeals = $state([]);
+  let view = $state('users');
+  let roleMenu = $state('');
   let owner = $state(false);
   let loading = $state(true);
   let loadError = $state('');
@@ -96,6 +99,48 @@
     return new Date(time).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
 
+  function auditLine(row) {
+    const staff = row.actorName || 'Staff';
+    const name = row.targetName ? '@' + row.targetName : 'an account';
+    const detail = String(row.detail || '').trim();
+    const action = row.action || '';
+    if (action === 'restrict') {
+      const allowed = /allowed/i.test(detail);
+      const feature = detail.replace(/ restricted| allowed/gi, '') || 'a feature';
+      return staff + (allowed ? ' allowed ' : ' restricted ') + feature + ' for ' + name;
+    }
+    if (action === 'role') return staff + ' ' + (detail ? detail.charAt(0).toLowerCase() + detail.slice(1) : 'changed a role') + ' for ' + name;
+    if (action === 'username' || action === 'reset-username') return staff + ' changed ' + name + ' to ' + (detail || 'a new username');
+    if (action === 'display-name' || action === 'reset-display') return staff + ' set the display name for ' + name + ' to ' + (detail || 'their username');
+    if (action === 'warn') return staff + ' warned ' + name + (detail ? ': ' + detail : '');
+    if (action === 'case') return staff + ' opened a case on ' + name + (detail ? ': ' + detail : '');
+    if (action === 'mute') return staff + ' muted ' + name;
+    if (action === 'unmute') return staff + ' unmuted ' + name;
+    if (action === 'kick') return staff + ' kicked ' + name + (detail ? ' · ' + detail : '');
+    if (action === 'server-ban') return staff + ' banned ' + name + ' from a server' + (detail ? ' · ' + detail : '');
+    if (action === 'global-ban') return staff + ' banned ' + name + ' from Nebula' + (detail ? ': ' + detail : '');
+    if (action === 'global-unban') return staff + ' removed the platform ban on ' + name;
+    if (action === 'unban') return staff + ' removed a server ban on ' + name;
+    if (action === 'timeout') return staff + ' timed out ' + name + (detail ? ' · ' + detail : '');
+    if (action === 'suspend') return staff + ' suspended ' + name + (detail ? ' · ' + detail : '');
+    if (action === 'unsuspend') return staff + ' cleared the suspension on ' + name;
+    if (action === 'disable') return staff + ' disabled ' + name + (detail ? ': ' + detail : '');
+    if (action === 'enable' || action === 'unlock') return staff + ' enabled ' + name;
+    if (action === 'lock') return staff + ' locked ' + name + (detail ? ': ' + detail : '');
+    if (action === 'logout') return staff + ' signed ' + name + ' out of every device';
+    if (action === 'delete') return staff + ' deleted ' + name + (detail ? ': ' + detail : '');
+    if (action === 'restore') return staff + ' restored ' + name;
+    if (action === 'purge') return staff + ' permanently deleted ' + name + (detail ? ': ' + detail : '');
+    if (action === 'delete-messages') return staff + ' deleted messages from ' + name + (detail ? ' · ' + detail : '');
+    if (action === 'note') return staff + ' added a staff note on ' + name;
+    if (action === 'badge' || action === 'premium' || action === 'verify-email' || action === 'password' || action === 'email') return staff + ' · ' + (detail || action) + ' for ' + name;
+    if (action === 'appeal-approve') return staff + ' approved the appeal from ' + name;
+    if (action === 'appeal-deny') return staff + ' denied the appeal from ' + name;
+    return staff + ' ' + action.replaceAll('-', ' ') + ' ' + name + (detail ? ' · ' + detail : '');
+  }
+
+  const openAppeals = $derived(appeals.filter((row) => row.status === 'open').length);
+
   function pill(user) {
     if (user.deleted) return ['Deleted', 'bad'];
     if (user.globalBan) return ['Banned', 'bad'];
@@ -111,6 +156,7 @@
     counts = { ...counts, ...(data.counts || {}) };
     servers = data.servers || [];
     audit = data.audit || [];
+    appeals = data.appeals || [];
     owner = !!data.owner;
     if (selectedId && !people.some((user) => user.id === selectedId)) {
       selectedId = '';
@@ -219,6 +265,19 @@
     URL.revokeObjectURL(link.href);
   }
 
+  async function decideAppeal(id, action) {
+    busy = id;
+    formError = '';
+    try {
+      apply(await api('/api/staff/appeals/' + encodeURIComponent(id), { method: 'POST', body: { action } }));
+      toast(action === 'approve' ? 'Appeal approved' : 'Appeal denied');
+    } catch (err) {
+      formError = err.message || 'Could not update the appeal';
+    } finally {
+      busy = '';
+    }
+  }
+
   async function closeReport(id, action) {
     busy = id;
     try {
@@ -243,6 +302,11 @@
     </div>
     <span class="adm-live"><i></i> All systems operational</span>
   </header>
+
+  <div class="adm-filters">
+    <button type="button" class:on={view === 'users'} onclick={() => (view = 'users')}>Users</button>
+    <button type="button" class:on={view === 'appeals'} onclick={() => (view = 'appeals')}>Appeals{openAppeals ? ' ' + openAppeals : ''}</button>
+  </div>
 
   {#if loadError}
     <p class="adm-error">{loadError}</p>
@@ -275,6 +339,40 @@
     </article>
   </div>
 
+  {#if view === 'appeals'}
+    <section class="adm-card">
+      <div class="adm-card-top">
+        <span class="stat-ico"><Gavel size={15} /></span>
+        <div>
+          <h3>Appeals</h3>
+          <small>Accounts banned or disabled on Nebula.</small>
+        </div>
+      </div>
+      {#if loadError}<p class="adm-error">{loadError}</p>{/if}
+      {#if !appeals.length}
+        <p class="adm-empty">No appeals yet.</p>
+      {:else}
+        {#each appeals as appeal (appeal.id)}
+          <article class="adm-appeal">
+            <div>
+              <strong>@{appeal.username}</strong>
+              <small>ID {appeal.uid || '—'} · {appeal.kind === 'disabled' ? 'Disabled' : appeal.kind === 'both' ? 'Banned and disabled' : 'Platform ban'} · {when(appeal.at)}</small>
+              <p>{appeal.text}</p>
+              {#if appeal.status !== 'open'}
+                <small>{appeal.status === 'approved' ? 'Approved' : 'Denied'}{appeal.resolvedBy ? ' by ' + appeal.resolvedBy : ''}</small>
+              {/if}
+            </div>
+            {#if appeal.status === 'open'}
+              <div class="adm-inline">
+                <button type="button" class="primary" disabled={!!busy} onclick={() => decideAppeal(appeal.id, 'approve')}>Approve</button>
+                <button type="button" disabled={!!busy} onclick={() => decideAppeal(appeal.id, 'deny')}>Deny</button>
+              </div>
+            {/if}
+          </article>
+        {/each}
+      {/if}
+    </section>
+  {:else}
   <div class="adm-grid">
     <section class="adm-card">
       <div class="adm-card-top">
@@ -315,32 +413,6 @@
     <div class="adm-side">
       <section class="adm-card">
         <div class="adm-card-top">
-          <span class="stat-ico"><Server size={15} /></span>
-          <div>
-            <h3>Server management</h3>
-            <small>Communities on Nebula.</small>
-          </div>
-        </div>
-        {#if servers[0]}
-          <div class="adm-nebula" aria-hidden="true"></div>
-          <div class="adm-feature">
-            <strong>{servers[0].name}</strong>
-            <small>{servers[0].members.toLocaleString()} members</small>
-          </div>
-        {/if}
-        {#each servers.slice(1) as server (server.id)}
-          <div class="adm-server">
-            <strong>{server.name}</strong>
-            <small>{server.members.toLocaleString()} members</small>
-          </div>
-        {/each}
-        {#if !servers.length}
-          <p class="adm-empty">No servers yet.</p>
-        {/if}
-      </section>
-
-      <section class="adm-card">
-        <div class="adm-card-top">
           <span class="stat-ico"><Gavel size={15} /></span>
           <div>
             <h3>Moderation tools</h3>
@@ -371,7 +443,7 @@
           {#each audit as row (row.id)}
             <div class="adm-audit">
               <span class="stat-ico"><Shield size={13} /></span>
-              <span><b>{row.actorName}</b> {row.action}{row.targetName ? ' · ' + row.targetName : ''}</span>
+              <span>{auditLine(row)}</span>
               <small>{when(row.at)}</small>
             </div>
           {/each}
@@ -387,6 +459,7 @@
       </section>
     </div>
   </div>
+  {/if}
 
   {#if open && selected}
     {@const tag = pill(selected)}
@@ -483,19 +556,6 @@
                   <label>Username
                     <span class="adm-field"><input bind:value={nextName} disabled={!selected.canEdit} /><button type="button" disabled={!selected.canEdit || !!busy} onclick={() => run('username')}>Save</button></span>
                   </label>
-                  <label>Server
-                    <select bind:value={serverId}>
-                      {#each servers as server}<option value={server.id}>{server.name}</option>{/each}
-                    </select>
-                  </label>
-                  <label>Add role
-                    <select bind:value={roleId} onchange={() => roleId && run('role', { serverId, roleId, remove: false })} disabled={!selected.canEdit}>
-                      <option value="">Select role</option>
-                      {#each (servers.find((server) => server.id === serverId)?.roles || []) as role}
-                        <option value={role.id}>{role.name}</option>
-                      {/each}
-                    </select>
-                  </label>
                   <div class="adm-switch">
                     <div><strong>Disable account</strong><small>Stop them from signing in</small></div>
                     <button type="button" class="switch" class:on={selected.disabled} disabled={!selected.canModerate || !!busy} onclick={() => ask(selected.disabled ? 'enable' : 'disable')} aria-label="Disable account"></button>
@@ -522,21 +582,38 @@
             {:else if tab === 'roles'}
               {#if !selected.roles.length}<p class="adm-empty">Not in a server.</p>{/if}
               {#each selected.roles as membership (membership.id)}
+                {@const catalog = (servers.find((server) => server.id === membership.id)?.roles || []).filter((role) => !membership.roles.some((have) => have.id === role.id))}
                 <div class="adm-section">
                   <h3>{membership.name} {#if membership.banned}<em class="bad">Banned</em>{/if}</h3>
-                  <div class="adm-chips">
+                  <div class="pop-role-list profile-roles">
                     {#each membership.roles as role (role.id)}
-                      <button type="button" disabled={!selected.canEdit || role.id === 'everyone' || !!busy} onclick={() => run('role', { serverId: membership.id, roleId: role.id, remove: true })}>{role.name} ×</button>
+                      <em class="pop-role" class:can-drop={selected.canEdit && role.id !== 'everyone'}>
+                        {#if selected.canEdit && role.id !== 'everyone'}
+                          <button type="button" class="role-x" title={'Remove ' + role.name} aria-label={'Remove ' + role.name} disabled={!!busy} onclick={() => run('role', { serverId: membership.id, roleId: role.id, remove: true })}>
+                            <i style="background:{role.color || '#99aab5'}"></i>
+                            <X size={9} />
+                          </button>
+                        {:else}
+                          <i style="background:{role.color || '#99aab5'}"></i>
+                        {/if}
+                        {role.name}
+                      </em>
                     {/each}
+                    {#if selected.canEdit}
+                      <button type="button" class="role-add" title="Add role" aria-label="Add role" onclick={() => (roleMenu = roleMenu === membership.id ? '' : membership.id)}><Plus size={14} /></button>
+                    {/if}
                   </div>
-                  <label>Add role
-                    <select onchange={(event) => { const id = event.currentTarget.value; if (id) run('role', { serverId: membership.id, roleId: id, remove: false }); event.currentTarget.value = ''; }} disabled={!selected.canEdit}>
-                      <option value="">Select role</option>
-                      {#each (servers.find((server) => server.id === membership.id)?.roles || []) as role}
-                        <option value={role.id}>{role.name}</option>
+                  {#if roleMenu === membership.id}
+                    <div class="role-add-menu">
+                      {#each catalog as role (role.id)}
+                        <button type="button" disabled={!!busy} onclick={() => { roleMenu = ''; run('role', { serverId: membership.id, roleId: role.id, remove: false }); }}>
+                          <i style="background:{role.color || '#99aab5'}"></i>{role.name}
+                        </button>
+                      {:else}
+                        <p>Every role is already on this profile.</p>
                       {/each}
-                    </select>
-                  </label>
+                    </div>
+                  {/if}
                 </div>
               {/each}
             {:else if tab === 'permissions'}
@@ -690,17 +767,17 @@
   .adm-stats article, .adm-card, .adm-modal, .adm-section, .adm-tile, .adm-confirm { background: #1a1028; border: 1px solid rgba(168, 85, 247, 0.28); border-radius: 18px; }
   .adm-stats article { padding: 14px 16px 16px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 118px; }
   .adm-stats b { font-size: 32px; line-height: 1.1; margin-top: 8px; }
-  .adm-stats small, .adm-row small, .adm-server small, .adm-audit small, .adm-tile small, .adm-bot small, .adm-feature small { color: #b9a4cc; }
+  .adm-stats small, .adm-row small, .adm-audit small, .adm-tile small, .adm-bot small { color: #b9a4cc; }
   .adm-grid { grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr); align-items: start; }
   .adm-card { padding: 14px; }
-  .adm-card-top, .adm-feature, .adm-server, .adm-audit, .adm-bot, .adm-row, .adm-inline, .adm-mail, .adm-premium, .adm-rail button { display: flex; align-items: center; gap: 10px; }
+  .adm-card-top, .adm-audit, .adm-bot, .adm-row, .adm-inline, .adm-mail, .adm-premium, .adm-rail button { display: flex; align-items: center; gap: 10px; }
   .adm-card-top { margin-bottom: 12px; }
   .adm-card-top .stat-ico { width: 32px; height: 32px; }
   .adm-side { display: flex; flex-direction: column; gap: 12px; }
   .adm-search { display: flex; gap: 8px; align-items: center; background: #12091c; border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
-  .adm-search input, .adm-confirm input, .adm-confirm select, .adm-section input, .adm-section select, .adm-section textarea, .adm-field input { width: 100%; border: 0; background: transparent; color: inherit; outline: none; font: inherit; }
+  .adm-search input, .adm-confirm input, .adm-confirm select, .adm-section input, .adm-section textarea, .adm-field input { width: 100%; border: 0; background: transparent; color: inherit; outline: none; font: inherit; }
   .adm-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-  .adm-filters button, .adm-tabs button, .adm-inline button, .adm-chips button, .adm-rail button, .adm-settings button, .adm-field button, .texty { border: 0; border-radius: 999px; background: #241433; color: inherit; padding: 7px 12px; cursor: pointer; font: inherit; }
+  .adm-filters button, .adm-tabs button, .adm-inline button, .adm-rail button, .adm-settings button, .adm-field button, .texty { border: 0; border-radius: 999px; background: #241433; color: inherit; padding: 7px 12px; cursor: pointer; font: inherit; }
   .adm-filters button.on, .adm-tabs button.on, .primary, .adm-field button { background: #c026d3; }
   .adm-list { display: flex; flex-direction: column; gap: 4px; max-height: 520px; overflow: auto; }
   .adm-row { width: 100%; background: transparent; border: 0; color: inherit; border-radius: 14px; padding: 8px; cursor: pointer; text-align: left; }
@@ -716,16 +793,14 @@
   .adm-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .adm-tools button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 72px; border: 0; border-radius: 14px; background: #12091c; color: inherit; cursor: pointer; font: inherit; }
   .adm-tools button:hover, .adm-tile:hover { border-color: rgba(232, 121, 249, 0.7); }
-  .adm-server, .adm-audit { justify-content: space-between; padding: 8px 0; }
-  .adm-audit { gap: 8px; }
-  .adm-audit span { flex: 1; min-width: 0; color: #eadff5; }
+  .adm-audit { justify-content: space-between; padding: 8px 0; }
+  .adm-audit { gap: 8px; align-items: flex-start; }
+  .adm-audit span { flex: 1; min-width: 0; color: #eadff5; white-space: normal; line-height: 1.35; }
+  .adm-section .profile-roles { flex-wrap: wrap; justify-content: flex-start; }
+  .adm-appeal { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid rgba(168, 85, 247, 0.16); }
+  .adm-appeal p { margin: 6px 0; }
+  .adm-appeal small { display: block; color: #b9a4cc; }
   .adm-audit .stat-ico, .adm-bot .stat-ico { width: 28px; height: 28px; border-radius: 9px; }
-  .adm-nebula { height: 108px; border-radius: 14px; margin-bottom: 10px; background:
-    radial-gradient(circle at 32% 42%, rgba(250, 232, 255, 0.95), transparent 16%),
-    radial-gradient(circle at 58% 58%, rgba(192, 132, 252, 0.85), transparent 26%),
-    radial-gradient(circle at 74% 28%, rgba(244, 114, 182, 0.45), transparent 18%),
-    linear-gradient(160deg, #3b0764, #12081f); }
-  .adm-feature { justify-content: space-between; }
   .adm-shade { position: fixed; inset: 0; background: rgba(6, 2, 14, 0.72); display: grid; place-items: center; z-index: 120; padding: 28px; }
   .adm-modal { width: min(1140px, 100%); max-height: min(860px, 100%); overflow: auto; background: #140a20; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
   .adm-modal-top { display: flex; align-items: center; gap: 12px; padding: 12px 14px; position: sticky; top: 0; z-index: 2; background: #140a20; border-bottom: 1px solid rgba(168, 85, 247, 0.18); }
@@ -736,7 +811,7 @@
   .adm-profile, .adm-rail { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
   .adm-profile h3, .handle, .uid { margin: 0; }
   .handle, .uid { color: #c4b0d6; }
-  .adm-pills, .adm-flags, .adm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .adm-pills, .adm-flags { display: flex; flex-wrap: wrap; gap: 6px; }
   .adm-facts { width: 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
   .adm-facts div { display: grid; grid-template-columns: 16px minmax(72px, auto) minmax(0, 1fr); gap: 8px; align-items: center; font-size: 13px; }
   .adm-facts span { color: #b9a4cc; }
@@ -754,7 +829,7 @@
   .ico.neutral { background: rgba(192, 132, 252, 0.16); color: #e9d5ff; }
   .adm-optgrid { grid-template-columns: 1fr 1fr; }
   .adm-optgrid label, .adm-confirm label, .adm-settings label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #c4b0d6; }
-  .adm-field, .adm-optgrid select, .adm-confirm input, .adm-confirm select, .adm-settings input, .adm-section textarea { display: flex; align-items: center; gap: 8px; background: #12091c; border: 1px solid rgba(168, 85, 247, 0.22); border-radius: 12px; padding: 8px 10px; }
+  .adm-field, .adm-confirm input, .adm-confirm select, .adm-settings input, .adm-section textarea { display: flex; align-items: center; gap: 8px; background: #12091c; border: 1px solid rgba(168, 85, 247, 0.22); border-radius: 12px; padding: 8px 10px; }
   .adm-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #12091c; border-radius: 14px; padding: 12px; }
   .adm-switch strong, .adm-switch small { display: block; }
   .switch { width: 44px; height: 26px; border-radius: 99px; border: 0; background: #3b2a4d; position: relative; cursor: pointer; }

@@ -22,6 +22,7 @@ export const ui = $state({
   mfa: null,
   authError: '',
   authOk: '',
+  appeal: null,
   pending: null,
   pendingVault: null,
   mode: 'friends',
@@ -324,7 +325,18 @@ function keepUnlock(data) {
 
 export async function login(email, password) {
   ui.authError = '';
-  const data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+  let data;
+  try {
+    data = await api('/api/auth/login', { method: 'POST', body: { email, password } });
+  } catch (err) {
+    if (err.appeal) {
+      ui.auth = 'appeal';
+      ui.appeal = { username: email, password, kind: err.kind || 'ban' };
+      ui.authError = err.message;
+      return;
+    }
+    throw err;
+  }
   if (data.mfa) {
     ui.mfa = { ticket: data.ticket, methods: data.methods || ['totp'], email };
     ui.auth = 'mfa';
@@ -332,6 +344,19 @@ export async function login(email, password) {
   }
   if (keepUnlock(data)) return;
   await finishLogin(data);
+}
+
+export async function submitAppeal(text) {
+  const appeal = ui.appeal;
+  if (!appeal) throw new Error('Sign in again to send an appeal');
+  await api('/api/auth/appeal', {
+    method: 'POST',
+    body: { username: appeal.username, password: appeal.password, text },
+  });
+  ui.appeal = null;
+  ui.auth = 'login';
+  ui.authError = '';
+  ui.authOk = 'Appeal sent. Staff will review it.';
 }
 
 export async function unlockAccount(secret) {

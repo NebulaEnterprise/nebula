@@ -73,6 +73,8 @@ export async function api(path, opts = {}) {
   if (!res.ok) {
     const error = new Error(data.error || 'Request failed');
     error.status = res.status;
+    if (data.appeal) error.appeal = true;
+    if (data.kind) error.kind = data.kind;
     throw error;
   }
   return data;

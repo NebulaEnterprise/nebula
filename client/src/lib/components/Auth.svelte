@@ -1,5 +1,5 @@
 <script>
-  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey, unlockAccount, finishSetup, confirmSwitch, cancelSwitch } from '../state.svelte.js';
+  import { ui, login, requestCode, verify, cancelAdd, savedAccounts, switchAccount, submitMfa, loginWithPasskey, unlockAccount, finishSetup, confirmSwitch, cancelSwitch, submitAppeal } from '../state.svelte.js';
   import { recoveryCode } from '../vault.js';
   import Avatar from './Avatar.svelte';
   import { t } from '../i18n.svelte.js';
@@ -13,6 +13,7 @@
   let generated = $state(recoveryCode());
   let saved = $state(false);
   let busy = $state(false);
+  let appealText = $state('');
 
   function chosenSecret() {
     if (method === 'code') {
@@ -75,6 +76,11 @@
       {#if !ui.addingAccount}
         <p class="auth-switch"><button type="button" onclick={() => (ui.authGate = false)}>Back to home</button></p>
       {/if}
+    {:else if ui.auth === 'appeal'}
+      <p class="sub">{ui.appeal?.kind === 'disabled' ? 'This account is disabled.' : ui.appeal?.kind === 'both' ? 'This account is banned and disabled.' : 'This account is banned from Nebula.'} You can ask staff to restore it.</p>
+      <div class="field"><label>Appeal</label><textarea bind:value={appealText} rows="4" maxlength="500" placeholder="Why should this account be restored?"></textarea></div>
+      <button class="btn brand" disabled={busy} onclick={() => run(() => submitAppeal(appealText.trim()))}>Submit appeal</button>
+      <p class="auth-switch"><button type="button" onclick={() => { ui.auth = 'login'; ui.appeal = null; ui.authError = ''; }}>Back</button></p>
     {:else if ui.auth === 'locked'}
       <p class="sub">{ui.switchHold ? 'Enter the recovery code or passphrase for ' + (ui.switchHold.name || 'this account') + '.' : 'Email and password were accepted. Enter the recovery code or passphrase to open the account.'}</p>
       <div class="field"><label>Recovery code or passphrase</label><input bind:value={secret} type="password" autocomplete="current-password" /></div>

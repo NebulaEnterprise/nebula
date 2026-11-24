@@ -3728,7 +3728,10 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
   const held = accountHold(user);
-  if (held) return res.status(403).json({ error: held });
+  if (held) {
+    const kind = user.globalBan && user.disabled ? 'both' : user.globalBan ? 'ban' : user.disabled ? 'disabled' : '';
+    return res.status(403).json({ error: held, appeal: !!kind, kind });
+  }
   if (raw.includes('@') && emailMatches(raw, user.emailSalt, user.emailHash) && user.email !== raw) {
     user.email = raw;
     save(USERS_FILE, users);
@@ -3747,6 +3750,29 @@ app.post('/api/auth/login', (req, res) => {
     });
   }
   res.json(vaultGate(user));
+});
+
+app.post('/api/auth/appeal', (req, res) => {
+  const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
+  const password = req.body && req.body.password;
+  const text = String((req.body && req.body.text) || '').trim().slice(0, 500);
+  const user = Object.values(users).find((u) => u && !u.bot && u.username === raw)
+    || Object.values(users).find((u) => u && !u.bot && emailMatches(raw, u.emailSalt, u.emailHash));
+  if (!user || !checkPassword(password || '', user.passwordHash)) {
+    return res.status(400).json({ error: 'That email, username, or password is wrong' });
+  }
+  if (isRootAccount(user)) return res.status(400).json({ error: 'That account cannot send an appeal' });
+  const kind = user.globalBan && user.disabled ? 'both' : user.globalBan ? 'ban' : user.disabled ? 'disabled' : '';
+  if (!kind) return res.status(400).json({ error: 'This account is not banned or disabled' });
+  if (text.length < 8) return res.status(400).json({ error: 'Tell staff why the account should be restored' });
+  if (!Array.isArray(user.appeals)) user.appeals = [];
+  if (user.appeals.some((row) => row && row.status === 'open')) {
+    return res.status(400).json({ error: 'You already have an appeal waiting' });
+  }
+  user.appeals.unshift({ id: uuidv4(), at: new Date().toISOString(), text, status: 'open', kind });
+  user.appeals = user.appeals.slice(0, 20);
+  save(USERS_FILE, users);
+  res.json({ ok: true });
 });
 
 app.post('/api/auth/mfa', (req, res) => {
@@ -7763,7 +7789,7 @@ function accountRoles(user) {
     if (!mem && !banned) continue;
     const roles = ((mem && mem.roles) || []).map((id) => {
       const role = (g.roles || []).find((row) => row.id === id);
-      return { id, name: role ? role.name : id };
+      return { id, name: role ? role.name : id, color: role && role.color ? role.color : '#99aab5' };
     });
     out.push({
       id: g.id,
@@ -7876,7 +7902,7 @@ function staffDirectory(viewer) {
     id: g.id,
     name: g.name || 'Server',
     members: Object.keys(g.members || {}).length,
-    roles: (g.roles || []).filter((row) => row && row.id !== 'everyone' && row.id !== 'owner').map((row) => ({ id: row.id, name: row.name })),
+    roles: (g.roles || []).filter((row) => row && row.id && row.id !== 'everyone' && row.id !== 'owner' && row.id !== 'here' && row.type !== 'text' && row.type !== 'voice').map((row) => ({ id: row.id, name: row.name, color: row.color || '#99aab5' })),
   }));
   const audit = (guilds.staffAudit || []).slice(0, 12).map((row) => ({
     id: row.id,
@@ -7886,7 +7912,31 @@ function staffDirectory(viewer) {
     action: row.action,
     detail: row.detail,
   }));
-  return { users: list, counts, owner: isOfficialOwner(viewer), servers, audit };
+  return { users: list, counts, owner: isOfficialOwner(viewer), servers, audit, appeals: listAppeals() };
+}
+
+function listAppeals() {
+  const out = [];
+  for (const user of Object.values(users)) {
+    if (!user || !Array.isArray(user.appeals)) continue;
+    for (const row of user.appeals) {
+      if (!row) continue;
+      out.push({
+        id: row.id,
+        at: row.at,
+        text: row.text || '',
+        status: row.status || 'open',
+        kind: row.kind || '',
+        userId: user.id,
+        username: user.username,
+        uid: user.uid || null,
+        resolvedBy: row.resolvedBy || '',
+        resolvedAt: row.resolvedAt || '',
+      });
+    }
+  }
+  out.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
+  return out.slice(0, 80);
 }
 
 function dropSessions(user) {
@@ -8194,6 +8244,39 @@ app.post('/api/staff/users/:id', auth, (req, res) => {
   const body = { ok: true, user: staffAccount(target, req.user), ...staffDirectory(req.user) };
   if (temporaryPassword) body.temporaryPassword = temporaryPassword;
   res.json(body);
+});
+
+app.post('/api/staff/appeals/:id', auth, (req, res) => {
+  if (!isNebulaStaff(req.user)) return res.status(403).json({ error: 'Only Nebula staff can review appeals' });
+  const id = String(req.params.id || '');
+  let target = null;
+  let appeal = null;
+  for (const user of Object.values(users)) {
+    if (!user || !Array.isArray(user.appeals)) continue;
+    const found = user.appeals.find((row) => row && row.id === id);
+    if (found) {
+      target = user;
+      appeal = found;
+      break;
+    }
+  }
+  if (!appeal || !target) return res.status(404).json({ error: 'Appeal not found' });
+  if (appeal.status !== 'open') return res.status(400).json({ error: 'That appeal is already closed' });
+  if (isRootAccount(target)) return res.status(400).json({ error: 'That account is not affected by permissions' });
+  const action = String(req.body?.action || '');
+  if (action === 'approve') {
+    target.globalBan = null;
+    target.disabled = false;
+    appeal.status = 'approved';
+  } else if (action === 'deny') {
+    appeal.status = 'denied';
+  } else return res.status(400).json({ error: 'Unknown action' });
+  appeal.resolvedBy = req.user.username;
+  appeal.resolvedAt = new Date().toISOString();
+  pushStaffLog(req.user, target, action === 'approve' ? 'appeal-approve' : 'appeal-deny', appeal.text.slice(0, 160));
+  save(USERS_FILE, users);
+  saveGuilds();
+  res.json({ ok: true, ...staffDirectory(req.user) });
 });
 
 app.get('/api/staff/reports', auth, (req, res) => {
