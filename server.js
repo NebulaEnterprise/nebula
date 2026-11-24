@@ -3447,6 +3447,13 @@ function endsWithBotTag(name) {
   return String(name || '').toLowerCase().endsWith('_bot');
 }
 
+const RESERVED_USERNAMES = new Set(['owner', 'founder', 'admin', 'administrator', 'manager', 'staff', 'mod', 'support', 'official', 'system']);
+
+function reservedUsername(name) {
+  const folded = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return RESERVED_USERNAMES.has(folded);
+}
+
 function cleanAliases(list) {
   const out = [];
   const seen = new Set();
@@ -3520,6 +3527,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   const cleanEmail = String(email).trim().toLowerCase();
   if (cleanUser.length < 1) return res.status(400).json({ error: 'Username required' });
   if (endsWithBotTag(cleanUser)) return res.status(400).json({ error: 'Usernames cannot end with _bot' });
+  if (reservedUsername(cleanUser)) return res.status(400).json({ error: 'That username is reserved' });
   if (!cleanEmail.includes('@')) return res.status(400).json({ error: 'Invalid email' });
   if (String(password).length < 6) return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -3630,6 +3638,7 @@ function sessionFor(user, req) {
 
 function createAccount(entry, req) {
   if (endsWithBotTag(entry && entry.username)) return { error: 'Usernames cannot end with _bot', status: 400 };
+  if (reservedUsername(entry && entry.username)) return { error: 'That username is reserved', status: 400 };
   const id = uuidv4();
   const uid = nextUid();
   const badges = [];
@@ -4529,7 +4538,7 @@ app.get('/api/username-available', auth, (req, res) => {
   const clean = normalizeUsername(req.query.name);
   if (!clean) return res.json({ ok: true, username: '', available: false, reason: 'invalid' });
   if (clean === req.user.username) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
-  if (endsWithBotTag(clean) && !req.user.bot) return res.json({ ok: true, username: clean, available: false, reason: 'reserved' });
+  if ((endsWithBotTag(clean) && !req.user.bot) || reservedUsername(clean)) return res.json({ ok: true, username: clean, available: false, reason: 'reserved' });
   const taken = Object.values(users).some((u) => u && u.id !== req.user.id && u.username === clean);
   res.json({ ok: true, username: clean, available: !taken, reason: taken ? 'taken' : 'available' });
 });
@@ -4554,6 +4563,7 @@ app.patch('/api/me', auth, (req, res) => {
     const clean = normalizeUsername(username);
     if (clean.length < 1) return res.status(400).json({ error: 'Username required' });
     if (endsWithBotTag(clean) && !req.user.bot) return res.status(400).json({ error: 'Usernames cannot end with _bot' });
+    if (reservedUsername(clean)) return res.status(400).json({ error: 'That username is reserved' });
     if (clean !== req.user.username) {
       const taken = Object.values(users).some((u) => u.id !== req.user.id && u.username === clean);
       if (taken) return res.status(409).json({ error: 'Username taken' });

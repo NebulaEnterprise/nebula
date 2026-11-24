@@ -592,12 +592,14 @@
 {#snippet roleRank(role)}
   <div class="gset-role-row" class:on={editing && editing.id === role.id} ondragover={(e) => e.preventDefault()} ondrop={() => dropRole(role)}>
     <span class="gset-grip" draggable="true" title="Drag to reorder" ondragstart={() => (dragRole = role.id)}><GripVertical size={14} /></span>
-    <button type="button" class="gset-role-hit" onclick={() => openRole(role)}>
+    <button type="button" class="gset-role-hit" title={role.name} onclick={() => openRole(role)}>
       <span class="gset-dot" style:background={role.color || '#99aab5'}></span>
-      <span class="grow">{role.icon ? role.icon + ' ' : ''}{role.name}</span>
+      <span class="gset-role-name">{role.icon ? role.icon + ' ' : ''}{role.name}</span>
     </button>
-    <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
-    <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
+    <span class="gset-role-moves">
+      <button type="button" class="btn icon" title="Move up" onclick={() => moveRole(role, 'up')}><ChevronUp size={14} /></button>
+      <button type="button" class="btn icon" title="Move down" onclick={() => moveRole(role, 'down')}><ChevronDown size={14} /></button>
+    </span>
   </div>
 {/snippet}
 

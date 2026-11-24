@@ -114,7 +114,7 @@
     : nameStatus === 'yours' ? 'This is your current username.'
     : nameStatus === 'checking' ? 'Checking that username…'
     : nameStatus === 'invalid' ? 'Use letters, numbers, dots, or underscores.'
-    : nameStatus === 'reserved' ? 'Usernames cannot end with _bot.'
+    : nameStatus === 'reserved' ? 'That username is reserved.'
     : ''
   );
   const nameReady = $derived(nameStatus === 'available' || nameStatus === 'yours');
@@ -136,7 +136,7 @@
     const username = cleanName(draftUser);
     if (!username) return toast('Username required');
     if (nameStatus === 'taken') return toast('That username is taken');
-    if (nameStatus === 'reserved') return toast('Usernames cannot end with _bot');
+    if (nameStatus === 'reserved') return toast('That username is reserved');
     if (nameStatus === 'checking') return;
     accountBusy = true;
     try {
