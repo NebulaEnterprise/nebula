@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
-  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen } from '@lucide/svelte';
-  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast, stepTextChannel, markServerRead } from './lib/state.svelte.js';
+  import { UserRound, Flag, Hash, FolderPlus, Bell, Pencil, Trash2, MicOff, HeadphoneOff, MessageSquare, Clock, Phone, X, Ban, DoorOpen, ChevronUp, ChevronDown } from '@lucide/svelte';
+  import { ui, boot, askSiteAccess, copyText, staffReport, applySiteTitle, openPopout, muteRoom, roomMuted, togglePin, closeConversation, pinnedChats, developerMode, markChannelRead, deleteChannel, openVoiceRoom, pollActivity, confirmSwitch, cancelSwitch, canModerateMembers, guildAction, loadMembers, toast, stepTextChannel, markServerRead, reloadSettings } from './lib/state.svelte.js';
   import { pullSharedTheme } from './lib/look.svelte.js';
   import { answerCall, declineCall, joinVoice, toggleMute, toggleDeafen } from './lib/voice.js';
   import { matchBind, isRecordingBind, pttKeyDown, pttChord, chordUsesMouse, mouseName } from './lib/keybinds.js';
@@ -49,6 +49,16 @@
       reason: '',
       minutes: '10',
     };
+  }
+
+  async function categoryAct(body) {
+    ui.channelMenu = null;
+    try {
+      await guildAction(body);
+      await reloadSettings();
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
   async function runMod() {
@@ -520,7 +530,15 @@
 {#if ui.channelMenu}
   {@const menu = ui.channelMenu}
   <div class="msg-menu channel-menu" style="left:{menu.x}px;top:{menu.y}px">
-    {#if menu.kind === 'blank'}
+    {#if menu.kind === 'category'}
+      {@const catIndex = (ui.categories || []).findIndex((row) => row.id === menu.categoryId)}
+      {#if menu.canChannels}
+        <button type="button" onclick={() => { ui.dialog = { kind: 'channel', categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
+        <button type="button" disabled={catIndex <= 0} onclick={() => categoryAct({ type: 'category-move', categoryId: menu.categoryId, dir: 'up' })}><ChevronUp size={16} /> Move up</button>
+        <button type="button" disabled={catIndex < 0 || catIndex >= (ui.categories || []).length - 1} onclick={() => categoryAct({ type: 'category-move', categoryId: menu.categoryId, dir: 'down' })}><ChevronDown size={16} /> Move down</button>
+        <button type="button" class="danger" onclick={() => categoryAct({ type: 'category-delete', categoryId: menu.categoryId })}><Trash2 size={16} /> Delete category</button>
+      {/if}
+    {:else if menu.kind === 'blank'}
       {#if menu.canChannels}
         <button type="button" onclick={() => { ui.dialog = { kind: 'channel', categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
       {/if}

@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom, guildAction, reloadSettings } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { look } from '../look.svelte.js';
   import { PERM } from '../format.js';
@@ -16,6 +16,7 @@
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   let dmQuery = $state('');
   let dragId = $state('');
+  let dragCat = $state('');
   let dropId = $state('');
   const canChannels = $derived(hasPerm(PERM.MANAGE_CHANNELS));
   const canServer = $derived(hasPerm(PERM.MANAGE_SERVER));
@@ -131,7 +132,7 @@
     ui.channelMenu = {
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - 240)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - 320)),
-      kind: channel ? channel.type : 'blank',
+      kind: channel ? channel.type : (extra.categoryId ? 'category' : 'blank'),
       channel,
       categoryId: channel ? (channel.categoryId || '') : (extra.categoryId || ''),
       canChannels,
@@ -147,6 +148,42 @@
       return;
     }
     try { await openVoiceRoom(ch); } catch (err) { toast(err.message); }
+  }
+
+  function dragCatStart(event, cat) {
+    if (!canChannels) return;
+    dragCat = cat.id;
+    dragId = '';
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', 'cat:' + cat.id);
+    event.stopPropagation();
+  }
+
+  function dragCatOver(event, cat) {
+    if (!dragCat || dragCat === cat.id) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dropId = 'cat:' + cat.id;
+  }
+
+  async function dragCatDrop(event, cat) {
+    event.preventDefault();
+    event.stopPropagation();
+    const from = dragCat;
+    dragCat = '';
+    dropId = '';
+    if (!from || from === cat.id) return;
+    const list = ui.categories || [];
+    const start = list.findIndex((row) => row.id === from);
+    const dest = list.findIndex((row) => row.id === cat.id);
+    if (start < 0 || dest < 0 || start === dest) return;
+    const dir = dest > start ? 'down' : 'up';
+    try {
+      for (let i = 0; i < Math.abs(dest - start); i += 1) await guildAction({ type: 'category-move', categoryId: from, dir });
+      await reloadSettings();
+    } catch (err) {
+      toast(err.message);
+    }
   }
 
   function dragStart(event, ch) {
@@ -224,7 +261,7 @@
         {@const texts = channelsIn(cat, 'text')}
         {@const voices = channelsIn(cat, 'voice')}
         {#if cat.name}
-          <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
+          <div class="cat" class:drop-target={dropId === 'cat:' + cat.id} class:dragging={dragCat === cat.id} draggable={canChannels} ondragstart={(e) => dragCatStart(e, cat)} ondragover={(e) => dragCatOver(e, cat)} ondrop={(e) => dragCatDrop(e, cat)} ondragend={() => { dragCat = ''; dropId = ''; }} oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
             <span>{cat.name}</span>
             {#if canChannels}
               <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', categoryId: cat.id })}><Plus size={16} /></button>

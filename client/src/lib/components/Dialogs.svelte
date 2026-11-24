@@ -414,7 +414,10 @@
       {:else if kind === 'category'}
         <div class="field"><label>Name</label><input bind:value={name} maxlength="40" placeholder="Community" /></div>
         <button class="btn brand" style="width:auto" onclick={() => go(async () => {
-          await guildAction({ type: 'category', name });
+          const title = name.trim();
+          if (!title) throw new Error('Category name required');
+          if ((ui.categories || []).some((cat) => String(cat.name || '').trim().toLowerCase() === title.toLowerCase())) throw new Error('A category with that name already exists');
+          await guildAction({ type: 'category', name: title });
           close();
           await reloadSettings();
         })}>Create</button>

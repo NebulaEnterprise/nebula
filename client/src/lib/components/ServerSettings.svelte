@@ -2,7 +2,7 @@
   import {
     X, Search, Image, Palette, Hash, Calendar, Smile, Sticker, UserRound, Bell, Shield,
     Flag, ScrollText, Trash2, Users, Crown, Ban, Bot, Webhook, DoorOpen, Plus, ChevronLeft,
-    Copy, Pencil, Clock, MoreHorizontal, GripVertical,
+    Copy, Pencil, Clock, MoreHorizontal, GripVertical, ChevronUp, ChevronDown,
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
@@ -825,10 +825,12 @@
             <p class="hint">Drag a channel to reorder it. Members see this order in the sidebar.</p>
             <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
           </div>
-          {#each s.categories || [] as cat}
-            <div class="gset-chan head" draggable="true" ondragstart={() => (dragCat = cat.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropCategory(cat.id)}>
-              <GripVertical size={14} />
-              <strong>{cat.name}</strong>
+          {#each s.categories || [] as cat, i}
+            <div class="gset-chan head" ondragover={(e) => e.preventDefault()} ondrop={(e) => { e.preventDefault(); dropCategory(cat.id); }}>
+              <span class="gset-grip" draggable="true" title="Drag to move" ondragstart={(e) => { dragCat = cat.id; e.dataTransfer?.setData('text/plain', cat.id); }}><GripVertical size={14} /></span>
+              <strong class="grow">{cat.name}</strong>
+              <button type="button" class="btn icon" title="Move up" disabled={i === 0} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: cat.id, dir: 'up' }))}><ChevronUp size={16} /></button>
+              <button type="button" class="btn icon" title="Move down" disabled={i === (s.categories || []).length - 1} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: cat.id, dir: 'down' }))}><ChevronDown size={16} /></button>
               <button type="button" class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: cat.id }))}><Trash2 size={16} /></button>
             </div>
             {#each (s.channels || []).filter((ch) => ch.categoryId === cat.id) as ch}

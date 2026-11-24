@@ -7652,6 +7652,8 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   if (type === 'category') {
     const name = clip(req.body.name, 40).trim();
     if (!name) return res.status(400).json({ error: 'Category name required' });
+    const taken = (g.categories || []).some((c) => String(c.name || '').trim().toLowerCase() === name.toLowerCase());
+    if (taken) return res.status(400).json({ error: 'A category with that name already exists' });
     const cat = { id: uuidv4(), name };
     g.categories.push(cat);
     audit(g, req.user, 'created the category ' + name);
@@ -7659,13 +7661,18 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     return res.json({ ok: true, category: cat });
   }
   if (type === 'category-delete') {
-    g.categories = g.categories.filter((c) => c.id !== req.body.categoryId);
-    (g.channels || []).forEach((c) => { if (c.categoryId === req.body.categoryId) c.categoryId = ''; });
+    const categoryId = String(req.body.categoryId || '');
+    if (!categoryId || !(g.categories || []).some((c) => String(c.id) === categoryId)) return res.status(404).json({ error: 'Category not found' });
+    const removed = (g.categories || []).find((c) => String(c.id) === categoryId);
+    g.categories = (g.categories || []).filter((c) => String(c.id) !== categoryId);
+    (g.channels || []).forEach((c) => { if (String(c.categoryId) === categoryId) c.categoryId = ''; });
+    audit(g, req.user, 'deleted the category ' + (removed && removed.name ? removed.name : categoryId));
     saveGuilds();
     return res.json({ ok: true });
   }
   if (type === 'category-move') {
-    const idx = (g.categories || []).findIndex((c) => c.id === req.body.categoryId);
+    const categoryId = String(req.body.categoryId || '');
+    const idx = (g.categories || []).findIndex((c) => String(c.id) === categoryId);
     const next = idx + (req.body.dir === 'up' ? -1 : 1);
     if (idx < 0 || next < 0 || next >= g.categories.length) return res.json({ ok: true });
     const tmp = g.categories[idx];
@@ -10090,8 +10097,11 @@ botApi.post('/servers/:id/categories', (req, res) => {
   if (!botManage(g, req.botUser, PERM.MANAGE_CHANNELS)) return botFail(res, 403, 'The bot cannot manage channels', 'missing_permission');
   const name = String(req.body?.name || '').trim().slice(0, 40);
   if (!name) return botFail(res, 400, 'Category name required');
-  const category = { id: uuidv4(), name };
   g.categories = g.categories || [];
+  if (g.categories.some((row) => String(row.name || '').trim().toLowerCase() === name.toLowerCase())) {
+    return botFail(res, 400, 'A category with that name already exists', 'invalid_request');
+  }
+  const category = { id: uuidv4(), name };
   g.categories.push(category);
   saveGuilds();
   res.json({ category });

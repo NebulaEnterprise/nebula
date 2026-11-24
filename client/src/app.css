@@ -894,6 +894,7 @@ html:not(.app-blur) .thread-menu {
 }
 .msg-menu > button:hover { background: var(--bg-hover); }
 .msg-menu > button.danger { color: #f23f43; }
+.msg-menu > button:disabled { opacity: 0.4; cursor: default; }
 .msg-menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 6px; }
 .channel-types { display: flex; gap: 8px; margin-bottom: 12px; }
 .channel-types .btn { width: auto; flex: 1; }
@@ -3626,6 +3627,7 @@ html.paint-mention .mention {
 .gset-fake-av { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; }
 .gset-chan { padding: 6px 0; }
 .gset-chan.head { margin-top: 8px; }
+.gset-grip { display: grid; place-items: center; cursor: grab; color: var(--faint); }
 .gset-chan .grow, .gset-member .grow, .gset-role-row .grow { flex: 1; min-width: 0; }
 .gset-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 28px 12px 18px; }
 .gset-empty img { width: 72px; height: 72px; object-fit: contain; }
