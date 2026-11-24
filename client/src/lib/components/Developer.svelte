@@ -5,7 +5,7 @@
   import { PERM, hasBit } from '../format.js';
   import DeveloperDocs from './DeveloperDocs.svelte';
 
-  let { docs = false } = $props();
+  let { docs = false, portal = false, onopen = () => {} } = $props();
   let bots = $state([]);
   let limit = $state(2);
   let name = $state('');
@@ -160,6 +160,43 @@
   }
 </script>
 
+{#if !portal && !docs}
+  <div class="dev-home">
+    <article class="dev-portal-card">
+      <div>
+        <h3>Developer Portal</h3>
+        <p>Your bots, tokens, the API reference and the starter file in one place.</p>
+      </div>
+      <button type="button" class="dev-open" onclick={() => onopen()}>Open</button>
+    </article>
+    <header class="dev-home-head">
+      <div>
+        <h2>Developer</h2>
+        <p>Bots that chat in servers. Run them on your own computer. <button type="button" class="dev-docs-link" onclick={() => { tab = 'api'; onopen(); }}>Docs</button></p>
+        <p class="dev-count">{bots.length} of {limit} bots.</p>
+      </div>
+      <button type="button" class="dev-open" disabled={busy || bots.length >= limit} onclick={() => { naming = true; openId = ''; onopen(); }}>New bot</button>
+    </header>
+    {#if note}<p class="portal-note">{note}</p>{/if}
+    {#if bots.length}
+      <div class="dev-bot-list">
+        {#each bots as bot (bot.id)}
+          <button type="button" class="dev-bot" onclick={() => { openId = bot.id; freshToken = ''; onopen(); }}>
+            <Code size={18} />
+            <span><strong>{bot.displayName || bot.name}</strong><em>@{bot.username}</em></span>
+          </button>
+        {/each}
+      </div>
+    {:else if !note}
+      <div class="dev-empty">
+        <img src="./logo.webp?v=3" alt="" />
+        <strong>No bots yet</strong>
+        <p>Make one, add it to a server and it can answer /commands in a few minutes.</p>
+        <button type="button" class="dev-open" disabled={busy} onclick={() => { naming = true; onopen(); }}>Make a bot</button>
+      </div>
+    {/if}
+  </div>
+{:else}
 <div class="portal">
   <aside class="portal-nav">
     <div class="portal-brand">
@@ -317,3 +354,4 @@
     {/if}
   </div>
 </div>
+{/if}

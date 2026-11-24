@@ -1,5 +1,5 @@
 <script>
-  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Lock, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
+  import { ChevronLeft, ChevronRight, X, Check, User, AtSign, Tags, Smile, Clock, Circle, Palette, Bell, Shield, Eye, EyeOff, Image, Music, Moon, Sun, Sparkles, Droplet, Monitor, Award, Code, Flag, Plus, Users } from '@lucide/svelte';
   import { ui, nowClock, saveMe, logout, toast, playPing, developerMode, setDeveloperMode, staffReport, saveRecovery, savedAccounts, switchAccount, addAccount } from '../state.svelte.js';
   import { loadSecret, recoveryCode, unlockSecret } from '../vault.js';
   import { profileSeen } from '../seen.js';
@@ -221,10 +221,12 @@
       toast(err.message);
     }
   }
-  const page = $derived(ui.userPage || 'profile');
+  let portalOpen = $state(false);
+  const page = $derived(ui.userPage === 'look' || ui.userPage === 'privacy' || !ui.userPage ? 'profile' : ui.userPage);
   $effect(() => {
     if (page !== 'account') securityOpen = false;
-    if (page !== 'look') lookOpen = '';
+    if (page !== 'profile') lookOpen = '';
+    if (page !== 'developer' && page !== 'devdocs') portalOpen = false;
     if (page === 'admin' && ui.me?.canAdmin) {
       api('/api/staff/reports').then((data) => { ui.staffReports = data.reports || []; }).catch(() => {});
     }
@@ -608,7 +610,7 @@
 </script>
 
 <div class="overlay" role="presentation" onclick={() => (ui.userSettings = false)}>
-  <div class="settings" class:portal-mode={page === 'developer' || page === 'devdocs'} role="dialog" onclick={(e) => e.stopPropagation()}>
+  <div class="settings" class:portal-mode={(page === 'developer' && portalOpen) || page === 'devdocs'} role="dialog" onclick={(e) => e.stopPropagation()}>
     <aside class="set-nav">
       <div class="set-user">
         <Avatar user={ui.me} size={36} />
@@ -620,12 +622,10 @@
       <div class="group">User settings</div>
       <button class:on={page === 'account'} onclick={() => (ui.userPage = 'account')}><Shield size={16} /> Account</button>
       <button class:on={page === 'profile'} onclick={() => (ui.userPage = 'profile')}><User size={16} /> Profile</button>
-      <button class:on={page === 'look'} onclick={() => { ui.userPage = 'look'; lookOpen = ''; }}><Palette size={16} /> Appearance</button>
       <button class:on={page === 'theme'} onclick={() => (ui.userPage = 'theme')}><Sparkles size={16} /> Theme</button>
       <button class:on={page === 'notify'} onclick={() => (ui.userPage = 'notify')}><Bell size={16} /> Notifications</button>
-      <button class:on={page === 'privacy'} onclick={() => (ui.userPage = 'privacy')}><Lock size={16} /> Privacy</button>
       <button class:on={page === 'advanced'} onclick={() => (ui.userPage = 'advanced')}><Code size={16} /> Advanced</button>
-      <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => (ui.userPage = 'developer')}><Code size={16} /> Developer</button>
+      <button class:on={page === 'developer' || page === 'devdocs'} onclick={() => { portalOpen = false; ui.userPage = 'developer'; }}><Code size={16} /> Developer</button>
       {#if ui.me?.canAdmin}
         <div class="group">Nebula staff</div>
         <button class:on={page === 'admin'} onclick={() => (ui.userPage = 'admin')}><Flag size={16} /> Admin</button>
@@ -634,23 +634,15 @@
       <button class:on={page === 'accounts'} onclick={() => (ui.userPage = 'accounts')}><Users size={16} /> Switch accounts</button>
       <button class="danger set-logout" onclick={logout}>Sign out</button>
     </aside>
-    <div class="set-main" class:look-main={page === 'look' || page === 'theme'}>
+    <div class="set-main" class:look-main={page === 'profile' || page === 'theme'}>
       <div class="set-head">
-        {#if page === 'look' && lookOpen === 'badges'}
+        {#if page === 'profile' && lookOpen === 'badges'}
           <div class="look-intro">
-            <button type="button" class="look-back" onclick={() => (lookOpen = '')} aria-label="Back to Appearance"><ChevronLeft size={18} /></button>
+            <button type="button" class="look-back" onclick={() => (lookOpen = '')} aria-label="Back to Profile"><ChevronLeft size={18} /></button>
             <i class="look-mark"><Award size={18} /></i>
             <div>
               <h2>Badges</h2>
               <p>Choose what shows on your profile and next to your name.</p>
-            </div>
-          </div>
-        {:else if page === 'look'}
-          <div class="look-intro">
-            <i class="look-mark"><Palette size={18} /></i>
-            <div>
-              <h2>Appearance</h2>
-              <p>How your profile looks on Nebula.</p>
             </div>
           </div>
         {:else if page === 'theme'}
@@ -758,7 +750,7 @@
           </div>
         </section>
       {:else if page === 'developer' || page === 'devdocs'}
-        <Developer docs={page === 'devdocs'} />
+        <Developer docs={page === 'devdocs'} portal={portalOpen || page === 'devdocs'} onopen={() => (portalOpen = true)} />
       {:else if page === 'theme'}
         <section class="look-sec app-card">
           <h3><Sparkles size={16} class="sec-ico" /> App theme</h3>
@@ -915,69 +907,13 @@
           {/if}
         </section>
       {:else}
-      <div class="grid-2" class:look-layout={page === 'look'}>
+      <div class="grid-2" class:look-layout={page === 'profile'}>
         <div>
-          {#if page === 'profile'}
-            <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
-            <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
-            <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
-            <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="they/them" /></div>
-          {:else if page === 'notify'}
+          {#if page === 'notify'}
             <div class="field">
               <label>Notification sound</label>
               <button type="button" class="btn" class:brand={sound} onclick={toggleSound}>{sound ? 'On' : 'Off'}</button>
               <p class="hint">Plays a sound for every new message and every mention, including while this tab is in the background.</p>
-            </div>
-          {:else if page === 'privacy'}
-            <div class="field">
-              <label>Last seen</label>
-              <div class="row">
-                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'everyone'} onclick={() => setPrivacy({ lastSeenPrivacy: 'everyone' }, 'Last seen shown to everyone')}>Everyone</button>
-                <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'nobody'} onclick={() => setPrivacy({ lastSeenPrivacy: 'nobody' }, 'Last seen hidden')}>Nobody</button>
-              </div>
-              <p class="hint">People you hide your last seen from only see “recently”, “within a week”, or “within a month”. You see the same kind of time for them. Sending, reading, or typing still shows you online for 30 seconds.</p>
-            </div>
-            <div class="field">
-              <label>Who can message you</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.dmPrivacy || 'servers'} options={messageOptions} onpick={(value) => setPrivacy({ dmPrivacy: value }, 'Message privacy updated')} />
-              </div>
-              <p class="hint">Friends can always message you. Blocked people never can.</p>
-            </div>
-            <div class="field">
-              <label>Who can add you to group chats</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.groupPrivacy || 'friends'} options={groupOptions} onpick={(value) => setPrivacy({ groupPrivacy: value }, 'Group privacy updated')} />
-              </div>
-              <p class="hint">With Nobody, no one can put you in a group chat, not even friends. You can still make your own.</p>
-            </div>
-            <div class="field">
-              <label>Who can call you</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.callPrivacy || 'everyone'} options={callOptions} onpick={(value) => setPrivacy({ callPrivacy: value }, 'Call privacy updated')} />
-              </div>
-              <p class="hint">Friends can always call you, unless you pick Nobody. Blocked people never can.</p>
-            </div>
-            <div class="field">
-              <label>Who can send links</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.linkPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ linkPrivacy: value }, 'Link privacy updated')} />
-              </div>
-              <p class="hint">Friends can always send you links, unless you pick Nobody. Blocked people never can.</p>
-            </div>
-            <div class="field">
-              <label>Who can send media</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.mediaPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ mediaPrivacy: value }, 'Media privacy updated')} />
-              </div>
-              <p class="hint">Friends can always send you photos, videos, GIFs, and files, unless you pick Nobody. Blocked people never can.</p>
-            </div>
-            <div class="field">
-              <label>Who can see your stories</label>
-              <div class="privacy-pick">
-                <Select value={ui.me?.storyPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ storyPrivacy: value }, 'Story privacy updated')} />
-              </div>
-              <p class="hint">Stories stay on your profile for 24 hours. Friends can always see them, unless you pick Nobody. Blocked people never can.</p>
             </div>
           {:else if page === 'advanced'}
             <div class="field">
@@ -1024,7 +960,7 @@
                 </div>
               </div>
             {/if}
-          {:else if page === 'look' && lookOpen === 'badges'}
+          {:else if page === 'profile' && lookOpen === 'badges'}
             <section class="look-sec">
               <div class="look-line">
                 <div class="copy">
@@ -1070,10 +1006,17 @@
               {/if}
             </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
-          {:else if page === 'look'}
+          {:else if page === 'profile'}
+            <section class="look-sec">
+              <h3><User size={16} class="sec-ico" /> Identity</h3>
+              <div class="field"><label>User id</label><input value={ui.me?.uid ?? '—'} disabled /></div>
+              <div class="field"><label>Username</label><input bind:value={form.username} maxlength="32" /></div>
+              <div class="field"><label>Display name</label><input bind:value={form.displayName} maxlength="32" /></div>
+              <div class="field"><label>Pronouns</label><input bind:value={form.pronouns} maxlength="40" placeholder="Add your pronouns" /></div>
+            </section>
             <section class="look-sec">
               <h3><Palette size={16} class="sec-ico" /> Profile theme</h3>
-              <p class="look-note">How your profile card is colored. This is separate from the app theme above.</p>
+              <p class="look-note">How your profile card is colored. App colors stay in Theme.</p>
               <div class="theme-grid">
                 <button type="button" class="theme-card" class:on={form.profileStyle === 'solid'} onclick={() => (form.profileStyle = 'solid')}>
                   {#if form.profileStyle === 'solid'}<span class="tick"><Check size={11} strokeWidth={3} /></span>{/if}
@@ -1271,15 +1214,64 @@
                 </div>
               {/if}
             </section>
+            <section class="look-sec">
+              <h3><Shield size={16} class="sec-ico" /> Privacy</h3>
+              <div class="field">
+                <label>Last seen</label>
+                <div class="row">
+                  <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'everyone'} onclick={() => setPrivacy({ lastSeenPrivacy: 'everyone' }, 'Last seen shown to everyone')}>Everyone</button>
+                  <button type="button" class="btn" class:brand={(ui.me?.lastSeenPrivacy || (ui.me?.hideLastSeen ? 'nobody' : 'everyone')) === 'nobody'} onclick={() => setPrivacy({ lastSeenPrivacy: 'nobody' }, 'Last seen hidden')}>Nobody</button>
+                </div>
+                <p class="hint">People you hide your last seen from only see “recently”, “within a week”, or “within a month”. You see the same kind of time for them. Sending, reading, or typing still shows you online for 30 seconds.</p>
+              </div>
+              <div class="field">
+                <label>Who can message you</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.dmPrivacy || 'servers'} options={messageOptions} onpick={(value) => setPrivacy({ dmPrivacy: value }, 'Message privacy updated')} />
+                </div>
+                <p class="hint">Friends can always message you. Blocked people never can.</p>
+              </div>
+              <div class="field">
+                <label>Who can add you to group chats</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.groupPrivacy || 'friends'} options={groupOptions} onpick={(value) => setPrivacy({ groupPrivacy: value }, 'Group privacy updated')} />
+                </div>
+                <p class="hint">With Nobody, no one can put you in a group chat, not even friends. You can still make your own.</p>
+              </div>
+              <div class="field">
+                <label>Who can call you</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.callPrivacy || 'everyone'} options={callOptions} onpick={(value) => setPrivacy({ callPrivacy: value }, 'Call privacy updated')} />
+                </div>
+                <p class="hint">Friends can always call you, unless you pick Nobody. Blocked people never can.</p>
+              </div>
+              <div class="field">
+                <label>Who can send links</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.linkPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ linkPrivacy: value }, 'Link privacy updated')} />
+                </div>
+                <p class="hint">Friends can always send you links, unless you pick Nobody. Blocked people never can.</p>
+              </div>
+              <div class="field">
+                <label>Who can send media</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.mediaPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ mediaPrivacy: value }, 'Media privacy updated')} />
+                </div>
+                <p class="hint">Friends can always send you photos, videos, GIFs, and files, unless you pick Nobody. Blocked people never can.</p>
+              </div>
+              <div class="field">
+                <label>Who can see your stories</label>
+                <div class="privacy-pick">
+                  <Select value={ui.me?.storyPrivacy || 'everyone'} options={shareOptions} onpick={(value) => setPrivacy({ storyPrivacy: value }, 'Story privacy updated')} />
+                </div>
+                <p class="hint">Stories stay on your profile for 24 hours. Friends can always see them, unless you pick Nobody. Blocked people never can.</p>
+              </div>
+            </section>
             <button type="button" class="btn brand look-save" onclick={save}>Save changes</button>
           {/if}
-          {#if page !== 'look' && page !== 'notify' && page !== 'privacy' && page !== 'advanced' && page !== 'admin'}
-            <div style="height:16px"></div>
-            <button class="btn brand" style="width:auto" onclick={save}>Save changes</button>
-          {/if}
         </div>
-        <div class="preview-sticky" class:look-preview={page === 'look'}>
-          {#if page === 'look'}
+        <div class="preview-sticky" class:look-preview={page === 'profile'}>
+          {#if page === 'profile'}
             <header class="preview-label"><Eye size={16} /> Preview</header>
           {:else}
             <p class="label">Preview</p>
