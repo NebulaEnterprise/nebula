@@ -2301,6 +2301,40 @@ html.paint-mention .mention {
 }
 .bg-thumb.avatar-thumb { width: 48px; display: grid; place-items: center; color: #fff; font-weight: 750; }
 .look-panel { margin-top: 8px; padding: 12px; border-radius: 14px; background: #171821; border: 1px solid rgba(255,255,255,0.06); }
+.look-sec .field input,
+.look-sec .field textarea,
+.look-panel input,
+.look-panel textarea {
+  width: 100%;
+  background: #12131a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #fff;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.look-sec .field textarea,
+.look-panel textarea {
+  min-height: 76px;
+  resize: none;
+  line-height: 1.45;
+}
+.look-sec .field input::placeholder,
+.look-sec .field textarea::placeholder,
+.look-panel input::placeholder,
+.look-panel textarea::placeholder { color: #6d7080; }
+.look-sec .field input:focus,
+.look-sec .field textarea:focus,
+.look-panel input:focus,
+.look-panel textarea:focus {
+  border-color: rgba(124, 92, 255, 0.8);
+  box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
+}
+.look-sec .field input:disabled {
+  color: #8b8e98;
+  background: #16171f;
+}
 .btn.brand.look-save {
   width: auto; min-width: 0; margin-top: 18px; padding: 10px 22px;
   border-radius: 999px; background: #7c5cff; font-weight: 700;
