@@ -380,9 +380,12 @@
   <LinkPill floating />
 {/if}
 {#if ui.booting}
-  <div class="boot" role="status">
-    <video class="boot-video" src="./restart.mp4" autoplay muted loop playsinline></video>
-    <p>Nebula is restarting</p>
+  <div class="boot" role="status" aria-label="Nebula">
+    <div>
+      <img src="./logo.webp?v=3" alt="" />
+      <strong>Nebula</strong>
+      <i></i>
+    </div>
   </div>
 {:else if !ui.me}
   {#if ui.addingAccount || ui.authGate}
