@@ -6,13 +6,13 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import { joinVoice, leaveVoice, partnerInCall } from '../voice.js';
-  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom, guildAction, reloadSettings } from '../state.svelte.js';
+  import { ui, hasPerm, serverMuted, showFriends, openDm, openGroup, warmDm, warmChannel, pickChannel, openServerSettings, openServer, toast, chatClosed, closeConversation, openIdMenu, pinnedChats, phoneChat, placeChannel, openVoiceRoom, isVoiceRoom, guildAction, reloadSettings, orderedSections } from '../state.svelte.js';
   import { recentServerIds, serverFace } from '../serverface.js';
   import { look } from '../look.svelte.js';
   import { PERM } from '../format.js';
   import { t } from '../i18n.svelte.js';
 
-  const groups = $derived([{ id: '', name: '' }, ...ui.categories]);
+  const sections = $derived(orderedSections(ui.categories, ui.categoryOrder));
   const noChats = $derived(!(ui.dms || []).some((dm) => dm.other && !chatClosed('dm:' + dm.other.id, dm.lastId)) && !(ui.groups || []).some((group) => !chatClosed('group:' + group.id, group.lastId)));
   let dmQuery = $state('');
   let dragId = $state('');
@@ -135,6 +135,7 @@
       kind: channel ? channel.type : (extra.categoryId ? 'category' : 'blank'),
       channel,
       categoryId: channel ? (channel.categoryId || '') : (extra.categoryId || ''),
+      fixed: extra.fixed || '',
       canChannels,
       canServer,
     };
@@ -150,38 +151,46 @@
     try { await openVoiceRoom(ch); } catch (err) { toast(err.message); }
   }
 
-  function dragCatStart(event, cat) {
-    if (!canChannels) return;
-    dragCat = cat.id;
+  function dragCatStart(event, section) {
+    if (!canChannels || event.target.closest('button')) {
+      event.preventDefault();
+      return;
+    }
+    dragCat = section.id;
     dragId = '';
     event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', 'cat:' + cat.id);
-    event.stopPropagation();
+    event.dataTransfer.setData('text/plain', 'cat:' + section.id);
   }
 
-  function dragCatOver(event, cat) {
-    if (!dragCat || dragCat === cat.id) return;
+  function dragCatOver(event, section) {
+    if (!dragCat || dragCat === section.id) return;
     event.preventDefault();
-    event.stopPropagation();
-    dropId = 'cat:' + cat.id;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    dropId = (before ? 'before:' : 'after:') + section.id;
   }
 
-  async function dragCatDrop(event, cat) {
+  async function dragCatDrop(event, section) {
     event.preventDefault();
-    event.stopPropagation();
-    const from = dragCat;
+    const raw = dragCat || String(event.dataTransfer?.getData('text/plain') || '');
+    const from = raw.startsWith('cat:') ? raw.slice(4) : raw;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
     dragCat = '';
     dropId = '';
-    if (!from || from === cat.id) return;
-    const list = ui.categories || [];
-    const start = list.findIndex((row) => row.id === from);
-    const dest = list.findIndex((row) => row.id === cat.id);
-    if (start < 0 || dest < 0 || start === dest) return;
-    const dir = dest > start ? 'down' : 'up';
+    if (!from || from === section.id) return;
+    const order = sections.map((row) => row.id).filter((id) => id !== from);
+    let dest = order.indexOf(section.id);
+    if (dest < 0) return;
+    if (!before) dest += 1;
+    order.splice(dest, 0, from);
+    const previous = ui.categoryOrder;
+    ui.categoryOrder = order;
     try {
-      for (let i = 0; i < Math.abs(dest - start); i += 1) await guildAction({ type: 'category-move', categoryId: from, dir });
+      await guildAction({ type: 'category-order', ids: order });
       await reloadSettings();
     } catch (err) {
+      ui.categoryOrder = previous;
       toast(err.message);
     }
   }
@@ -189,6 +198,7 @@
   function dragStart(event, ch) {
     if (!canServer) return;
     dragId = ch.id;
+    dragCat = '';
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', ch.id);
   }
@@ -202,7 +212,9 @@
   }
 
   async function dragDrop(event, ch) {
+    if (!dragId) return;
     event.preventDefault();
+    event.stopPropagation();
     const id = dragId;
     dragId = '';
     dropId = '';
@@ -257,24 +269,23 @@
       </div>
     {/if}
     <div class="scroll" oncontextmenu={(e) => { if (e.target === e.currentTarget) openChannelMenu(e); }}>
-      {#each groups as cat}
-        {@const texts = channelsIn(cat, 'text')}
-        {@const voices = channelsIn(cat, 'voice')}
-        {#if cat.name}
-          <div class="cat" class:drop-target={dropId === 'cat:' + cat.id} class:dragging={dragCat === cat.id} draggable={canChannels} ondragstart={(e) => dragCatStart(e, cat)} ondragover={(e) => dragCatOver(e, cat)} ondrop={(e) => dragCatDrop(e, cat)} ondragend={() => { dragCat = ''; dropId = ''; }} oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
-            <span>{cat.name}</span>
+      {#each sections as section}
+        {@const cat = section.fixed ? { id: '' } : section}
+        {@const texts = section.fixed === 'voice' ? [] : channelsIn(cat, 'text')}
+        {@const voices = section.fixed === 'text' ? [] : channelsIn(cat, 'voice')}
+        <div class="cat-block" class:drop-before={dropId === 'before:' + section.id} class:drop-after={dropId === 'after:' + section.id} class:dragging={dragCat === section.id} ondragover={(e) => dragCatOver(e, section)} ondrop={(e) => dragCatDrop(e, section)}>
+          <div class="cat" draggable={canChannels} ondragstart={(e) => dragCatStart(e, section)} ondragend={() => { dragCat = ''; dropId = ''; }} oncontextmenu={(e) => openChannelMenu(e, { categoryId: section.id, fixed: section.fixed })}>
+            <span>{section.fixed === 'text' ? t('text channels') : section.fixed === 'voice' ? t('voice channels') : section.name}</span>
             {#if canChannels}
-              <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', categoryId: cat.id })}><Plus size={16} /></button>
+              <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = section.fixed === 'voice' ? { kind: 'channel', voice: true } : section.fixed === 'text' ? { kind: 'channel', voice: false } : { kind: 'channel', categoryId: section.id })}><Plus size={16} /></button>
             {/if}
           </div>
-        {/if}
-        {#if texts.length || !cat.id}
-            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
-              <span>{cat.name ? t('text') : t('text channels')}</span>
-              {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
-                <button class="cat-add" title="Create channel" onclick={() => (ui.dialog = { kind: 'channel', voice: false })}><Plus size={16} /></button>
-              {/if}
+        {#if texts.length || (!section.fixed && voices.length === 0)}
+            {#if !section.fixed}
+            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: section.id })}>
+              <span>{t('text')}</span>
             </div>
+            {/if}
             {#each texts as ch}
               {@const note = ui.activity.channels[ch.id]}
               <div class="channel" class:on={ui.channelId === ch.id} class:unread={!!note && ui.channelId !== ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
@@ -296,13 +307,11 @@
               </div>
             {/each}
           {/if}
-          {#if voices.length || (!cat.id && hasPerm(PERM.MANAGE_CHANNELS))}
-            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: cat.id })}>
-              <span>{cat.name ? t('voice') : t('voice channels')}</span>
-              {#if !cat.id && hasPerm(PERM.MANAGE_CHANNELS)}
-                <button class="cat-add" title="Create voice channel" onclick={() => (ui.dialog = { kind: 'channel', voice: true })}><Plus size={16} /></button>
-              {/if}
+          {#if voices.length && !section.fixed}
+            <div class="cat" oncontextmenu={(e) => openChannelMenu(e, { categoryId: section.id })}>
+              <span>{t('voice')}</span>
             </div>
+          {/if}
             {#each voices as ch}
               <div class="channel" class:on={ui.voiceStage ? ui.voiceStage.id === ch.id : ui.voice?.channelId === ch.id} class:drop-target={dropId === ch.id} class:dragging={dragId === ch.id} draggable={canServer} ondragstart={(e) => dragStart(e, ch)} ondragover={(e) => dragOver(e, ch)} ondrop={(e) => dragDrop(e, ch)} ondragend={dragEnd} oncontextmenu={(e) => openChannelMenu(e, { channel: ch })}>
                 <button class="channel-hit" onclick={() => onVoice(ch)}>
@@ -326,7 +335,7 @@
                 </div>
               {/each}
             {/each}
-          {/if}
+        </div>
       {/each}
     </div>
   {:else}

@@ -6,7 +6,7 @@
   } from '@lucide/svelte';
   import Avatar from './Avatar.svelte';
   import Select from './Select.svelte';
-  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel } from '../state.svelte.js';
+  import { ui, guildAction, reloadSettings, toast, loadMembers, keepServerKey, serverInvite, openServer, hasPerm, placeChannel, orderedSections } from '../state.svelte.js';
   import Events from './Events.svelte';
   import { newRoomKey } from '../vault.js';
   import { PERM, PERM_GROUPS, TAG_ICONS, hasBit, setBit, initial } from '../format.js';
@@ -437,6 +437,8 @@
   let dragCh = $state('');
   let dragCat = $state('');
   let dragRole = $state('');
+  let dropCat = $state('');
+  const channelSections = $derived(orderedSections(s.categories, s.categoryOrder));
 
   async function saveRoleOrder(ids) {
     await api('/api/servers/' + ui.serverId + '/roles/order', { method: 'POST', body: { ids } });
@@ -474,19 +476,30 @@
     }
   }
 
-  async function dropCategory(id) {
-    const from = dragCat;
+  function overCategory(event, id) {
+    if (!dragCat || dragCat === id) return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
+    dropCat = (before ? 'before:' : 'after:') + id;
+  }
+
+  async function dropCategory(event, id) {
+    event.preventDefault();
+    const raw = dragCat || String(event.dataTransfer?.getData('text/plain') || '');
+    const from = raw.startsWith('cat:') ? raw.slice(4) : raw;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const before = event.clientY < rect.top + rect.height / 2;
     dragCat = '';
+    dropCat = '';
     if (!from || from === id) return;
-    const list = s.categories || [];
-    const start = list.findIndex((cat) => cat.id === from);
-    const dest = list.findIndex((cat) => cat.id === id);
-    if (start < 0 || dest < 0) return;
-    const dir = dest > start ? 'down' : 'up';
+    const order = channelSections.map((row) => row.id).filter((row) => row !== from);
+    let dest = order.indexOf(id);
+    if (dest < 0) return;
+    if (!before) dest += 1;
+    order.splice(dest, 0, from);
     try {
-      for (let i = 0; i < Math.abs(dest - start); i += 1) {
-        await guildAction({ type: 'category-move', categoryId: from, dir });
-      }
+      await guildAction({ type: 'category-order', ids: order });
       await reloadSettings();
     } catch (err) {
       toast(err.message);
@@ -579,7 +592,7 @@
 {/snippet}
 
 {#snippet channelRow(ch)}
-  <div class="gset-chan" draggable="true" ondragstart={() => (dragCh = ch.id)} ondragover={(e) => e.preventDefault()} ondrop={() => dropChannel(ch)}>
+  <div class="gset-chan" draggable="true" ondragstart={() => { dragCh = ch.id; dragCat = ''; }} ondragover={(e) => { if (dragCh) e.preventDefault(); }} ondrop={(e) => { if (!dragCh) return; e.preventDefault(); e.stopPropagation(); dropChannel(ch); }}>
     <GripVertical size={14} />
     <strong>{ch.type === 'voice' ? '🔊' : '#'} {ch.name}</strong>
   </div>
@@ -822,31 +835,26 @@
 
         {:else if ui.settingsPage === 'channels'}
           <div class="gset-split">
-            <p class="hint">Drag a channel to reorder it. Members see this order in the sidebar.</p>
+            <p class="hint">Drag a category onto the top of another one to place it above. Text channels and Voice channels move the same way.</p>
             <button type="button" class="btn brand" onclick={() => (ui.dialog = { kind: 'category' })}>Create category</button>
           </div>
-          {#each s.categories || [] as cat, i}
-            <div class="gset-chan head" ondragover={(e) => e.preventDefault()} ondrop={(e) => { e.preventDefault(); dropCategory(cat.id); }}>
-              <span class="gset-grip" draggable="true" title="Drag to move" ondragstart={(e) => { dragCat = cat.id; e.dataTransfer?.setData('text/plain', cat.id); }}><GripVertical size={14} /></span>
-              <strong class="grow">{cat.name}</strong>
-              <button type="button" class="btn icon" title="Move up" disabled={i === 0} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: cat.id, dir: 'up' }))}><ChevronUp size={16} /></button>
-              <button type="button" class="btn icon" title="Move down" disabled={i === (s.categories || []).length - 1} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: cat.id, dir: 'down' }))}><ChevronDown size={16} /></button>
-              <button type="button" class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: cat.id }))}><Trash2 size={16} /></button>
+          {#each channelSections as section, i}
+            {@const rows = (s.channels || []).filter((ch) => section.fixed === 'text' ? ch.type !== 'voice' && !(s.categories || []).some((cat) => cat.id === ch.categoryId) : section.fixed === 'voice' ? ch.type === 'voice' && !(s.categories || []).some((cat) => cat.id === ch.categoryId) : ch.categoryId === section.id)}
+            <div class="gset-block" class:drop-before={dropCat === 'before:' + section.id} class:drop-after={dropCat === 'after:' + section.id} ondragover={(e) => overCategory(e, section.id)} ondrop={(e) => dropCategory(e, section.id)}>
+              <div class="gset-chan head">
+                <span class="gset-grip" draggable="true" title="Drag to move" ondragstart={(e) => { dragCat = section.id; dragCh = ''; e.dataTransfer?.setData('text/plain', 'cat:' + section.id); }}><GripVertical size={14} /></span>
+                <strong class="grow">{section.name}</strong>
+                <button type="button" class="btn icon" title="Move up" disabled={i === 0} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: section.id, dir: 'up' }))}><ChevronUp size={16} /></button>
+                <button type="button" class="btn icon" title="Move down" disabled={i === channelSections.length - 1} onclick={() => run(() => guildAction({ type: 'category-move', categoryId: section.id, dir: 'down' }))}><ChevronDown size={16} /></button>
+                {#if !section.fixed}
+                  <button type="button" class="btn icon danger" title="Delete category" onclick={() => run(() => guildAction({ type: 'category-delete', categoryId: section.id }))}><Trash2 size={16} /></button>
+                {/if}
+              </div>
+              {#each rows as ch}
+                {@render channelRow(ch)}
+              {/each}
             </div>
-            {#each (s.channels || []).filter((ch) => ch.categoryId === cat.id) as ch}
-              {@render channelRow(ch)}
-            {/each}
           {/each}
-          <section class="gset-card">
-            <div class="gset-split"><strong>Text channels</strong><i class="gset-count">{textChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)).length}</i></div>
-            {#each textChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)) as ch}
-              {@render channelRow(ch)}
-            {/each}
-            <div class="gset-split"><strong>Voice channels</strong><i class="gset-count">{voiceChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)).length}</i></div>
-            {#each voiceChannels.filter((ch) => !(s.categories || []).some((cat) => cat.id === ch.categoryId)) as ch}
-              {@render channelRow(ch)}
-            {/each}
-          </section>
 
         {:else if ui.settingsPage === 'events'}
           <Events />

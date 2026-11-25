@@ -5139,6 +5139,7 @@ app.get('/api/channels', auth, (req, res) => {
     roles: g.roles,
     permissions: basePerms(g, req.user),
     categories: g.categories || [],
+    categoryOrder: sectionOrder(g),
     theme: g.theme || null,
     bannerUrl: g.bannerUrl || '',
     iconUrl: g.iconUrl || '',
@@ -7372,6 +7373,22 @@ app.post('/api/polls/:messageId/vote', auth, (req, res) => {
   res.status(404).json({ error: 'Poll not found' });
 });
 
+function sectionOrder(g, override) {
+  const cats = (g.categories || []).map((cat) => String(cat && cat.id || '')).filter(Boolean);
+  const allowed = new Set(['text', 'voice', ...cats]);
+  const source = Array.isArray(override) ? override : (g.categoryOrder || []);
+  const order = [];
+  for (const id of source) {
+    const key = String(id || '');
+    if (!allowed.has(key) || order.includes(key)) continue;
+    order.push(key);
+  }
+  if (!order.includes('text')) order.unshift('text');
+  if (!order.includes('voice')) order.splice(order.indexOf('text') + 1, 0, 'voice');
+  for (const id of cats) if (!order.includes(id)) order.push(id);
+  return order;
+}
+
 function settingsView(g, user) {
   hydrateGuild(g);
   const manage = can(g, user, PERM.MANAGE_SERVER);
@@ -7396,6 +7413,7 @@ function settingsView(g, user) {
     color: g.color,
     theme: g.theme,
     categories: g.categories,
+    categoryOrder: sectionOrder(g),
     channels: g.channels,
     roles: g.roles,
     emoji: g.emoji,
@@ -7577,7 +7595,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     saveGuilds();
     return res.json({ ok: true, events: fresh() });
   }
-  const channelOps = ['category', 'category-delete', 'category-move', 'set-category', 'move-channel'];
+  const channelOps = ['category', 'category-delete', 'category-move', 'category-order', 'set-category', 'move-channel'];
   const canChannels = can(g, req.user, PERM.MANAGE_CHANNELS);
   if (!manage && !(canChannels && channelOps.includes(type)) && !moderate.includes(type) && type !== 'report') return res.status(403).json({ error: 'You do not have permission' });
   if (['kick', 'ban', 'timeout', 'nick-other', 'voice-ban'].includes(type)) {
@@ -7702,6 +7720,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (taken) return res.status(400).json({ error: 'A category with that name already exists' });
     const cat = { id: uuidv4(), name };
     g.categories.push(cat);
+    g.categoryOrder = sectionOrder(g);
     audit(g, req.user, 'created the category ' + name);
     saveGuilds();
     return res.json({ ok: true, category: cat });
@@ -7711,6 +7730,7 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
     if (!categoryId || !(g.categories || []).some((c) => String(c.id) === categoryId)) return res.status(404).json({ error: 'Category not found' });
     const removed = (g.categories || []).find((c) => String(c.id) === categoryId);
     g.categories = (g.categories || []).filter((c) => String(c.id) !== categoryId);
+    g.categoryOrder = sectionOrder(g);
     (g.channels || []).forEach((c) => { if (String(c.categoryId) === categoryId) c.categoryId = ''; });
     audit(g, req.user, 'deleted the category ' + (removed && removed.name ? removed.name : categoryId));
     saveGuilds();
@@ -7718,14 +7738,22 @@ app.post('/api/servers/:id/action', auth, (req, res) => {
   }
   if (type === 'category-move') {
     const categoryId = String(req.body.categoryId || '');
-    const idx = (g.categories || []).findIndex((c) => String(c.id) === categoryId);
+    const order = sectionOrder(g);
+    const idx = order.indexOf(categoryId);
     const next = idx + (req.body.dir === 'up' ? -1 : 1);
-    if (idx < 0 || next < 0 || next >= g.categories.length) return res.json({ ok: true });
-    const tmp = g.categories[idx];
-    g.categories[idx] = g.categories[next];
-    g.categories[next] = tmp;
+    if (idx < 0 || next < 0 || next >= order.length) return res.json({ ok: true, categoryOrder: order });
+    const tmp = order[idx];
+    order[idx] = order[next];
+    order[next] = tmp;
+    g.categoryOrder = order;
     saveGuilds();
-    return res.json({ ok: true });
+    return res.json({ ok: true, categoryOrder: order });
+  }
+  if (type === 'category-order') {
+    const order = sectionOrder(g, req.body.ids);
+    g.categoryOrder = order;
+    saveGuilds();
+    return res.json({ ok: true, categoryOrder: order });
   }
   if (type === 'set-category') {
     const ch = (g.channels || []).find((c) => c.id === req.body.channelId);

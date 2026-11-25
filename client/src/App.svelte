@@ -537,12 +537,15 @@
   {@const menu = ui.channelMenu}
   <div class="msg-menu channel-menu" style="left:{menu.x}px;top:{menu.y}px">
     {#if menu.kind === 'category'}
-      {@const catIndex = (ui.categories || []).findIndex((row) => row.id === menu.categoryId)}
+      {@const order = ui.categoryOrder?.length ? ui.categoryOrder : ['text', 'voice', ...(ui.categories || []).map((row) => row.id)]}
+      {@const catIndex = order.indexOf(menu.categoryId)}
       {#if menu.canChannels}
-        <button type="button" onclick={() => { ui.dialog = { kind: 'channel', categoryId: menu.categoryId || '' }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
+        <button type="button" onclick={() => { ui.dialog = menu.fixed === 'voice' ? { kind: 'channel', voice: true } : menu.categoryId === 'text' ? { kind: 'channel', voice: false } : { kind: 'channel', categoryId: menu.fixed ? '' : (menu.categoryId || '') }; ui.channelMenu = null; }}><Hash size={16} /> Create channel</button>
         <button type="button" disabled={catIndex <= 0} onclick={() => categoryAct({ type: 'category-move', categoryId: menu.categoryId, dir: 'up' })}><ChevronUp size={16} /> Move up</button>
-        <button type="button" disabled={catIndex < 0 || catIndex >= (ui.categories || []).length - 1} onclick={() => categoryAct({ type: 'category-move', categoryId: menu.categoryId, dir: 'down' })}><ChevronDown size={16} /> Move down</button>
-        <button type="button" class="danger" onclick={() => categoryAct({ type: 'category-delete', categoryId: menu.categoryId })}><Trash2 size={16} /> Delete category</button>
+        <button type="button" disabled={catIndex < 0 || catIndex >= order.length - 1} onclick={() => categoryAct({ type: 'category-move', categoryId: menu.categoryId, dir: 'down' })}><ChevronDown size={16} /> Move down</button>
+        {#if !menu.fixed}
+          <button type="button" class="danger" onclick={() => categoryAct({ type: 'category-delete', categoryId: menu.categoryId })}><Trash2 size={16} /> Delete category</button>
+        {/if}
       {/if}
     {:else if menu.kind === 'blank'}
       {#if menu.canChannels}

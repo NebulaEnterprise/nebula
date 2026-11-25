@@ -57,6 +57,7 @@ export const ui = $state({
   serverPerms: 0,
   roles: [],
   categories: [],
+  categoryOrder: [],
   channels: [],
   channelId: '',
   theme: null,
@@ -502,6 +503,7 @@ function resetSession() {
   ui.serverPerms = 0;
   ui.roles = [];
   ui.categories = [];
+  ui.categoryOrder = [];
   ui.popout = null;
   ui.userSettings = false;
   ui.serverSettings = false;
@@ -1353,6 +1355,7 @@ export async function openServer(id, opts = {}) {
   ui.serverPerms = data.permissions || 0;
   ui.roles = data.roles || [];
   ui.categories = data.categories || [];
+  ui.categoryOrder = data.categoryOrder || [];
   ui.serverMeta = data.server || null;
   ui.theme = data.theme || null;
   ui.bannerUrl = data.bannerUrl || '';
@@ -1419,6 +1422,7 @@ function snapServer(id) {
     serverPerms: ui.serverPerms,
     roles: ui.roles.slice(),
     categories: ui.categories.slice(),
+    categoryOrder: (ui.categoryOrder || []).slice(),
     serverMeta: ui.serverMeta,
     theme: ui.theme,
     bannerUrl: ui.bannerUrl,
@@ -1442,6 +1446,7 @@ function restoreServer(id) {
   ui.serverPerms = snap.serverPerms;
   ui.roles = snap.roles.slice();
   ui.categories = snap.categories.slice();
+  ui.categoryOrder = (snap.categoryOrder || []).slice();
   ui.serverMeta = snap.serverMeta;
   ui.theme = snap.theme;
   ui.bannerUrl = snap.bannerUrl;
@@ -3152,6 +3157,27 @@ export async function placeChannel(ch, target) {
       ui.channels = previous;
     }
   }
+}
+
+export function orderedSections(categories, order) {
+  const cats = Array.isArray(categories) ? categories.filter((cat) => cat && cat.id) : [];
+  const byId = new Map(cats.map((cat) => [String(cat.id), cat]));
+  const list = [];
+  const push = (id) => {
+    const key = String(id || '');
+    if (!key || list.includes(key)) return;
+    if (key === 'text' || key === 'voice' || byId.has(key)) list.push(key);
+  };
+  for (const id of Array.isArray(order) ? order : []) push(id);
+  if (!list.includes('text')) list.unshift('text');
+  if (!list.includes('voice')) list.splice(list.indexOf('text') + 1, 0, 'voice');
+  for (const cat of cats) push(cat.id);
+  return list.map((id) => {
+    if (id === 'text') return { id, name: 'Text channels', fixed: 'text' };
+    if (id === 'voice') return { id, name: 'Voice channels', fixed: 'voice' };
+    const cat = byId.get(id);
+    return { id: cat.id, name: cat.name, fixed: '' };
+  });
 }
 
 export async function guildAction(body) {
