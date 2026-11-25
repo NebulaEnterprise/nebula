@@ -376,17 +376,14 @@
 </script>
 
 <DesktopChrome />
-{#if ui.restarting}
-  <div class="restart-screen" role="status" aria-live="polite">
-    <video class="restart-video" src="./restart.mp4" autoplay muted loop playsinline></video>
-    <p>Nebula is restarting</p>
-  </div>
-{/if}
 {#if ui.link && (ui.booting || !ui.me || ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'servers' || ui.mode === 'discover' || ui.mode === 'messages')}
   <LinkPill floating />
 {/if}
 {#if ui.booting}
-  <div class="boot">Opening Nebula…</div>
+  <div class="boot" role="status">
+    <video class="boot-video" src="./restart.mp4" autoplay muted loop playsinline></video>
+    <p>Nebula is restarting</p>
+  </div>
 {:else if !ui.me}
   {#if ui.addingAccount || ui.authGate}
     <Auth />
