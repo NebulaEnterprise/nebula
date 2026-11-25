@@ -376,6 +376,12 @@
 </script>
 
 <DesktopChrome />
+{#if ui.restarting}
+  <div class="restart-screen" role="status" aria-live="polite">
+    <video class="restart-video" src="./restart.mp4" autoplay muted loop playsinline></video>
+    <p>Nebula is restarting</p>
+  </div>
+{/if}
 {#if ui.link && (ui.booting || !ui.me || ui.mode === 'friends' || ui.mode === 'add' || ui.mode === 'servers' || ui.mode === 'discover' || ui.mode === 'messages')}
   <LinkPill floating />
 {/if}

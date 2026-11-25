@@ -117,6 +117,7 @@ export const ui = $state({
   quickOpen: false,
   quickUser: null,
   link: '',
+  restarting: false,
 });
 
 let pollTimer = null;
@@ -1873,6 +1874,21 @@ let alertPending = false;
 let linkLive = false;
 let linkJob = 0;
 let linkTimer = 0;
+let restartTimer = 0;
+
+function clearRestart() {
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = 0;
+  ui.restarting = false;
+}
+
+function armRestart() {
+  if (ui.restarting || restartTimer) return;
+  restartTimer = setTimeout(() => {
+    restartTimer = 0;
+    if (ui.link === 'reconnecting') ui.restarting = true;
+  }, 700);
+}
 
 function clearLinkTimer() {
   if (!linkTimer) return;
@@ -1938,6 +1954,7 @@ function applySocket(packet) {
     if (data.voice) import('./voice.js').then((mod) => mod.applyVoiceSnapshot(data.voice)).catch(() => {});
     const dropped = ui.link === 'reconnecting' || ui.link === 'catching';
     linkLive = true;
+    clearRestart();
     if (ui.link === 'updating') return;
     if (dropped) catchUpLink();
     return;
@@ -1948,12 +1965,14 @@ function applySocket(packet) {
       linkJob += 1;
       clearLinkTimer();
       ui.link = 'reconnecting';
+      armRestart();
     }
     linkLive = false;
     return;
   }
   if (type === 'RESYNC') {
     linkLive = true;
+    clearRestart();
     if (ui.link === 'updating') return;
     catchUpLink();
     import('./voice.js').then((mod) => {
