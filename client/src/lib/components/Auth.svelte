@@ -24,6 +24,13 @@
     return secret.trim();
   }
 
+  let lockArmed = false;
+  $effect(() => {
+    const locked = ui.auth === 'locked';
+    if (locked && !lockArmed) secret = '';
+    lockArmed = locked;
+  });
+
   async function run(fn) {
     busy = true;
     ui.authError = '';
@@ -40,8 +47,8 @@
     <p class="sub">Nebula is a community chat. This account exists only here.</p>
     {#if ui.auth === 'login'}
       <p class="sub">{t('Log in and pick up where you left off.')}</p>
-      <div class="field"><label>{t('Email or username')}</label><input bind:value={email} autocomplete="username" /></div>
-      <div class="field"><label>{t('Password')}</label><input bind:value={password} type="password" autocomplete="current-password" /></div>
+      <div class="field"><label>{t('Email or username')}</label><input name="username" bind:value={email} autocomplete="username" spellcheck="false" /></div>
+      <div class="field"><label>{t('Password')}</label><input name="password" bind:value={password} type="password" autocomplete="current-password" /></div>
       <p class="sub">A correct email and password still need your recovery code or passphrase.</p>
       <button class="btn brand" disabled={busy} onclick={() => run(() => login(email, password))}>{t('Log in')}</button>
       <button class="btn" disabled={busy} onclick={() => run(() => loginWithPasskey())}>Sign in with a passkey</button>
@@ -83,7 +90,7 @@
       <p class="auth-switch"><button type="button" onclick={() => { ui.auth = 'login'; ui.appeal = null; ui.authError = ''; }}>Back</button></p>
     {:else if ui.auth === 'locked'}
       <p class="sub">{ui.switchHold ? 'Enter the recovery code or passphrase for ' + (ui.switchHold.name || 'this account') + '.' : 'Email and password were accepted. Enter the recovery code or passphrase to open the account.'}</p>
-      <div class="field"><label>Recovery code or passphrase</label><input bind:value={secret} type="password" autocomplete="current-password" /></div>
+      <div class="field"><label>Recovery code or passphrase</label><input name="recovery" bind:value={secret} type="password" autocomplete="off" spellcheck="false" /></div>
       <button class="btn brand" disabled={busy} onclick={() => run(() => ui.switchHold ? confirmSwitch(secret.trim()) : unlockAccount(secret.trim()))}>Open account</button>
       <p class="auth-switch"><button type="button" onclick={() => { if (ui.switchHold) cancelSwitch(); else ui.auth = 'login'; }}>Back</button></p>
     {:else if ui.auth === 'setup'}

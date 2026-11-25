@@ -126,6 +126,29 @@ export async function openVault(wrapped, salt, secret) {
   }
 }
 
+export function secretForms(secret) {
+  const text = String(secret || '').trim();
+  const compact = text.replace(/\s+/g, '');
+  const forms = [];
+  const add = (value) => { if (value && !forms.includes(value)) forms.push(value); };
+  add(text);
+  add(compact);
+  if (/^[A-Za-z0-9-]{8,}$/.test(compact)) {
+    const bare = compact.replace(/-/g, '').toUpperCase();
+    add(bare);
+    add(bare.replace(/(.{4})(?=.)/g, '$1-'));
+  }
+  return forms;
+}
+
+export async function openVaultSecret(wrapped, salt, secret) {
+  for (const form of secretForms(secret)) {
+    const vault = await openVault(wrapped, salt, form);
+    if (vault) return { vault, secret: form };
+  }
+  return null;
+}
+
 async function aes(master) {
   return crypto.subtle.importKey('raw', raw(master), 'AES-GCM', false, ['encrypt', 'decrypt']);
 }

@@ -3477,9 +3477,58 @@ function cleanNameColors(input) {
 function normalizeUsername(name) {
   return String(name || '')
     .trim()
+    .replace(/^@+/, '')
     .toLowerCase()
     .replace(/[^a-z0-9._]/g, '')
     .slice(0, 32);
+}
+
+function usernameKey(name) {
+  return normalizeUsername(name);
+}
+
+function findLoginUser(raw, password) {
+  const typed = String(raw || '').trim();
+  const folded = typed.toLowerCase();
+  const named = usernameKey(typed);
+  const emailish = folded.includes('@');
+  const ranked = { email: null, exact: null, loose: null, past: null, deleted: null };
+  const take = (slot, user) => { if (!ranked[slot]) ranked[slot] = user; };
+  for (const user of Object.values(users)) {
+    if (!user || user.bot) continue;
+    if (!checkPassword(password || '', user.passwordHash)) continue;
+    const key = usernameKey(user.username);
+    const nameHit = !!(named && key === named);
+    const exact = nameHit && String(user.username || '') === named;
+    const past = !nameHit && named && Array.isArray(user.nameHistory) && user.nameHistory.some((row) => row && usernameKey(row.name) === named);
+    const legacy = !named && String(user.username || '').toLowerCase() === folded;
+    const emailHit = emailish && emailMatches(folded, user.emailSalt, user.emailHash);
+    if (!nameHit && !past && !legacy && !emailHit) continue;
+    if (user.deleted) {
+      take('deleted', user);
+      continue;
+    }
+    if (emailHit) take('email', user);
+    if (exact) take('exact', user);
+    else if (nameHit || legacy) take('loose', user);
+    else if (past) take('past', user);
+  }
+  if (emailish) return ranked.email || ranked.exact || ranked.loose || ranked.past || ranked.deleted;
+  return ranked.exact || ranked.loose || ranked.past || ranked.deleted;
+}
+
+function claimUsername(user, clean) {
+  const next = usernameKey(clean);
+  if (!next || !user) return false;
+  if (usernameTaken(next, user.id)) return false;
+  const old = String(user.username || '');
+  if (old !== next) {
+    if (!Array.isArray(user.nameHistory)) user.nameHistory = [];
+    if (old) user.nameHistory.unshift({ name: old, at: new Date().toISOString() });
+    user.nameHistory = user.nameHistory.slice(0, 12);
+    user.username = next;
+  }
+  return true;
 }
 
 function endsWithBotTag(name) {
@@ -3573,7 +3622,7 @@ app.post('/api/auth/request-code', async (req, res) => {
   if (Object.values(users).some((u) => emailMatches(cleanEmail, u.emailSalt, u.emailHash))) {
     return res.status(409).json({ error: 'Email already registered' });
   }
-  if (Object.values(users).some((u) => u.username === cleanUser)) {
+  if (usernameTaken(cleanUser)) {
     return res.status(409).json({ error: 'Username taken' });
   }
 
@@ -3742,11 +3791,10 @@ app.post('/api/auth/verify', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
+  const raw = String((req.body && (req.body.email || req.body.username)) || '');
   const password = req.body && req.body.password;
-  const user = Object.values(users).find((u) => u && !u.bot && u.username === raw)
-    || Object.values(users).find((u) => u && !u.bot && emailMatches(raw, u.emailSalt, u.emailHash));
-  if (!user || !checkPassword(password || '', user.passwordHash)) {
+  const user = findLoginUser(raw, password);
+  if (!user) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
   const held = accountHold(user);
@@ -3754,8 +3802,9 @@ app.post('/api/auth/login', (req, res) => {
     const kind = user.globalBan && user.disabled ? 'both' : user.globalBan ? 'ban' : user.disabled ? 'disabled' : '';
     return res.status(403).json({ error: held, appeal: !!kind, kind });
   }
-  if (raw.includes('@') && emailMatches(raw, user.emailSalt, user.emailHash) && user.email !== raw) {
-    user.email = raw;
+  const email = String(raw || '').trim().toLowerCase();
+  if (email.includes('@') && emailMatches(email, user.emailSalt, user.emailHash) && user.email !== email) {
+    user.email = email;
     save(USERS_FILE, users);
   }
   if (!String(user.passwordHash).startsWith('scrypt$')) {
@@ -3775,12 +3824,11 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 app.post('/api/auth/appeal', (req, res) => {
-  const raw = String((req.body && (req.body.email || req.body.username)) || '').trim().toLowerCase();
+  const raw = String((req.body && (req.body.email || req.body.username)) || '');
   const password = req.body && req.body.password;
   const text = String((req.body && req.body.text) || '').trim().slice(0, 500);
-  const user = Object.values(users).find((u) => u && !u.bot && u.username === raw)
-    || Object.values(users).find((u) => u && !u.bot && emailMatches(raw, u.emailSalt, u.emailHash));
-  if (!user || !checkPassword(password || '', user.passwordHash)) {
+  const user = findLoginUser(raw, password);
+  if (!user) {
     return res.status(400).json({ error: 'That email, username, or password is wrong' });
   }
   if (isRootAccount(user)) return res.status(400).json({ error: 'That account cannot send an appeal' });
@@ -4691,9 +4739,9 @@ app.post('/api/seen', auth, (req, res) => {
 app.get('/api/username-available', auth, (req, res) => {
   const clean = normalizeUsername(req.query.name);
   if (!clean) return res.json({ ok: true, username: '', available: false, reason: 'invalid' });
-  if (clean === req.user.username) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
+  if (usernameKey(req.user.username) === clean) return res.json({ ok: true, username: clean, available: true, reason: 'yours' });
   if ((endsWithBotTag(clean) && !req.user.bot) || reservedUsername(clean)) return res.json({ ok: true, username: clean, available: false, reason: 'reserved' });
-  const taken = Object.values(users).some((u) => u && u.id !== req.user.id && u.username === clean);
+  const taken = usernameTaken(clean, req.user.id);
   res.json({ ok: true, username: clean, available: !taken, reason: taken ? 'taken' : 'available' });
 });
 
@@ -4718,10 +4766,8 @@ app.patch('/api/me', auth, (req, res) => {
     if (clean.length < 1) return res.status(400).json({ error: 'Username required' });
     if (endsWithBotTag(clean) && !req.user.bot) return res.status(400).json({ error: 'Usernames cannot end with _bot' });
     if (reservedUsername(clean)) return res.status(400).json({ error: 'That username is reserved' });
-    if (clean !== req.user.username) {
-      const taken = Object.values(users).some((u) => u.id !== req.user.id && u.username === clean);
-      if (taken) return res.status(409).json({ error: 'Username taken' });
-      req.user.username = clean;
+    if (usernameKey(req.user.username) !== clean || req.user.username !== clean) {
+      if (!claimUsername(req.user, clean)) return res.status(409).json({ error: 'Username taken' });
     }
   }
   if (aliases !== undefined) req.user.aliases = cleanAliases(aliases);
@@ -6228,7 +6274,7 @@ app.post('/api/friends/request', auth, (req, res) => {
   } else if (username) {
     const clean = normalizeUsername(username);
     if (!clean) return res.status(400).json({ error: 'Invalid username' });
-    target = Object.values(users).find((u) => u.username === clean);
+    target = Object.values(users).find((u) => u && usernameKey(u.username) === clean);
   } else {
     return res.status(400).json({ error: 'Provide username or uid' });
   }
@@ -8064,7 +8110,9 @@ function dropSessions(user) {
 }
 
 function usernameTaken(name, exceptId) {
-  return Object.values(users).some((user) => user && user.id !== exceptId && user.username === name);
+  const key = usernameKey(name);
+  if (!key) return false;
+  return Object.values(users).some((user) => user && user.id !== exceptId && usernameKey(user.username) === key);
 }
 
 function spareUsername(user) {

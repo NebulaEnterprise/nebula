@@ -9,7 +9,7 @@ import { applyLook } from './look.svelte.js';
 import { ensureBox, localKeys, saveKeys } from './seal.js';
 import {
   createVault, forgetVault, isSealedText, keyInLink, loadSecret, loadVault, lockSecret, newRoomKey,
-  openText, openVault, rememberSecret, rememberVault, sealFile, sealText, unwrapKey, vaultCheck, wrapKeyFor, wrapVault,
+  openText, openVault, openVaultSecret, rememberSecret, rememberVault, sealFile, sealText, unwrapKey, vaultCheck, wrapKeyFor, wrapVault,
 } from './vault.js';
 
 export const nowClock = $state({ t: Date.now() });
@@ -361,8 +361,9 @@ export async function submitAppeal(text) {
 }
 
 export async function unlockAccount(secret) {
-  const vault = await openVault(holdVault?.wrapped, holdVault?.salt, secret);
-  if (!vault) throw new Error('That recovery code or passphrase is wrong');
+  const opened = await openVaultSecret(holdVault?.wrapped, holdVault?.salt, secret);
+  if (!opened) throw new Error('That recovery code or passphrase is wrong');
+  const vault = opened.vault;
   const check = await vaultCheck(vault);
   const data = await api('/api/auth/unlock', { method: 'POST', body: { ticket: holdTicket, check } });
   const local = loadVault(data.user.id);
@@ -372,7 +373,7 @@ export async function unlockAccount(secret) {
     vault.groups = { ...vault.groups, ...local.groups };
   }
   rememberVault(data.user.id, vault);
-  rememberSecret(data.user.id, secret);
+  rememberSecret(data.user.id, opened.secret);
   await finishLogin(data);
   pushVault().catch(() => {});
 }
@@ -593,8 +594,9 @@ export async function switchAccount(id) {
 export async function confirmSwitch(secret) {
   const hold = ui.switchHold;
   if (!hold) throw new Error('Pick an account first');
-  const opened = await openVault(hold.wrapped, hold.salt, secret);
-  if (!opened) throw new Error('That recovery code or passphrase is wrong');
+  const unlocked = await openVaultSecret(hold.wrapped, hold.salt, secret);
+  if (!unlocked) throw new Error('That recovery code or passphrase is wrong');
+  const opened = unlocked.vault;
   const local = loadVault(hold.id);
   if (local) {
     opened.servers = { ...opened.servers, ...local.servers };
@@ -602,7 +604,7 @@ export async function confirmSwitch(secret) {
     opened.groups = { ...opened.groups, ...local.groups };
   }
   rememberVault(hold.id, opened);
-  rememberSecret(hold.id, secret);
+  rememberSecret(hold.id, unlocked.secret);
   await activateSaved(hold);
 }
 
