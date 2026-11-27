@@ -140,9 +140,8 @@ Nebula is independently operated. We do not partner with, work on behalf of, or 
 We collect only the information necessary to operate accounts and provide the platform's features. Private message contents are encrypted before leaving the user's device, and we do not ordinarily possess the keys needed to read private conversations.
 Your conversations are yours. Your privacy is not a product, and your personal information is not something we sell.
 
-<img width="1918" height="1080" alt="image" src="https://github.com/user-attachments/assets/bc9236d0-fd1e-4f46-b5bf-a2a158dd0f62" />
-<img width="1912" height="1063" alt="image" src="https://github.com/user-attachments/assets/458377e6-8218-4a6c-8d23-744c51a532c7" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/96f4f86f-db2f-4267-9e29-c8c5d20ee318" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a044bc36-6025-48cc-9b4b-da67f4c4b32b" />
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/156c4c2a-e8d2-44c9-8214-a39eee0d0108" />
 
 
