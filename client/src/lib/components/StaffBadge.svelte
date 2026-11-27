@@ -5,6 +5,6 @@
 
 {#if label}
   <span class="staff-badge" title={label} aria-label={label}>
-    <img src="./badges/staff.png?v=2" alt="" />
+    <img src="./badges/staff.png?v=3" alt="" />
   </span>
 {/if}
