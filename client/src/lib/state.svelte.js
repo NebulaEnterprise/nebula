@@ -483,6 +483,7 @@ export async function verify(code) {
 function resetSession() {
   stopTyping();
   roomLogs.clear();
+  droppedIds.clear();
   serverSnap.clear();
   memberStamp = '';
   profileStamp = '';
@@ -1390,6 +1391,44 @@ export async function openServer(id, opts = {}) {
 }
 
 const roomLogs = new Map();
+const droppedIds = new Set();
+
+function withoutDropped(list) {
+  if (!droppedIds.size || !Array.isArray(list)) return list || [];
+  const next = list.filter((msg) => msg && !droppedIds.has(String(msg.id || '')));
+  return next.length === list.length ? list : next;
+}
+
+function forgetMessage(id) {
+  const messageId = String(id || '');
+  if (!messageId) return;
+  droppedIds.add(messageId);
+  if ((ui.messages || []).some((msg) => msg && String(msg.id) === messageId)) {
+    ui.messages = ui.messages.filter((msg) => msg && String(msg.id) !== messageId);
+  }
+  for (const [key, list] of roomLogs) {
+    if (!Array.isArray(list) || !list.some((msg) => msg && String(msg.id) === messageId)) continue;
+    roomLogs.set(key, list.filter((msg) => msg && String(msg.id) !== messageId));
+  }
+}
+
+function recallMessage(id, snapshot, roomKey, logs) {
+  const messageId = String(id || '');
+  droppedIds.delete(messageId);
+  if (!snapshot) return;
+  for (const [key] of logs) {
+    const cur = Array.isArray(roomLogs.get(key)) ? roomLogs.get(key).filter((msg) => msg && String(msg.id) !== messageId) : [];
+    const at = cur.findIndex((msg) => msg && msg.createdAt > snapshot.createdAt);
+    cur.splice(at < 0 ? cur.length : at, 0, snapshot);
+    roomLogs.set(key, cur);
+  }
+  if (roomKey && currentRoom() !== roomKey) return;
+  if ((ui.messages || []).some((msg) => msg && String(msg.id) === messageId)) return;
+  const next = ui.messages.slice();
+  const at = next.findIndex((msg) => msg && msg.createdAt > snapshot.createdAt);
+  next.splice(at < 0 ? next.length : at, 0, snapshot);
+  ui.messages = next;
+}
 
 function currentRoom() {
   if (ui.mode === 'dm' && ui.dmUser && ui.dmUser.id) return 'dm:' + ui.dmUser.id;
@@ -1401,7 +1440,7 @@ function currentRoom() {
 
 function stashRoom(id) {
   if (!id) return;
-  const clean = ui.messages.filter((msg) => msg && !msg.pending && !msg.failed && !isSealedText(msg.content));
+  const clean = withoutDropped(ui.messages.filter((msg) => msg && !msg.pending && !msg.failed && !isSealedText(msg.content)));
   if (clean.length) roomLogs.set(id, clean);
   else if (roomLogs.has(id) && !logReady(roomLogs.get(id))) roomLogs.delete(id);
 }
@@ -1470,7 +1509,7 @@ function showCached(id) {
   ui.typers = [];
   const cached = id ? roomLogs.get(id) : null;
   if (cached && logReady(cached)) {
-    ui.messages = cached.slice();
+    ui.messages = withoutDropped(cached).slice();
     ui.chatLoading = false;
     return;
   }
@@ -1481,7 +1520,7 @@ function showCached(id) {
 
 function rememberLog(id, list) {
   if (!id) return;
-  const clean = (list || []).filter((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-') && !isSealedText(msg.content));
+  const clean = withoutDropped((list || []).filter((msg) => msg && !msg.pending && !msg.failed && !String(msg.id || '').startsWith('local-') && !isSealedText(msg.content)));
   const prev = roomLogs.get(id);
   if (!clean.length && prev && prev.length && logReady(prev)) return;
   if (!logReady(clean)) return;
@@ -1549,7 +1588,7 @@ function warmRoom(key, path, where) {
       if (list.some((msg) => msg && msg.locked)) list = await revealList(data.messages || [], where);
       if (!list.length && (data.messages || []).length) return null;
       if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) return null;
-      if (!roomLogs.has(key) || !logReady(roomLogs.get(key))) roomLogs.set(key, list);
+      if (!roomLogs.has(key) || !logReady(roomLogs.get(key))) roomLogs.set(key, withoutDropped(list));
       return roomLogs.get(key) || list;
     } catch (_) {
       return null;
@@ -1565,7 +1604,7 @@ async function paintReady(key) {
   if (!key || currentRoom() !== key) return;
   const ready = roomLogs.get(key);
   if (ready && logReady(ready)) {
-    ui.messages = ready.slice();
+    ui.messages = withoutDropped(ready).slice();
     ui.chatLoading = false;
     return;
   }
@@ -1573,7 +1612,7 @@ async function paintReady(key) {
   if (!task) return;
   const list = await task;
   if (currentRoom() !== key || !list || !logReady(list)) return;
-  ui.messages = list.slice();
+  ui.messages = withoutDropped(list).slice();
   ui.chatLoading = false;
 }
 
@@ -1821,6 +1860,18 @@ async function applySocketMessage(type, data) {
     noteTypingEvent(data);
     return;
   }
+  if (type === 'MESSAGE_DELETE') {
+    const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
+    forgetMessage(data && data.id);
+    if (viewingRoom(data && data.roomId)) {
+      noteOpenDm(ui.messages);
+      if (roomHeard[roomKey] === (data && data.id)) {
+        const last = [...ui.messages].reverse().find((msg) => msg && !msg.pending && !msg.failed);
+        roomHeard[roomKey] = last ? last.id : '';
+      }
+    }
+    return;
+  }
   if (data && data.message) revealMessage(data.message).catch(() => {});
   if (!viewingRoom(data && data.roomId)) {
     if (type === 'MESSAGE_CREATE') pingDm(data && (data.roomId || data.message?.channelId), data && data.message && data.message.author, data && data.message && data.message.id);
@@ -1828,14 +1879,8 @@ async function applySocketMessage(type, data) {
   }
   const roomKey = currentRoom().replace(/^ch:/, '') || ui.channelId;
   const logKey = currentRoom();
-  if (type === 'MESSAGE_DELETE') {
-    ui.messages = ui.messages.filter((msg) => msg && msg.id !== data.id);
-    rememberLog(logKey, ui.messages);
-    noteOpenDm(ui.messages);
-    return;
-  }
   const message = await revealMessage(data.message);
-  if (!message || !message.id) return;
+  if (!message || !message.id || droppedIds.has(String(message.id))) return;
   const idx = ui.messages.findIndex((msg) => msg && msg.id === message.id);
   if (type === 'MESSAGE_UPDATE') {
     if (idx < 0) return;
@@ -2214,10 +2259,10 @@ export async function loadMessages(quiet, live) {
     const previousId = ui.messages.length ? ui.messages[ui.messages.length - 1].id : '';
     acceptTypers(data.typers || []);
     const where = roomWhere();
-    let list = await revealList(data.messages, where);
-    if (list.some((msg) => msg && msg.locked)) list = await revealList(data.messages, where);
+    let list = withoutDropped(await revealList(data.messages, where));
+    if (list.some((msg) => msg && msg.locked)) list = withoutDropped(await revealList(data.messages, where));
     if (list.some((msg) => msg && (msg.locked || isSealedText(msg.content)))) {
-      const cached = roomLogs.get(currentRoom());
+      const cached = withoutDropped(roomLogs.get(currentRoom()));
       if (cached && logReady(cached) && cached.length) {
         if (!sameLog(ui.messages, cached)) ui.messages = cached.slice();
         ui.chatLoading = false;
@@ -2946,13 +2991,30 @@ export async function reactTo(messageId, emoji) {
 }
 
 export async function removeMessage(messageId) {
-  await api('/api/messages/' + encodeURIComponent(messageId), { method: 'DELETE' });
-  const roomKey = currentRoom() || ui.channelId;
-  ui.messages = ui.messages.filter((msg) => msg.id !== messageId);
+  const id = String(messageId || '');
+  const roomKey = currentRoom() || '';
+  let snapshot = (ui.messages || []).find((msg) => msg && String(msg.id) === id) || null;
+  if (!snapshot) {
+    for (const list of roomLogs.values()) {
+      snapshot = (list || []).find((msg) => msg && String(msg.id) === id) || null;
+      if (snapshot) break;
+    }
+  }
+  const logs = [];
+  for (const [key, list] of roomLogs) {
+    if (Array.isArray(list) && list.some((msg) => msg && String(msg.id) === id)) logs.push([key, list.slice()]);
+  }
+  forgetMessage(id);
   noteOpenDm(ui.messages);
-  if (roomHeard[roomKey] === messageId) {
-    const last = ui.messages[ui.messages.length - 1];
+  if (roomHeard[roomKey] === id) {
+    const last = [...ui.messages].reverse().find((msg) => msg && !msg.pending && !msg.failed);
     roomHeard[roomKey] = last ? last.id : '';
+  }
+  try {
+    await api('/api/messages/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (err) {
+    recallMessage(id, snapshot, roomKey, logs);
+    throw err;
   }
   dropLive();
 }
